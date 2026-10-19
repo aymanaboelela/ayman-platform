@@ -44,6 +44,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
+import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
 import { DiagnosticsController } from '../modules/diagnostics/diagnostics.controller';
@@ -176,6 +177,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
   // Admin-content fixtures created fresh by this file.
   let homeBlockId: string;
   let newsPostId: string;
+  let practiceSetId: string;
+  let practiceQuestionId: string;
+  let practiceLessonCode: string;
   let navItemId: string;
   let honorPinId: string;
   const FLAG_KEY = 'catalog.showComingSoon';
@@ -325,6 +329,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // إشعار للطالب)، وهو موجود هنا أصلاً من `OutreachModule` تحت.
         AdminHonorBoardModule,
         NewsModule,
+        // «اختبارات مجانية» — Prisma + `AuditService` only, both already here.
+        // Open in this fixture because the run has no `TENANT_KEY` (Ayman's
+        // stack), where `practice.enabled` defaults on.
+        PracticeModule,
         AuditReadModule,
         CohortAnalyticsModule,
         // Self-contained: it imports only NotificationsModule and
@@ -609,6 +617,23 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       },
     });
     newsPostId = newsPost.id;
+    // A DRAFT practice set WITH a question, for the same reason as the draft
+    // article: the public detail must 404 for it, not merely for a lesson that
+    // never had a set. A real code (the controller 404s a malformed one before
+    // the service is ever asked), random so it cannot meet a real lesson.
+    practiceLessonCode = `${90 + Math.floor(Math.random() * 10)}-${Math.floor(Math.random() * 100)}`;
+    const practiceSet = await prisma.practiceSet.create({
+      data: {
+        year: 2,
+        track: 'languages',
+        lessonCode: practiceLessonCode,
+        title: 'مصفوفة',
+        questions: { create: { type: 'tf', stem: 'سؤال المصفوفة', answer: 0, position: 0 } },
+      },
+      include: { questions: { select: { id: true } } },
+    });
+    practiceSetId = practiceSet.id;
+    practiceQuestionId = practiceSet.questions[0]!.id;
     const navItem = await prisma.navigationItem.create({
       data: { labelAr: 'مصفوفة', href: '/matrix', position: 999 },
     });
@@ -641,6 +666,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
 
     await owner.homeBlock.delete({ where: { id: homeBlockId } }).catch(() => undefined);
     await owner.newsPost.delete({ where: { id: newsPostId } }).catch(() => undefined);
+    await owner.practiceSet.delete({ where: { id: practiceSetId } }).catch(() => undefined);
     await owner.navigationItem.delete({ where: { id: navItemId } }).catch(() => undefined);
     await owner.honorBoardPin.delete({ where: { id: honorPinId } }).catch(() => undefined);
     await owner.sessionDevice.deleteMany({ where: { id: { in: [studentDeviceId, otherDeviceId] } } });
@@ -1909,6 +1935,30 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'news publish: student', method: 'patch', path: () => `/api/admin/news/${newsPostId}/published`, actor: 'student', status: 403 },
     { label: 'news delete: anonymous', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
     { label: 'news delete: student', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+    // «اختبارات مجانية» — two public reads, and the admin side on the question
+    // bank's own permissions (`question:read` / `question:write`).
+    { label: 'practice public list: anonymous', method: 'get', path: () => '/api/practice/sets', actor: 'anonymous', status: 200 },
+    { label: 'practice public set: anonymous, no such lesson', method: 'get', path: () => '/api/practice/sets/1/arabic/99-99', actor: 'anonymous', status: 404 },
+    { label: 'practice public set: anonymous, a DRAFT set', method: 'get', path: () => `/api/practice/sets/2/languages/${practiceLessonCode}`, actor: 'anonymous', status: 404 },
+    { label: 'practice admin list: anonymous', method: 'get', path: () => '/api/admin/practice/sets', actor: 'anonymous', status: 401 },
+    { label: 'practice admin list: student', method: 'get', path: () => '/api/admin/practice/sets', actor: 'student', status: 403 },
+    { label: 'practice admin list: admin', method: 'get', path: () => '/api/admin/practice/sets', actor: 'admin', status: 200 },
+    { label: 'practice admin detail: student', method: 'get', path: () => `/api/admin/practice/sets/${practiceSetId}`, actor: 'student', status: 403 },
+    { label: 'practice admin detail: admin', method: 'get', path: () => `/api/admin/practice/sets/${practiceSetId}`, actor: 'admin', status: 200 },
+    { label: 'practice create: anonymous', method: 'post', path: () => '/api/admin/practice/sets', actor: 'anonymous', status: 401 },
+    { label: 'practice create: student', method: 'post', path: () => '/api/admin/practice/sets', actor: 'student', status: 403 },
+    { label: 'practice patch: anonymous', method: 'patch', path: () => `/api/admin/practice/sets/${practiceSetId}`, actor: 'anonymous', status: 401 },
+    { label: 'practice patch: student', method: 'patch', path: () => `/api/admin/practice/sets/${practiceSetId}`, actor: 'student', status: 403 },
+    { label: 'practice delete: anonymous', method: 'delete', path: () => `/api/admin/practice/sets/${practiceSetId}`, actor: 'anonymous', status: 401 },
+    { label: 'practice delete: student', method: 'delete', path: () => `/api/admin/practice/sets/${practiceSetId}`, actor: 'student', status: 403 },
+    { label: 'practice add questions: anonymous', method: 'post', path: () => `/api/admin/practice/sets/${practiceSetId}/questions`, actor: 'anonymous', status: 401 },
+    { label: 'practice add questions: student', method: 'post', path: () => `/api/admin/practice/sets/${practiceSetId}/questions`, actor: 'student', status: 403 },
+    { label: 'practice reorder: anonymous', method: 'put', path: () => `/api/admin/practice/sets/${practiceSetId}/order`, actor: 'anonymous', status: 401 },
+    { label: 'practice reorder: student', method: 'put', path: () => `/api/admin/practice/sets/${practiceSetId}/order`, actor: 'student', status: 403 },
+    { label: 'practice question patch: anonymous', method: 'patch', path: () => `/api/admin/practice/questions/${practiceQuestionId}`, actor: 'anonymous', status: 401 },
+    { label: 'practice question patch: student', method: 'patch', path: () => `/api/admin/practice/questions/${practiceQuestionId}`, actor: 'student', status: 403 },
+    { label: 'practice question delete: anonymous', method: 'delete', path: () => `/api/admin/practice/questions/${practiceQuestionId}`, actor: 'anonymous', status: 401 },
+    { label: 'practice question delete: student', method: 'delete', path: () => `/api/admin/practice/questions/${practiceQuestionId}`, actor: 'student', status: 403 },
 
     // ── Role grants — admin only, in BOTH directions ──
     //
@@ -3039,6 +3089,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // in SQL, so a draft is unreachable rather than merely unlinked.
           'GET /api/news',
           'GET /api/news/:slug',
+          // «اختبارات مجانية». Reads only — grading happens in the visitor's
+          // browser and nothing is written back — and the service filters
+          // `published: true` in SQL, so a draft set is unreachable.
+          'GET /api/practice/sets',
+          'GET /api/practice/sets/:year/:track/:lessonCode',
           // «قسم الكتب». A shop window: the whole point of the page is that a
           // stranger who tapped a link in a bio can read it. Reads only, and
           // the service filters `isActive: true` in SQL, so a withdrawn title

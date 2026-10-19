@@ -56,6 +56,17 @@ export const FLAG_DECLARATIONS = [
     defaultValue: true,
     defaultForTenant: false,
   },
+  /**
+   * «اختبارات مجانية» — the public, no-account self-test per lesson
+   * (`/practice`, `GET /api/practice/*`). Off on a new stack: an empty section
+   * is worse than none, so a teacher switches it on once they have sets.
+   */
+  {
+    key: 'practice.enabled',
+    descriptionAr: 'اختبارات مجانية من غير تسجيل على كل درس',
+    defaultValue: true,
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FlagDeclaration[];
 
 export type FlagKey = (typeof FLAG_DECLARATIONS)[number]['key'];

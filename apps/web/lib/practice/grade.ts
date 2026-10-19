@@ -43,6 +43,15 @@ export function shuffledOrder(n: number, random: () => number = Math.random): nu
  */
 const KEY = 'practice:v1:';
 
+/**
+ * The storage id of one set. The Arabic track keeps the shape it shipped with
+ * (`2-2-1`), so a score a student already has survives the Languages track
+ * arriving; Languages gets its own (`2-languages-2-1`).
+ */
+export function bestKey(year: number, track: string, code: string): string {
+  return track === 'languages' ? `${year}-languages-${code}` : `${year}-${code}`;
+}
+
 /** Same-tab writes do not fire `storage`, so the store announces its own. */
 const listeners = new Set<() => void>();
 
@@ -61,9 +70,9 @@ export interface PracticeBest {
 }
 
 /** The stored string as-is — a stable snapshot for `useSyncExternalStore`. */
-export function readBestRaw(year: number, code: string): string | null {
+export function readBestRaw(id: string): string | null {
   try {
-    return globalThis.localStorage?.getItem(`${KEY}${year}-${code}`) ?? null;
+    return globalThis.localStorage?.getItem(`${KEY}${id}`) ?? null;
   } catch {
     return null;
   }
@@ -81,17 +90,17 @@ export function parseBest(raw: string | null): PracticeBest | null {
   }
 }
 
-export function readBest(year: number, code: string): PracticeBest | null {
-  return parseBest(readBestRaw(year, code));
+export function readBest(id: string): PracticeBest | null {
+  return parseBest(readBestRaw(id));
 }
 
 /** Stores `result` if it beats what is there; returns whether it did. */
-export function recordBest(year: number, code: string, result: PracticeBest): boolean {
-  const previous = readBest(year, code);
+export function recordBest(id: string, result: PracticeBest): boolean {
+  const previous = readBest(id);
   const better = !previous || percent(result.score, result.total) > percent(previous.score, previous.total);
   if (!better) return false;
   try {
-    globalThis.localStorage?.setItem(`${KEY}${year}-${code}`, JSON.stringify(result));
+    globalThis.localStorage?.setItem(`${KEY}${id}`, JSON.stringify(result));
   } catch {
     return false;
   }

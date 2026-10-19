@@ -1,82 +1,65 @@
 import { describe, expect, it } from 'vitest';
-import { PRACTICE_SETS } from './sets';
+import type { PracticePublicSetSummary } from '@ayman/contracts/practice';
 import {
-  PRACTICE_YEARS,
-  allPracticeLessons,
-  getPracticeSet,
+  LESSON_CODE,
+  parsePracticeTrack,
   parsePracticeYear,
+  practiceCourseSlug,
   practicePath,
+  practiceTotals,
   practiceUnits,
+  unitLook,
 } from './catalog';
-import { percent, practiceBand, readBest, recordBest, shuffledOrder } from './grade';
+import { bestKey, percent, practiceBand, readBest, recordBest, shuffledOrder } from './grade';
 
-/**
- * The sets are written by hand and auto-graded with no human in the loop, so
- * a broken key is a student told «غلط» for the right answer on a public page.
- * These are the properties that make a key unambiguous.
- */
-describe('practice sets', () => {
-  it('has one set per (year, lesson), and every set is listed by the catalog', () => {
-    const keys = PRACTICE_SETS.map((s) => `${s.year}-${s.lesson}`);
-    expect(new Set(keys).size).toBe(keys.length);
-    const listed = new Set(allPracticeLessons().map((l) => `${l.year}-${l.code}`));
-    for (const key of keys) expect(listed.has(key), `${key} has no catalog row`).toBe(true);
-  });
-
-  for (const set of PRACTICE_SETS) {
-    describe(`${set.year}-${set.lesson} ${set.title}`, () => {
-      it('has between 15 and 30 questions with unique ids', () => {
-        expect(set.questions.length).toBeGreaterThanOrEqual(15);
-        expect(set.questions.length).toBeLessThanOrEqual(30);
-        const ids = set.questions.map((q) => q.id);
-        expect(new Set(ids).size).toBe(ids.length);
-      });
-
-      it('keys every question to exactly one real option', () => {
-        for (const q of set.questions) {
-          if (q.type === 'tf') {
-            expect(q.options, q.id).toBeUndefined();
-            expect([0, 1], q.id).toContain(q.answer);
-          } else {
-            expect(q.options?.length, q.id).toBe(4);
-            expect(new Set(q.options!.map((o) => o.trim())).size, q.id).toBe(4);
-            expect(q.answer, q.id).toBeGreaterThanOrEqual(0);
-            expect(q.answer, q.id).toBeLessThan(4);
-          }
-          expect(q.explanation.trim().length, q.id).toBeGreaterThan(0);
-        }
-      });
-
-      it('never offers an option that points at the others', () => {
-        // Options are shuffled per attempt, so «كل ما سبق» would point at rows
-        // that moved — `quiz/option-label.ts` documents the same failure.
-        for (const q of set.questions) {
-          for (const o of q.options ?? []) expect(o, q.id).not.toMatch(/كل ما سبق|جميع ما سبق|لا شيء مما سبق/);
-        }
-      });
-    });
-  }
+const set = (over: Partial<PracticePublicSetSummary>): PracticePublicSetSummary => ({
+  year: 2,
+  track: 'arabic',
+  lessonCode: '1-1',
+  title: 't',
+  unitTitle: null,
+  articleSlug: null,
+  questionCount: 20,
+  ...over,
 });
 
 describe('catalog', () => {
-  it('orders year 2 before year 1 and keeps every unit non-empty', () => {
-    expect(PRACTICE_YEARS).toEqual([2, 1]);
-    for (const year of PRACTICE_YEARS) {
-      for (const unit of practiceUnits(year)) expect(unit.lessons.length).toBeGreaterThan(0);
-    }
+  it('groups one year and track by unit, in the book’s numeric order', () => {
+    const sets = [
+      set({ lessonCode: '6-10' }),
+      set({ lessonCode: '6-8' }),
+      set({ lessonCode: '2-1', unitTitle: 'الوحدة الثانية: الأمن السيبراني' }),
+      set({ lessonCode: '1-1', track: 'languages' }),
+      set({ lessonCode: '1-1', year: 1 }),
+    ];
+    const units = practiceUnits(sets, 2, 'arabic');
+    expect(units.map((u) => u.number)).toEqual([2, 6]);
+    expect(units[0]!.title).toBe('الوحدة الثانية: الأمن السيبراني');
+    expect(units[1]!.title).toBe('الوحدة السادسة');
+    expect(units[1]!.sets.map((s) => s.lessonCode)).toEqual(['6-8', '6-10']);
   });
 
-  it('resolves a path back to its set and rejects anything else', () => {
-    const first = allPracticeLessons()[0]!;
-    expect(practicePath(first.year, first.code)).toBe(`/practice/${first.year}/${first.code}`);
-    expect(getPracticeSet(first.year, first.code)?.title).toBe(first.title);
+  it('gives a known unit its own look and an unknown one a non-grey fallback', () => {
+    expect(unitLook(2, 2)).toEqual({ tone: 'ok', icon: 'shield' });
+    expect(unitLook(2, 9).icon).toBe('book');
+  });
+
+  it('counts lessons and questions per filter', () => {
+    const sets = [set({}), set({ lessonCode: '1-2', questionCount: 10 }), set({ year: 1 })];
+    expect(practiceTotals(sets)).toEqual({ lessons: 3, questions: 50 });
+    expect(practiceTotals(sets, { year: 2 })).toEqual({ lessons: 2, questions: 30 });
+  });
+
+  it('builds and parses URLs, and recognises a legacy lesson segment', () => {
+    expect(practicePath(2)).toBe('/practice/2');
+    expect(practicePath(2, 'languages')).toBe('/practice/2/languages');
+    expect(practicePath(1, 'arabic', '6-10')).toBe('/practice/1/arabic/6-10');
     expect(parsePracticeYear('3')).toBeNull();
-    expect(parsePracticeYear('2')).toBe(2);
-    expect(getPracticeSet(2, '9-9')).toBeNull();
-  });
-
-  it('links every lesson to a free lesson article', () => {
-    for (const lesson of allPracticeLessons()) expect(lesson.article).toMatch(/^شرح-درس-/);
+    expect(parsePracticeTrack('english')).toBeNull();
+    expect(LESSON_CODE.test('2-1')).toBe(true);
+    expect(LESSON_CODE.test('arabic')).toBe(false);
+    expect(practiceCourseSlug(2, 'languages')).toBe('programming-cs-year2-2027-languages');
+    expect(practiceCourseSlug(1, 'arabic')).toBe('programming-cs-year1-2027-general');
   });
 });
 
@@ -91,23 +74,26 @@ describe('grading', () => {
   });
 
   it('shuffles into a permutation', () => {
-    const order = shuffledOrder(4, () => 0.3);
-    expect([...order].sort()).toEqual([0, 1, 2, 3]);
+    expect([...shuffledOrder(4, () => 0.3)].sort()).toEqual([0, 1, 2, 3]);
+  });
+
+  it('keeps the Arabic key the first release wrote, and a separate one for Languages', () => {
+    expect(bestKey(2, 'arabic', '2-1')).toBe('2-2-1');
+    expect(bestKey(2, 'languages', '2-1')).toBe('2-languages-2-1');
   });
 
   it('keeps only a better best score, and survives storage that throws', () => {
     localStorage.clear();
-    expect(recordBest(2, '2-1', { score: 10, total: 20 })).toBe(true);
-    expect(recordBest(2, '2-1', { score: 8, total: 20 })).toBe(false);
-    expect(readBest(2, '2-1')).toEqual({ score: 10, total: 20 });
-    expect(recordBest(2, '2-1', { score: 19, total: 20 })).toBe(true);
+    expect(recordBest('2-2-1', { score: 10, total: 20 })).toBe(true);
+    expect(recordBest('2-2-1', { score: 8, total: 20 })).toBe(false);
+    expect(readBest('2-2-1')).toEqual({ score: 10, total: 20 });
 
     const original = Storage.prototype.getItem;
     Storage.prototype.getItem = () => {
       throw new Error('blocked');
     };
     try {
-      expect(readBest(2, '2-1')).toBeNull();
+      expect(readBest('2-2-1')).toBeNull();
     } finally {
       Storage.prototype.getItem = original;
     }

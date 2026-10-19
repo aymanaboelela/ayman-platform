@@ -10,10 +10,10 @@ import { parseBest, readBestRaw, subscribeBest, type PracticeBest } from '@/lib/
  * then the stored value — so the prerendered HTML and hydration agree, and a
  * finished attempt updates every reader on the page at once.
  */
-export function usePracticeBest(year: number, code: string): PracticeBest | null {
+export function usePracticeBest(id: string): PracticeBest | null {
   const raw = useSyncExternalStore(
     subscribeBest,
-    () => readBestRaw(year, code),
+    () => readBestRaw(id),
     () => null,
   );
   return useMemo(() => parseBest(raw), [raw]);
