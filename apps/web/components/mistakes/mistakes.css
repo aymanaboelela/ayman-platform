@@ -1,34 +1,610 @@
 /* =============================================================================
    «دفتر غلطاتي» — `/mistakes`.
 
-   صفحة عادية في الشل، مش مسرح غامق زي الساحة — الألوان والكروت كلها
-   Tailwind utilities على التوكنز العادية (`globals.css`'s `@theme`). الملف
-   ده بيحمل بس اللي الـutilities ماتقدرش تعبّر عنه بسهولة: حالات زرار
-   الاختيار الأربعة في المراجعة.
+   A page in the student shell, on the ordinary tokens. It used to be bare
+   grey cards and outlined buttons; Ayman asked for it to be colourful
+   (2026-10-19), so every part here carries a hue: a warm hero, coloured tabs,
+   a colour per course on the cards, lettered options in four hues, a progress
+   bar, and feedback that turns the whole question green, red or gold.
+
+   Hues come from the viz ramp (`--viz-1…4`) plus `--ok`/`--err`/
+   `--a-9`, all mixed against the surface so dark and light both hold.
    ========================================================================== */
 
-.mk-option {
-  transition: transform 120ms var(--ease-out), border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
+.mk-notebook,
+.mk-review {
+  display: grid;
+  gap: 1rem;
 }
 
-/* الضغطة نفسها، قبل رد السيرفر — نفس درس `game.css`: بدون `pending` واضح
-   الزرار بيفضل شكله زي قبل الضغط لحد رد السيرفر، وده اللي كان بيحسّس
-   الطالب إن الضغطة «مش شغالة» فيدوس تاني. */
+.mk-review {
+  max-inline-size: 46rem;
+  margin-inline: auto;
+}
+
+/* ── hero ─────────────────────────────────────────────────────────────── */
+
+.mk-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.4rem 1.5rem;
+  border: 1px solid color-mix(in oklab, var(--a-9) 35%, var(--color-line));
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in oklab, var(--viz-2) 22%, transparent), transparent 55%),
+    linear-gradient(135deg, color-mix(in oklab, var(--a-9) 22%, var(--color-surface-1)), var(--color-surface-1) 70%);
+}
+
+.mk-hero__text {
+  display: grid;
+  gap: 0.3rem;
+  max-inline-size: 34rem;
+}
+
+.mk-hero__eyebrow {
+  inline-size: fit-content;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--a-9) 22%, transparent);
+  color: var(--color-fg);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.mk-hero__title {
+  color: var(--color-fg);
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.mk-hero__lead {
+  color: var(--color-fg-muted);
+  line-height: 1.7;
+}
+
+.mk-hero__stats {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.mk-stat {
+  --hue: var(--err);
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  min-inline-size: 6.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--hue) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--hue) 13%, var(--color-surface-1));
+  color: var(--hue);
+}
+
+.mk-stat[data-tone='mastered'] {
+  --hue: var(--ok);
+}
+
+.mk-stat b {
+  color: var(--color-fg);
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-stat span {
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ── tabs + start ─────────────────────────────────────────────────────── */
+
+.mk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mk-tabs {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+
+.mk-tab {
+  --hue: var(--err);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  color: var(--color-fg-muted);
+  font-weight: 700;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.mk-tab[data-tone='mastered'] {
+  --hue: var(--ok);
+}
+
+.mk-tab[aria-selected='true'] {
+  background: color-mix(in oklab, var(--hue) 18%, var(--color-surface-1));
+  color: var(--color-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hue) 45%, transparent);
+}
+
+.mk-tab__n {
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.4rem;
+  padding-inline: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--hue) 25%, transparent);
+  color: var(--color-fg);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-start {
+  gap: 0.45rem;
+}
+
+.mk-count {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1.5rem;
+  border: 1.5px dashed color-mix(in oklab, var(--ok) 40%, var(--color-line));
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--ok) 6%, var(--color-surface-1));
+  color: var(--ok);
+  text-align: center;
+}
+
+.mk-empty p {
+  color: var(--color-fg-muted);
+}
+
+/* ── notebook cards ───────────────────────────────────────────────────── */
+
+.mk-cards {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mk-card,
+.mk-option {
+  --hue: var(--viz-1);
+}
+
+.mk-card[data-hue='2'],
+.mk-option[data-hue='2'] {
+  --hue: var(--viz-2);
+}
+
+.mk-card[data-hue='3'],
+.mk-option[data-hue='3'] {
+  --hue: var(--viz-3);
+}
+
+.mk-card[data-hue='4'],
+.mk-option[data-hue='4'] {
+  --hue: var(--viz-4);
+}
+
+.mk-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--color-line);
+  border-inline-start: 4px solid var(--hue);
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-1) 60%,
+    color-mix(in oklab, var(--hue) 9%, var(--color-surface-1))
+  );
+}
+
+.mk-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.mk-card__n,
+.mk-question__n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--hue, var(--a-9)) 22%, transparent);
+  color: var(--color-fg);
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-card__where,
+.mk-question__where {
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.mk-card__stem {
+  color: var(--color-fg);
+  line-height: 1.75;
+}
+
+.mk-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.mk-chip {
+  --tone: var(--color-fg-muted);
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--tone) 14%, transparent);
+  color: var(--color-fg-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mk-chip[data-tone='missed'] {
+  --tone: var(--err);
+  color: var(--err);
+}
+
+.mk-chip[data-tone='streak'] {
+  --tone: var(--ok);
+  color: var(--ok);
+}
+
+.mk-chip[data-tone='source'] {
+  --tone: var(--viz-3);
+  color: var(--color-fg);
+}
+
+/* ── review: top bar + progress ───────────────────────────────────────── */
+
+.mk-review__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mk-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  color: var(--color-fg-muted);
+  font-weight: 600;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.mk-back:hover {
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+}
+
+.mk-review__top .mk-count {
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--a-9) 16%, transparent);
+  color: var(--color-fg);
+  font-weight: 700;
+}
+
+.mk-progress {
+  block-size: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  overflow: hidden;
+}
+
+.mk-progress__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--a-9), var(--viz-2));
+  transition: inline-size 300ms var(--ease-out);
+}
+
+/* ── review: the question ─────────────────────────────────────────────── */
+
+.mk-question {
+  --tone: var(--a-9);
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid color-mix(in oklab, var(--tone) 35%, var(--color-line));
+  border-block-start: 4px solid var(--tone);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--tone) 10%, var(--color-surface-1)),
+    var(--color-surface-1) 9rem
+  );
+  transition: border-color 200ms var(--ease-out);
+}
+
+.mk-question[data-tone='right'] {
+  --tone: var(--ok);
+}
+
+.mk-question[data-tone='wrong'] {
+  --tone: var(--err);
+}
+
+.mk-question[data-tone='mastered'] {
+  --tone: var(--a-9);
+}
+
+.mk-question__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.mk-question__head .mk-streak {
+  margin-inline-start: auto;
+}
+
+.mk-question__stem {
+  color: var(--color-fg);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.8;
+}
+
+.mk-streak {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.mk-streak__dot {
+  inline-size: 0.6rem;
+  block-size: 0.6rem;
+  border-radius: 50%;
+  background: var(--color-surface-3);
+  box-shadow: inset 0 0 0 1px var(--color-line-strong);
+}
+
+.mk-streak__dot[data-on] {
+  background: var(--ok);
+  box-shadow: none;
+}
+
+/* ── review: options ──────────────────────────────────────────────────── */
+
+.mk-options {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.mk-option {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  inline-size: 100%;
+  min-block-size: 3.4rem;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+  text-align: start;
+  line-height: 1.6;
+  transition:
+    transform 120ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    background-color 140ms var(--ease-out);
+}
+
+.mk-option:not(:disabled):hover {
+  border-color: var(--hue);
+  background: color-mix(in oklab, var(--hue) 9%, var(--color-surface-1));
+  transform: translateY(-1px);
+}
+
+.mk-option:disabled {
+  cursor: default;
+}
+
+.mk-option__letter {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.1rem;
+  block-size: 2.1rem;
+  border-radius: 0.6rem;
+  background: color-mix(in oklab, var(--hue) 22%, var(--color-surface-1));
+  color: var(--color-fg);
+  font-weight: 800;
+}
+
+.mk-option__text {
+  flex: 1;
+}
+
+.mk-option__mark {
+  flex: none;
+}
+
+/* The press itself, before the server answers — the same lesson as
+   `game.css`: without a visible `pending` the button looks untouched until
+   the reply, and the student presses again thinking it did not take. */
 .mk-option[data-state='pending'] {
   transform: translateY(2px);
   border-color: var(--a-9);
-  background: color-mix(in oklch, var(--a-9), transparent 92%);
+  background: color-mix(in oklab, var(--a-9) 10%, var(--color-surface-1));
 }
+
 .mk-option[data-state='right'] {
   border-color: var(--ok);
-  background: color-mix(in oklch, var(--ok), transparent 90%);
+  background: color-mix(in oklab, var(--ok) 14%, var(--color-surface-1));
   color: var(--ok);
 }
+
+.mk-option[data-state='right'] .mk-option__letter {
+  background: var(--ok);
+  color: var(--on-accent-ink);
+}
+
 .mk-option[data-state='wrong'] {
   border-color: var(--err);
-  background: color-mix(in oklch, var(--err), transparent 90%);
+  background: color-mix(in oklab, var(--err) 12%, var(--color-surface-1));
   color: var(--err);
 }
+
+.mk-option[data-state='wrong'] .mk-option__letter {
+  background: var(--err);
+  color: var(--on-accent-ink);
+}
+
 .mk-option[data-state='dim'] {
-  opacity: 0.45;
+  opacity: 0.5;
+}
+
+/* ── review: feedback ─────────────────────────────────────────────────── */
+
+.mk-feedback {
+  --tone: var(--ok);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--tone) 45%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--tone) 13%, var(--color-surface-1));
+  animation: mk-rise 220ms var(--ease-out);
+}
+
+.mk-feedback[data-tone='wrong'] {
+  --tone: var(--err);
+}
+
+.mk-feedback[data-tone='mastered'] {
+  --tone: var(--a-9);
+}
+
+.mk-feedback__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.6rem;
+  block-size: 2.6rem;
+  border-radius: 50%;
+  background: var(--tone);
+  color: var(--on-accent-ink);
+}
+
+.mk-feedback__body {
+  flex: 1;
+  min-inline-size: 10rem;
+}
+
+.mk-feedback__title {
+  color: var(--color-fg);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.mk-feedback__sub {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+/* ── review: done ─────────────────────────────────────────────────────── */
+
+.mk-done {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  max-inline-size: 30rem;
+  margin: 2rem auto;
+  padding: 2rem 1.5rem;
+  border: 1px solid color-mix(in oklab, var(--a-9) 40%, var(--color-line));
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in oklab, var(--a-9) 25%, transparent), transparent 60%),
+    var(--color-surface-1);
+  text-align: center;
+  animation: mk-rise 260ms var(--ease-out);
+}
+
+.mk-done__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 4.25rem;
+  block-size: 4.25rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--a-9), var(--viz-2));
+  color: var(--on-accent-ink);
+}
+
+.mk-done__title {
+  color: var(--color-fg);
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.mk-done__lead {
+  color: var(--color-fg-muted);
+}
+
+@keyframes mk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-feedback,
+  .mk-done {
+    animation: none;
+  }
+
+  .mk-option,
+  .mk-progress__fill {
+    transition: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .mk-hero__stats {
+    inline-size: 100%;
+  }
+
+  .mk-stat {
+    flex: 1;
+  }
+
+  .mk-start {
+    inline-size: 100%;
+  }
 }
