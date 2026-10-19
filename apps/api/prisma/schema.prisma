@@ -4815,6 +4815,85 @@ model NewsPost {
   @@schema("app")
 }
 
+// ── «اختبارات مجانية» — public practice quizzes ────────────────────────────
+//
+// ⚠️ Deliberately NOT the question bank. The bank is the paid product and its
+// keys never reach a learner who has not submitted; these questions are given
+// away WITH their key (grading happens in the visitor's browser and nothing is
+// written back). Two tables, no relation to `question_bank_entries`, so no rule
+// of the bank ever has to grow an exception for an anonymous reader. See
+// `packages/contracts/src/practice.ts`.
+
+enum PracticeTrack {
+  arabic
+  languages
+
+  @@map("practice_track")
+  @@schema("app")
+}
+
+enum PracticeQuestionType {
+  mcq
+  tf
+
+  @@map("practice_question_type")
+  @@schema("app")
+}
+
+/// One lesson's self-test for one year AND one track — «تانية · عربي · 2-1» and
+/// «تانية · لغات · 2-1» are two rows with different questions in different
+/// languages. `year` is CHECKed to 1|2 in the migration.
+model PracticeSet {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  year        Int
+  track       PracticeTrack
+  /// «2-1», «6-10» — unit, then lesson. It is a URL segment, so it is ordered
+  /// numerically in the service, never by this text (which would put «6-10»
+  /// before «6-8»).
+  lessonCode  String        @map("lesson_code")
+  title       String
+  unitTitle   String?       @map("unit_title")
+  /// The free «شرح درس» article under `/news/`. A slug, not a FK: the article
+  /// may be renamed or unpublished, and a stale link must not delete a quiz.
+  articleSlug String?       @map("article_slug")
+  /// A draft is invisible to the public reads (filtered in SQL).
+  published   Boolean       @default(false)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  questions PracticeQuestion[]
+
+  @@unique([year, track, lessonCode])
+  /// The public list: `published = true`, then year/track.
+  @@index([published, year, track])
+  @@map("practice_sets")
+  @@schema("app")
+}
+
+/// For `tf`, `options` is empty and `answer` is 0 (صح) or 1 (غلط); for `mcq`,
+/// `answer` indexes `options`. The shape rules live in the contract's Zod
+/// schema; the database only refuses a negative index.
+model PracticeQuestion {
+  id          String               @id @default(uuid(7)) @db.Uuid
+  setId       String               @map("set_id") @db.Uuid
+  type        PracticeQuestionType
+  stem        String
+  options     String[]             @default([])
+  answer      Int
+  explanation String               @default("")
+  /// Dense 0..n-1 within a set — the service renumbers after every delete and
+  /// reorder, inside one transaction.
+  position    Int
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  set PracticeSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([setId, position])
+  @@map("practice_questions")
+  @@schema("app")
+}
+
 /// Stores the storage KEY, never a full URL. The URL is reconstructed from
 /// the media origin at render time, so moving to S3/R2 changes one env var
 /// rather than rewriting every row.

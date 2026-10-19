@@ -9,6 +9,8 @@ import { buildMetadata, SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
 import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { IS_AYMAN } from '@/lib/tenant';
+import { PracticeInvite } from '@/components/practice/practice-invite';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
@@ -242,15 +244,23 @@ function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], heroKey: s
       );
 
     case 'courseGrid':
+      /*
+       * «اختبارات مجانية» rides on the course grid — on his page only, right
+       * under the section that answers «إيه اللي هتذاكره». Here rather than in
+       * the return above, which `landing-preset.test.ts` pins byte for byte.
+       * Not a home block of its own; `<PracticeInvite>` says why.
+       */
       return (
-        <FeaturedCourses
-          key={block.id}
-          title={props.titleAr}
-          lead={props.leadAr}
-          ctaLabel={props.ctaLabelAr}
-          limit={props.limit}
-          courseIds={props.courseIds}
-        />
+        <Fragment key={block.id}>
+          <FeaturedCourses
+            title={props.titleAr}
+            lead={props.leadAr}
+            ctaLabel={props.ctaLabelAr}
+            limit={props.limit}
+            courseIds={props.courseIds}
+          />
+          {IS_AYMAN ? <PracticeInvite /> : null}
+        </Fragment>
       );
 
     case 'books':

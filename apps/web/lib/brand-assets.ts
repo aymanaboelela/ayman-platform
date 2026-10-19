@@ -54,7 +54,14 @@ export type BrandAssetKind =
    * `/honor-board`. Personal, so gated like every kind not in
    * `GENERIC_ASSET_KINDS`: another teacher's board simply has no portrait.
    */
-  | 'honorHost';
+  | 'honorHost'
+  /**
+   * «اختبارات مجانية»: him riding the dragon over a sunset, the two robot
+   * pups beside him. Drawn by the landing-page invite and the `/practice`
+   * hero (animated there — see `practice-showcase.tsx`), which both fall back
+   * to a designed panel without it.
+   */
+  | 'practiceGuide';
 
 export type BrandAsset = {
   src: string;
@@ -107,6 +114,8 @@ export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
   trackYear1: 3 / 2,
   trackYear2: 3 / 2,
   honorHost: 4 / 5,
+  /** 16:9 — the lecture-cover frame it was rendered for, uncropped. */
+  practiceGuide: 16 / 9,
 };
 
 export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
@@ -199,6 +208,11 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
    * ⚠️ Re-cutting this needs a NEW FILENAME — see the note on `hero`.
    */
   honorHost: { src: '/brand/honor-host-1.webp', width: 720, height: 900 },
+  /**
+   * His lecture-6 cover art (1280×720), which carries no lettering of its
+   * own — the page puts none on it either. WebP at q78.
+   */
+  practiceGuide: { src: '/brand/practice-dragon-1.webp', width: 1280, height: 720 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
 };

@@ -4,6 +4,7 @@ import {
   BookMarked,
   Building2,
   CalendarClock,
+  ClipboardCheck,
   ChartColumn,
   ClipboardList,
   Coins,
@@ -45,6 +46,7 @@ import {
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminPractice } from '@ayman/contracts/copy/admin-practice';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -279,6 +281,20 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     href: '/admin/questions',
     labelAr: copy.admin.nav.questions,
     icon: FileQuestion,
+    permission: 'question:write',
+    group: 'teaching',
+  },
+  {
+    // «اختبارات مجانية» — the public no-account self-test per lesson. Right
+    // under the bank because it is the same act (writing questions) for a
+    // different audience. `question:write`, like the bank: the API guards the
+    // whole `/api/admin/practice` surface with the question permissions, and
+    // the screen exists to write. No `feature`: `practice.enabled` is a runtime
+    // FLAG, not an entitlement this table can read, and while it is off the
+    // page says so and links to «الفلاجات» instead of hiding the door to it.
+    href: '/admin/practice',
+    labelAr: adminPractice.nav,
+    icon: ClipboardCheck,
     permission: 'question:write',
     group: 'teaching',
   },

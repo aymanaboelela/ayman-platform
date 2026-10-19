@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Check, X, ArrowLeft, RotateCcw, BookOpen, Trophy, Sparkles } from 'lucide-react';
+import { Check, X, ArrowLeft, RotateCcw, BookOpen, Trophy, Sparkles, MousePointerClick, Lightbulb, Gauge } from 'lucide-react';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { arabicCount } from '@ayman/contracts/arabic-count';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { optionLetter } from '@/components/quiz/option-letter';
-import type { PracticeQuestion, PracticeSet } from '@/lib/practice/catalog';
-import { percent, practiceBand, recordBest, shuffledOrder } from '@/lib/practice/grade';
+import type { PracticePublicSet } from '@ayman/contracts/practice';
+import { bestKey, percent, practiceBand, recordBest, shuffledOrder } from '@/lib/practice/grade';
 import { usePracticeBest } from './use-practice-best';
 
 const fill = (template: string, values: Record<string, string | number>) =>
   template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ''));
+
+type PracticeQuestion = PracticePublicSet['questions'][number];
 
 /** A question as served on one attempt: options in this attempt's order. */
 interface Served {
@@ -23,12 +25,13 @@ interface Served {
   answer: number;
 }
 
-function serve(question: PracticeQuestion): Served {
+function serve(question: PracticeQuestion, english: boolean): Served {
   if (question.type === 'tf') {
     // صح / غلط never shuffle — «غلط» first would be a trap, not a test.
-    return { question, options: [p.run.true, p.run.false], answer: question.answer };
+    const pair = english ? [p.run.trueEn, p.run.falseEn] : [p.run.true, p.run.false];
+    return { question, options: pair, answer: question.answer };
   }
-  const options = question.options ?? [];
+  const options = question.options;
   const order = shuffledOrder(options.length);
   return { question, options: order.map((i) => options[i]!), answer: order.indexOf(question.answer) };
 }
@@ -40,23 +43,32 @@ export function PracticeRunner({
   articleHref,
   courseHref,
 }: {
-  set: PracticeSet;
-  articleHref: string;
+  set: PracticePublicSet;
+  articleHref: string | null;
   courseHref: string;
 }) {
   const total = set.questions.length;
+  const id = bestKey(set.year, set.track, set.lessonCode);
+  /*
+   * The Languages track is written in English. Its question text, options and
+   * explanations are set LTR as a block — inside the RTL page a trailing «?»
+   * or «.» otherwise jumps to the wrong end of the line — while the chrome
+   * around them (progress, buttons, verdict) stays Arabic.
+   */
+  const english = set.track === 'languages';
+  const content = english ? ({ dir: 'ltr', lang: 'en' } as const) : {};
   const [phase, setPhase] = useState<Phase>('intro');
   const [served, setServed] = useState<Served[]>([]);
   const [index, setIndex] = useState(0);
   /** Chosen display index per question, or undefined while unanswered. */
   const [picks, setPicks] = useState<Array<number | undefined>>([]);
-  const best = usePracticeBest(set.year, set.lesson);
+  const best = usePracticeBest(id);
   const [newBest, setNewBest] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const resultRef = useRef<HTMLHeadingElement>(null);
 
   const start = () => {
-    setServed(set.questions.map(serve));
+    setServed(set.questions.map((q) => serve(q, english)));
     setPicks([]);
     setIndex(0);
     setNewBest(false);
@@ -89,7 +101,7 @@ export function PracticeRunner({
     // A first attempt is a score, not a record: «رقم قياسي» only when it beats
     // one that was already there.
     const hadBest = best !== null;
-    setNewBest(recordBest(set.year, set.lesson, { score, total }) && hadBest);
+    setNewBest(recordBest(id, { score, total }) && hadBest);
     setPhase('done');
   };
 
@@ -106,6 +118,19 @@ export function PracticeRunner({
         <p className="practice-intro__lead">
           {fill(p.run.intro, { count: arabicCount(total, quizExperience.counts.questions) })}
         </p>
+        <ol className="practice-steps">
+          {p.run.steps.map((step, i) => {
+            const Icon = [MousePointerClick, Lightbulb, Gauge][i] ?? Check;
+            return (
+              <li key={step} data-step={i + 1}>
+                <span className="practice-steps__icon" aria-hidden="true">
+                  <Icon size={20} />
+                </span>
+                {step}
+              </li>
+            );
+          })}
+        </ol>
         {best ? (
           <p className="practice-best">
             <Trophy size={16} aria-hidden="true" />
@@ -139,11 +164,11 @@ export function PracticeRunner({
           <span style={{ inlineSize: `${((index + (answered ? 1 : 0)) / total) * 100}%` }} />
         </div>
 
-        <h2 ref={headingRef} tabIndex={-1} className="practice-stem">
+        <h2 ref={headingRef} tabIndex={-1} className="practice-stem" {...content}>
           {current.question.stem}
         </h2>
 
-        <div className="practice-options" role="group" aria-label={p.run.optionsLabel}>
+        <div className="practice-options" role="group" aria-label={p.run.optionsLabel} {...content}>
           {current.options.map((text, i) => {
             const state = !answered
               ? 'idle'
@@ -163,7 +188,18 @@ export function PracticeRunner({
                 onClick={() => choose(i)}
               >
                 <span className="practice-option__letter" aria-hidden="true">
-                  {current.question.type === 'tf' ? (i === 0 ? <Check size={16} /> : <X size={16} />) : optionLetter(i)}
+                  {current.question.type === 'tf' ? (
+                    i === 0 ? (
+                      <Check size={16} />
+                    ) : (
+                      <X size={16} />
+                    )
+                  ) : english ? (
+                    // The book and the teacher say «A, B, C, D» to a Languages class.
+                    String.fromCharCode(65 + i)
+                  ) : (
+                    optionLetter(i)
+                  )}
                 </span>
                 <span className="practice-option__text">{text}</span>
                 {state === 'right' ? <Check className="practice-option__mark" size={18} aria-hidden="true" /> : null}
@@ -185,7 +221,7 @@ export function PracticeRunner({
                   </span>
                 ) : null}
               </p>
-              <p className="practice-feedback__why">
+              <p className="practice-feedback__why" {...content}>
                 <strong>{p.run.explanation}: </strong>
                 {current.question.explanation}
               </p>
@@ -237,11 +273,13 @@ export function PracticeRunner({
           <RotateCcw size={18} aria-hidden="true" />
           {p.result.retry}
         </button>
-        <Link href={articleHref} className="practice-btn">
-          <BookOpen size={18} aria-hidden="true" />
-          {p.result.lessonArticle}
-        </Link>
-        <Link href="/practice" className="practice-btn">
+        {articleHref ? (
+          <Link href={articleHref} className="practice-btn">
+            <BookOpen size={18} aria-hidden="true" />
+            {p.result.lessonArticle}
+          </Link>
+        ) : null}
+        <Link href={`/practice/${set.year}/${set.track}`} className="practice-btn">
           {p.result.another}
         </Link>
       </div>
@@ -254,7 +292,9 @@ export function PracticeRunner({
           <ol className="practice-misses">
             {misses.map(({ s, pick }) => (
               <li key={s.question.id}>
-                <p className="practice-misses__stem">{s.question.stem}</p>
+                <p className="practice-misses__stem" {...content}>
+                  {s.question.stem}
+                </p>
                 {pick !== undefined ? (
                   <p className="practice-misses__yours">
                     <X size={15} aria-hidden="true" />
@@ -265,7 +305,9 @@ export function PracticeRunner({
                   <Check size={15} aria-hidden="true" />
                   {fill(p.run.rightAnswer, { answer: s.options[s.answer] ?? '' })}
                 </p>
-                <p className="practice-misses__why">{s.question.explanation}</p>
+                <p className="practice-misses__why" {...content}>
+                  {s.question.explanation}
+                </p>
               </li>
             ))}
           </ol>

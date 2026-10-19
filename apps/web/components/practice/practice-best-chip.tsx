@@ -12,8 +12,8 @@ import { usePracticeBest } from './use-practice-best';
  * after mount, which is the only moment storage can be read without the server
  * HTML and the first client render disagreeing.
  */
-export function PracticeBestChip({ year, code }: { year: number; code: string }) {
-  const best = usePracticeBest(year, code);
+export function PracticeBestChip({ id }: { id: string }) {
+  const best = usePracticeBest(id);
 
   if (!best) return <span className="practice-chip">{p.index.notYet}</span>;
   return (

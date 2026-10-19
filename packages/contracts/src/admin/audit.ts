@@ -492,6 +492,17 @@ export const AUDIT_ACTIONS = [
      (who went up, who came off, who moved), because it is one decision. */
   'honor:publish-exam',
   /*
+   * «اختبارات مجانية» — public practice sets. A set's lifecycle is three
+   * verbs (`update` carries publish/unpublish as a field flip, the way
+   * `term:update` carries a reprice); everything done to its QUESTIONS is one
+   * verb with `operation` (add|edit|delete|reorder) in metadata, the
+   * `section:update` convention — «مين غيّر أسئلة الدرس ده» is one filter.
+   */
+  'practice:create',
+  'practice:update',
+  'practice:delete',
+  'practice:questions',
+  /*
    * «المحفظة» — every movement of a student's money, each its own action so
    * «مين شحنله» and «مين خصم منه» are filters, not metadata searches. Each is
    * written INSIDE the transaction that writes the ledger row (`recordTx`),
