@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Download } from 'lucide-react';
 import { GRADE_BANDS, LessonAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui/lib/cn';
@@ -20,6 +19,7 @@ import {
 } from '@/components/admin/charts/format';
 import { ordinalColor, sequentialColor, seriesColor } from '@/components/admin/charts/palette';
 import { AnalyticsNav } from '../../analytics-nav';
+import { ExportLinks } from '../../export-links';
 
 const c = copy.analytics;
 
@@ -245,18 +245,7 @@ export default async function LessonAnalyticsDetailPage({
             </h2>
             <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.rosterHint}</p>
           </div>
-          <a
-            href={`/api/admin/analytics/lessons/${lessonId}/roster.csv`}
-            download
-            className={cn(
-              'inline-flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5',
-              'text-[length:var(--fs-text-sm)] text-fg',
-              'transition-colors duration-[160ms] ease-out hover:border-line-strong hover:bg-surface-3',
-            )}
-          >
-            <Download className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
-            {c.exportCsv}
-          </a>
+          <ExportLinks base={`/api/admin/analytics/lessons/${lessonId}/roster`} />
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-line">

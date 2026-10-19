@@ -41,7 +41,7 @@ export default async function LessonAnalyticsPage({
       <FilterBar
         courses={courses}
         showWindow={false}
-        exportHref="/api/admin/analytics/export/lessons.csv"
+        exportHref="/api/admin/analytics/export/lessons"
       />
 
       {rows.length === 0 ? (

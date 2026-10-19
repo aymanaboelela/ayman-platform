@@ -562,7 +562,7 @@ export default async function AnalyticsOverviewPage({
       </Section>
 
       <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
-        {maybe(quiz.attempts)} · {c.attempts} — {c.exportHint}
+        {maybe(quiz.attempts)} · {c.attempts} — {c.exportXlsxHint}
       </p>
     </div>
   );

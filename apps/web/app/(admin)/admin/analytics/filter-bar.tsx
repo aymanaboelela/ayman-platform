@@ -1,10 +1,10 @@
 'use client';
 
 import { useQueryStates } from 'nuqs';
-import { Download } from 'lucide-react';
 import { cn } from '@ayman/ui/lib/cn';
 import { copy } from '@ayman/contracts/copy/admin';
 import { WINDOW_DAYS, overviewSearchParams } from './search-params';
+import { ExportLinks } from './export-links';
 
 const c = copy.analytics;
 
@@ -90,19 +90,11 @@ export function FilterBar({
       </label>
 
       {exportHref ? (
-        <a
-          href={query.courseId ? `${exportHref}?courseId=${query.courseId}` : exportHref}
-          download
-          className={cn(
-            'ms-auto inline-flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5',
-            'text-[length:var(--fs-text-sm)] text-fg',
-            'transition-colors duration-[160ms] ease-out hover:border-line-strong hover:bg-surface-3',
-          )}
-          title={c.exportHint}
-        >
-          <Download className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
-          {c.exportCsv}
-        </a>
+        <ExportLinks
+          base={exportHref}
+          query={query.courseId ? `courseId=${query.courseId}` : ''}
+          className="ms-auto"
+        />
       ) : null}
     </div>
   );

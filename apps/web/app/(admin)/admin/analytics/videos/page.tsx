@@ -50,7 +50,7 @@ export default async function VideoAnalyticsPage({ searchParams }: { searchParam
       </header>
 
       <AnalyticsNav />
-      <PeriodSwitcher exportHref="/api/admin/analytics/export/videos.csv" />
+      <PeriodSwitcher exportHref="/api/admin/analytics/export/videos" />
 
       <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
