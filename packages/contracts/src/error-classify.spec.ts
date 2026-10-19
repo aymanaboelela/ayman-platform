@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   CONNECTIVITY_ERROR_MESSAGES,
+  MINIFIED_CONNECTION_CLOSED_MESSAGE,
   isConnectivityErrorMessage,
   isOmittedServerErrorMessage,
   isUnexpectedServerResponseMessage,
@@ -17,6 +18,13 @@ import {
 describe('error-classify', () => {
   it('knows the sentence production actually recorded', () => {
     expect(isConnectivityErrorMessage('network error')).toBe(true);
+  });
+
+  it('knows React’s «Connection closed.» in its minified spelling, and only #412', () => {
+    expect(isConnectivityErrorMessage(MINIFIED_CONNECTION_CLOSED_MESSAGE)).toBe(true);
+    // #488 is the server renderer's «Couldn't find all resumable slots…», which
+    // a production server prints in full — and any other code is a real fault.
+    expect(isConnectivityErrorMessage(MINIFIED_CONNECTION_CLOSED_MESSAGE.replaceAll('412', '488'))).toBe(false);
   });
 
   it('matches whole sentences, never a substring', () => {

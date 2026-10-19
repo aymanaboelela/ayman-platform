@@ -38,6 +38,30 @@
  * never as substrings: «network error» inside a longer sentence is somebody's
  * real message and must still reach the log.
  */
+/**
+ * React's «Connection closed.» as a production build spells it since Next
+ * 16.3.8.
+ *
+ * The React that Next 16.2.11 shipped threw the plain sentence. The 19.3 build
+ * vendored by 16.3.8 minifies it to error code 412 (`codes.json`: «412:
+ * Connection closed.»), thrown from the Flight client's `close()` the moment a
+ * stream ends with rows still pending: the document's inline payload when the
+ * HTML stops half-way, or an RSC fetch whose body dies. The plain sentence
+ * stopped matching the day the upgrade deployed (2026-10-18), and the next
+ * night `/admin/errors` filed 18 of these on `/` and 3 on a `/news` article,
+ * all from phones.
+ *
+ * ⚠️ «#412» is NOT «Couldn't find all resumable slots…». That sentence is
+ * code 488, it is thrown only by react-dom's SERVER renderer, and a production
+ * server build prints it in full. A row reading «Minified React error #412»
+ * always came from a browser, and its stack is the Flight client's `close`.
+ *
+ * Fixed text: the message takes no arguments, so `formatProdErrorMessage`
+ * produces exactly this, and it can be matched exactly like the rest.
+ */
+export const MINIFIED_CONNECTION_CLOSED_MESSAGE =
+  'Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.';
+
 export const CONNECTIVITY_ERROR_MESSAGES: readonly string[] = [
   'Failed to fetch',
   'Load failed',
@@ -49,6 +73,7 @@ export const CONNECTIVITY_ERROR_MESSAGES: readonly string[] = [
   'A server with the specified hostname could not be found.',
   'Network request failed',
   'Connection closed.',
+  MINIFIED_CONNECTION_CLOSED_MESSAGE,
 ];
 
 export function isConnectivityErrorMessage(message: string | null | undefined): boolean {
