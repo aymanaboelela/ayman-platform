@@ -33,10 +33,25 @@ import { isConnectivityErrorMessage } from '@ayman/contracts/error-classify';
  * `report-error.ts`: both already shipped in client bundles, and a tab from an
  * older build that loaded a newer chunk importing a fresh export from either
  * would read it as `undefined` — see `zod-exports-only-z.spec.ts` in contracts.
+ * The same reason this file names React's two spellings itself below instead of
+ * importing `MINIFIED_CONNECTION_CLOSED_MESSAGE`: a fresh export read through an
+ * older tab's copy of `error-classify` would be `undefined`.
  */
 export function isConnectivityError(error: unknown): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   if (!(error instanceof Error)) return false;
   if (!isConnectivityErrorMessage(error.message)) return false;
-  return error.name === 'TypeError' || error.message.trim() === 'Connection closed.';
+  return error.name === 'TypeError' || isReactConnectionClosed(error.message);
+}
+
+/**
+ * React's own «the Flight stream ended early», which it raises as a plain
+ * `Error`. Next 16.2.11's React threw the sentence; the 19.3 build in 16.3.8
+ * throws it minified as error #412 — see `MINIFIED_CONNECTION_CLOSED_MESSAGE`
+ * in `@ayman/contracts/error-classify`. The caller has already matched the
+ * whole message against that shared list, so a prefix is enough here.
+ */
+function isReactConnectionClosed(message: string): boolean {
+  const text = message.trim();
+  return text === 'Connection closed.' || text.startsWith('Minified React error #412;');
 }

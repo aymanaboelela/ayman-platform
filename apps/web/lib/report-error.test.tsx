@@ -143,6 +143,15 @@ describe('useErrorReport', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('never files React’s «Connection closed.» in the minified spelling Next 16.3.8 ships', () => {
+    // 18 rows on `/` and 3 on a `/news` article the night after the upgrade —
+    // the same dropped stream as above, no longer recognised once minified.
+    render(
+      <Harness message="Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings." />,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('never files anything while the browser says it is offline', () => {
     const onLine = vi.spyOn(Navigator.prototype, 'onLine', 'get').mockReturnValue(false);
     render(<Harness message="anything at all" />);

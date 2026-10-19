@@ -31,6 +31,22 @@ describe('isConnectivityError', () => {
     expect(isConnectivityError(new Error('Connection closed.'))).toBe(true);
   });
 
+  it('recognises the same sentence minified, as Next 16.3.8’s React throws it', () => {
+    // Byte for byte what a production build raised on a truncated `/` stream
+    // (local `next build` on 16.3.8, at `ec`/`n` in the Flight client chunk).
+    const minified =
+      'Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.';
+    expect(isConnectivityError(new Error(minified))).toBe(true);
+    // Any OTHER minified React error is a real fault and stays in the log.
+    expect(
+      isConnectivityError(
+        new Error(
+          'Minified React error #418; visit https://react.dev/errors/418 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.',
+        ),
+      ),
+    ).toBe(false);
+  });
+
   it('needs the TypeError, not just the words', () => {
     // A component that throws `new Error('network error')` on purpose is a
     // real message and must reach the log.

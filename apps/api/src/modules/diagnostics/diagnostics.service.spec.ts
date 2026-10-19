@@ -132,6 +132,9 @@ describe('DiagnosticsService', () => {
         'NetworkError when attempting to fetch resource.',
         'The network connection was lost.',
         'Connection closed.',
+        // The same, as the React in Next 16.3.8 throws it in production. Tabs
+        // on a build from before the browser learned it keep posting it.
+        'Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.',
       ]) {
         await service.record({ kind: 'client', route: '/results', message }, { userId: null, userAgent: null });
       }
