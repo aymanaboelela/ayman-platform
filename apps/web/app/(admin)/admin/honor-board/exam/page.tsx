@@ -84,7 +84,7 @@ export default async function HonorExamPage({
               <Link
                 href={`/admin/honor-board/exam?lesson=${exam.lessonId}`}
                 className={cn(
-                  'flex h-full items-center gap-3 rounded-[var(--r-lg)] border border-line bg-surface p-4',
+                  'flex h-full items-center gap-3 rounded-[var(--r-lg)] border border-line bg-surface-1 p-4',
                   'transition-colors hover:border-accent/60 hover:bg-accent/5',
                 )}
               >

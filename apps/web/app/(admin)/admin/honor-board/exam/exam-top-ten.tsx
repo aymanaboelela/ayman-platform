@@ -154,7 +154,7 @@ export function ExamTopTen({ board }: { board: AdminHonorExamBoard }) {
                 key={place}
                 className={cn(
                   'flex min-w-0 items-center gap-2 rounded-md border p-2',
-                  row ? 'border-line bg-surface' : 'border-dashed border-line-strong',
+                  row ? 'border-line bg-surface-1' : 'border-dashed border-line-strong',
                 )}
               >
                 <span className={cn('grid size-7 shrink-0 place-items-center rounded-full text-[length:var(--fs-text-sm)] font-bold', toneFor(place))}>
@@ -176,7 +176,7 @@ export function ExamTopTen({ board }: { board: AdminHonorExamBoard }) {
         </ol>
       </section>
 
-      <section className="rounded-[var(--r-lg)] border border-line bg-surface">
+      <section className="rounded-[var(--r-lg)] border border-line bg-surface-1">
         <header className="border-b border-line px-4 py-3">
           <h2 className="text-[length:var(--fs-text-base)] font-semibold text-fg">{c.candidatesTitle}</h2>
           <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg-muted">{c.candidatesHint}</p>
@@ -249,7 +249,7 @@ export function ExamTopTen({ board }: { board: AdminHonorExamBoard }) {
       </section>
 
       {/* The publish bar stays in reach on a long list. */}
-      <div className="sticky bottom-3 z-10 flex flex-wrap items-end justify-between gap-3 rounded-[var(--r-lg)] border border-line bg-surface p-3 shadow-lg">
+      <div className="sticky bottom-3 z-10 flex flex-wrap items-end justify-between gap-3 rounded-[var(--r-lg)] border border-line bg-surface-2 p-3 shadow-lg">
         <div className="space-y-1">
           <Label htmlFor="honor-exam-day">{c.dayLabel}</Label>
           <Input id="honor-exam-day" type="date" value={day} onChange={(event) => setDay(event.target.value)} className="w-44" />

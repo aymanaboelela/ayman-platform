@@ -4141,6 +4141,14 @@
   text-align: center;
 }
 
+/* On a phone the board comes before the list of past rounds — the visitor
+   came for the names. Beside each other on a desk, the rail stays first. */
+@media (max-width: 63.99rem) {
+  .honor-archive__body > .honor-archive__rail {
+    order: 2;
+  }
+}
+
 .honor-races {
   display: grid;
   gap: var(--s-32);

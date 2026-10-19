@@ -236,20 +236,19 @@ export default async function HonorBoardArchivePage({
   );
 }
 
-/** «48 من 50» — or nothing on a hand-added card, which has no paper. The
- *  digits are isolated: a Latin number inside an Arabic line flips. */
+/** «48 من 50» — or the reason line on a hand-added card, which has no paper. */
 function Score({ entry, className }: { entry: HonorBoardEntry; className: string }) {
   if (entry.scaledScore === null || entry.gradeOutOf === null) {
     return <span className={`${className} ${className}--reason`}>{entry.title}</span>;
   }
   return (
+    // RTL flow, not `dir="ltr"`: an LTR run around «من» put the total first
+    // and read «20 من 19». Each number is its own run, so it still never flips.
     <span className={className}>
-      <bdi dir="ltr">
-        {formatCopy(c.score, {
-          score: formatMark(entry.scaledScore),
-          outOf: formatMark(entry.gradeOutOf),
-        })}
-      </bdi>
+      {formatCopy(c.score, {
+        score: formatMark(entry.scaledScore),
+        outOf: formatMark(entry.gradeOutOf),
+      })}
     </span>
   );
 }
