@@ -14,10 +14,7 @@ import {
 } from '@ayman/ui/components/dropdown-menu';
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { cn } from '@ayman/ui/lib/cn';
-import {
-  markAllNotificationsReadAction,
-  markNotificationReadAction,
-} from '@/app/(app)/notifications/actions';
+import { markAllNotificationsRead, markNotificationRead } from './mark-read';
 import { describeNotification, formatNotificationTime } from '@/lib/notification-view';
 import { iconFor, toneFor } from './notification-icon';
 import { useLiveUnread } from './notification-stream';
@@ -157,8 +154,8 @@ export function NotificationBellClient({ unread }: { unread: number }) {
     setOpen(false);
     // Navigate FIRST, mark read in the background. The student's intent is to
     // see the thing; making them wait on a write that only changes a badge
-    // would be the wrong order, and the Server Action revalidates the layout
-    // when it lands so the badge catches up on its own.
+    // would be the wrong order, and `router.refresh()` re-renders the layout
+    // when the mark lands so the badge catches up on its own.
     router.push(href);
     if (!entry.readAt) {
       // Drop the dot on our own copy too. `refresh()` re-renders the server
@@ -170,8 +167,9 @@ export function NotificationBellClient({ unread }: { unread: number }) {
       setEntries((current) =>
         current?.map((row) => (row.id === entry.id ? { ...row, readAt: at } : row)) ?? null,
       );
-      startTransition(() => {
-        void markNotificationReadAction(entry.id);
+      startTransition(async () => {
+        await markNotificationRead(entry.id);
+        router.refresh();
       });
     }
   }
@@ -183,8 +181,9 @@ export function NotificationBellClient({ unread }: { unread: number }) {
     setEntries((current) =>
       current?.map((entry) => (entry.readAt ? entry : { ...entry, readAt: at })) ?? null,
     );
-    startTransition(() => {
-      void markAllNotificationsReadAction();
+    startTransition(async () => {
+      await markAllNotificationsRead();
+      router.refresh();
     });
   }
 

@@ -1,15 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
 import { apiGet } from '@/lib/api';
-import {
-  markAllNotificationsReadAction,
-  markNotificationReadAction,
-} from '@/app/(app)/notifications/actions';
+import { markAllNotificationsRead, markNotificationRead } from './mark-read';
 import { describeNotification, formatNotificationTime } from '@/lib/notification-view';
 import { iconFor } from './notification-icon';
 
@@ -39,6 +37,7 @@ export function NotificationList({
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   const unread = entries.filter((entry) => !entry.readAt).length;
 
@@ -63,12 +62,13 @@ export function NotificationList({
   }
 
   function markAll() {
-    // Optimistic: the rows lose their dot immediately. The action revalidates
-    // the layout when it lands, which is what updates the topbar badge.
+    // Optimistic: the rows lose their dot immediately. `router.refresh()` when
+    // the mark lands re-renders the layout, which updates the topbar badge.
     const at = new Date().toISOString();
     setEntries((current) => current.map((entry) => (entry.readAt ? entry : { ...entry, readAt: at })));
-    startTransition(() => {
-      void markAllNotificationsReadAction();
+    startTransition(async () => {
+      await markAllNotificationsRead();
+      router.refresh();
     });
   }
 
@@ -123,8 +123,9 @@ export function NotificationList({
                       row.id === entry.id ? { ...row, readAt: new Date().toISOString() } : row,
                     ),
                   );
-                  startTransition(() => {
-                    void markNotificationReadAction(entry.id);
+                  startTransition(async () => {
+                    await markNotificationRead(entry.id);
+                    router.refresh();
                   });
                 }}
                 className={cn(
