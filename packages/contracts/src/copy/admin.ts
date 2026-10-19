@@ -6740,8 +6740,12 @@ const analytics = {
   window365: 'آخر سنة',
   course: 'الكورس',
   allCourses: 'كل الكورسات',
-  exportCsv: 'تنزيل CSV',
-  exportHint: 'ملف UTF-8 بيفتح في إكسل وفي pandas على طول.',
+  /** The main download: a real workbook, right-to-left, Arabic headers. */
+  exportXlsx: 'تنزيل Excel',
+  exportXlsxHint: 'ملف Excel مترتب: كل رقم في عمود، والنسب والتواريخ متظبطة.',
+  /** The raw file beside it — for pandas and other tools, not for Excel. */
+  exportCsv: 'CSV',
+  exportHint: 'نفس الأرقام كملف CSV خام — للتحليل في pandas.',
 
   // ── students ───────────────────────────────────────────────────────────
   students: 'الطلبة',

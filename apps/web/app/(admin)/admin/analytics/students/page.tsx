@@ -50,7 +50,7 @@ export default async function StudentAnalyticsPage({
       <FilterBar
         courses={courses}
         showWindow={false}
-        exportHref="/api/admin/analytics/export/students.csv"
+        exportHref="/api/admin/analytics/export/students"
       />
 
       <StudentsAnalyticsTable rows={data.rows} rowCount={data.rowCount} />

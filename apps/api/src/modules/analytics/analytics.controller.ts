@@ -1,4 +1,5 @@
-import { Controller, Get, Header, Param, ParseUUIDPipe, Query, UsePipes } from '@nestjs/common';
+import { Controller, Get, Header, Param, ParseUUIDPipe, Query, Res, UsePipes } from '@nestjs/common';
+import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type {
   AnalyticsOverview,
@@ -22,6 +23,7 @@ import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
 import { VideoAnalyticsService } from './video-analytics.service';
 import { csvFraction, toCsv } from './csv';
+import { toXlsx, XLSX_CONTENT_TYPE, type XlsxColumn } from './xlsx';
 
 /**
  * Every route here is `analytics:read` — the permission the per-quiz item
@@ -213,4 +215,146 @@ export class AnalyticsController {
       ]),
     );
   }
+
+  // ── the same four exports as Excel workbooks ─────────────────────────────
+  // What the «تنزيل Excel» buttons fetch. Same rows, same filters as the CSV
+  // beside each one — only the file format and the Arabic headers differ.
+  // `xlsx.ts` says why the CSV alone opened as one column on his machine.
+
+  @Get('export/lessons.xlsx')
+  async exportLessonsXlsx(@Query() query: LessonAnalyticsQueryDto, @Res() res: Response): Promise<void> {
+    const rows = await this.lessons.list(query.courseId);
+    sendXlsx(res, 'lessons', await toXlsx('الدروس', LESSON_COLUMNS, rows));
+  }
+
+  @Get('export/students.xlsx')
+  async exportStudentsXlsx(@Query() query: StudentAnalyticsQueryDto, @Res() res: Response): Promise<void> {
+    // Unpaginated, filtered — the same rule as the CSV above.
+    const { rows } = await this.students.list({ ...query, page: 1, perPage: 100_000 });
+    sendXlsx(res, 'students', await toXlsx('الطلبة', STUDENT_COLUMNS, rows));
+  }
+
+  @Get('export/videos.xlsx')
+  async exportVideosXlsx(@Query() query: VideoAnalyticsQueryDto, @Res() res: Response): Promise<void> {
+    const { videos } = await this.videos.list(query.period);
+    sendXlsx(res, 'videos', await toXlsx('الفيديوهات', VIDEO_COLUMNS, videos));
+  }
+
+  @Get('lessons/:lessonId/roster.xlsx')
+  async exportRosterXlsx(
+    @Param('lessonId', ParseUUIDPipe) lessonId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const detail = await this.lessons.detail(lessonId);
+    sendXlsx(res, 'lesson-roster', await toXlsx('طلبة الدرس', ROSTER_COLUMNS, detail.students));
+  }
 }
+
+/** `@Res()` bypasses the interceptor chain, so the no-store that
+ *  `PrivateCacheInterceptor` gives every admin read is set here by hand: this
+ *  file is the whole cohort's names and scores. */
+function sendXlsx(res: Response, name: string, buffer: Buffer): void {
+  res.set({
+    'Content-Type': XLSX_CONTENT_TYPE,
+    'Content-Disposition': `attachment; filename="${name}.xlsx"`,
+    'Cache-Control': 'private, no-store',
+  });
+  res.send(buffer);
+}
+
+const YEAR_LABEL: Record<number, string> = { 1: 'أولى ثانوي', 2: 'تانية ثانوي', 3: 'تالتة ثانوي' };
+const yearLabel = (year: number | null): string | null =>
+  year === null ? null : (YEAR_LABEL[year] ?? String(year));
+
+const KIND_LABEL: Record<string, string> = {
+  video: 'فيديو',
+  quiz: 'امتحان',
+  attachment: 'ملف',
+  text: 'مقال',
+};
+
+/** Same words as `copy.analytics.progressStates`, which the screen shows. */
+const STATE_LABEL: Record<string, string> = {
+  not_started: 'مافتحوش',
+  in_progress: 'لسه بيتفرّج',
+  completed: 'خلّصه',
+  passed: 'نجح',
+  failed: 'رسب',
+};
+
+const PROVIDER_LABEL: Record<string, string> = { youtube: 'يوتيوب', upload: 'مرفوع على المنصة' };
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+const STUDENT_COLUMNS: XlsxColumn<StudentAnalyticsRow>[] = [
+  { header: 'الطالب', kind: 'text', width: 30, value: (r) => r.fullName },
+  { header: 'الصف', kind: 'text', width: 14, value: (r) => yearLabel(r.year) },
+  { header: 'المحافظة', kind: 'text', width: 16, value: (r) => r.governorateNameAr },
+  { header: 'كورسات', kind: 'int', value: (r) => r.enrollments },
+  { header: 'دروس اتفتحت', kind: 'int', value: (r) => r.lessonsOpened },
+  { header: 'دروس خلّصها', kind: 'int', value: (r) => r.lessonsCompleted },
+  { header: 'متوسط نسبة المشاهدة', kind: 'percent', width: 16, value: (r) => r.avgCompletion },
+  { header: 'ساعات المشاهدة', kind: 'decimal', width: 14, value: (r) => round2(r.watchHours) },
+  { header: 'امتحانات حلّها', kind: 'int', width: 13, value: (r) => r.quizzesTaken },
+  { header: 'محاولات', kind: 'int', value: (r) => r.attempts },
+  { header: 'متوسط درجاته', kind: 'percent', width: 13, value: (r) => r.meanScore },
+  { header: 'أعلى درجة', kind: 'percent', value: (r) => r.bestScore },
+  { header: 'نسبة النجاح', kind: 'percent', value: (r) => r.passRate },
+  { header: 'وسيط زمن الحل', kind: 'duration', width: 14, value: (r) => r.medianQuizSeconds },
+  { header: 'آخر نشاط', kind: 'datetime', value: (r) => r.lastActiveAt },
+];
+
+const LESSON_COLUMNS: XlsxColumn<LessonAnalyticsRow>[] = [
+  { header: 'الكورس', kind: 'text', width: 34, value: (r) => r.courseTitle },
+  { header: 'الوحدة', kind: 'text', width: 26, value: (r) => r.sectionTitle },
+  { header: 'الترتيب', kind: 'int', width: 8, value: (r) => r.position },
+  { header: 'الدرس', kind: 'text', width: 34, value: (r) => r.title },
+  { header: 'النوع', kind: 'text', width: 10, value: (r) => KIND_LABEL[r.kind] ?? r.kind },
+  { header: 'مشتركين في الكورس', kind: 'int', width: 15, value: (r) => r.eligible },
+  { header: 'فتحوه', kind: 'int', value: (r) => r.opened },
+  { header: 'نسبة الفتح', kind: 'percent', value: (r) => r.openRate },
+  { header: 'خلّصوه', kind: 'int', value: (r) => r.completed },
+  { header: 'نسبة اللي خلّصوه', kind: 'percent', width: 14, value: (r) => r.completionRate },
+  { header: 'متوسط المشاهدة', kind: 'percent', width: 14, value: (r) => r.avgCompletion },
+  { header: 'ساعات المشاهدة', kind: 'decimal', width: 14, value: (r) => round2(r.watchHours) },
+  { header: 'متوسط زمن المشاهدة', kind: 'duration', width: 16, value: (r) => r.avgWatchSeconds },
+  { header: 'محاولات الامتحان', kind: 'int', width: 14, value: (r) => r.quizAttempts },
+  { header: 'حلّوا الامتحان', kind: 'int', width: 13, value: (r) => r.quizParticipants },
+  { header: 'نسبة اللي حلّوا', kind: 'percent', width: 13, value: (r) => r.quizParticipationRate },
+  { header: 'متوسط الدرجة', kind: 'percent', width: 13, value: (r) => r.quizMeanScore },
+  { header: 'وسيط الدرجة', kind: 'percent', width: 13, value: (r) => r.quizMedianScore },
+  { header: 'نسبة النجاح', kind: 'percent', value: (r) => r.quizPassRate },
+  { header: 'وسيط زمن الحل', kind: 'duration', width: 14, value: (r) => r.quizMedianDurationSeconds },
+];
+
+const VIDEO_COLUMNS: XlsxColumn<VideoAnalyticsList['videos'][number]>[] = [
+  { header: 'الفيديو', kind: 'text', width: 40, value: (r) => r.title },
+  { header: 'الكورس', kind: 'text', width: 30, value: (r) => r.courseTitle },
+  { header: 'المصدر', kind: 'text', width: 16, value: (r) => PROVIDER_LABEL[r.provider] ?? r.provider },
+  { header: 'عدد الدروس', kind: 'int', value: (r) => r.lessonCount },
+  { header: 'مدة الفيديو', kind: 'duration', value: (r) => r.durationSeconds },
+  { header: 'المشاهدات', kind: 'int', value: (r) => r.views },
+  { header: 'مشاهدين مختلفين', kind: 'int', width: 14, value: (r) => r.uniqueViewers },
+  { header: 'ساعات المشاهدة', kind: 'decimal', width: 14, value: (r) => round2(r.watchSeconds / 3600) },
+  { header: 'متوسط زمن المشاهدة', kind: 'duration', width: 16, value: (r) => r.avgViewSeconds },
+  { header: 'متوسط نسبة المشاهدة', kind: 'percent', width: 16, value: (r) => r.avgPercentWatched },
+  { header: 'كمّلوه للآخر', kind: 'int', width: 12, value: (r) => r.completedViewers },
+  { header: 'نسبة اللي كمّلوه', kind: 'percent', width: 14, value: (r) => r.completionRate },
+  { header: 'آخر مشاهدة', kind: 'datetime', value: (r) => r.lastViewedAt },
+];
+
+const ROSTER_COLUMNS: XlsxColumn<LessonAnalyticsDetail['students'][number]>[] = [
+  { header: 'الطالب', kind: 'text', width: 30, value: (r) => r.fullName },
+  { header: 'الصف', kind: 'text', width: 14, value: (r) => yearLabel(r.year) },
+  { header: 'المحافظة', kind: 'text', width: 16, value: (r) => r.governorateNameAr },
+  { header: 'الحالة', kind: 'text', width: 14, value: (r) => STATE_LABEL[r.state] ?? r.state },
+  { header: 'مشاهدة', kind: 'duration', value: (r) => r.watchedSeconds },
+  { header: 'نسبة المشاهدة', kind: 'percent', width: 13, value: (r) => r.completion },
+  { header: 'مرات الفتح', kind: 'int', value: (r) => r.openCount },
+  { header: 'آخر مرة', kind: 'datetime', value: (r) => r.lastSeenAt },
+  { header: 'محاولات', kind: 'int', value: (r) => r.attempts },
+  { header: 'أعلى درجة', kind: 'percent', value: (r) => r.bestScore },
+  { header: 'آخر درجة', kind: 'percent', value: (r) => r.lastScore },
+  { header: 'نجح؟', kind: 'text', width: 8, value: (r) => (r.passed === null ? null : r.passed ? 'نجح' : 'رسب') },
+  { header: 'زمن الحل', kind: 'duration', value: (r) => r.quizSeconds },
+];

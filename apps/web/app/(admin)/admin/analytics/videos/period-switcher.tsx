@@ -1,11 +1,12 @@
 'use client';
 
 import { useQueryStates } from 'nuqs';
-import { CalendarRange, Download } from 'lucide-react';
+import { CalendarRange } from 'lucide-react';
 import { VIDEO_PERIODS, type VideoPeriod } from '@ayman/contracts/admin/video-analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui/lib/cn';
 import { videosSearchParams } from '../search-params';
+import { ExportLinks } from '../export-links';
 
 const c = copy.analytics;
 
@@ -58,19 +59,7 @@ export function PeriodSwitcher({ exportHref }: { exportHref?: string }) {
       </div>
 
       {exportHref ? (
-        <a
-          href={`${exportHref}?period=${period}`}
-          download
-          title={c.exportHint}
-          className={cn(
-            'ms-auto inline-flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5',
-            'text-[length:var(--fs-text-sm)] text-fg',
-            'transition-colors duration-[160ms] ease-out hover:border-line-strong hover:bg-surface-3',
-          )}
-        >
-          <Download className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
-          {c.exportCsv}
-        </a>
+        <ExportLinks base={exportHref} query={`period=${period}`} className="ms-auto" />
       ) : null}
     </div>
   );

@@ -2106,6 +2106,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'analytics export videos: anonymous', method: 'get', path: () => '/api/admin/analytics/export/videos.csv', actor: 'anonymous', status: 401 },
     { label: 'analytics export videos: student', method: 'get', path: () => '/api/admin/analytics/export/videos.csv', actor: 'student', status: 403 },
     { label: 'analytics export videos: admin', method: 'get', path: () => '/api/admin/analytics/export/videos.csv?period=all', actor: 'admin', status: 200 },
+    { label: 'analytics xlsx lessons: anonymous', method: 'get', path: () => '/api/admin/analytics/export/lessons.xlsx', actor: 'anonymous', status: 401 },
+    { label: 'analytics xlsx lessons: student', method: 'get', path: () => '/api/admin/analytics/export/lessons.xlsx', actor: 'student', status: 403 },
+    { label: 'analytics xlsx lessons: admin', method: 'get', path: () => '/api/admin/analytics/export/lessons.xlsx', actor: 'admin', status: 200 },
+    { label: 'analytics xlsx students: anonymous', method: 'get', path: () => '/api/admin/analytics/export/students.xlsx', actor: 'anonymous', status: 401 },
+    { label: 'analytics xlsx students: student', method: 'get', path: () => '/api/admin/analytics/export/students.xlsx', actor: 'student', status: 403 },
+    { label: 'analytics xlsx students: admin', method: 'get', path: () => '/api/admin/analytics/export/students.xlsx', actor: 'admin', status: 200 },
+    { label: 'analytics xlsx videos: anonymous', method: 'get', path: () => '/api/admin/analytics/export/videos.xlsx?period=all', actor: 'anonymous', status: 401 },
+    { label: 'analytics xlsx videos: student', method: 'get', path: () => '/api/admin/analytics/export/videos.xlsx?period=all', actor: 'student', status: 403 },
+    { label: 'analytics xlsx videos: admin', method: 'get', path: () => '/api/admin/analytics/export/videos.xlsx?period=all', actor: 'admin', status: 200 },
+    { label: 'analytics xlsx roster: anonymous', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.xlsx`, actor: 'anonymous', status: 401 },
+    { label: 'analytics xlsx roster: student', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.xlsx`, actor: 'student', status: 403 },
+    { label: 'analytics xlsx roster: admin', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.xlsx`, actor: 'admin', status: 200 },
 
     // «الأوائل» — `analytics:read` زي اللي فوقه، بس الكونترولر جوّه
     // `ProgressModule` جنب `/api/me/rank` عشان يقرا نفس الكاش. صف الأدمن على
