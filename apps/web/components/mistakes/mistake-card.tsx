@@ -17,27 +17,41 @@ function relativeAr(iso: string): string {
   return months === 1 ? 'من شهر' : `من ${months} شهور`;
 }
 
-export function MistakeCard({ entry }: { entry: MistakeEntry }) {
+/** A stable colour per course, so one course's mistakes read as a group. */
+function hueOf(key: string | null): number {
+  if (!key) return 1;
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (h % 4) + 1;
+}
+
+export function MistakeCard({ entry, n }: { entry: MistakeEntry; n: number }) {
+  const mastered = entry.streakRight >= MISTAKE_MASTERY_STREAK;
   return (
-    <li className="panel grid gap-1.5 p-4">
-      {(entry.courseTitle || entry.lessonTitle) && (
-        <p className="text-xs text-fg-muted">
-          {entry.courseTitle}
-          {entry.courseTitle && entry.lessonTitle ? ' · ' : ''}
-          {entry.lessonTitle}
-        </p>
-      )}
-      <SafeHtml html={entry.stemHtml} className="leading-relaxed text-fg" />
-      <div className="flex flex-wrap gap-2.5 text-xs text-fg-muted">
+    <li className="mk-card" data-hue={hueOf(entry.courseSlug ?? entry.courseTitle)}>
+      <div className="mk-card__head">
+        <span className="mk-card__n">{n}</span>
+        {(entry.courseTitle || entry.lessonTitle) && (
+          <p className="mk-card__where">
+            {entry.courseTitle}
+            {entry.courseTitle && entry.lessonTitle ? ' · ' : ''}
+            {entry.lessonTitle}
+          </p>
+        )}
+      </div>
+      <SafeHtml html={entry.stemHtml} className="mk-card__stem" />
+      <div className="mk-card__meta">
         {entry.source === 'game' || entry.source === 'arena' ? (
-          <span className="rounded-full bg-[color-mix(in_oklab,var(--viz-3)_18%,transparent)] px-2 font-semibold text-fg">
+          <span className="mk-chip" data-tone="source">
             {entry.source === 'game' ? c.fromGame : c.fromArena}
           </span>
         ) : null}
-        <span>{entry.timesMissed === 1 ? c.missedOnce : formatCopy(c.missedTimes, { n: entry.timesMissed })}</span>
-        <span>{formatCopy(c.missedAt, { when: relativeAr(entry.missedAt) })}</span>
-        {entry.streakRight > 0 && (
-          <span className="font-bold text-ok">
+        <span className="mk-chip" data-tone="missed">
+          {entry.timesMissed === 1 ? c.missedOnce : formatCopy(c.missedTimes, { n: entry.timesMissed })}
+        </span>
+        <span className="mk-chip">{formatCopy(c.missedAt, { when: relativeAr(entry.missedAt) })}</span>
+        {entry.streakRight > 0 && !mastered && (
+          <span className="mk-chip" data-tone="streak">
             {formatCopy(c.streakHint, { have: entry.streakRight, need: MISTAKE_MASTERY_STREAK })}
           </span>
         )}

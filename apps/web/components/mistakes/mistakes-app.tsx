@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BookCheck, NotebookPen } from 'lucide-react';
+import { BookCheck, NotebookPen, Play } from 'lucide-react';
 import type { MistakeAnswerResult, MistakeEntry, MistakeNotebook } from '@ayman/contracts/mistakes';
 import { formatCopy } from '@ayman/contracts/format';
 import { mistakesCopy } from '@ayman/contracts/copy/mistakes';
@@ -47,55 +47,76 @@ export function MistakesApp({ notebook: initial }: { notebook: MistakeNotebook }
   }
 
   return (
-    <div className="grid gap-4">
-      <header>
-        <p className="text-sm font-bold text-fg-muted">{c.eyebrow}</p>
-        <h1 className="mt-1 text-2xl font-bold text-fg">{c.title}</h1>
-        <p className="mt-1 text-fg-muted">{c.lead}</p>
+    <div className="mk-notebook">
+      <header className="mk-hero">
+        <div className="mk-hero__text">
+          <p className="mk-hero__eyebrow">{c.eyebrow}</p>
+          <h1 className="mk-hero__title">{c.title}</h1>
+          <p className="mk-hero__lead">{c.lead}</p>
+        </div>
+        <div className="mk-hero__stats">
+          <div className="mk-stat" data-tone="open">
+            <NotebookPen size={20} aria-hidden="true" />
+            <b>{notebook.open.length}</b>
+            <span>{c.tabOpen}</span>
+          </div>
+          <div className="mk-stat" data-tone="mastered">
+            <BookCheck size={20} aria-hidden="true" />
+            <b>{notebook.mastered.length}</b>
+            <span>{c.tabMastered}</span>
+          </div>
+        </div>
       </header>
 
-      <div className="flex gap-2 border-b border-line pb-1" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'open'}
-          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 font-bold text-fg-muted aria-selected:bg-surface-2 aria-selected:text-fg"
-          onClick={() => setTab('open')}
-        >
-          <NotebookPen size={16} aria-hidden="true" />
-          {c.tabOpen}
-          <span className="grid min-w-5 place-items-center rounded-full bg-surface-3 px-1 text-xs tabular-nums">
-            {notebook.open.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'mastered'}
-          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 font-bold text-fg-muted aria-selected:bg-surface-2 aria-selected:text-fg"
-          onClick={() => setTab('mastered')}
-        >
-          <BookCheck size={16} aria-hidden="true" />
-          {c.tabMastered}
-          <span className="grid min-w-5 place-items-center rounded-full bg-surface-3 px-1 text-xs tabular-nums">
-            {notebook.mastered.length}
-          </span>
-        </button>
+      <div className="mk-toolbar">
+        <div className="mk-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'open'}
+            className="mk-tab"
+            data-tone="open"
+            onClick={() => setTab('open')}
+          >
+            <NotebookPen size={16} aria-hidden="true" />
+            {c.tabOpen}
+            <span className="mk-tab__n">{notebook.open.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'mastered'}
+            className="mk-tab"
+            data-tone="mastered"
+            onClick={() => setTab('mastered')}
+          >
+            <BookCheck size={16} aria-hidden="true" />
+            {c.tabMastered}
+            <span className="mk-tab__n">{notebook.mastered.length}</span>
+          </button>
+        </div>
+
+        {entries.length > 0 && (
+          <Button className="mk-start" onClick={() => setPracticeQueue(entries)}>
+            <Play size={16} aria-hidden="true" />
+            {tab === 'open' ? c.practice : c.practiceMastered}
+          </Button>
+        )}
       </div>
 
       {entries.length === 0 ? (
-        <p className="py-8 text-center text-fg-muted">{tab === 'open' ? c.emptyOpen : c.emptyMastered}</p>
+        <div className="mk-empty">
+          {tab === 'open' ? <BookCheck size={28} aria-hidden="true" /> : <NotebookPen size={28} aria-hidden="true" />}
+          <p>{tab === 'open' ? c.emptyOpen : c.emptyMastered}</p>
+        </div>
       ) : (
         <>
-          <p className="text-sm text-fg-muted">
+          <p className="mk-count">
             {formatCopy(tab === 'open' ? c.countOpen : c.countMastered, { n: entries.length })}
           </p>
-          <Button className="w-fit" onClick={() => setPracticeQueue(entries)}>
-            {tab === 'open' ? c.practice : c.practiceMastered}
-          </Button>
-          <ul className="grid gap-3" role="list">
-            {entries.map((entry) => (
-              <MistakeCard key={entry.questionVersionId} entry={entry} />
+          <ul className="mk-cards" role="list">
+            {entries.map((entry, i) => (
+              <MistakeCard key={entry.questionVersionId} entry={entry} n={i + 1} />
             ))}
           </ul>
         </>
