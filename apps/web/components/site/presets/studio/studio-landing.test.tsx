@@ -219,7 +219,7 @@ describe('the honour board has a face on it', () => {
     expect(face?.getAttribute('src')).not.toContain('some-avatar');
   });
 
-  it('falls back to initials when no board photo was set — not a blank row', async () => {
+  it('falls back to the drawn avatar when no board photo was set — not a blank row', async () => {
     const { container } = render(
       await StudioLanding({
         blocks: [block(HERO), block({ type: 'honorBoard' })],
@@ -230,7 +230,7 @@ describe('the honour board has a face on it', () => {
     const face = container.querySelector('.honor-board__slot-avatar');
     expect(face).not.toBeNull();
     expect(face?.tagName).not.toBe('IMG');
-    expect(face?.textContent?.trim().length).toBeGreaterThan(0);
+    expect(face?.querySelector('svg.honor-avatar')).not.toBeNull();
   });
 
   it('still stands down on an empty board, face or no face', async () => {

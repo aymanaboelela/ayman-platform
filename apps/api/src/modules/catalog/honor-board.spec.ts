@@ -345,3 +345,34 @@ describe('toHonorBoardRounds — the two sources on one board', () => {
     expect(round.titles).toEqual([]);
   });
 });
+
+describe('toHonorBoardRounds — a pin ranked from a month exam', () => {
+  it('keeps the instructor’s rank and prints the paper’s mark', () => {
+    const [round] = toHonorBoardRounds(
+      [],
+      [
+        {
+          ...hand({ name: 'ندى', at: '2026-10-18T10:00:00Z', rank: 2, reason: 'امتحان آخر الشهر' }),
+          attempt: { scaledScore: '48', gradeOutOf: '50' },
+        },
+        {
+          ...hand({ name: 'ريم', at: '2026-10-18T10:00:00Z', rank: 1, reason: 'امتحان آخر الشهر' }),
+          attempt: { scaledScore: '47', gradeOutOf: '50' },
+        },
+      ],
+    );
+    // He put the 47 first; the board does not "correct" him by score.
+    expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
+      ['ريم', 1],
+      ['ندى', 2],
+    ]);
+    expect(round.entries[1]).toMatchObject({ scaledScore: 48, gradeOutOf: 50, percent: 96 });
+    // And the rail names the exam, like a paper pinned from grading.
+    expect(round.titles).toEqual(['امتحان آخر الشهر']);
+  });
+
+  it('still prints no mark on a hand-added pin', () => {
+    const [round] = toHonorBoardRounds([], [hand({ name: 'ندى', at: '2026-10-18T10:00:00Z', rank: 1 })]);
+    expect(round.entries[0]).toMatchObject({ scaledScore: null, gradeOutOf: null, percent: null });
+  });
+});

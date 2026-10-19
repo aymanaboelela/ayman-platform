@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser } from '../../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
 import type { AuthenticatedUser } from '../../../auth/decorators/current-user.decorator';
 import {
+  AdminHonorExamPublishDto,
   AdminHonorPinCreateDto,
   AdminHonorPinPatchDto,
   AdminHonorStudentQueryDto,
@@ -40,6 +41,32 @@ export class AdminHonorBoardController {
   @Get('students')
   searchStudents(@Query() query: AdminHonorStudentQueryDto) {
     return this.board.searchStudents(query.q, query.limit);
+  }
+
+  /** «الأوائل من امتحان الشهر» — the month exams that have papers to rank. */
+  @RequirePermission('honor:read')
+  @Get('exams')
+  listExams() {
+    return this.board.listExams();
+  }
+
+  /** One exam's best papers, with the place each holds on the board now. */
+  @RequirePermission('honor:read')
+  @Get('exams/:lessonId')
+  examBoard(@Param('lessonId') lessonId: string) {
+    return this.board.examBoard(lessonId);
+  }
+
+  /** PUT, not POST: the body is the exam's whole board, and sending it twice
+   *  leaves the same board — nobody is notified twice. */
+  @RequirePermission('honor:write')
+  @Put('exams/:lessonId')
+  publishExam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('lessonId') lessonId: string,
+    @Body() body: AdminHonorExamPublishDto,
+  ) {
+    return this.board.publishExam(lessonId, body, user.id);
   }
 
   @RequirePermission('honor:write')

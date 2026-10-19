@@ -110,6 +110,9 @@ export const AdminHonorPinRowSchema = z.object({
   /** صورة لوحة الشرف اللي في بروفايل الطالب — اللي بتظهر لما اللي فوق فاضي.
    *  بتتبعت عشان الشاشة تعرض الصورة الحقيقية اللي هتتنشر، مش خانة فاضية. */
   profilePhotoKey: z.string().nullable(),
+  /** The month-exam paper this place came from («الأوائل من امتحان الشهر»),
+   *  or null for a pin added by hand. */
+  attemptId: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
 });
 export type AdminHonorPinRow = z.infer<typeof AdminHonorPinRowSchema>;
@@ -193,3 +196,111 @@ export const AdminHonorStudentQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(25).default(10),
 });
 export type AdminHonorStudentQuery = z.infer<typeof AdminHonorStudentQuerySchema>;
+
+/* ── «الأوائل من امتحان الشهر» ─────────────────────────────────────────────
+ *
+ * The instructor opens a month exam, sees its best papers, and says who is
+ * first, second … tenth. The order is HIS — ten papers on 50/50 are not
+ * ranked by the score — so each pick lands as an `honor_board_pins` row with
+ * an explicit rank, tied back to its paper (`attempt_id`) so the card can
+ * still print the mark and a re-publish updates instead of duplicating.
+ */
+
+/** How many papers the picker lists — the best sitting of each student. Ten
+ *  are picked; the rest are there so a full-mark paper that sorted eleventh
+ *  can still be moved up. */
+export const HONOR_EXAM_CANDIDATES = 40;
+
+/** One month exam in the picker's list. */
+export const AdminHonorExamOptionSchema = z.object({
+  lessonId: z.uuid(),
+  title: z.string(),
+  courseTitle: z.string(),
+  /** «تانية بكالوريا — لغات» — the chip the cards will carry. */
+  courseLabel: z.string(),
+  /** When it opened, or null on an exam that was simply left open. */
+  opensAt: z.iso.datetime().nullable(),
+  /** Finished, on-time sittings — the papers that can go on the board. */
+  sat: z.number().int().nonnegative(),
+  /** How many of its papers are on the board right now. */
+  pinned: z.number().int().nonnegative(),
+});
+export type AdminHonorExamOption = z.infer<typeof AdminHonorExamOptionSchema>;
+
+export const AdminHonorExamListSchema = z.object({
+  exams: z.array(AdminHonorExamOptionSchema),
+});
+export type AdminHonorExamList = z.infer<typeof AdminHonorExamListSchema>;
+
+/** One paper in the picker — the student's best on-time sitting. */
+export const AdminHonorCandidateSchema = z.object({
+  attemptId: z.uuid(),
+  userId,
+  studentName: z.string(),
+  /** Tells two students with the same name apart. Never reaches the board. */
+  phone: z.string().nullable(),
+  /** `student_profiles.honor_photo_key` — the photo the board will draw. */
+  photoKey: z.string().nullable(),
+  scaledScore: z.number().nullable(),
+  gradeOutOf: z.number(),
+  percent: z.number().min(0).max(100).nullable(),
+  /** The grading screen's own star rating, if he gave one — shown, not used. */
+  instructorRating: z.number().int().nullable(),
+  /** The place this paper holds on the board now, or null. */
+  pinnedRank: z.number().int().min(1).nullable(),
+});
+export type AdminHonorCandidate = z.infer<typeof AdminHonorCandidateSchema>;
+
+export const AdminHonorExamBoardSchema = z.object({
+  lessonId: z.uuid(),
+  title: z.string(),
+  courseLabel: z.string(),
+  /** The day the board is filed under if it is already published, else null
+   *  and the screen offers today. */
+  day: dayString.nullable(),
+  candidates: z.array(AdminHonorCandidateSchema),
+});
+export type AdminHonorExamBoard = z.infer<typeof AdminHonorExamBoardSchema>;
+
+/**
+ * Publish (or re-publish) one exam's top ten.
+ *
+ * The list is the WHOLE board for that exam: a paper that was on it and is
+ * not in `picks` comes off, one that is moves to its new place, one that is
+ * new goes up and its student is notified. An empty list takes the exam off
+ * the board entirely.
+ */
+export const AdminHonorExamPublishSchema = z
+  .object({
+    day: dayString,
+    picks: z
+      .array(
+        z
+          .object({
+            attemptId: z.uuid(),
+            rank: z.number().int().min(1).max(HONOR_PIN_MAX_RANK),
+            /** A new board photo for this student, written to their profile so
+             *  every later round shows it too. Absent = leave it alone. */
+            photoKey: z.string().max(300).nullable().optional(),
+          })
+          .strict(),
+      )
+      .max(HONOR_PIN_MAX_RANK),
+  })
+  .strict()
+  .refine((value) => new Set(value.picks.map((p) => p.rank)).size === value.picks.length, {
+    message: 'كل مركز لواحد بس',
+    path: ['picks'],
+  })
+  .refine((value) => new Set(value.picks.map((p) => p.attemptId)).size === value.picks.length, {
+    message: 'نفس الورقة اتختارت مرتين',
+    path: ['picks'],
+  });
+export type AdminHonorExamPublish = z.infer<typeof AdminHonorExamPublishSchema>;
+
+export const AdminHonorExamPublishResultSchema = z.object({
+  added: z.number().int().nonnegative(),
+  updated: z.number().int().nonnegative(),
+  removed: z.number().int().nonnegative(),
+});
+export type AdminHonorExamPublishResult = z.infer<typeof AdminHonorExamPublishResultSchema>;

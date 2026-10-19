@@ -1,13 +1,13 @@
 import Image from 'next/image';
 import { mediaUrl } from '@ayman/ui/branding';
-import { initials } from '@/components/app/user-avatar';
+import { HonorAvatar } from '@/components/site/honor-avatar';
 
 /**
  * نفس وش الكارت العام، بحجم صف في ليستة.
  *
  * بيقرا **نفس** المفتاح اللي اللوحة بتقراه بالترتيب ده: صورة التكريم، وبعدين
  * صورة لوحة الشرف اللي في البروفايل. الشاشة بتعرض اللي هينزل على الموقع،
- * مش وصف ليه — لو الاتنين فاضيين بيظهر أول حرفين، وده بالظبط اللي الزائر
+ * مش وصف ليه — لو الاتنين فاضيين بيظهر الأڤاتار المرسوم، وده بالظبط اللي الزائر
  * هيشوفه.
  *
  * ⚠️ عمره ما بيقرا `User.image`. الأڤاتار بتاع الطالب نفسه ومش متكلّم عنه
@@ -16,11 +16,8 @@ import { initials } from '@/components/app/user-avatar';
 export function HonorFaceThumb({ name, photoKey }: { name: string; photoKey: string | null }) {
   if (!photoKey) {
     return (
-      <span
-        className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/15 text-[length:var(--fs-text-sm)] font-semibold text-accent-text"
-        aria-hidden="true"
-      >
-        {initials(name)}
+      <span className="block size-11 shrink-0" aria-hidden="true">
+        <HonorAvatar name={name} />
       </span>
     );
   }

@@ -50,6 +50,12 @@ export type BrandAssetKind =
   | 'trackYear1'
   | 'trackYear2'
   /**
+   * The instructor in a suit, beside the «مبروك للأوائل» line at the head of
+   * `/honor-board`. Personal, so gated like every kind not in
+   * `GENERIC_ASSET_KINDS`: another teacher's board simply has no portrait.
+   */
+  | 'honorHost'
+  /**
    * «اختبارات مجانية»: him riding the dragon over a sunset, the two robot
    * pups beside him. Drawn by the landing-page invite and the `/practice`
    * hero (animated there — see `practice-showcase.tsx`), which both fall back
@@ -107,6 +113,7 @@ export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
   trackEssentials: 3 / 2,
   trackYear1: 3 / 2,
   trackYear2: 3 / 2,
+  honorHost: 4 / 5,
   /** 16:9 — the lecture-cover frame it was rendered for, uncropped. */
   practiceGuide: 16 / 9,
 };
@@ -193,6 +200,14 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
   trackEssentials: { src: '/brand/track-essentials-1.webp', width: 900, height: 600 },
   trackYear1: { src: '/brand/track-year-1-1.webp', width: 900, height: 600 },
   trackYear2: { src: '/brand/track-year-2-1.webp', width: 900, height: 600 },
+  /**
+   * 1024×1536 studio portrait cropped 4:5 from y=60 (head to just below the
+   * jacket) and down to 720×900 WebP at q80, 30KB. The box draws at 18rem at
+   * most, so 720 is the 2.5× source.
+   *
+   * ⚠️ Re-cutting this needs a NEW FILENAME — see the note on `hero`.
+   */
+  honorHost: { src: '/brand/honor-host-1.webp', width: 720, height: 900 },
   /**
    * His lecture-6 cover art (1280×720), which carries no lettering of its
    * own — the page puts none on it either. WebP at q78.

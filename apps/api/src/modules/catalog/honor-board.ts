@@ -50,6 +50,10 @@ export interface ManualPin {
   /** The course the place was won in, or null — then the chip is built from
    *  the student's own year and stream, below. */
   course: { year: number; forGeneral: boolean; forLanguages: boolean } | null;
+  /** The month-exam paper the place was earned on («الأوائل من امتحان
+   *  الشهر»), or null/absent for a pin added by hand. Only its mark is read:
+   *  the rank stays the instructor's. */
+  attempt?: { scaledScore: unknown; gradeOutOf: unknown } | null;
   user: {
     image: string | null;
     studentProfile: {
@@ -201,11 +205,14 @@ function draftFromAttempt(row: PinnedAttempt): Draft {
 
 function draftFromPin(row: ManualPin): Draft {
   const profile = row.user.studentProfile;
+  const mark = markOf(row.attempt ?? null);
   return {
     at: row.honoredAt,
     courseLabel: row.course ? courseChip(row.course) : chipFromProfile(profile),
     rank: row.rank,
-    fromExam: false,
+    // A pin ranked from a month exam names that exam in the archive rail,
+    // exactly like a paper pinned from the grading screen.
+    fromExam: mark !== null,
     entry: {
       studentName: profile?.fullName ?? '—',
       avatarKey: row.user.image,
@@ -217,10 +224,26 @@ function draftFromPin(row: ManualPin): Draft {
       title: row.reason,
       // No paper, no mark. Zero here would read as «جاب صفر» — see the
       // contract's own note on the three nullable fields.
-      scaledScore: null,
-      gradeOutOf: null,
-      percent: null,
+      scaledScore: mark?.scaledScore ?? null,
+      gradeOutOf: mark?.gradeOutOf ?? null,
+      percent: mark?.percent ?? null,
     },
+  };
+}
+
+/** The mark of the paper behind a pin, all three fields or none — the
+ *  contract's rule. Clamped for the reason `draftFromAttempt` gives. */
+function markOf(
+  attempt: { scaledScore: unknown; gradeOutOf: unknown } | null,
+): { scaledScore: number; gradeOutOf: number; percent: number } | null {
+  if (!attempt || attempt.scaledScore === null || attempt.scaledScore === undefined) return null;
+  const scaledScore = Number(attempt.scaledScore);
+  const gradeOutOf = Number(attempt.gradeOutOf);
+  if (!Number.isFinite(scaledScore) || !(gradeOutOf > 0)) return null;
+  return {
+    scaledScore,
+    gradeOutOf,
+    percent: Math.min(Math.max(Math.round((scaledScore / gradeOutOf) * 100), 0), 100),
   };
 }
 

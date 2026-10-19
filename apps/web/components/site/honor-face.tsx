@@ -1,10 +1,10 @@
 import Image from 'next/image';
 import { mediaUrl } from '@ayman/ui/branding';
-import { initials } from '@/components/app/user-avatar';
+import { HonorAvatar } from './honor-avatar';
 
 /**
- * The face of a place on لوحة الشرف — the winner's photograph, or their
- * initials when there isn't one.
+ * The face of a place on لوحة الشرف — the winner's photograph, or a drawn
+ * graduate when there isn't one.
  *
  * ## Why a photo is here at all now
  *
@@ -19,7 +19,7 @@ import { initials } from '@/components/app/user-avatar';
  * student at a time. A photo appears because somebody decided it should, which
  * is the same rule the board's membership already runs on.
  *
- * ## Initials are the normal case, not the failure case
+ * ## No photo is the normal case, not the failure case
  *
  * Most winners have no board photo and the owner adds them as he gets them, so
  * a card with a monogram is not a card waiting to finish loading — it is the
@@ -31,11 +31,27 @@ import { initials } from '@/components/app/user-avatar';
  * in the next element, and a screen reader announcing it twice — once as an
  * image, once as text — is noise, not description.
  */
-export function HonorFace({ name, photoKey }: { name: string; photoKey: string | null }) {
+export function HonorFace({
+  name,
+  photoKey,
+  className,
+  sizes = '7rem',
+}: {
+  name: string;
+  photoKey: string | null;
+  /** Replaces the landing card's disc class — the archive's podium draws the
+   *  same face at its own sizes. */
+  className?: string;
+  /** The drawn size, for the optimizer. */
+  sizes?: string;
+}) {
+  const disc = className ?? 'honor-board__slot-avatar';
   if (!photoKey) {
+    /* No photo: the drawn graduate, not the two initials it used to be —
+       «لو حد مش حاطط صورة، حط أڤاتار شكله كويس». See `honor-avatar.tsx`. */
     return (
-      <span className="honor-board__slot-avatar" aria-hidden="true">
-        {initials(name)}
+      <span className={`${disc} ${disc}--art`} aria-hidden="true">
+        <HonorAvatar name={name} />
       </span>
     );
   }
@@ -44,13 +60,13 @@ export function HonorFace({ name, photoKey }: { name: string; photoKey: string |
     <Image
       src={mediaUrl(photoKey)}
       alt=""
-      /* The disc is at most 7rem drawn, so 256 is a 2× source on a retina
-         phone and nothing is downloaded twice over. `sizes` is what makes the
-         optimizer pick that rather than the full upload. */
-      width={256}
-      height={256}
-      sizes="7rem"
-      className="honor-board__slot-avatar honor-board__slot-avatar--photo"
+      /* 512 so the podium's 10rem disc is still sharp on a 3× phone
+         («صورتهم تبقى واضحة»); `sizes` keeps the 7rem landing card from
+         downloading more than it draws. */
+      width={512}
+      height={512}
+      sizes={sizes}
+      className={`${disc} ${disc}--photo`}
     />
   );
 }

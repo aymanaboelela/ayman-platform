@@ -340,8 +340,14 @@ export async function getHomeBlocks(): Promise<HomeBlockList> {
  * for in the first place.
  */
 export async function getHonorBoard(): Promise<HonorBoardEntry[]> {
-  return (await getHonorBoardRounds()).entries;
+  // The landing shows the top places only; the full ten are one click away
+  // on `/honor-board`. Entries arrive sorted by place, so two courses give
+  // their two firsts, then their two seconds.
+  return (await getHonorBoardRounds()).entries.slice(0, LANDING_HONOR_PLACES);
 }
+
+/** Four cards on the landing — the board's original four places. */
+export const LANDING_HONOR_PLACES = 4;
 
 /**
  * The same read, un-narrowed — the archive page needs every round, and the

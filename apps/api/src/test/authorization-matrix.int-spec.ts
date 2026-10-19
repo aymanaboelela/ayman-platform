@@ -1914,6 +1914,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'honor-board patch: student', method: 'patch', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'student', status: 403 },
     { label: 'honor-board delete: anonymous', method: 'delete', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'anonymous', status: 401 },
     { label: 'honor-board delete: student', method: 'delete', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'student', status: 403 },
+    // «الأوائل من امتحان الشهر». The id is a well-formed uuid nobody owns —
+    // the guard answers before the service ever looks it up.
+    { label: 'honor-board exams: anonymous', method: 'get', path: () => '/api/admin/honor-board/exams', actor: 'anonymous', status: 401 },
+    { label: 'honor-board exams: student', method: 'get', path: () => '/api/admin/honor-board/exams', actor: 'student', status: 403 },
+    { label: 'honor-board exams: admin', method: 'get', path: () => '/api/admin/honor-board/exams', actor: 'admin', status: 200 },
+    { label: 'honor-board exam board: anonymous', method: 'get', path: () => '/api/admin/honor-board/exams/0199a000-0000-7000-8000-000000000001', actor: 'anonymous', status: 401 },
+    { label: 'honor-board exam board: student', method: 'get', path: () => '/api/admin/honor-board/exams/0199a000-0000-7000-8000-000000000001', actor: 'student', status: 403 },
+    { label: 'honor-board exam publish: anonymous', method: 'put', path: () => '/api/admin/honor-board/exams/0199a000-0000-7000-8000-000000000001', actor: 'anonymous', status: 401 },
+    { label: 'honor-board exam publish: student', method: 'put', path: () => '/api/admin/honor-board/exams/0199a000-0000-7000-8000-000000000001', actor: 'student', status: 403 },
 
     // ── «نيوز» — two public reads, admin-only everything else ──
     //

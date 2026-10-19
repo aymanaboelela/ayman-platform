@@ -43,14 +43,14 @@ describe('HonorBoardSection', () => {
     expect(container.innerHTML).not.toContain('googleusercontent');
   });
 
-  it('falls back to initials for a winner with no board photo', () => {
+  it('draws the graduate avatar for a winner with no board photo', () => {
     // The ordinary case: most winners have none and he adds them as he gets
-    // them. A monogram is the board as it has always looked, not a card that
-    // failed to load — so the disc has to be there either way.
+    // them. The drawn avatar is not a card that failed to load — so the disc
+    // has to be there either way, and it must not be an <img> of anything.
     const { container } = render(<HonorBoardSection entries={[BASE]} />);
 
     expect(container.querySelector('img.honor-board__slot-avatar')).toBeNull();
-    expect(container.querySelector('.honor-board__slot-avatar')?.textContent).toBe('زأ');
+    expect(container.querySelector('.honor-board__slot-avatar--art svg.honor-avatar')).not.toBeNull();
     expect(container.innerHTML).not.toContain('googleusercontent');
   });
 });

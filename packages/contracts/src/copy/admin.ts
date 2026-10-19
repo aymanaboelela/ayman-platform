@@ -1651,6 +1651,41 @@ const admin = {
     noCourse: 'من غير شارة',
     /** زرار «عرض اللوحة» اللي بيفتح الصفحة العامة على الدور ده. */
     viewPublic: 'شوفها على الموقع',
+
+    /* ── الأوائل من امتحان الشهر ─────────────────────────────────────────── */
+    fromExam: 'الأوائل من امتحان الشهر',
+    fromExamLead:
+      'اختار الامتحان، وحدّد مين الأول لحد العاشر. اللي بيتحط جديد بيوصله إشعار «مبروك! اسمك على لوحة الشرف».',
+    /** The badge on a pin that came from this screen. */
+    fromExamBadge: 'من امتحان الشهر',
+    back: 'رجوع للوحة الشرف',
+    examsTitle: 'اختار الامتحان',
+    examsEmpty: 'مفيش امتحان شهر حد امتحنه لسه.',
+    /** `{n}` — students who finished on time. */
+    examSat: '{n} طالب امتحن',
+    /** `{n}` — papers of this exam on the board now. */
+    examPinned: '{n} على اللوحة',
+    examNotPinned: 'لسه مش على اللوحة',
+    candidatesTitle: 'أحسن الدرجات',
+    candidatesHint:
+      'مترتّبين بتقييمك وبعدين بالدرجة. دوس على المركز جنب كل طالب — لو المركز متاخد، اللي عليه بيتبدّل معاه.',
+    candidatesEmpty: 'مفيش ورق خلص في الامتحان ده.',
+    rankFor: 'مركز {name}',
+    rankNone: 'مش على اللوحة',
+    /** `{n}` picked out of ten — Western digits. */
+    pickedCount: '{n} / 10',
+    autoFill: 'رتّب أول ١٠ بالدرجة',
+    clearAll: 'امسح الاختيار',
+    podiumPreview: 'كده هتظهر على الموقع',
+    photo: 'صورة',
+    photoTitle: 'صورة {name} على اللوحة',
+    examPhotoHint: 'بتتحفظ في ملفه مع النشر، وبتظهر في كل دور يطلع فيه بعد كده.',
+    photoDone: 'تمام',
+    publish: 'انشر الأوائل',
+    publishing: 'بننشر…',
+    published: 'اتنشرت ✓ — {added} جديد، {updated} اتعدّل، {removed} اتشال',
+    publishFailed: 'مقدرناش ننشر — نجرّب تاني',
+    publishEmpty: 'هتشيل الامتحان ده من اللوحة كله',
   },
   grading: {
     title: 'تصحيح الورق',

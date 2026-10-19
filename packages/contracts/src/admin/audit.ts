@@ -488,6 +488,9 @@ export const AUDIT_ACTIONS = [
   'honor:add',
   'honor:update',
   'honor:remove',
+  /* «الأوائل من امتحان الشهر» — one row for the whole published top ten
+     (who went up, who came off, who moved), because it is one decision. */
+  'honor:publish-exam',
   /*
    * «اختبارات مجانية» — public practice sets. A set's lifecycle is three
    * verbs (`update` carries publish/unpublish as a field flip, the way

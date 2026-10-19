@@ -400,6 +400,8 @@ export class CatalogService {
         reason: true,
         photoKey: true,
         course: { select: { year: true, forGeneral: true, forLanguages: true } },
+        // The mark on a card ranked from a month exam. Rank is NOT read from it.
+        attempt: { select: { scaledScore: true, gradeOutOf: true } },
         user: {
           select: {
             image: true,
