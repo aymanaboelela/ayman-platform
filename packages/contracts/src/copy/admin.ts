@@ -1157,6 +1157,10 @@ const admin = {
     imagesGone: 'الصور اتمسحت بعد المراجعة — التسليم نفسه لسه متسجّل.',
     imagesExpired: 'الصور اتمسحت بعد ٣٠ يوم — التسليم نفسه لسه متسجّل.',
     yourNote: 'اللي بعتّه',
+    editGrade: 'تعديل الدرجة والرد',
+    saveEdit: 'حفظ التعديل',
+    cancelEdit: 'إلغاء',
+    noGradeGiven: 'من غير درجة',
     /** The `sr-only` sentence beside the sidebar badge. `{n}` is the count. */
     pendingBadgeLabel: '{n} حل مستني مراجعة',
 
