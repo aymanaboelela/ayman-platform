@@ -338,6 +338,20 @@ describe('HomeworkService', () => {
       for (const key of keys) expect(objects.has(key)).toBe(false);
     });
 
+    it('allows updating the grade and note on an already-accepted submission', async () => {
+      const { id } = await handIn(1);
+      await service.review(adminId, id, { decision: 'accepted', grade: 0, message: '-0' });
+
+      let row = await prisma.homeworkSubmission.findUniqueOrThrow({ where: { id } });
+      expect(Number(row.grade)).toBe(0);
+
+      await service.review(adminId, id, { decision: 'accepted', grade: 100, message: 'ممتاز. كله صح.' });
+
+      row = await prisma.homeworkSubmission.findUniqueOrThrow({ where: { id } });
+      expect(Number(row.grade)).toBe(100);
+      expect(row.reviewNote).toBe('ممتاز. كله صح.');
+    });
+
     it('«يفكّر تاني» keeps them, so he can look again', async () => {
       const { id, keys } = await handIn(1);
 
