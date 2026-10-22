@@ -237,7 +237,7 @@ describe('FinanceDailyService', () => {
     expect(byCourses).toBe(report.totals.subscriptionCents);
     expect(report.totals.newCount + report.totals.renewalCount).toBe(report.totals.subscriptionCount);
     for (const day of report.daily) {
-      expect(day.netCents).toBe(day.subscriptionCents + day.bookCents - day.refundCents);
+      expect(day.netCents).toBe(day.subscriptionCents + day.bookCents + day.walletCents - day.refundCents);
     }
     // Asked without `book-order:read`: no book money, and it says so.
     expect(report.includesBooks).toBe(false);
@@ -247,7 +247,12 @@ describe('FinanceDailyService', () => {
   it('matches the finance predicate: approved, not comped, on the Cairo day it was approved', async () => {
     const report = await service.daily({ days: 30, includeBooks: false, now });
     const rows = await prisma.paymentSubmission.findMany({
-      where: { status: 'approved', isFree: false, reviewedAt: { gte: new Date(now.getTime() - 32 * DAY) } },
+      where: {
+        status: 'approved',
+        isFree: false,
+        walletTransactionId: null,
+        reviewedAt: { gte: new Date(now.getTime() - 32 * DAY) },
+      },
       select: { amountCents: true, reviewedAt: true },
     });
     const expected = rows
