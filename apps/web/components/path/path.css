@@ -173,7 +173,15 @@
 .pth-art__spark { transform-box: fill-box; transform-origin: center; }
 
 /* ── الريل ──────────────────────────────────────────────────────────────── */
-.pth-rail { display: grid; gap: 0.6rem; }
+.pth-rail {
+  display: grid;
+  /* ⚠️ An explicit track. With the implicit `auto` one, the column sized itself
+     to its longest course title (`nowrap` below made that the whole name), so
+     «منهج البرمجة وعلوم الحاسب — تانية بكالوريا (عربي)» pushed the rail out of
+     its 18rem and under the course header beside it. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+}
 .pth-rail__item {
   display: flex;
   align-items: center;
@@ -193,10 +201,14 @@
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--hue) 22%, transparent), var(--shadow-sm);
 }
 .pth-rail__title {
-  display: block;
+  /* Two lines, then an ellipsis: a course name is long and Arabic, and cut at
+     one line it lost exactly the part that tells two courses apart — «(عربي)»
+     against «(لغات)». */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
 }

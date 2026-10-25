@@ -395,7 +395,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
               — the title would have been one more press into the 404 this
               change removes, and the most tempting one on the card. Plain text
               instead; the stops below carry the explanation. */}
-          <h2 className="line-clamp-2 min-w-0 text-[length:var(--fs-title-3)] font-medium text-fg sm:truncate">
+          <h2 className="line-clamp-2 min-w-0 text-[length:var(--fs-title-3)] font-medium text-fg">
             {course.published ? (
               <Link
                 href={`/library/${course.slug}`}
