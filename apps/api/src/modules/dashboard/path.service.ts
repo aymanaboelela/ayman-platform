@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
-import type { LearningPath, PathCourse, PathNode } from '@ayman/contracts/path';
+import type { LearningPath, PathCourse, PathNode, RetiredCourses } from '@ayman/contracts/path';
 import type { LessonProgressState } from '@ayman/contracts/progress';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
@@ -43,6 +43,17 @@ export class PathService {
     private readonly prisma: PrismaService,
     private readonly gate: LessonGateService,
   ) {}
+
+  /** See `RetiredCoursesSchema`. Active enrollments only: a student who
+   *  dropped the course before it was retired has nothing to be told. */
+  async retiredFor(userId: string): Promise<RetiredCourses> {
+    const rows = await this.prisma.enrollment.findMany({
+      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] }, course: { status: 'archived' } },
+      orderBy: [{ enrolledAt: 'asc' }, { id: 'asc' }],
+      select: { course: { select: { id: true, slug: true, title: true } } },
+    });
+    return { courses: rows.map((row) => row.course) };
+  }
 
   async forUser(userId: string): Promise<LearningPath> {
     const enrollments = await this.prisma.enrollment.findMany({

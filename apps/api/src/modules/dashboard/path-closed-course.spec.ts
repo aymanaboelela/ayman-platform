@@ -156,6 +156,16 @@ describe('PathService — a course unpublished under an enrolled student', () =>
     expect(path.currentCourseId).not.toBe(courseId);
   });
 
+  // …and is named instead in «الكورس ده خلص دوره في رحلتك», so it does not
+  // just vanish without a word.
+  it('lists an archived course under retiredFor, and a draft not at all', async () => {
+    await prisma.course.update({ where: { id: courseId }, data: { status: 'draft' } });
+    expect((await service.retiredFor(userId)).courses).toEqual([]);
+
+    await prisma.course.update({ where: { id: courseId }, data: { status: 'archived' } });
+    expect((await service.retiredFor(userId)).courses.map((course) => course.id)).toEqual([courseId]);
+  });
+
   it('still matches the shared contract with the course closed', async () => {
     await prisma.course.update({ where: { id: courseId }, data: { status: 'draft' } });
 

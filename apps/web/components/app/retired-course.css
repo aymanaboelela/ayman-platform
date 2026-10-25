@@ -1,0 +1,181 @@
+/* ===========================================================================
+   «الكورس ده خلص دوره في رحلتك» — the card on «حسابي» and the page on the
+   course's old URL. One object, two sizes.
+
+   Ember for structure (the band and the well), amber for the one thing you
+   press — the study surface's own colour rule. The glow and the rising marks
+   are the «وقت أقل، تركيز أكتر» feeling, not decoration for its own sake;
+   both go still under reduced motion.
+   =========================================================================== */
+
+.retired {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  gap: var(--s-20);
+  padding: var(--s-24);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklab, var(--e-ink), transparent 62%);
+  background:
+    radial-gradient(28rem 14rem at 100% 0%, color-mix(in oklab, var(--e-ink), transparent 80%), transparent 70%),
+    radial-gradient(22rem 12rem at 0% 100%, color-mix(in oklab, var(--a-9), transparent 84%), transparent 70%),
+    var(--n-2);
+  animation: retired-in 520ms var(--ease-out) both;
+}
+
+@media (min-width: 48rem) {
+  .retired {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+  }
+}
+
+@keyframes retired-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+.retired__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  border-radius: 1.25rem;
+  border: var(--hairline) solid color-mix(in oklab, var(--e-ink), transparent 55%);
+  background: color-mix(in oklab, var(--e-ink), transparent 84%);
+  color: var(--e-ink);
+}
+
+/* A slow ring around the mark: the journey moving on. */
+.retired__mark::after {
+  content: '';
+  position: absolute;
+  inset: -0.375rem;
+  border-radius: 1.5rem;
+  border: var(--hairline) solid color-mix(in oklab, var(--e-ink), transparent 70%);
+  animation: retired-ring 2.4s var(--ease-out) infinite;
+}
+
+@keyframes retired-ring {
+  from {
+    opacity: 0.9;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+.retired__eyebrow {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--e-ink);
+}
+
+.retired__title {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  color: var(--n-12);
+}
+
+.retired--page .retired__title {
+  font-size: var(--fs-title-1);
+}
+
+.retired__body {
+  margin-block-start: var(--s-8);
+  max-inline-size: var(--w-prose);
+  color: var(--n-11);
+  line-height: 1.8;
+}
+
+.retired__points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  margin-block-start: var(--s-12);
+}
+
+.retired__point {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-4) var(--s-12);
+  border-radius: 999px;
+  border: var(--hairline) solid color-mix(in oklab, var(--ok), transparent 60%);
+  background: color-mix(in oklab, var(--ok), transparent 90%);
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+  animation: retired-in 520ms var(--ease-out) both;
+}
+
+.retired__point:nth-child(2) { animation-delay: 90ms; }
+.retired__point:nth-child(3) { animation-delay: 180ms; }
+
+.retired__point svg {
+  color: var(--ok);
+}
+
+.retired__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  margin-block-start: var(--s-16);
+}
+
+.retired__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-8) var(--s-16);
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease-out);
+}
+
+.retired__btn:hover {
+  transform: translateY(-1px);
+}
+
+.retired__btn--primary {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.retired__btn--primary:hover {
+  background: var(--a-10);
+}
+
+.retired__btn--ghost {
+  border: var(--hairline) solid var(--border);
+  background: transparent;
+  color: var(--n-11);
+}
+
+.retired__btn--ghost:hover {
+  border-color: var(--n-8);
+  color: var(--n-12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .retired,
+  .retired__point,
+  .retired__mark::after {
+    animation: none;
+  }
+
+  .retired__btn:hover {
+    transform: none;
+  }
+}

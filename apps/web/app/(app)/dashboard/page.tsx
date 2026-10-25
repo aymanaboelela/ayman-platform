@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { apiGetAuthed } from '@/lib/api-server';
+import { RetiredCourseNotice } from '@/components/app/retired-course';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getDashboard } from '@/lib/dashboard';
 import { bandExam, getStudentExamsOrEmpty } from '@/lib/exams';
@@ -370,6 +371,10 @@ export default async function DashboardPage() {
         // below already render from.
         courses={dashboard.enrolledCourses}
       />
+
+      {/* «الكورس ده خلص دوره في رحلتك» — right under the band, the first thing
+          below the greeting, until «تمام، فهمت». Nothing on the ordinary day. */}
+      <RetiredCourseNotice retired={dashboard.retiredCourses ?? []} />
 
       {/*
         «امتحان الشهر» — full width, directly under the band, ABOVE «ناقصك كده

@@ -830,6 +830,13 @@ export const DashboardMonthOfferSchema = z.object({
 export type DashboardMonthOffer = z.infer<typeof DashboardMonthOfferSchema>;
 
 export const DashboardSchema = z.object({
+  /**
+   * «الكورس ده خلص دوره في رحلتك» — archived courses this student was in; see
+   * `RetiredCoursesSchema` in `path.ts`. On this payload rather than a call of
+   * its own: «حسابي» is already at the edge of the per-second throttle.
+   * Optional so a web build newer than the API parses during a deploy.
+   */
+  retiredCourses: z.array(z.object({ id: z.string(), slug: z.string(), title: z.string() })).optional(),
   continueWatching: ContinueWatchingSchema.nullable(),
   enrolledCourses: z.array(EnrolledCourseSchema),
   recentScores: z.array(RecentScoreSchema),

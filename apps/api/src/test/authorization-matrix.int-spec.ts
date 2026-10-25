@@ -870,6 +870,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
     { label: 'dashboard: student', method: 'get', path: () => '/api/me/dashboard', actor: 'student', status: 200 },
     { label: 'path: student', method: 'get', path: () => '/api/me/path', actor: 'student', status: 200 },
+    { label: 'retired courses: anonymous', method: 'get', path: () => '/api/me/retired-courses', actor: 'anonymous', status: 401 },
+    { label: 'retired courses: student', method: 'get', path: () => '/api/me/retired-courses', actor: 'student', status: 200 },
     // Same self-scoped shape, but guarded by `quiz:read` rather than the
     // dashboard's own permission — so it earns its own rows instead of riding
     // on theirs. There is no id to tamper with; the session IS the identity.

@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import type { Dashboard } from '@ayman/contracts';
-import type { LearningPath } from '@ayman/contracts/path';
+import type { LearningPath, RetiredCourses } from '@ayman/contracts/path';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { DashboardService } from './dashboard.service';
@@ -30,5 +30,12 @@ export class DashboardController {
   @Get('path')
   path_(@CurrentUser() user: AuthenticatedUser): Promise<LearningPath> {
     return this.path.forUser(user.id);
+  }
+
+  /** «الكورس ده خلص دوره في رحلتك» — the archived courses this student was in. */
+  @RequirePermission('enrollment:read')
+  @Get('retired-courses')
+  retired(@CurrentUser() user: AuthenticatedUser): Promise<RetiredCourses> {
+    return this.path.retiredFor(user.id);
   }
 }
