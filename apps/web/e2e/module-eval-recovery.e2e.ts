@@ -84,7 +84,10 @@ test('reloads once when a module fails to evaluate, then stops', async ({ page }
       timeout: 15_000,
       message: 'the stale registration never broke the page, so this test proves nothing',
     })
-    .toContain('is not a function');
+    // Before Next 16.4 the stale factory ran and threw «… is not a function»;
+    // from 16.4 the Turbopack runtime refuses it first («… but the module
+    // factory is not available»). Either one is the page breaking.
+    .toMatch(/is not a function|the module factory is not available/);
 
   // The `goto` itself, plus exactly one automatic recovery attempt. See the
   // counter above for why this counts navigation requests.

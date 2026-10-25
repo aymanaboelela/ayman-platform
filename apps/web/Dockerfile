@@ -23,7 +23,7 @@
 # الصفحات بتتولّد وقت الطلب. قبل التعديل ده كان `next build` بيقع بـ
 # ECONNREFUSED جوه docker build، وهي حالة مستحيل ترضيها أصلًا.
 
-FROM node:24-slim AS base
+FROM node:24.22.1-slim AS base
 RUN corepack enable && corepack prepare pnpm@11.17.0 --activate
 WORKDIR /app
 

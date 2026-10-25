@@ -5,7 +5,7 @@
 #
 # الصورة دي **مش** جزء من الـ monorepo — الـ context هنا هو `services/wa`
 # لوحده، فمفيش pnpm ولا workspace ولا lockfile مشترك. اقرا README.md للسبب.
-FROM node:22-slim
+FROM node:22.23.4-slim
 
 WORKDIR /app
 

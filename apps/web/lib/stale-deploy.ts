@@ -99,6 +99,20 @@ export function isStaleDeployError(error: Error): boolean {
  */
 export function isModuleEvaluationError(error: Error): boolean {
   const stack = error.stack ?? '';
+  /*
+   * Next 16.4's Turbopack no longer lets the stale factory run and fail on a
+   * missing export — its runtime refuses first, with a fixed sentence:
+   *
+   *   Module 817422 was instantiated because it was required from module
+   *   903896, but the module factory is not available.
+   *
+   * Same cause (a module id this tab registered from an older build), and the
+   * one message in the runtime that can mean nothing else, so it is matched on
+   * the text. Without it the upgrade silently turned the stale-tab reload off.
+   */
+  if (/was instantiated because it was required from module .* but the module factory is not available/.test(error.message)) {
+    return true;
+  }
   return stack.includes('at module evaluation') && /\/_next\/static\/chunks\/turbopack-/.test(stack);
 }
 
