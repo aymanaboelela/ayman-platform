@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { CheckCircle2, Route, Sparkles } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -15,46 +15,64 @@ const c = copy.retiredCourse;
  *  throw in a private window. */
 const SEEN_KEY = 'retired-course-seen';
 
-function readSeen(): string[] {
+const SEEN_EVENT = 'retired-course-seen';
+
+/** The raw stored string — a stable primitive, which is what
+ *  `useSyncExternalStore` needs from a snapshot. */
+function readRaw(): string {
   try {
-    const raw = window.localStorage.getItem(SEEN_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
+    return window.localStorage.getItem(SEEN_KEY) ?? '[]';
+  } catch {
+    return '[]';
+  }
+}
+
+function parseSeen(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
   }
 }
 
-function writeSeen(ids: string[]): void {
+function subscribe(onChange: () => void): () => void {
+  window.addEventListener(SEEN_EVENT, onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    window.removeEventListener(SEEN_EVENT, onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+function markSeen(ids: readonly string[]): void {
   try {
-    window.localStorage.setItem(SEEN_KEY, JSON.stringify(ids));
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify([...new Set([...parseSeen(readRaw()), ...ids])]));
   } catch {
     // Nothing to do: the card simply comes back next visit.
   }
+  window.dispatchEvent(new Event(SEEN_EVENT));
 }
 
 /**
  * «حسابي»'s card for a course the instructor archived. One card for all of
  * them (normally one), dismissed with «تمام، فهمت» and not shown again on this
- * device. Rendered only after mount so the server HTML never disagrees with
- * what storage says.
+ * device. The server snapshot is `null`, so the HTML renders nothing and the
+ * card appears after hydration — server and client never disagree about what
+ * storage says.
  */
 export function RetiredCourseNotice({ retired }: { retired: RetiredCourses['courses'] }) {
-  const [visible, setVisible] = useState<RetiredCourses['courses']>([]);
+  const raw = useSyncExternalStore(subscribe, readRaw, () => null);
+  if (raw === null) return null;
 
-  useEffect(() => {
-    const seen = new Set(readSeen());
-    setVisible(retired.filter((course) => !seen.has(course.id)));
-  }, [retired]);
-
+  const seen = new Set(parseSeen(raw));
+  const visible = retired.filter((course) => !seen.has(course.id));
   if (visible.length === 0) return null;
 
   return (
     <RetiredCard
       title={formatCopy(c.title, { course: visible.map((course) => course.title).join('، ') })}
-      onDismiss={() => {
-        writeSeen([...new Set([...readSeen(), ...visible.map((course) => course.id)])]);
-        setVisible([]);
-      }}
+      onDismiss={() => markSeen(visible.map((course) => course.id))}
     />
   );
 }
