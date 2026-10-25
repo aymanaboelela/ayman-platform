@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { DRAGON_BLAZE } from '@/lib/brand-assets';
 import { IS_AYMAN } from '@/lib/tenant';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { AlphaVideoSources } from './alpha-video-sources';
 
 /**
  * Two dragons closing the page, one at each end of the oversized wordmark,
@@ -172,8 +173,7 @@ export function FooterDragons() {
         // not carry the stage the footer is not worth a full download at load.
         preload="metadata"
       >
-        <source src={DRAGON_BLAZE.webm} type="video/webm" />
-        <source src={DRAGON_BLAZE.mov} type="video/quicktime" />
+        <AlphaVideoSources video={DRAGON_BLAZE} />
       </video>
       <video
         className="footer-dragons__one footer-dragons__one--flip"
@@ -185,8 +185,7 @@ export function FooterDragons() {
         loop
         preload="metadata"
       >
-        <source src={DRAGON_BLAZE.webm} type="video/webm" />
-        <source src={DRAGON_BLAZE.mov} type="video/quicktime" />
+        <AlphaVideoSources video={DRAGON_BLAZE} />
       </video>
     </div>
   );

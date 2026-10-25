@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type RefObject } from 'react';
+import { AlphaVideoSources } from './alpha-video-sources';
 import {
   DRAGON_BLAZE,
   DRAGON_FLIGHT_LOOP,
@@ -800,8 +801,7 @@ function Clip({
       // style attribute fighting over one property is a bug waiting to happen.
       style={{ opacity: 0 }}
     >
-      <source src={video.webm} type="video/webm" />
-      <source src={video.mov} type="video/quicktime" />
+      <AlphaVideoSources video={video} />
     </video>
   );
 }
