@@ -10,7 +10,10 @@ import { Label } from '@ayman/ui/components/label';
 import { cn } from '@ayman/ui/lib/cn';
 import { mediaUrl } from '@ayman/ui/branding';
 import { uploadImage, type UploadFailure } from '@/lib/upload-client';
+import { IS_AYMAN } from '@/lib/tenant';
+import { DesignPicker } from '@/components/designs/design-picker';
 import { CoverCropper } from './cover-cropper';
+import { useAdminCan } from './permissions-context';
 
 const ACCEPT = ALLOWED_UPLOAD_EXT.map((ext) => `.${ext}`).join(',');
 
@@ -138,6 +141,12 @@ export function MediaKeyField({
    */
   const [picked, setPicked] = useState<File | null>(null);
   const describedBy = useId();
+  /*
+   * «من التصميمات» — the designer's finished artwork, published at full
+   * quality straight into this field. Ayman's stack only (the studio is), and
+   * only for an account that may publish one; the route checks both.
+   */
+  const canUseDesigns = useAdminCan('design:publish') && IS_AYMAN;
 
   const pending = progress !== null;
 
@@ -268,6 +277,17 @@ export function MediaKeyField({
                 ? copy.admin.media.replaceImage
                 : copy.admin.media.chooseImage}
           </Button>
+          {canUseDesigns ? (
+            <DesignPicker
+              shape={shape}
+              disabled={pending}
+              onPicked={(asset) => {
+                setReason(null);
+                setStorageKey(asset.storageKey);
+                onChange?.(asset.storageKey);
+              }}
+            />
+          ) : null}
           {storageKey ? (
             <>
               {/*

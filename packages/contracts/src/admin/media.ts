@@ -196,7 +196,22 @@ export const BOOK_ORDER_PROOF_KEY_PATTERN = /^book-order-proof\/[0-9a-f]{2}\/[0-
  */
 export const HOMEWORK_KEY_PATTERN = /^hw\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
-/** Any of the six shapes. `MediaStorage` implementations validate against this. */
+/**
+ * «ستوديو التصميم» — `design/<2 hex>/<uuid>.<png|jpg|webp>`, minted by
+ * `DesignsService`: a designer's master (`png`/`jpg`, full resolution) and its
+ * grid preview (`webp`).
+ *
+ * Private for the reason every three-segment prefix above is: unpublished
+ * work must not be readable by anyone holding a key, and the public
+ * two-segment serve route cannot address it. No `media_assets` row either —
+ * a master becomes a library image only when it is PUBLISHED, as a separate,
+ * resized copy with its own key.
+ *
+ * Every extension here is one sharp WROTE, never one an upload claimed.
+ */
+export const DESIGN_KEY_PATTERN = /^design\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:png|jpg|webp)$/;
+
+/** Any of the seven shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
@@ -204,7 +219,8 @@ export function isValidStorageKey(key: string): boolean {
     CONVERSATION_KEY_PATTERN.test(key) ||
     PAYMENT_PROOF_KEY_PATTERN.test(key) ||
     BOOK_ORDER_PROOF_KEY_PATTERN.test(key) ||
-    HOMEWORK_KEY_PATTERN.test(key)
+    HOMEWORK_KEY_PATTERN.test(key) ||
+    DESIGN_KEY_PATTERN.test(key)
   );
 }
 

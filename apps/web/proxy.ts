@@ -105,6 +105,8 @@ export const PROTECTED_PREFIXES = [
   '/onboarding',
   '/settings',
   '/admin',
+  // «ستوديو التصميم» — the designer's own shell.
+  '/studio',
   '/quizzes',
   // Every route below renders inside the student shell and its page calls
   // `apiGetAuthed` unconditionally. Without an entry here an anonymous request

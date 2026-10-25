@@ -6161,3 +6161,49 @@ model PdfFile {
   @@map("pdf_files")
   @@schema("app")
 }
+
+/// «ستوديو التصميم» — a folder in the graphic designer's workspace. See
+/// `@ayman/contracts/designs` for why these are not `media_assets` rows.
+model DesignFolder {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  name      String
+  /// amber | teal | violet | rose | blue | green — CHECKed in SQL.
+  color     String        @default("amber")
+  createdBy String?       @map("created_by")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  assets    DesignAsset[]
+
+  @@index([createdAt])
+  @@map("design_folders")
+  @@schema("app")
+}
+
+/// One finished picture: the full-resolution master and its grid preview, both
+/// under the private `design/` prefix.
+///
+/// `RESTRICT` on the folder, not `CASCADE`: a folder delete has to remove the
+/// BYTES of every picture in it first, and a cascade would drop the rows that
+/// say where those bytes are — leaving gigabytes nobody can find on the disk.
+model DesignAsset {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  folderId   String       @map("folder_id") @db.Uuid
+  folder     DesignFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  name       String
+  storageKey String       @unique @map("storage_key")
+  previewKey String       @unique @map("preview_key")
+  /// png | jpg — what sharp WROTE, never what the upload claimed.
+  format     String
+  width      Int
+  height     Int
+  sizeBytes  Int          @map("size_bytes")
+  /// Bumped by every «استبدال», so a cached preview URL changes with it.
+  version    Int          @default(1)
+  uploadedBy String?      @map("uploaded_by")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  @@index([folderId, createdAt])
+  @@map("design_assets")
+  @@schema("app")
+}

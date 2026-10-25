@@ -1049,7 +1049,9 @@ export class StudentsService {
 
   async changeRole(
     userId: string,
-    input: AdminRoleChange,
+    // The staff door's schema is the only one that can say `designer`; the
+    // wide door's is the only one that can say `admin`. Both land here.
+    input: AdminRoleChange | AdminStaffRole,
     actorUserId: string,
   ): Promise<{ role: string }> {
     if (userId === actorUserId) {

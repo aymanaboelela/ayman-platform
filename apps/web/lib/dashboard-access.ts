@@ -21,3 +21,15 @@ export function canOpenDashboard(session: SessionUser | null): boolean {
   if (session === null) return true;
   return DASHBOARD_PERMISSIONS.every((permission) => can(session, permission));
 }
+
+/**
+ * Where an account that cannot open the dashboard goes instead.
+ *
+ * A graphic designer (`designer`) holds the studio and nothing else — no
+ * `admin:access` — so sending them to `/admin` was a 404 straight after
+ * signing in. Everyone else who lands here is staff with the dashboard.
+ */
+export function landingForStaff(session: SessionUser | null): '/admin' | '/studio' {
+  if (session && !can(session, 'admin:access') && can(session, 'design:read')) return '/studio';
+  return '/admin';
+}

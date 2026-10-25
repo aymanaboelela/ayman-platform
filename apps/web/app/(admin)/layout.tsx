@@ -15,6 +15,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { AdminEntitlementsProvider } from '@/components/admin/entitlements-context';
+import { AdminPermissionsProvider } from '@/components/admin/permissions-context';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { WalletTopupsAlertsProvider } from '@/components/admin/wallet-topups-alerts';
@@ -61,7 +62,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notFound(), not a 403 page: a 403 confirms the admin area exists at this
   // path. A student poking at /admin should learn nothing beyond "not found".
   // The API guard is still the real gate — this only decides what renders.
-  if (!can(session, 'admin:access')) notFound();
+  if (!can(session, 'admin:access')) {
+    // The designer's door is `/studio`; an `/admin` bookmark should land there,
+    // not on a 404 that reads like a broken account.
+    if (can(session, 'design:read')) redirect('/studio');
+    notFound();
+  }
 
   /*
    * The inbox poller wraps the whole shell, so the sidebar badge and the mobile
@@ -126,6 +132,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         كومبوننت `'use client'` جوّه اللوحة — تاب رفع الفيديو، مؤلّف الصفحة
         الرئيسية، لوحة كتاب الكورس. شوف `entitlements-context.tsx`. */}
     <AdminEntitlementsProvider features={features}>
+    <AdminPermissionsProvider permissions={session.permissions}>
     <div className="product-type min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} features={features} />
       <div className="flex min-w-0 flex-col">
@@ -152,6 +159,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* «رفع الفيديو» in the corner, on every admin screen — see `UploadDock`. */}
       <UploadDock />
     </div>
+    </AdminPermissionsProvider>
     </AdminEntitlementsProvider>
     </NotificationStreamProvider>
     </GradingAlerts>

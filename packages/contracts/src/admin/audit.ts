@@ -529,6 +529,21 @@ export const AUDIT_ACTIONS = [
   'wallet:code-redeem',
   'wallet:purchase',
   'wallet:refund',
+  /*
+   * «ستوديو التصميم». Every act on the designer's folders is audited, the
+   * designer's own included: the account belongs to someone outside the
+   * teaching team, and «مين مسح التصميم ده» has to have an answer that does not
+   * depend on asking them. `design:publish` is the one that reaches students —
+   * a design becoming a site image — and carries the new media asset's id.
+   */
+  'design:folder-create',
+  'design:folder-update',
+  'design:folder-delete',
+  'design:upload',
+  'design:replace',
+  'design:update',
+  'design:delete',
+  'design:publish',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);
