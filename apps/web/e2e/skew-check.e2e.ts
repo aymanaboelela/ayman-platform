@@ -21,53 +21,42 @@ import { loginAsAdmin } from './fixtures';
  * registering an id nothing imports — green, and testing nothing at all.
  */
 /*
- * The id the replayed factories import for the zod PACKAGE. It is minted from
- * the package's path under `node_modules/.pnpm/zod@<version>/…`, so it moves
- * whenever zod's version does — 817422 for zod 4.4.3, 377698 since the
- * 2026-10-25 security bump to 4.6.7. With a stale number the replay throws
- * «module factory is not available» before it can test anything. To find the
- * current one: in `.next/static/chunks`, the factory registered for 237145
- * starts `var t=e.i(<this id>)`.
+ * Turbopack 16.4's compiled output for `zod.ts`, verbatim from
+ * `.next/static/chunks` (2026-10-25, Next 16.4.3, zod 4.6.7). One factory is
+ * registered under TWO ids — 237145 is the module, 108691 the facade that
+ * carries its `z` re-export — and `e.s` names the id it fills. A replay must
+ * keep that shape: register 237145 alone and 108691 never gets a factory, so
+ * every page that imports `z` (the login form first) breaks before this test
+ * can reach the course form.
+ *
+ * Re-capture after a Next or zod bump: in `.next/static/chunks`, find
+ * `237145,108691,e=>{` and copy the factory body. `ZOD_PACKAGE_ID` is the
+ * `e.i(…)` it opens with — minted from zod's path under `node_modules/.pnpm`,
+ * so it moves whenever zod's version does (817422 on 4.4.3).
  */
+const ZOD_IDS = '237145,108691';
 const ZOD_PACKAGE_ID = 377698;
+const ZOD_HEAD = `var t=e.i(${ZOD_PACKAGE_ID});e.s(["z",0,t],108691);var t=t,r=t;"window"in globalThis&&r.config({jitless:!0}),`;
 
 const STALE_BUILDS = [
   {
     label: 'the build before the helper existed',
-    body: `var t=e.i(${ZOD_PACKAGE_ID});"window" in globalThis&&t.z.config({jitless:!0}),e.s([])`,
+    body: `${ZOD_HEAD}e.s([],237145)`,
   },
   {
     label: 'the build that exported the helper from zod.ts',
     body:
-      `var t=e.i(${ZOD_PACKAGE_ID});"window" in globalThis&&t.z.config({jitless:!0}),` +
+      ZOD_HEAD +
       'e.s(["partialWithoutDefaults",0,function(e){return Object.fromEntries(' +
-      'Object.entries(e).map(([e,r])=>{let n=r instanceof t.z.ZodDefault?r.def.innerType:r;' +
-      'return[e,t.z.optional(n)]}))}])',
+      'Object.entries(e).map(([e,n])=>{let o=n instanceof r.ZodDefault?n.def.innerType:n;' +
+      'return[e,r.optional(o)]}))}],237145)',
   },
 ] as const;
 
-/*
- * ⚠️ PARKED with `test.fixme` on the Next 16.3.8 → 16.4.3 security upgrade
- * (2026-10-25, unauthenticated RCE in ≤ 16.4.0 — the upgrade could not wait).
- *
- * The replayed factories are Turbopack 16.3's CHUNK FORMAT, and 16.4 changed
- * it: a module can now be registered under several ids (zod.ts ships as
- * `237145,108691,e=>{…}`), and `e.s` takes the module id as a second argument
- * (`e.s(["z",0,t],108691)`). Injected in the old shape, the factory no longer
- * models any real old tab — it breaks the LOGIN page before this test reaches
- * the course form, which is a failure of the fixture, not of the app.
- *
- * What it guards is still guarded: a tab whose module graph is older than the
- * server reloads once and settles (`module-eval-recovery.e2e.ts`, green on
- * 16.4, and `isModuleEvaluationError` now knows 16.4's refusal sentence). To
- * bring this back, re-capture both factories from a 16.4 build — the real
- * compiled output of `zod.ts` before and after an export is added — rather
- * than hand-editing these strings.
- */
 for (const { label, body } of STALE_BUILDS) {
-  test.fixme(`a tab holding ${label} still opens the course form`, async ({ page }) => {
+  test(`a tab holding ${label} still opens the course form`, async ({ page }) => {
     await page.addInitScript(
-      `(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["static/chunks/stale-build.js",237145,` +
+      `(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["static/chunks/stale-build.js",${ZOD_IDS},` +
         `function(e){"use strict";globalThis.__staleZodRan=true;${body}}]);`,
     );
 
