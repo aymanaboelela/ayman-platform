@@ -4014,6 +4014,11 @@ enum AttemptEventKind {
   extra_attempt_granted
   attempt_reopened
   stale_write_rejected
+  /// What the runner noticed during an exam: paste, copy, tab hidden, window
+  /// blurred, page left. `payload.type` says which, see
+  /// `@ayman/contracts/quiz/exam-signals`. Written only for monthly and course
+  /// exams on Ayman's stack.
+  exam_signal
 
   @@schema("app")
 }

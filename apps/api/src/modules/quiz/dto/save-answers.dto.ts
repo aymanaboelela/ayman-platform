@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { ExamSignalsBodySchema } from '@ayman/contracts/quiz/exam-signals';
 
 /**
  * The learner response shape. There is no `fraction`, no `mark`, no `state`,
@@ -51,3 +52,11 @@ export const SubmitSchema = z.object({ attemptToken: z.string().uuid() }).strict
 export class SaveAnswersDto extends createZodDto(SaveAnswersSchema) {}
 export class FlagDto extends createZodDto(FlagSchema) {}
 export class SubmitDto extends createZodDto(SubmitSchema) {}
+
+/**
+ * The exam runner's quiet record — see `@ayman/contracts/quiz/exam-signals`.
+ * No `attemptToken`: a tab the student left open on a second device is the
+ * one whose paste matters most, and a rotated token would silence exactly it.
+ * Ownership is still checked against the session on every batch.
+ */
+export class ExamSignalsDto extends createZodDto(ExamSignalsBodySchema) {}

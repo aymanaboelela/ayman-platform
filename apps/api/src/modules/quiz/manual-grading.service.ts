@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type {
   AdminAttemptMarkInput,
   AdminGradeAnswerInput,
@@ -14,6 +14,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { AttemptService } from './attempt.service';
+import { ExamSignalsService } from './exam-signals.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '../../generated/prisma/client';
 import { clamp, fractionToState, roundMark } from './grading/fraction';
@@ -56,6 +57,7 @@ interface GradingResultRow {
   instructor_rating: number | null;
   honor_board_at: Date | null;
   is_late: boolean;
+  signal_count: number;
 }
 
 function toGradedRow(row: GradingResultRow): AdminGradedRow {
@@ -78,6 +80,7 @@ function toGradedRow(row: GradingResultRow): AdminGradedRow {
     instructorRating: row.instructor_rating,
     onHonorBoard: row.honor_board_at !== null,
     isLate: row.is_late,
+    signalCount: row.signal_count,
   };
 }
 
@@ -118,6 +121,9 @@ export class ManualGradingService {
     private readonly audit: AuditService,
     private readonly attempts: AttemptService,
     private readonly notifications: NotificationsService,
+    // Optional so the hand-built specs keep their four arguments; the panel
+    // is then simply absent.
+    @Optional() private readonly signals?: ExamSignalsService,
   ) {}
 
   /** «ورقات محتاجة تصحيح» — without this he has no way to FIND them. */
@@ -325,7 +331,15 @@ export class ManualGradingService {
         EXISTS (
           SELECT 1 FROM "app"."attempt_questions" hq
           WHERE hq."attempt_id" = a."id" AND hq."graded_by" IS NOT NULL
-        ) AS hand_marked
+        ) AS hand_marked,
+        -- What the exam runner recorded (ExamSignalsService): the same three
+        -- buckets the paper's panel counts, minus the returns and the opens,
+        -- which say nothing on their own.
+        (
+          SELECT count(*)::int FROM "app"."attempt_events" se
+          WHERE se."attempt_id" = a."id" AND se."kind" = 'exam_signal'
+            AND se."payload"->>'type' IN ('paste', 'copy', 'hidden', 'blur', 'pagehide', 'left')
+        ) AS signal_count
       FROM "app"."quiz_attempts" a
       JOIN "app"."quizzes" q  ON q."id" = a."quiz_id"
       JOIN "app"."lessons"  l ON l."id" = q."lesson_id"
@@ -573,10 +587,12 @@ export class ManualGradingService {
       },
     });
     if (!attempt) throw new NotFoundException({ code: 'attempt_not_found' });
+    const signals = (await this.signals?.forAdmin(attempt.id)) ?? null;
 
     return {
       attemptId: attempt.id,
       studentUserId: attempt.userId,
+      signals,
       studentName: attempt.user.studentProfile?.fullName ?? '—',
       quizTitle: attempt.quiz.lesson.title,
       submittedAt: attempt.submittedAt?.toISOString() ?? null,

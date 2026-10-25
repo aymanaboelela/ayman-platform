@@ -2897,6 +2897,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       'POST /api/quiz/attempts/:attemptId/resume',
       'PUT /api/quiz/attempts/:attemptId/answers',
       'POST /api/quiz/attempts/:attemptId/flag',
+      'POST /api/quiz/attempts/:attemptId/signals',
       'POST /api/quiz/attempts/:attemptId/submit',
       'GET /api/quiz/attempts/:attemptId/preflight',
       'GET /api/quiz/attempts/:attemptId/review',

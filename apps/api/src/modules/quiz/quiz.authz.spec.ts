@@ -231,6 +231,12 @@ describe('quiz module authorization matrix', () => {
     { label: 'answers: anonymous', method: 'PUT', path: (c) => `/api/quiz/attempts/${c.attemptId}/answers`, role: 'anonymous', status: 401 },
     { label: 'answers: non-owner is 404', method: 'PUT', path: (c) => `/api/quiz/attempts/${c.attemptId}/answers`, role: 'other', status: 404, body: (c) => ({ attemptToken: c.attemptToken, seq: 1, answers: [{ slotPosition: 0, response: null }] }) },
 
+    { label: 'exam signals: anonymous', method: 'POST', path: (c) => `/api/quiz/attempts/${c.attemptId}/signals`, role: 'anonymous', status: 401 },
+    // 201 with `{ recorded: 0 }` on this fixture (a lecture quiz): the route
+    // answers the same whether or not anyone is recording.
+    { label: 'exam signals: owner', method: 'POST', path: (c) => `/api/quiz/attempts/${c.attemptId}/signals`, role: 'student', status: 201, body: () => ({ signals: [{ type: 'paste', at: new Date().toISOString() }] }) },
+    { label: 'exam signals: non-owner is 404', method: 'POST', path: (c) => `/api/quiz/attempts/${c.attemptId}/signals`, role: 'other', status: 404, body: () => ({ signals: [{ type: 'paste', at: new Date().toISOString() }] }) },
+
 
     { label: 'start attempt: anonymous', method: 'POST', path: (c) => `/api/quiz/quizzes/${c.quizId}/attempts`, role: 'anonymous', status: 401 },
 
