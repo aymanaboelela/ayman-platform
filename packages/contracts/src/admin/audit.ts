@@ -237,6 +237,11 @@ export const AUDIT_ACTIONS = [
   'news:publish',
   'news:unpublish',
   'news:delete',
+  'pdf:create',
+  'pdf:update',
+  'pdf:publish',
+  'pdf:unpublish',
+  'pdf:delete',
   /**
    * التسويق — outbound WhatsApp.
    *

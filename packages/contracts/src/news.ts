@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { PdfCardSchema } from '@ayman/contracts/pdfs';
 
 /**
  * «نيوز» — the public articles section.
@@ -109,6 +110,13 @@ export const NewsPostDetailSchema = NewsListItemSchema.extend({
    * course it pointed at was unpublished; the article survives either way.
    */
   relatedCourseTitle: z.string().nullable(),
+  /**
+   * «حمّل الـPDF» — the published PDF this article links, as the card it
+   * renders. Optional on the wire, not just nullable: a web build that is newer
+   * than the API it talks to during a deploy must still parse the article.
+   * `null`/absent when there is none, or when the PDF went back to draft.
+   */
+  pdf: PdfCardSchema.nullable().optional(),
 });
 
 export const NewsListSchema = z.object({
@@ -137,6 +145,8 @@ export const AdminNewsDetailSchema = AdminNewsRowSchema.extend({
   body: z.string(),
   coverKey: z.string().nullable(),
   relatedCourseId: z.uuid().nullable(),
+  /** The linked PDF, drafts included — the editor must show what is picked. */
+  pdfId: z.uuid().nullable().optional(),
 });
 
 export const NewsCreateSchema = z.object({
@@ -146,6 +156,7 @@ export const NewsCreateSchema = z.object({
   body: NewsBodySchema,
   coverKey: z.string().trim().min(1).max(200).nullable().optional(),
   relatedCourseId: z.uuid().nullable().optional(),
+  pdfId: z.uuid().nullable().optional(),
 });
 
 /** Every field optional — a PATCH that renames nothing but the title is normal. */

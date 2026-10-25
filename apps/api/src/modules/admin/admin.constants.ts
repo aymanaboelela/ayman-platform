@@ -27,6 +27,7 @@ export const AUDIT_RESOURCES = {
   homeBlock: 'home_blocks',
   /// «نيوز» — the public articles section.
   newsPost: 'news_posts',
+  pdfFile: 'pdf_files',
   mediaAsset: 'media_assets',
   /// Lesson materials. Also the resourceType for a DOCUMENT UPLOAD, which
   /// happens before any row exists — the storage key in that entry's metadata

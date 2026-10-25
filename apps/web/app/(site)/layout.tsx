@@ -23,6 +23,7 @@ import './styles/pages.css';
 import './styles/layouts.css';
 import './styles/books.css';
 import './styles/practice.css';
+import './styles/pdfs.css';
 // ⚠️ GENUINELY LAST, and after `books.css` rather than merely after
 // `layouts.css`. This is the CSS for the two landing pages that are NOT
 // Ayman's (`landingPreset` = `neon` / `board`), and a preset page renders the

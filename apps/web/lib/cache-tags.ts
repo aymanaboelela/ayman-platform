@@ -59,6 +59,10 @@ export const courseTag = (courseId: string): string => tag('course', courseId);
  */
 export const TAG_NEWS = tag('news');
 
+/** «ملفات PDF» — one coarse tag for the list and every page, same reasoning as
+ *  `TAG_NEWS`. Articles carry a PDF card, so a PDF write invalidates both. */
+export const TAG_PDFS = tag('pdfs');
+
 /**
  * «اختبارات مجانية» — the set list and every set page, one coarse tag for the
  * reason `TAG_NEWS` gives. Invalidated by every `/admin/practice` action.

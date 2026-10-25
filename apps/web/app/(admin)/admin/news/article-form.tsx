@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition, type FormEvent } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 import type { AdminNewsDetail } from '@ayman/contracts/news';
 import { Button } from '@ayman/ui/components/button';
 import { Card, CardBody } from '@ayman/ui/components/card';
@@ -33,13 +34,24 @@ export interface CourseOption {
   title: string;
 }
 
+/** A PDF the article may link — published ones only reach the card, but
+ *  drafts are listed too so the picker shows what is already linked. */
+export interface PdfOption {
+  id: string;
+  title: string;
+  published: boolean;
+}
+
 export function ArticleForm({
   article,
   courses,
+  pdfs = [],
 }: {
   /** `null` when creating. */
   article: AdminNewsDetail | null;
   courses: readonly CourseOption[];
+  /** Empty off Ayman's stack, and then the picker is not drawn at all. */
+  pdfs?: readonly PdfOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -52,6 +64,7 @@ export function ArticleForm({
   const [excerpt, setExcerpt] = useState(article?.excerpt ?? '');
   const [body, setBody] = useState(article?.body ?? '');
   const [courseId, setCourseId] = useState(article?.relatedCourseId ?? '');
+  const [pdfId, setPdfId] = useState(article?.pdfId ?? '');
 
   const isPublished = article?.status === 'published';
 
@@ -70,6 +83,9 @@ export function ArticleForm({
       // '' is the "no course" option — the wire wants null, not an empty
       // string, and the contract rejects a non-uuid.
       relatedCourseId: courseId === '' ? null : courseId,
+      // Sent only where the picker exists, so another stack's save never
+      // touches the column.
+      ...(pdfs.length > 0 ? { pdfId: pdfId === '' ? null : pdfId } : {}),
     };
 
     try {
@@ -192,6 +208,21 @@ export function ArticleForm({
               {copy.adminNews.fieldCourseHint}
             </p>
           </Field>
+
+          {pdfs.length > 0 ? (
+            <Field name="pdfId">
+              <FieldLabel htmlFor="news-pdf">{pdfsCopy.admin.articlePdf}</FieldLabel>
+              <Select id="news-pdf" value={pdfId} onChange={(event) => setPdfId(event.target.value)}>
+                <option value="">{pdfsCopy.admin.articlePdfNone}</option>
+                {pdfs.map((pdf) => (
+                  <option key={pdf.id} value={pdf.id}>
+                    {pdf.published ? pdf.title : `${pdf.title} (${pdfsCopy.admin.draft})`}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{pdfsCopy.admin.articlePdfHint}</p>
+            </Field>
+          ) : null}
 
           <Field name="body">
             <FieldLabel htmlFor="news-body">{copy.adminNews.fieldBody}</FieldLabel>

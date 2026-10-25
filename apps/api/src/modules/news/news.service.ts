@@ -9,6 +9,7 @@ import {
   type NewsPatch,
   type NewsPostDetail,
 } from '@ayman/contracts/news';
+import type { PdfCategory } from '@ayman/contracts/pdfs';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -128,6 +129,20 @@ export class NewsService {
         // The CTA. Only a PUBLISHED course may be named: an article pointing
         // at a draft course would send a reader to a 404 on our own site.
         relatedCourse: { select: { slug: true, title: true, status: true } },
+        // «حمّل الـPDF». Only a PUBLISHED PDF becomes a card, for the same
+        // reason as the course above.
+        pdf: {
+          select: {
+            slug: true,
+            title: true,
+            description: true,
+            category: true,
+            sizeBytes: true,
+            pageCount: true,
+            coverKey: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -139,6 +154,18 @@ export class NewsService {
       ...toListItem(row),
       body: row.body,
       relatedCourseTitle: course?.title ?? null,
+      pdf:
+        row.pdf?.status === 'published'
+          ? {
+              slug: row.pdf.slug,
+              title: row.pdf.title,
+              description: row.pdf.description,
+              category: row.pdf.category as PdfCategory,
+              sizeBytes: row.pdf.sizeBytes,
+              pageCount: row.pdf.pageCount,
+              coverKey: row.pdf.coverKey,
+            }
+          : null,
     };
   }
 
@@ -179,6 +206,7 @@ export class NewsService {
       body: row.body,
       coverKey: row.coverKey,
       relatedCourseId: row.relatedCourseId,
+      pdfId: row.pdfId,
       publishedAt: row.publishedAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -195,6 +223,7 @@ export class NewsService {
         body: input.body,
         coverKey: input.coverKey ?? null,
         relatedCourseId: input.relatedCourseId ?? null,
+        pdfId: input.pdfId ?? null,
         authorId: actorId,
         // Always a draft. There is no "create and publish" path on purpose —
         // publishing is a separate permission and a separate, auditable act.
@@ -238,6 +267,7 @@ export class NewsService {
         ...(input.body === undefined ? {} : { body: input.body }),
         ...(input.coverKey === undefined ? {} : { coverKey: input.coverKey }),
         ...(input.relatedCourseId === undefined ? {} : { relatedCourseId: input.relatedCourseId }),
+        ...(input.pdfId === undefined ? {} : { pdfId: input.pdfId }),
       },
     });
 

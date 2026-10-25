@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
+import { getPdfListOrEmpty } from '@/lib/pdfs';
 import { getPracticeListOrEmpty, practicePath } from '@/lib/practice/catalog';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { IS_AYMAN } from '@/lib/tenant';
@@ -54,6 +55,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // entries for one build is recoverable; a build that will not complete is not.
   const { courses } = await getCatalogOrEmpty();
   const { posts } = await getNewsListOrEmpty();
+  // «ملفات PDF» — empty off Ayman's stack without asking; see the loader.
+  const { pdfs } = await getPdfListOrEmpty();
   const practice = IS_AYMAN ? await getPracticeListOrEmpty() : { sets: [] };
   /* الصفحات اللي بتعيش جوّه فيتشر. لو الفيتشر مقفولة، الصفحة بترد ٤٠٤ —
      ونشر URL ميت في السايت‌ماب مش سهو صغير: ده بالظبط «الدريفت» اللي بيخلّي
@@ -243,6 +246,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // `updatedAt`, not `publishedAt`: <lastmod> means "last modified", and
       // an article edited last week should be recrawled.
       lastModified: new Date(post.updatedAt),
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
+    /*
+     * «ملفات PDF» — the index and one page per PUBLISHED file (the API filters
+     * in SQL, as it does for articles). The page, never the `.pdf` itself: the
+     * page carries the title, the description and the JSON-LD that rank.
+     */
+    ...(pdfs.length > 0
+      ? [
+          {
+            url: `${SITE_URL}/pdfs`,
+            lastModified: new Date(Math.max(...pdfs.map((pdf) => Date.parse(pdf.updatedAt)))),
+            changeFrequency: 'weekly' as const,
+            priority: 0.7,
+          },
+        ]
+      : []),
+    ...pdfs.map((pdf) => ({
+      url: sitemapLoc(`${SITE_URL}/pdfs/${pdf.slug}`),
+      lastModified: new Date(pdf.updatedAt),
       changeFrequency: 'monthly' as const,
       priority: 0.6,
     })),

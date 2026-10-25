@@ -4,15 +4,16 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { ArticleForm } from '../article-form';
-import { loadCourseOptions } from '../course-options';
+import { loadCourseOptions, loadPdfOptions } from '../course-options';
 
 export const metadata = { title: copy.adminNews.edit };
 
 export default async function EditArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [article, courses] = await Promise.all([
+  const [article, courses, pdfs] = await Promise.all([
     adminGetOrNotFound(`/api/admin/news/${encodeURIComponent(id)}`, AdminNewsDetailSchema),
     loadCourseOptions(),
+    loadPdfOptions(),
   ]);
 
   const isPublished = article.status === 'published';
@@ -40,7 +41,7 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
         ) : null}
       </div>
 
-      <ArticleForm article={article} courses={courses} />
+      <ArticleForm article={article} courses={courses} pdfs={pdfs} />
     </>
   );
 }

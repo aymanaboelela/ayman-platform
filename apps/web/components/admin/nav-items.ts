@@ -43,10 +43,12 @@ import {
   Library,
   PiggyBank,
   BanknoteArrowUp,
+  FileDown,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminPractice } from '@ayman/contracts/copy/admin-practice';
+import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -555,6 +557,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Newspaper,
     permission: 'news:read',
     group: 'site',
+  },
+  {
+    // «ملفات PDF» — public downloads with their own indexed page. Beside the
+    // articles and on their permissions: the same kind of published content,
+    // by the same people. Ayman's stack only (the API 404s it elsewhere).
+    href: '/admin/pdfs',
+    labelAr: pdfsCopy.admin.title,
+    icon: FileDown,
+    permission: 'news:read',
+    group: 'site',
+    aymanOnly: true,
   },
   {
     // «المساعد يقدر يعمل إيه». في `system` جنب الفلاجات وسجل التدقيق: التلاتة

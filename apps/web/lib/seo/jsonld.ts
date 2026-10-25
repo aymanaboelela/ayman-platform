@@ -1392,3 +1392,69 @@ export function faqPageJsonLd(rows: ReadonlyArray<{ questionAr: string; answerAr
     })),
   };
 }
+
+/**
+ * «ملفات PDF» — one file's page as a `DigitalDocument`.
+ *
+ * The page is the indexed thing; the PDF is its `encoding` (a `MediaObject`
+ * with the download URL as `contentUrl`). That pairing is what lets a search
+ * engine show the page for «ملخص الوحدة الأولى برمجة PDF» and still know the
+ * file behind it is a free PDF of a given size — rather than indexing the raw
+ * bytes with no title and no date.
+ */
+export function pdfDocumentJsonLd(pdf: {
+  slug: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  updatedAt: string;
+  sizeBytes: number;
+  pageCount: number | null;
+  categoryLabel: string;
+  yearLabel: string | null;
+  downloadPath: string;
+  image?: string | null;
+}) {
+  const url = absolute(`/pdfs/${pdf.slug}`);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'DigitalDocument',
+    '@id': `${url}#document`,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    url,
+    name: pdf.title,
+    headline: pdf.title,
+    description: pdf.description,
+    datePublished: pdf.publishedAt,
+    dateModified: pdf.updatedAt,
+    inLanguage: 'ar',
+    isAccessibleForFree: true,
+    learningResourceType: pdf.categoryLabel,
+    ...(pdf.yearLabel ? { educationalLevel: pdf.yearLabel } : {}),
+    ...(pdf.pageCount ? { numberOfPages: pdf.pageCount } : {}),
+    ...(pdf.image ? { image: [pdf.image] } : {}),
+    author: personRef(),
+    publisher: organizationRef(),
+    encoding: {
+      '@type': 'MediaObject',
+      encodingFormat: 'application/pdf',
+      contentUrl: absolute(pdf.downloadPath),
+      contentSize: `${Math.max(1, Math.round(pdf.sizeBytes / 1024))} KB`,
+    },
+  };
+}
+
+/** `/pdfs` — the index as an `ItemList` of the pages, in the order shown. */
+export function pdfListJsonLd(pdfs: ReadonlyArray<{ slug: string; title: string }>) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    '@id': `${absolute('/pdfs')}#list`,
+    itemListElement: pdfs.map((pdf, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: absolute(`/pdfs/${pdf.slug}`),
+      name: pdf.title,
+    })),
+  };
+}

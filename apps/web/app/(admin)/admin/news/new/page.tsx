@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
 import { ArticleForm } from '../article-form';
-import { loadCourseOptions } from '../course-options';
+import { loadCourseOptions, loadPdfOptions } from '../course-options';
 
 export const metadata = { title: copy.adminNews.create };
 
 export default async function NewArticlePage() {
-  const courses = await loadCourseOptions();
+  const [courses, pdfs] = await Promise.all([loadCourseOptions(), loadPdfOptions()]);
 
   return (
     <>
@@ -18,7 +18,7 @@ export default async function NewArticlePage() {
       </h1>
       {/* `article={null}` is the create branch — there is no "publish on
           create" path, so a new article is always a draft first. */}
-      <ArticleForm article={null} courses={courses} />
+      <ArticleForm article={null} courses={courses} pdfs={pdfs} />
     </>
   );
 }
