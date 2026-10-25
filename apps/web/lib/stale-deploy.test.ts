@@ -40,6 +40,14 @@ describe('isStaleDeployError', () => {
  * too broad and an ordinary client error hard-reloads the page under someone.
  */
 describe('isModuleEvaluationError', () => {
+  it('recognises Next 16.4\'s refusal of a stale module, which has no module-evaluation frame', () => {
+    const refused = new Error(
+      'Module 817422 was instantiated because it was required from module 903896, but the module factory is not available.',
+    );
+    refused.stack = `Error: ${refused.message}\n    at r (/_next/static/chunks/0abc.js:1:99)`;
+    expect(isModuleEvaluationError(refused)).toBe(true);
+  });
+
   it('matches the real production stack, verbatim', () => {
     // `/admin/errors`, 2026-08-18 03:26, `/admin/courses/{id}`.
     const actual = new Error('(0 , t.partialWithoutDefaults) is not a function');

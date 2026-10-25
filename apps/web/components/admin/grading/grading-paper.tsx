@@ -39,6 +39,9 @@ export interface GradingPaperProps {
    * Null when the attempt carries no submission stamp.
    */
   submittedAtLabel: string | null;
+  /** Rendered under the header — the page's «متابعة الامتحان» panel, a
+   *  Server Component handed in already rendered. */
+  aside?: React.ReactNode;
 }
 
 /**
@@ -75,7 +78,7 @@ export interface GradingPaperProps {
  * redesign built compared against values the API never sends, so «الغلط» and
  * «الصح» were always empty.
  */
-export function GradingPaper({ attempt, submittedAtLabel }: GradingPaperProps) {
+export function GradingPaper({ attempt, submittedAtLabel, aside }: GradingPaperProps) {
   const fieldId = useId();
   const [total, setTotal] = useState<number | null>(attempt.scaledScore);
   const [editingTotal, setEditingTotal] = useState(false);
@@ -220,6 +223,8 @@ export function GradingPaper({ attempt, submittedAtLabel }: GradingPaperProps) {
           </div>
         </div>
       </header>
+
+      {aside}
 
       {attempt.questions.length > 0 ? (
         <div className="mt-4 flex flex-wrap items-center gap-3">

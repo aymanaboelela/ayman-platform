@@ -4,7 +4,7 @@
 # alpine (musl) بيحمّل أو بيبني نسخة مختلفة وبيقع بأخطاء غامضة وقت التشغيل.
 # Debian بياخد الحزمة المبنية جاهزة.
 
-FROM node:24-slim AS base
+FROM node:24.22.1-slim AS base
 # Prisma's query engine links against OpenSSL and node:24-slim ships without
 # it — it warns "failed to detect the libssl/openssl version" and then fails.
 RUN apt-get update -y \

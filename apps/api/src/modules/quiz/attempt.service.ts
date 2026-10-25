@@ -19,6 +19,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { KeyWatchService } from './key-watch.service';
+import { ExamSignalsService } from './exam-signals.service';
 import type { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
 import type { GradedQuestionRow, QuestionResponse } from './grading';
@@ -158,6 +159,10 @@ export interface StartedAttempt {
   /** So the client's timer can render the grace countdown correctly. */
   graceSeconds: number;
   overdueHandling: 'autosubmit' | 'graceperiod' | 'autoabandon';
+  /** Whether the runner records paste and leaving the tab on this paper —
+   *  `ExamSignalsService.watches`. The runner says nothing to the student
+   *  either way. */
+  signals: boolean;
   questions: LearnerQuestion[];
 }
 
@@ -250,6 +255,9 @@ export class AttemptService {
     // and none of them is about the suspect-key alert. The application always
     // has it — `QuizModule` provides it beside this service.
     @Optional() protected readonly keyWatch?: KeyWatchService,
+    // `@Optional()` for the same reason as `keyWatch`: without it the runner
+    // simply records nothing, which is what every hand-built spec wants.
+    @Optional() protected readonly signals?: ExamSignalsService,
   ) {}
 
   async start(userId: string, quizId: string): Promise<StartedAttempt> {
@@ -454,6 +462,7 @@ export class AttemptService {
       sumMarks: Number(attempt.sumMarks),
       graceSeconds: quiz.graceSeconds,
       overdueHandling: quiz.overdueHandling,
+      signals: (await this.signals?.watches(quiz.lessonId)) ?? false,
       // A FRESH page load (a new tab, or a reload of the same one) has no
       // memory of what `seq` a previous session already reached — nothing on
       // `LearnerQuestion` exposes `responseSeq` (leak surface, deliberately),

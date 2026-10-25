@@ -93,7 +93,10 @@ test.describe('site nav lockup', () => {
       //
       // So re-scrolling in a retry loop fixes nothing that waiting does not,
       // and scrolling back to 0 first is cargo cult. Wait for the attribute.
-      const nav = page.locator('header.site-nav');
+      // `:visible` — from Next 16.4 a streamed page briefly holds a second,
+      // hidden copy of the layout while React reveals the boundary (~170ms,
+      // measured), and a strict locator on a slow runner can land inside it.
+      const nav = page.locator('header.site-nav:visible');
       await page.evaluate(() => window.scrollTo(0, 1400));
       await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 15_000 });
 

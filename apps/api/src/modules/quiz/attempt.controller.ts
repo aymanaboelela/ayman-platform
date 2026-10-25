@@ -3,7 +3,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AttemptService } from './attempt.service';
-import { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
+import { ExamSignalsDto, FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
+import { ExamSignalsService } from './exam-signals.service';
 import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 import { QuizAccessService } from './quiz-access.service';
 
@@ -21,6 +22,7 @@ export class AttemptController {
   constructor(
     private readonly attempts: AttemptService,
     private readonly access: QuizAccessService,
+    private readonly signals: ExamSignalsService,
   ) {}
 
   // `quiz:read`, not the class-level `quiz:attempt` — a method-level
@@ -66,6 +68,22 @@ export class AttemptController {
     @Body() body: FlagDto,
   ) {
     return this.attempts.setFlag(user.id, attemptId, body);
+  }
+
+  /**
+   * What the runner noticed during an exam (paste, leaving the tab). Answers
+   * `{ recorded: 0 }` for anything that is not an exam on Ayman's stack, so the
+   * route says nothing about whether anyone is watching.
+   */
+  @NoAnswerLeak()
+  @UsePipes(ZodValidationPipe)
+  @Post('attempts/:attemptId/signals')
+  recordSignals(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('attemptId') attemptId: string,
+    @Body() body: ExamSignalsDto,
+  ) {
+    return this.signals.record(user.id, attemptId, body);
   }
 
   @UsePipes(ZodValidationPipe)

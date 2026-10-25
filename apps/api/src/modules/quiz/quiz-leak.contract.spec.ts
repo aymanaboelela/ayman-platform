@@ -21,6 +21,7 @@ import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptController } from './attempt.controller';
 import { AttemptEventsService } from './attempt-events.service';
+import { ExamSignalsService } from './exam-signals.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptService } from './attempt.service';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
@@ -81,6 +82,10 @@ describe('quiz answer-leak contract (Layer 3)', () => {
         AttemptService,
         QuizAccessService,
         AttemptEventsService,
+        // The controller's signals route. The response it adds to the start
+        // and resume payloads (`signals`) is a boolean, which is part of what
+        // this contract is checking stays answer-free.
+        ExamSignalsService,
         LessonAccessService,
         LessonGateService,
         EntitlementService,
