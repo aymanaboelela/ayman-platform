@@ -18,6 +18,9 @@ export interface TenantEnvReport {
 /** Copied from `packages/contracts/src/subjects.ts`; the spec pins the two. */
 export const SUBJECT_SLUGS: readonly string[];
 
+/** The grade slugs of `packages/contracts/src/grades.ts`, copied — see `SUBJECT_SLUGS`. */
+export const GRADE_SLUGS: readonly string[];
+
 export function checkTenantEnv(
   env: Record<string, string | undefined>,
   options?: { firstDeploy?: boolean },
