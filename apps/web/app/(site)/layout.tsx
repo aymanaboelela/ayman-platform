@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { IS_AYMAN } from '@/lib/tenant';
 import { AgentDiscoveryLinks } from '@/components/agents/agent-discovery-links';
+import { DiscoveryLinksDedupe } from '@/components/agents/discovery-links-dedupe';
 import { WebMcpProvider } from '@/components/agents/webmcp-provider';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
@@ -92,6 +93,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         asking it not to look at is a contradiction.
       */}
       <AgentDiscoveryLinks />
+      <DiscoveryLinksDedupe />
 
       <div className="dot-grid" aria-hidden="true" />
       <DotGridSpotlight />
