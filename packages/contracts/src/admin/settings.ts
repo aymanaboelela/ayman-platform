@@ -184,7 +184,7 @@ export type LandingLayout = z.infer<typeof LandingLayoutSchema>;
  * `apps/web/components/site/presets/`, imported ONLY inside their own branch,
  * so choosing `classic` neither loads nor evaluates a byte of any of them.
  */
-export const LANDING_PRESETS = ['classic', 'neon', 'board', 'studio'] as const;
+export const LANDING_PRESETS = ['classic', 'neon', 'board', 'studio', 'ruqaa', 'kurrasa', 'taif', 'sabboora', 'rihla', 'nujoom'] as const;
 export const LandingPresetSchema = z.enum(LANDING_PRESETS);
 export type LandingPreset = z.infer<typeof LandingPresetSchema>;
 

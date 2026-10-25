@@ -147,6 +147,14 @@ const RUNTIME_DEFINED = new Set<string>([
   // alone, because the shipping cards are the only thing in the product set in
   // Cairo. See `lib/fonts.ts` for why that page gets its own family.
   '--font-cairo',
+  // The kit presets' display faces, applied on the preset's own root
+  // (`presets/kit/kit-landing.tsx`, `kit-footer.tsx`) — `lib/fonts.ts`.
+  '--font-ruqaa',
+  '--font-marhey',
+  '--font-readex',
+  '--font-lemonada',
+  '--font-el-messiri',
+  '--font-lalezar',
   // Written by Shiki onto the HTML it generates, per token, at highlight time.
   '--sh-light',
   '--sh-light-bg',

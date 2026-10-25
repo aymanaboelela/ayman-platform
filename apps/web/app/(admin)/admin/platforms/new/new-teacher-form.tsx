@@ -466,6 +466,12 @@ const PRESETS = [
   { id: 'board', label: copy.admin.settings.landingPresetBoard, hint: c.lookBoardHint },
   { id: 'classic', label: copy.admin.settings.landingPresetClassic, hint: c.lookClassicHint },
   { id: 'studio', label: copy.admin.settings.landingPresetStudio, hint: c.lookStudioHint },
+  { id: 'ruqaa', label: copy.admin.settings.landingPresetRuqaa, hint: c.lookRuqaaHint },
+  { id: 'kurrasa', label: copy.admin.settings.landingPresetKurrasa, hint: c.lookKurrasaHint },
+  { id: 'taif', label: copy.admin.settings.landingPresetTaif, hint: c.lookTaifHint },
+  { id: 'sabboora', label: copy.admin.settings.landingPresetSabboora, hint: c.lookSabbooraHint },
+  { id: 'rihla', label: copy.admin.settings.landingPresetRihla, hint: c.lookRihlaHint },
+  { id: 'nujoom', label: copy.admin.settings.landingPresetNujoom, hint: c.lookNujoomHint },
   { id: 'neon', label: copy.admin.settings.landingPresetNeon, hint: c.lookNeonHint },
 ] as const;
 
@@ -497,7 +503,7 @@ function LookPicker({
   accent: AccentSlot;
   programming: boolean;
   error?: string;
-  onPreset: (preset: 'classic' | 'board' | 'studio' | 'neon') => void;
+  onPreset: (preset: 'classic' | 'board' | 'studio' | 'neon' | 'ruqaa' | 'kurrasa' | 'taif' | 'sabboora' | 'rihla' | 'nujoom') => void;
   onAccent: (accent: AccentSlot) => void;
 }) {
   const swatch = ACCENT_RAMPS[accent].light[0];

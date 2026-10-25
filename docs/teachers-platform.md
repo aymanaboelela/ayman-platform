@@ -88,7 +88,7 @@ All of these are env vars, written by the form, and they ride in the web
 | `TENANT_LANDING_PRESET` / `TENANT_ACCENT` | landing look on day one. Seeded into `site_settings.branding` **once**, only while the row has no `branding` key (a fresh DB), and used as the web's branding fallback so the prerender doesn't flash the default | schema defaults (classic, amber) |
 
 After the first boot the teacher owns the look: `/admin/settings` → الهوية
-البصرية (preset, colour, custom hue, logo, favicon, portrait), plus
+البصرية (preset — classic, board, studio, ruqaa «الرقعة», kurrasa «الكرّاسة», taif «الطيف», sabboora «السبّورة», rihla «الرحلة», nujoom «النجوم»; colour, custom hue, logo, favicon, portrait), plus
 `/admin/home` for blocks and `/admin/settings` → عن المدرّس for the bio.
 
 The owner can change name and subject later from «تعديل» on the card. It
