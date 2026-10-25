@@ -12,6 +12,12 @@ const n = quizExperience.counts;
 interface ExternalBooksSectionProps {
   books: StudentExternalBookSummary[];
   courseSlug: string;
+  /**
+   * The course's own name, on `/external-books`, where several courses' books
+   * stand one under another and the page header already carries the section's
+   * title and lead. Absent on the course page, which is one course already.
+   */
+  title?: string;
 }
 
 /**
@@ -26,19 +32,22 @@ interface ExternalBooksSectionProps {
  * that do not agree with their numbers and a button labelled
  * «تصفح الأسئلة وابدأ الاختبار».
  */
-export function ExternalBooksSection({ books, courseSlug }: ExternalBooksSectionProps) {
+export function ExternalBooksSection({ books, courseSlug, title }: ExternalBooksSectionProps) {
   if (books.length === 0) return null;
+  const headingId = `external-books-title-${courseSlug}`;
 
   return (
-    <section className="mb-8" aria-labelledby="external-books-title">
+    <section className="mb-8" aria-labelledby={headingId}>
       <div className="group-head">
         <span className="group-head__mark" aria-hidden="true" />
-        <h2 id="external-books-title" className="group-head__title">
-          {x.sectionTitle}
+        <h2 id={headingId} className="group-head__title">
+          {title ?? x.sectionTitle}
         </h2>
         <span className="group-head__count">{arabicCount(books.length, n.books)}</span>
       </div>
-      <p className="mb-4 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{x.sectionLead}</p>
+      {title ? null : (
+        <p className="mb-4 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{x.sectionLead}</p>
+      )}
 
       <div className="unit">
         <ul className="unit__body">

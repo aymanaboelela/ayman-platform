@@ -3,6 +3,7 @@ import {
   BookMarked,
   BookOpen,
   Gamepad2,
+  Library,
   LayoutDashboard,
   MonitorSmartphone,
   NotebookPen,
@@ -133,6 +134,12 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * two book icons in one rail is a rail nobody can scan.
    */
   { href: '/store', labelAr: copy.nav.books, icon: BookOpen },
+  /*
+   * «الكتب الخارجية» — under the shop, a third book icon on purpose: `Library`
+   * reads as a shelf, not a single volume. Before this row the books were only
+   * reachable from the foot of each course page.
+   */
+  { href: '/external-books', labelAr: copy.nav.externalBooks, icon: Library },
   ...(TEACHES_CODE ? [{ href: '/playground', labelAr: copy.nav.playground, icon: Terminal }] : []),
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },

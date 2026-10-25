@@ -364,6 +364,8 @@ export const copy = {
     essentials: 'التأسيس',
     /** «قسم الكتب» — the shop, in the student's rail and the mobile sheet. */
     books: 'الكتب',
+    /** «الكتب الخارجية» — question banks on outside books, every course at once. */
+    externalBooks: 'الكتب الخارجية',
     playground: 'تجربة الكود',
     /** «كود الكورس» — where a code bought on WhatsApp gets typed in. */
     unlockCodes: 'كود الكورس',

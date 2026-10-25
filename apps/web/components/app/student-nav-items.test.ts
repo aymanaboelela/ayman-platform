@@ -186,6 +186,7 @@ describe('STUDENT_TABS', () => {
       '/wallet',
       '/foundations',
       '/store',
+      '/external-books',
       '/playground',
     ]);
   });

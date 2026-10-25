@@ -170,6 +170,9 @@ export const quizExperience = {
     /** The section on the course page in «كورساتي». */
     sectionTitle: 'أسئلة الكتب الخارجية',
     sectionLead: 'بنوك أسئلة على المنهج، درس بدرس ووحدة بوحدة — والتصحيح والشرح أول ما التدريب يتسلّم.',
+    /** `/external-books` — the rail's own page for every course's books. */
+    pageTitle: 'الكتب الخارجية',
+    pageEmpty: 'لسه مفيش كتب خارجية على كورساتك.',
     /** Under a book's title: three counted nouns. */
     bookMeta: '{questions} · {units} · {lessons}',
     openBookLabel: 'فتح الكتاب: {title}',
