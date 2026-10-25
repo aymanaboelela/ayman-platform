@@ -710,6 +710,19 @@
   animation: route-fade-in 220ms var(--ease-out) both;
 }
 
+/* The root skeleton stays invisible for its first 250ms — see `app/loading.tsx`
+   for why the landing page needs it. NOT under the reduced-motion query: this
+   is a delay, not movement, and without it the flash is back. */
+@keyframes route-skeleton-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.route-skeleton {
+  animation: route-skeleton-in 160ms ease-out 250ms both;
+}
+
 /* «ملء الشاشة» on a phone with no Fullscreen API for a <div> — the iPhone.
    The lesson player pins itself over the viewport (`fixed inset-0`) and sets
    this attribute on <html> while it is pinned (`video-lesson.tsx`).

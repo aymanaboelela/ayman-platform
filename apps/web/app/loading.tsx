@@ -46,9 +46,25 @@ import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
  * Do not put an `<h1>`…`<h6>` in a skeleton for the same reason — an empty
  * heading in the shell outranks the real one in source order.
  */
+/**
+ * ⚠️ `route-skeleton` — invisible for its first 250ms.
+ *
+ * On a FIRST load the real page is already in the same HTML document: the
+ * prerendered shell carries this fallback AND the content, and React outlines
+ * any boundary over 12.8KB (`progressiveChunkSize`) or holding a stylesheet,
+ * painting the fallback first and swapping the content in on the next frame.
+ * The landing page was reported as «بتحمل مرتين» because of exactly that: a
+ * generic skeleton, then `(site)/loading.tsx`'s landing skeleton revealed 300ms
+ * later by React's reveal throttle (`$RT + 300` in the inline `$RC`), then the
+ * page. `(site)/loading.tsx` was deleted for it — one boundary reveals in one
+ * frame — and this delay hides the single frame that is left.
+ *
+ * On a soft navigation the delay is the usual "don't flash a skeleton for a
+ * fast route" rule: a route that answers inside 250ms shows none at all.
+ */
 export default function Loading() {
   return (
-    <div aria-hidden="true" className="mx-auto max-w-[var(--w-shell)] px-6 py-10">
+    <div aria-hidden="true" className="route-skeleton mx-auto max-w-[var(--w-shell)] px-6 py-10">
       <RouteLoadingWatchdog />
       <div className="mb-8 space-y-3">
         <Skeleton width="narrow" className="h-3" />

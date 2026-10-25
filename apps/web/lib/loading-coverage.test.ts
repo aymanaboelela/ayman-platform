@@ -31,7 +31,21 @@ const segments = [APP_DIR, ...walk(APP_DIR)];
 const has = (dir: string, file: RegExp) => readdirSync(dir).some((f) => file.test(f));
 const rel = (dir: string) => relative(APP_DIR, dir) || '.';
 
-const withPage = segments.filter((d) => has(d, /^page\.tsx?$/) && !EXEMPT.test(rel(d)));
+/**
+ * Segments that must NOT have a skeleton of their own.
+ *
+ * `(site)` is the landing page. Its `loading.tsx` nested a second boundary
+ * inside the root one, and React outlines every completed boundary over
+ * 12.8KB: the first document painted the root skeleton, revealed the landing
+ * skeleton a frame later, and the page itself 300ms after that (React's reveal
+ * throttle) — reported as «بتحمل مرتين». The root `app/loading.tsx` still
+ * covers it; see that file.
+ */
+const NO_SKELETON = new Set(['(site)']);
+
+const withPage = segments.filter(
+  (d) => has(d, /^page\.tsx?$/) && !EXEMPT.test(rel(d)) && !NO_SKELETON.has(rel(d)),
+);
 const withLoading = segments.filter((d) => has(d, /^loading\.tsx?$/));
 
 describe('loading.tsx coverage', () => {
