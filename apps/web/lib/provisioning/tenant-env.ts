@@ -45,6 +45,7 @@ export const TEMPLATE_KEYS = [
   'TENANT_KEY',
   'TENANT_DISPLAY_NAME',
   'TENANT_SUBJECT',
+  'TENANT_GRADES',
   'TENANT_LANDING_PRESET',
   'TENANT_ACCENT',
   'TENANT_ENTITLEMENTS',
@@ -134,6 +135,8 @@ export interface NewTenantSpec {
   displayName: string;
   /** `TENANT_SUBJECT` — a slug from `@ayman/contracts/subjects`. */
   subject: string;
+  /** `TENANT_GRADES` — slugs from `@ayman/contracts/grades`, comma-joined; '' = none. */
+  grades?: string;
   /** The landing look on day one; '' = the schema default. */
   landingPreset: string;
   accent: string;
@@ -252,6 +255,7 @@ export function buildTenantEnv(spec: NewTenantSpec, secrets: TenantSecrets): Rec
     TENANT_KEY: spec.key,
     TENANT_DISPLAY_NAME: oneLine(spec.displayName),
     TENANT_SUBJECT: spec.subject,
+    TENANT_GRADES: spec.grades ?? '',
     TENANT_LANDING_PRESET: spec.landingPreset,
     TENANT_ACCENT: spec.accent,
     TENANT_ENTITLEMENTS: spec.entitlements,

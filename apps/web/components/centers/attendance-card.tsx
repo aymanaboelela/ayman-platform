@@ -14,6 +14,7 @@ import { UserAvatar } from '@/components/app/user-avatar';
 import { code128Bars } from '@/lib/code128';
 import { tenantName } from '@/lib/tenant';
 import './centers.css';
+import { TEACHES_PREPARATORY } from '@/lib/tenant-grades';
 
 const c = copy.centers;
 
@@ -69,7 +70,7 @@ export function AttendanceCard({
         <span className="ctr-id__number">{formatCopy(c.cardId, { id: studentNumber })}</span>
         {studyType ? (
           <span className="ctr-chip" data-tone={studyType}>
-            {studyType === 'general' ? c.studyGeneralHint : c.studyAzhariHint}
+            {studyType === 'general' ? (TEACHES_PREPARATORY ? c.studyGeneralHintAnyStage : c.studyGeneralHint) : (TEACHES_PREPARATORY ? c.studyAzhariHintAnyStage : c.studyAzhariHint)}
           </span>
         ) : null}
         {attendanceMode ? (

@@ -84,6 +84,8 @@ ARG TENANT_DISPLAY_NAME
 # above: the title, the landing cards and whether `/playground` exists are all
 # decided in the prerender and inlined into the client bundle.
 ARG TENANT_SUBJECT
+# The grades (`prep1,…,sec1`) — the grade picker and `/years/<grade>` pages.
+ARG TENANT_GRADES
 # The landing look from «مدرّس جديد» — the branding fallback the prerender bakes.
 ARG TENANT_LANDING_PRESET
 ARG TENANT_ACCENT
@@ -96,6 +98,7 @@ ARG TENANT_WHATSAPP
 ENV TENANT_KEY=$TENANT_KEY
 ENV TENANT_DISPLAY_NAME=$TENANT_DISPLAY_NAME
 ENV TENANT_SUBJECT=$TENANT_SUBJECT
+ENV TENANT_GRADES=$TENANT_GRADES
 ENV TENANT_LANDING_PRESET=$TENANT_LANDING_PRESET
 ENV TENANT_ACCENT=$TENANT_ACCENT
 ENV TENANT_YOUTUBE=$TENANT_YOUTUBE
@@ -154,7 +157,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # the same key and name but a different subject would otherwise share this
 # layer, and a physics teacher would be served a programming site — Python
 # playground and all — from somebody else's cached build.
-RUN echo "tenant=${TENANT_KEY} name=${TENANT_DISPLAY_NAME} subject=${TENANT_SUBJECT} look=${TENANT_LANDING_PRESET}/${TENANT_ACCENT}" >/dev/null && \
+RUN echo "tenant=${TENANT_KEY} name=${TENANT_DISPLAY_NAME} subject=${TENANT_SUBJECT} grades=${TENANT_GRADES} look=${TENANT_LANDING_PRESET}/${TENANT_ACCENT}" >/dev/null && \
     NEXT_PUBLIC_BUILD_ID="b$(date -u +%Y%m%d%H%M%S)" \
     pnpm --filter @ayman/web run build
 

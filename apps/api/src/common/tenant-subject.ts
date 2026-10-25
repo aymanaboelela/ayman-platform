@@ -1,6 +1,7 @@
 import { isSubjectSlug, subjectNameAr, type SubjectSlug } from '@ayman/contracts/subjects';
 import { fillSubject, subjectCopy } from '@ayman/contracts/copy/subject';
-import { TEACHES_CODE, TENANT_SUBJECT } from './tenant';
+import { TEACHES_CODE, TENANT_GRADES, TENANT_SUBJECT } from './tenant';
+import { stageWords } from '@ayman/contracts/grades';
 
 /**
  * The server-side half of `apps/web/lib/subject-copy.ts` — the stack's subject,
@@ -48,5 +49,5 @@ export function bySubject(
   vars: Readonly<Record<string, string>> = {},
 ): string {
   if (TEACHES_CODE) return programming;
-  return fillSubject(neutral, { subject: SUBJECT_NAME_AR, ...vars });
+  return fillSubject(neutral, { subject: SUBJECT_NAME_AR, ...stageWords(TENANT_GRADES), ...vars });
 }

@@ -8,7 +8,7 @@ import { getPracticeListOrEmpty, practicePath } from '@/lib/practice/catalog';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
-import { isYearIndexable } from '@/lib/seo/year-visibility';
+import { isYearPageIndexable, yearPages } from '@/lib/grade-pages';
 
 /**
  * The date the copy on the hand-written pages last changed — `/about`,
@@ -221,10 +221,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
      * Self-healing in both directions: publish a year-3 course and its page
      * returns here on the next build, with no code change.
      */
-    ...[1, 2, 3]
-      .filter((year) => isYearIndexable(courses, year))
-      .map((year) => ({
-        url: `${SITE_URL}/years/${year}`,
+    ...yearPages()
+      .filter((page) => isYearPageIndexable(courses, page))
+      .map((page) => ({
+        url: `${SITE_URL}/years/${page.segment}`,
         lastModified: coursesModified,
         changeFrequency: 'weekly' as const,
         priority: 0.7,

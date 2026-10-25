@@ -49,6 +49,7 @@ export async function provisionTenantAction(input: ProvisionRequest): Promise<Pr
       key: data.key,
       displayName: data.displayName,
       subject: data.subject,
+      grades: data.grades.join(','),
       landingPreset: data.landingPreset,
       accent: data.accent,
       adminName: data.adminName,

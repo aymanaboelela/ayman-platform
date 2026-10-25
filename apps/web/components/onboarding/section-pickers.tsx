@@ -13,7 +13,14 @@ import type { Onboarding } from '@ayman/contracts/onboarding';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy';
 import { subjectCopy } from '@ayman/contracts/copy/subject';
-import { systemOptions, trackOptionsFor, yearOptionsFor } from '@/lib/subject-section';
+import {
+  gradeOptions,
+  gradeValueOf,
+  systemOptions,
+  trackOptionsFor,
+  yearOptionsFor,
+} from '@/lib/subject-section';
+import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
 import { SelectField } from './select-field';
 
 /** `useSyncExternalStore` with nothing to subscribe to — see `live` below. */
@@ -87,6 +94,59 @@ export function SectionPickers({
   const years = yearOptionsFor(taxonomy, shownSystem);
   const tracks = trackOptionsFor(taxonomy, shownSystem, shownYear);
 
+  const trackSelect =
+    tracks.length > 0 ? (
+      <SelectField
+        key={`tracks-${shownSystem ?? 'none'}-${shownYear ?? 'none'}`}
+        variant={variant}
+        icon={variant === 'pill' ? Route : undefined}
+        label={copy.onboarding.track}
+        placeholder={copy.onboarding.trackPlaceholder}
+        options={tracks}
+        errorMessage={errors.trackId?.message}
+        {...register('trackId', { setValueAs: emptyToUndefined })}
+      />
+    ) : null;
+
+  /*
+   * A stack with `TENANT_GRADES` asks ONE question — «الصف الدراسي», with the
+   * stack's own grades («الصف الأول الإعدادي» … «الصف الأول الثانوي») — and
+   * writes the system and the year it stands for. The select itself is not a
+   * form field: `system` and `year` stay the two fields the schema, the
+   * draft and the API already know, so nothing past this component learns
+   * that a grade exists. The track select still follows, for a grade whose
+   * system has tracks that year (none of الإعدادية's do).
+   */
+  if (ASKS_GRADE) {
+    const options = gradeOptions(taxonomy, TENANT_GRADES);
+    return (
+      <>
+        <SelectField
+          key={live ? 'grades' : 'server'}
+          variant={variant}
+          icon={variant === 'pill' ? GraduationCap : undefined}
+          label={copy.onboarding.year}
+          placeholder={copy.onboarding.yearPlaceholder}
+          options={options}
+          errorMessage={errors.year?.message ?? errors.system?.message}
+          name="grade"
+          value={gradeValueOf(TENANT_GRADES, shownSystem, shownYear)}
+          onChange={(event) => {
+            const grade = TENANT_GRADES.find((g) => g.slug === event.target.value);
+            const touched = { shouldDirty: true, shouldValidate: true } as const;
+            setValue('system', grade?.system, touched);
+            setValue('year', grade?.year as number, touched);
+            const stillValid = trackOptionsFor(taxonomy, grade?.system, grade?.year).some(
+              (option) => option.value === trackId,
+            );
+            if (!stillValid) setValue('trackId', undefined);
+          }}
+        />
+        {trackSelect}
+      </>
+    );
+  }
+
   return (
     <>
       <SelectField
@@ -132,18 +192,7 @@ export function SectionPickers({
           },
         })}
       />
-      {tracks.length > 0 ? (
-        <SelectField
-          key={`tracks-${shownSystem ?? 'none'}-${shownYear ?? 'none'}`}
-          variant={variant}
-          icon={variant === 'pill' ? Route : undefined}
-          label={copy.onboarding.track}
-          placeholder={copy.onboarding.trackPlaceholder}
-          options={tracks}
-          errorMessage={errors.trackId?.message}
-          {...register('trackId', { setValueAs: emptyToUndefined })}
-        />
-      ) : null}
+      {trackSelect}
     </>
   );
 }

@@ -6,6 +6,7 @@ import type { SocialKey } from '@/components/site/social-icons';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { IS_AYMAN } from '@/lib/tenant';
 import { tenantName } from '@/lib/tenant';
+import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
 import { practiceCopy } from '@ayman/contracts/copy/practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 
@@ -140,10 +141,13 @@ export const PAGE_LINKS = [
   { href: '/pdfs', label: pdfsCopy.footerLink },
 ] as const;
 
-export const YEAR_LINKS = [
-  { href: '/years/1', label: c.trackYear1Title },
-  { href: '/years/2', label: c.trackYear2Title },
-] as const;
+/** On a stack with `TENANT_GRADES`, one link per grade page (`lib/grade-pages.ts`). */
+export const YEAR_LINKS: readonly { href: string; label: string }[] = ASKS_GRADE
+  ? TENANT_GRADES.map((grade) => ({ href: `/years/${grade.slug}`, label: grade.labelAr }))
+  : ([
+      { href: '/years/1', label: c.trackYear1Title },
+      { href: '/years/2', label: c.trackYear2Title },
+    ] as const);
 
 export const ACCOUNT_LINKS = [
   { href: '/register', label: c.footerRegister },

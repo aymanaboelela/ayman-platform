@@ -33,7 +33,11 @@
  *     the bug this file exists to close, and the spec checks for it.
  *   · Nothing about a SYSTEM. A programming stack is البكالوريا by
  *     construction; a physics teacher may teach الثانوية العامة, البكالوريا or
- *     both, so «المرحلة الثانوية» is the only claim true of all three.
+ *     both, so «المرحلة الثانوية» is the only claim true of all three. A stack
+ *     that teaches الإعدادية says so through `TENANT_GRADES`: the `{stage}`,
+ *     `{forStage}`, `{stageShort}`, `{forStageShort}`, `{firstGrade}` and
+ *     `{gradesSpoken}` holes are filled by `stageWords()` in
+ *     `@ayman/contracts/grades`, whose default is the old literal.
  *
  * ## ⚠️ AND NOTHING HERE IMPORTS ANYTHING
  *
@@ -53,7 +57,7 @@ export const subjectCopy = {
 
   site: {
     /** Under the wordmark, in the title, in the manifest — `copy.site.tagline`'s twin. */
-    tagline: '{subject} — المرحلة الثانوية',
+    tagline: '{subject} — {stage}',
   },
 
   seo: {
@@ -62,7 +66,7 @@ export const subjectCopy = {
      * purpose: «مدرّس» and «مدرّسة» are two people, and this field is about
      * the job, which is the same for both.
      */
-    jobTitle: 'تدريس {subject} للمرحلة الثانوية',
+    jobTitle: 'تدريس {subject} {forStage}',
     /** `/courses`' meta description. No platform name: the title tag carries it. */
     catalogDescription:
       'كل كورسات {subject} — مرتّبة بالصف الدراسي والنظام، بشرح فيديو وملفات وامتحانات.',
@@ -80,16 +84,16 @@ export const subjectCopy = {
       'منهج {subject} كامل، بترتيب واحد ثابت: شرح الفكرة، وتمرين عليها، وامتحان في نفس الجلسة.',
     feature1Body: 'مفيش قفزات. كل فكرة جديدة بتتبني على اللي قبلها، بأمثلة محلولة خطوة بخطوة.',
     instructorBody:
-      'شرح {subject} لطلبة المرحلة الثانوية: الفكرة الصعبة بتتفكّك لأجزاء صغيرة، وكل جزء وراه تمرين.',
-    footerTagline: '{subject} لطلبة المرحلة الثانوية',
-    profileRole: '{subject} — المرحلة الثانوية',
-    aboutBody1: 'شرح {subject} لطلبة المرحلة الثانوية، بالترتيب ومن غير قفزات.',
-    aboutRole: '{subject} — المرحلة الثانوية',
+      'شرح {subject} لطلبة {stage}: الفكرة الصعبة بتتفكّك لأجزاء صغيرة، وكل جزء وراه تمرين.',
+    footerTagline: '{subject} لطلبة {stage}',
+    profileRole: '{subject} — {stage}',
+    aboutBody1: 'شرح {subject} لطلبة {stage}، بالترتيب ومن غير قفزات.',
+    aboutRole: '{subject} — {stage}',
     /** `{name}` is the page's own subject — `tenantName(copy.landing.aboutPageTitle)`. */
-    aboutPageRoleTitle: '{name} — {subject} للمرحلة الثانوية',
-    aboutPageLead: '{subject} لطلبة المرحلة الثانوية.',
+    aboutPageRoleTitle: '{name} — {subject} {forStage}',
+    aboutPageLead: '{subject} لطلبة {stage}.',
     aboutPageDescription:
-      '{name} — شرح {subject} لطلبة المرحلة الثانوية، بفيديو وتمرين على كل درس واختبارات بتقيس المستوى أول بأول.',
+      '{name} — شرح {subject} لطلبة {stage}، بفيديو وتمرين على كل درس واختبارات بتقيس المستوى أول بأول.',
     /** The first of the about card's three chips, in place of «شرح بالكود». */
     aboutChip1: 'شرح خطوة بخطوة',
 
@@ -101,12 +105,15 @@ export const subjectCopy = {
      */
     tracksBadge: 'الصفوف',
     tracksTitle: 'كورسات كل صف في مكانها',
-    tracksLead: 'من أول ثانوي لحد آخر سنة — كل صف ليه صفحته، وكورساته مرتّبة بنفس ترتيب المنهج.',
+    tracksLead: 'من {firstGrade} لحد آخر سنة — كل صف ليه صفحته، وكورساته مرتّبة بنفس ترتيب المنهج.',
     /** `{n}` is the two-digit year, the same «· 01» rhythm the code cards used. */
     trackYearTag: 'الصف · {n}',
     trackYearTitles: ['الصف الأول', 'الصف الثاني', 'الصف الثالث'],
     /** `{year}` is one of `trackYearTitles` — «كورسات الصف الأول الثانوي: …». */
     trackYearBody: 'كورسات {year} الثانوي: شرح المنهج، وتمارين، ومراجعة قبل كل امتحان.',
+    /** A card per GRADE on a stack with `TENANT_GRADES` — `{grade}` is the whole
+     *  name («الصف الأول الإعدادي»), so no stage word is appended to it. */
+    gradeBody: 'كورسات {grade}: شرح المنهج، وتمارين، ومراجعة قبل كل امتحان.',
     trackYearCta: 'كورسات الصف',
   },
 
@@ -123,7 +130,7 @@ export const subjectCopy = {
     heading: 'شرح منهج {subject}',
     subtitle: 'مقالات مكتوبة بتشرح دروس {subject}، مفتوحة للقراية من غير حساب.',
     description:
-      'شرح منهج {subject} لطلبة المرحلة الثانوية: مقالات مكتوبة بتشرح الدروس، مفتوحة للقراية من غير حساب.',
+      'شرح منهج {subject} لطلبة {stage}: مقالات مكتوبة بتشرح الدروس، مفتوحة للقراية من غير حساب.',
   },
 
   subscribePage: {
@@ -137,7 +144,7 @@ export const subjectCopy = {
   },
 
   linkhub: {
-    role: '{subject} — المرحلة الثانوية',
+    role: '{subject} — {stage}',
     coursesNote: 'كل محاضرات {subject}، مرتّبة بالصف',
     newsNote: 'مقالات قصيرة بالعربي بتشرح المنهج',
   },
@@ -154,13 +161,13 @@ export const subjectCopy = {
   queries: {
     catalog: [
       'الكورس بكام',
-      'سعر كورس {subject} ثانوي',
-      'كورسات {subject} للمرحلة الثانوية',
-      'شرح {subject} أولى وتانية وتالتة ثانوي',
+      'سعر كورس {subject} {stageShort}',
+      'كورسات {subject} {forStage}',
+      'شرح {subject} {gradesSpoken}',
     ],
-    teacher: ['مين أحسن مدرس {subject} للثانوية', 'أفضل مدرس {subject} ثانوي'],
-    books: ['كتاب {subject} ثانوي', 'اطلب كتاب {subject} أونلاين ويوصل البيت'],
-    news: ['شرح منهج {subject} ثانوي', 'ملخص {subject} ثانوي', 'نماذج أسئلة {subject} بالإجابات'],
+    teacher: ['مين أحسن مدرس {subject} {forStageShort}', 'أفضل مدرس {subject} {stageShort}'],
+    books: ['كتاب {subject} {stageShort}', 'اطلب كتاب {subject} أونلاين ويوصل البيت'],
+    news: ['شرح منهج {subject} {stageShort}', 'ملخص {subject} {stageShort}', 'نماذج أسئلة {subject} بالإجابات'],
   },
 
   assistant: {

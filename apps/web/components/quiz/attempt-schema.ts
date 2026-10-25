@@ -42,6 +42,9 @@ export const StartedAttemptSchema = z.object({
   nextSeq: z.number(),
   graceSeconds: z.number(),
   overdueHandling: z.enum(['autosubmit', 'graceperiod', 'autoabandon']),
+  /** Defaults off, so a page rendered against an API from before the field
+   *  existed parses and simply records nothing. */
+  signals: z.boolean().default(false),
   questions: z.array(LearnerQuestionSchema),
 });
 

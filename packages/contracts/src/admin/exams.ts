@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { ExamPhaseSchema } from '@ayman/contracts/quiz/scheduled';
+import { AdminExamSignalsSchema } from '@ayman/contracts/quiz/exam-signals';
 
 /**
  * `/admin/exams` — «امتحانات الشهر».
@@ -307,6 +308,10 @@ export const AdminGradingAttemptSchema = z.object({
    *  zero. Shown beside the questions so it is obvious what marking will move. */
   scaledScore: z.number().nullable(),
   questions: z.array(AdminGradingRowSchema),
+  /** «عمل كوبي بيست؟ طلع برا الصفحة؟» — what the exam runner noticed, or null
+   *  when it was not recording on this paper. Optional so a page that outlived
+   *  the deploy still parses the older payload. */
+  signals: AdminExamSignalsSchema.nullable().optional(),
 });
 export type AdminGradingAttempt = z.infer<typeof AdminGradingAttemptSchema>;
 
@@ -416,6 +421,10 @@ export const AdminGradedRowSchema = z.object({
    * place on the honour board.
    */
   isLate: z.boolean(),
+  /** Pastes, copies and leaves the exam runner recorded on this paper, so the
+   *  list shows which ones to open. Optional for a tab that outlived the
+   *  deploy. */
+  signalCount: z.number().int().min(0).optional(),
 });
 export type AdminGradedRow = z.infer<typeof AdminGradedRowSchema>;
 

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { courseCountLabel } from '@/lib/course-groups';
+import { ASKS_GRADE } from '@/lib/tenant-grades';
+import { yearPages } from '@/lib/grade-pages';
 import { BoardHeading } from './board-heading';
 import { boardCopy } from './board-copy';
 
@@ -90,6 +92,30 @@ export async function BoardYears({ level }: { level: 1 | 2 }) {
   const years =
     counts.size > 0 ? [...counts.keys()].sort((a, b) => a - b) : [...FALLBACK_YEARS];
 
+  /*
+   * A stack with `TENANT_GRADES` declared its grades, so every one of them
+   * gets a tile from day one — the teacher said they teach it — keyed by the
+   * grade page (`/years/prep1`), with the stage word as the eyebrow so two
+   * «1» tiles («أولى إعدادي», «أولى ثانوي») cannot be mistaken for each other.
+   */
+  const tiles = ASKS_GRADE
+    ? yearPages().map((page) => ({
+        key: page.segment,
+        href: `/years/${page.segment}`,
+        n: page.n,
+        eyebrow: page.stageAr ?? boardCopy.years.tileEyebrow,
+        name: page.title,
+        count: courses.filter(page.matches).length,
+      }))
+    : years.map((year) => ({
+        key: String(year),
+        href: `/years/${year}`,
+        n: year,
+        eyebrow: boardCopy.years.tileEyebrow,
+        name: YEAR_NAMES[year] ?? '',
+        count: counts.get(year) ?? 0,
+      }));
+
   return (
     <section className="board-band" id="years">
       <div className="board-shell">
@@ -101,11 +127,11 @@ export async function BoardYears({ level }: { level: 1 | 2 }) {
         />
 
         <ul className="board-years" role="list">
-          {years.map((year) => {
-            const count = counts.get(year) ?? 0;
+          {tiles.map((tile) => {
+            const count = tile.count;
 
             return (
-              <li className="board-tile" key={year}>
+              <li className="board-tile" key={tile.key}>
                 {/*
                   ONE anchor around the entire tile, with a button-SHAPED span
                   inside it rather than a nested `<a>`. A link inside a link is
@@ -114,8 +140,8 @@ export async function BoardYears({ level }: { level: 1 | 2 }) {
                   nowhere — the exact bug `books-strip.tsx` documents having
                   hit. The tile is one destination, so it is one link.
                 */}
-                <Link className="board-tile__link" href={`/years/${year}`}>
-                  <span className="board-tile__eyebrow">{boardCopy.years.tileEyebrow}</span>
+                <Link className="board-tile__link" href={tile.href}>
+                  <span className="board-tile__eyebrow">{tile.eyebrow}</span>
 
                   {/*
                     ⚠️ `direction: ltr; unicode-bidi: isolate` in the stylesheet,
@@ -133,13 +159,13 @@ export async function BoardYears({ level }: { level: 1 | 2 }) {
                     number systems one scroll apart.
                   */}
                   <span className="board-tile__n" aria-hidden="true">
-                    {year}
+                    {tile.n}
                   </span>
 
                   {/* The accessible name of the tile. The numeral above is
                       `aria-hidden` precisely so this is not announced as
                       «2 الصف الثاني بكالوريا». */}
-                  <span className="board-tile__name">{YEAR_NAMES[year] ?? ''}</span>
+                  <span className="board-tile__name">{tile.name}</span>
 
                   {/* Only when there is something to count. «0 كورس» under a
                       year tile is a worse answer than no line at all, and on a

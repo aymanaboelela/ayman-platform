@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { CheckCheck, Timer } from 'lucide-react';
+import { CheckCheck, ShieldAlert, Timer } from 'lucide-react';
 // `/copy/admin`, never the root barrel — this only renders inside /admin.
 import { copy } from '@ayman/contracts/copy/admin';
+import { examSignals } from '@ayman/contracts/copy/exam-signals';
 import type { AdminGradedRow } from '@ayman/contracts/admin/exams';
 import { formatCopy, formatMark } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
@@ -152,6 +153,14 @@ export function ResultRow({ row, rank, canMark = false, listHref }: ResultRowPro
               present is not a badge. */}
           {/* On the late tab this is the one thing the row has to say. */}
           {row.isLate ? <span className="text-[color:var(--warn)]">{c.rowLate}</span> : null}
+          {/* «عمل كوبي بيست / طلع برا الامتحان» — the reason to open this paper
+              before the others. The detail is on the paper itself. */}
+          {row.signalCount ? (
+            <span className="inline-flex items-center gap-1 font-semibold text-[color:var(--warn)] tabular-nums">
+              <ShieldAlert className="size-3.5" aria-hidden="true" />
+              {formatCopy(examSignals.rowBadge, { n: row.signalCount })}
+            </span>
+          ) : null}
           {rank !== null && row.handMarked ? (
             <span className="text-accent-text">{c.rowHandMarked}</span>
           ) : null}

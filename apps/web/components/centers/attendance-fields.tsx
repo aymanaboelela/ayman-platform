@@ -24,12 +24,13 @@ import { copy } from '@ayman/contracts/copy';
 import { ChoiceCards, type ChoiceOption } from './choice-cards';
 import { seatsLeftLabel, slotPriceLabel } from './center-form';
 import './centers.css';
+import { TEACHES_PREPARATORY } from '@/lib/tenant-grades';
 
 const c = copy.centers;
 
 const STUDY_OPTIONS: ReadonlyArray<ChoiceOption<'general' | 'azhari'>> = [
-  { value: 'general', label: c.studyGeneral, hint: c.studyGeneralHint, icon: BookOpen, hue: 5 },
-  { value: 'azhari', label: c.studyAzhari, hint: c.studyAzhariHint, icon: BookMarked, hue: 6 },
+  { value: 'general', label: c.studyGeneral, hint: (TEACHES_PREPARATORY ? c.studyGeneralHintAnyStage : c.studyGeneralHint), icon: BookOpen, hue: 5 },
+  { value: 'azhari', label: c.studyAzhari, hint: (TEACHES_PREPARATORY ? c.studyAzhariHintAnyStage : c.studyAzhariHint), icon: BookMarked, hue: 6 },
 ];
 
 const ATTENDANCE_OPTIONS: ReadonlyArray<ChoiceOption<'online' | 'center'>> = [

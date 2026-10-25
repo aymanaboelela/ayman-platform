@@ -1,3 +1,4 @@
+import { yearPageOf } from '@/lib/grade-pages';
 import { getCatalogOrEmpty, getCourse } from '@/lib/catalog';
 import { getNewsListOrEmpty, getNewsPost } from '@/lib/news';
 import { estimateMarkdownTokens, resolveMarkdownRoute } from '@/lib/agents/markdown-routes';
@@ -12,6 +13,7 @@ import {
   renderNewsPostMarkdown,
   renderSubscribeMarkdown,
   renderYearMarkdown,
+  renderGradeMarkdown,
 } from '@/lib/agents/markdown-render';
 import { getBookCatalogOrEmpty } from '@/lib/books';
 import { getEntitlements } from '@/lib/entitlements';
@@ -129,6 +131,11 @@ export async function GET(
     case 'courses': {
       const { courses } = await getCatalogOrEmpty();
       return markdownResponse(renderCoursesMarkdown(courses));
+    }
+    case 'grade': {
+      const page = yearPageOf(route.segment);
+      const { courses } = await getCatalogOrEmpty();
+      return markdownResponse(page ? renderGradeMarkdown(page, courses) : renderYearMarkdown(1, courses));
     }
     case 'year': {
       const { courses } = await getCatalogOrEmpty();
