@@ -99,6 +99,18 @@ services:
     # وده بالظبط اللي كان بيمنع السيرفر يرجّع الموارد حتى بعد ما العملية
     # الأصلية خلصت أو اتقفلت بالقوة.
     init: true
+    # ⚠️ سقف CPU، مش حجز (CLAUDE.md §5). الثلاث ستاكات (أيمن/صبري/عادل) على
+    # نفس الـVPS بـ4 أنوية، فكونتينر واحد بياخد الأربعة = الثلاثة يقعوا مع بعض،
+    # زي 2026-10-04. السقف ده سخي عن قصد (3 من 4): الترافيك العادي وذروة بداية
+    # الامتحان مابيوصلوش له، فمحدش بيتأثر — لكن حتى لو هذا الكونتينر جُنّ (بوت،
+    # ffmpeg)، بتفضل نواة كاملة للسيرفر والستاكات التانية، فالانهيار يفضل قابل
+    # للاستعادة بـ`docker restart` من غير ما Hostinger يقفل الـCPU تلقائيًا.
+    # CPU بس، مفيش حد RAM عن قصد — سقف الذاكرة بيقتل الكونتينر (OOM)، واللي
+    # إحنا بنمنعه هو بالظبط السقوط ده.
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -318,6 +330,13 @@ services:
     # نفس سبب `api` — الـhealthcheck بينفّذ عملية جوّه الكونتينر ده كل كام
     # ثانية برضو، وبدون `init` بتتراكم zombie مع الوقت.
     init: true
+    # سقف CPU زي `api` و`web` (CLAUDE.md §5). أقل عن قصد — خدمة الواتساب
+    # مابتعملش شغل CPU تقيل زي ترميز الفيديو أو الـSSR، فنواة واحدة تكفيها
+    # وتسيب الباقي للخدمات اللي بتخدم الطلاب.
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
     environment:
       WA_PORT: '3400'
       WA_TOKEN: ${WA_TOKEN:-}
@@ -408,6 +427,12 @@ services:
     restart: unless-stopped
     # نفس سبب `api` فوق — healthcheck بينفّذ جوّه الكونتينر كل كام ثانية.
     init: true
+    # سقف CPU زي `api` (نفس السبب والأرقام، CLAUDE.md §5): الـSSR وقت هجمة
+    # بوت هو التاني اللي بياكل الأنوية، فالسقف السخي ده بيمنعه ياخد الـ4 كاملة.
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
     depends_on:
       api: { condition: service_healthy }
       redis: { condition: service_healthy }
