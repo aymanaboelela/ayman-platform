@@ -26,6 +26,8 @@ import { can, getSession } from '@/lib/session';
 import { IS_AYMAN } from '@/lib/tenant';
 import { DeleteVideoButton } from './delete-video-button';
 import { RestoreVideoButton } from './restore-video-button';
+import { LibraryUploadButton } from './library-upload-button';
+import { PlayVideoButton } from './play-video-button';
 
 const c = copy.admin.videos;
 
@@ -110,9 +112,17 @@ export default async function AdminVideosPage() {
 
   return (
     <>
-      <p className="text-[length:var(--fs-mono-label)] uppercase tracking-wide text-accent-text">{c.eyebrow}</p>
-      <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
-      <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[length:var(--fs-mono-label)] uppercase tracking-wide text-accent-text">{c.eyebrow}</p>
+          <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <LibraryUploadButton />
+          <p className="max-w-[22rem] text-end text-[length:var(--fs-text-xs)] text-fg-muted">{c.uploadHint}</p>
+        </div>
+      </header>
 
       <dl className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         <Stat icon={HardDrive} label={c.statTotal} tone="accent">
@@ -351,12 +361,21 @@ function VideoRow({ item, stats }: { item: VideoLibraryItem; stats: VideoStatsRo
               {c.rowStats}
             </Link>
           ) : null}
-          <Link
-            href={`/admin/courses/${item.courseId}`}
-            className="inline-flex h-10 items-center rounded-md border border-line px-3 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:bg-surface-3 md:h-9"
-          >
-            {c.openLesson}
-          </Link>
+          {item.status === 'ready' ? (
+            <PlayVideoButton videoId={item.videoId} title={item.lessonTitle} />
+          ) : null}
+          {/* A «ارفع فيديو» upload has no lecture to open yet — its holding
+              lesson lives in a hidden course. */}
+          {item.library ? (
+            <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.libraryUpload}</span>
+          ) : (
+            <Link
+              href={`/admin/courses/${item.courseId}`}
+              className="inline-flex h-10 items-center rounded-md border border-line px-3 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:bg-surface-3 md:h-9"
+            >
+              {c.openLesson}
+            </Link>
+          )}
           <DeleteVideoButton videoId={item.videoId} courseId={item.courseId} disabled={busy} />
         </div>
       </div>
@@ -493,6 +512,7 @@ function Archived({ videos, targets }: { videos: VideoLibraryArchived[]; targets
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <PlayVideoButton videoId={video.videoId} title={video.sourceName ?? ''} />
                 <RestoreVideoButton videoId={video.videoId} targets={targets} />
                 <DeleteVideoButton videoId={video.videoId} courseId={null} body={c.deleteArchivedBody} />
               </div>

@@ -6,7 +6,13 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import type { ReusableVideos, VideoLibrary, VideoLibraryOrphan } from '@ayman/contracts/admin/video-upload';
+import {
+  VIDEO_LIBRARY_COURSE_SLUG,
+  type ReusableVideos,
+  type VideoLibrary,
+  type VideoLibraryOrphan,
+  type VideoUploadSlotResult,
+} from '@ayman/contracts/admin/video-upload';
 import { UPLOAD_ID_RE, isVideoExternalId, mirrorPrefix, uploadSourceKey } from '@ayman/contracts/video';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -47,7 +53,102 @@ export class VideoLibraryService {
     private readonly archive: VideoArchiveService,
   ) {}
 
+  /**
+   * «ارفع فيديو» من صفحة الفيديوهات — a holding lesson to upload into.
+   *
+   * See `VIDEO_LIBRARY_COURSE_SLUG`. The hidden course is created on first use,
+   * ARCHIVED (out of every student surface, out of the published/draft counts)
+   * and copies its system/year/subject from the oldest real course, because
+   * those columns are required and the course is never shown with them. A
+   * stack with no course at all cannot have a library upload yet — there is
+   * nothing to put the video on afterwards either.
+   */
+  async createUploadSlot(title: string, actorId: string): Promise<VideoUploadSlotResult> {
+    let course = await this.prisma.course.findUnique({
+      where: { slug: VIDEO_LIBRARY_COURSE_SLUG },
+      select: { id: true },
+    });
+    if (course === null) {
+      const template = await this.prisma.course.findFirst({
+        where: { slug: { not: VIDEO_LIBRARY_COURSE_SLUG } },
+        orderBy: { createdAt: 'asc' },
+        select: { systemId: true, year: true, subjectId: true },
+      });
+      if (template === null) throw new ConflictException('اعمل كورس الأول — الفيديو محتاج مكان يتحط فيه بعد الرفع');
+      course = await this.prisma.course.create({
+        data: {
+          slug: VIDEO_LIBRARY_COURSE_SLUG,
+          title: 'مكتبة الفيديوهات — رفع مباشر',
+          status: 'archived',
+          systemId: template.systemId,
+          year: template.year,
+          subjectId: template.subjectId,
+          instructorId: actorId,
+          position: 9999,
+        },
+        select: { id: true },
+      });
+    }
+
+    const section =
+      (await this.prisma.courseSection.findFirst({ where: { courseId: course.id }, select: { id: true } })) ??
+      (await this.prisma.courseSection.create({
+        data: { courseId: course.id, title: 'رفع مباشر', position: 0 },
+        select: { id: true },
+      }));
+
+    const last = await this.prisma.lesson.findFirst({
+      where: { sectionId: section.id },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    const lesson = await this.prisma.lesson.create({
+      data: { courseId: course.id, sectionId: section.id, title, kind: 'video', position: (last?.position ?? -1) + 1 },
+      select: { id: true },
+    });
+
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lesson.id,
+      outcome: 'success',
+      metadata: { operation: 'libraryUploadSlot', title },
+    });
+    return { courseId: course.id, lessonId: lesson.id };
+  }
+
+  /**
+   * Library uploads whose encode has finished leave their holding lesson for
+   * «محفوظة». Run on every read of the library and of the reusable picker, so
+   * a finished upload is never shown in two places — no job to schedule, and
+   * nothing to miss: the next look at either screen settles it.
+   *
+   * The lesson is deleted FIRST, then `release` decides: if another lesson
+   * already uses the video (it was picked from the lesson editor before it got
+   * here) it simply stays there; otherwise it is kept in «محفوظة».
+   */
+  private async settleLibraryUploads(): Promise<void> {
+    const ready = await this.prisma.lessonVideo.findMany({
+      where: { provider: 'upload', mirrorStatus: 'ready', lesson: { course: { slug: VIDEO_LIBRARY_COURSE_SLUG } } },
+      select: {
+        lessonId: true,
+        externalId: true,
+        sourceName: true,
+        durationSeconds: true,
+        mirrorHeight: true,
+        mirrorBytes: true,
+        posterKey: true,
+        fullDurationSeconds: true,
+      },
+    });
+    for (const video of ready) {
+      await this.prisma.lesson.delete({ where: { id: video.lessonId } });
+      await this.archive.release(video, true, { lessonTitle: null, courseTitle: null });
+    }
+  }
+
   async list(): Promise<VideoLibrary> {
+    await this.settleLibraryUploads();
     const rows = await this.prisma.lessonVideo.findMany({
       where: { provider: 'upload' },
       orderBy: { updatedAt: 'desc' },
@@ -64,7 +165,7 @@ export class VideoLibraryService {
           select: {
             id: true,
             title: true,
-            section: { select: { title: true, course: { select: { id: true, title: true } } } },
+            section: { select: { title: true, course: { select: { id: true, title: true, slug: true } } } },
           },
         },
       },
@@ -91,6 +192,7 @@ export class VideoLibraryService {
       courseId: row.lesson.section.course.id,
       courseTitle: row.lesson.section.course.title,
       sectionTitle: row.lesson.section.title,
+      library: row.lesson.section.course.slug === VIDEO_LIBRARY_COURSE_SLUG,
     }));
 
     const kept = await this.prisma.archivedVideo.findMany({ orderBy: { archivedAt: 'desc' } });
@@ -105,9 +207,10 @@ export class VideoLibraryService {
       archivedAt: row.archivedAt.toISOString(),
     }));
 
-    // Every video lesson a kept video could be put back on, drafts included.
+    // Every video lesson a kept video could be put back on, drafts included —
+    // never a library upload's holding lesson.
     const lessons = await this.prisma.lesson.findMany({
-      where: { kind: 'video' },
+      where: { kind: 'video', course: { slug: { not: VIDEO_LIBRARY_COURSE_SLUG } } },
       orderBy: [{ section: { course: { title: 'asc' } } }, { section: { position: 'asc' } }, { position: 'asc' }],
       select: {
         id: true,
@@ -238,6 +341,7 @@ export class VideoLibraryService {
    * `ReusableVideosSchema`.
    */
   async reusable(): Promise<ReusableVideos> {
+    await this.settleLibraryUploads();
     const rows = await this.prisma.lessonVideo.findMany({
       where: { provider: 'upload', mirrorStatus: 'ready' },
       orderBy: { updatedAt: 'desc' },

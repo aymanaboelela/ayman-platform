@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, UsePipes } from '@nestjs/common';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
-import { VideoAttachSchema, VideoRestoreSchema } from '@ayman/contracts/admin/video-upload';
+import { VideoAttachSchema, VideoRestoreSchema, VideoUploadSlotSchema } from '@ayman/contracts/admin/video-upload';
+import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { VideoLibraryService } from './video-library.service';
@@ -20,6 +21,7 @@ import { VideoLibraryService } from './video-library.service';
  */
 class VideoRestoreDto extends createZodDto(VideoRestoreSchema) {}
 class VideoAttachDto extends createZodDto(VideoAttachSchema) {}
+class VideoUploadSlotDto extends createZodDto(VideoUploadSlotSchema) {}
 
 @Controller('admin')
 @UsePipes(ZodValidationPipe)
@@ -58,6 +60,18 @@ export class VideoLibraryController {
   @Post('videos/:videoId/attach')
   attach(@Param('videoId') videoId: string, @Body() body: VideoAttachDto) {
     return this.library.attach(videoId, body.lessonId);
+  }
+
+  /**
+   * «ارفع فيديو» من صفحة الفيديوهات — a holding lesson to upload into; the
+   * upload itself then runs through the lesson routes unchanged. `lesson:write`,
+   * because it creates one. See `VIDEO_LIBRARY_COURSE_SLUG`.
+   */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('videos/upload-slot')
+  uploadSlot(@Body() body: VideoUploadSlotDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.library.createUploadSlot(body.title, user.id);
   }
 
   @RequireFeature('video.upload')
