@@ -164,7 +164,7 @@ export function PracticeRunner({
           <span style={{ inlineSize: `${((index + (answered ? 1 : 0)) / total) * 100}%` }} />
         </div>
 
-        <h2 ref={headingRef} tabIndex={-1} className="practice-stem" {...content}>
+        <h2 ref={headingRef} tabIndex={-1} className="practice-stem bidi-auto" {...content}>
           {current.question.stem}
         </h2>
 
@@ -201,7 +201,7 @@ export function PracticeRunner({
                     optionLetter(i)
                   )}
                 </span>
-                <span className="practice-option__text">{text}</span>
+                <span className="practice-option__text bidi-auto">{text}</span>
                 {state === 'right' ? <Check className="practice-option__mark" size={18} aria-hidden="true" /> : null}
                 {state === 'wrong' ? <X className="practice-option__mark" size={18} aria-hidden="true" /> : null}
               </button>
@@ -292,7 +292,7 @@ export function PracticeRunner({
           <ol className="practice-misses">
             {misses.map(({ s, pick }) => (
               <li key={s.question.id}>
-                <p className="practice-misses__stem" {...content}>
+                <p className="practice-misses__stem bidi-auto" {...content}>
                   {s.question.stem}
                 </p>
                 {pick !== undefined ? (

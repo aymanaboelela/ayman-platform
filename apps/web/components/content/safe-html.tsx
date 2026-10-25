@@ -42,7 +42,9 @@
 export function SafeHtml({ html, className }: { html: string; className?: string }) {
   return (
     <div
-      className={`[overflow-wrap:anywhere] ${className ?? ''}`}
+      // `bidi-auto` (globals.css): an English stem or option reads LTR inside
+      // the Arabic page instead of with its punctuation flipped.
+      className={`bidi-auto [overflow-wrap:anywhere] ${className ?? ''}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

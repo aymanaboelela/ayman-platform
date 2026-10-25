@@ -4437,6 +4437,10 @@ label.runner-option {
   color: var(--n-12);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* A student's answer may be English — each line takes its own direction.
+     See `.bidi-auto` in globals.css. */
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 
 .review-note {

@@ -526,7 +526,8 @@ function Bubble({
       {message.text ? (
         <div
           className={cn(
-            'max-w-[88%] whitespace-pre-wrap wrap-anywhere rounded-2xl px-3.5 py-2.5',
+            // `bidi-auto`: an English question or answer reads LTR (globals.css).
+            'bidi-auto max-w-[88%] whitespace-pre-wrap wrap-anywhere rounded-2xl px-3.5 py-2.5',
             'text-[length:var(--fs-text-sm)] leading-[1.75]',
             fromStudent
               ? 'rounded-ss-md border border-line-subtle bg-surface-2 text-fg'
