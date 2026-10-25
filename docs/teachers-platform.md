@@ -84,6 +84,7 @@ All of these are env vars, written by the form, and they ride in the web
 | `TENANT_KEY` | whose stack this is | Ayman's stack |
 | `TENANT_DISPLAY_NAME` | the name everywhere (web **and** api: assistant, WhatsApp, push) | «المنصة» |
 | `TENANT_SUBJECT` | subject slug. Drives titles/SEO/GEO, assistant scope, onboarding pickers, and the seed opening that subject on every track/year. Programming tools (`/playground`, `/foundations`, `/essentials`, neon preset) exist only for `programming_cs` | `programming_cs` (Ayman, Sabry, Adel unchanged) |
+| `TENANT_GRADES` | the grades taught, e.g. `prep1,prep2,prep3,sec1` (`packages/contracts/src/grades.ts`). The student picks ONE grade instead of system → year → track; the seed creates المرحلة الإعدادية when a prep grade is listed; library, landing tiles, footer, sitemap and `/years/<grade>` work per grade; the copy says «الإعدادي والثانوي». Not allowed on a programming stack | the old questions, `/years/1..3` |
 | `TENANT_LANDING_PRESET` / `TENANT_ACCENT` | landing look on day one. Seeded into `site_settings.branding` **once**, only while the row has no `branding` key (a fresh DB), and used as the web's branding fallback so the prerender doesn't flash the default | schema defaults (classic, amber) |
 
 After the first boot the teacher owns the look: `/admin/settings` → الهوية
@@ -172,8 +173,10 @@ Auto mode denies these to Claude, so the owner does them:
 - **End-to-end on the real panel:** the code was tested against a fake
   Dokploy and Cloudflare and checked against the live panel's shapes. The
   first real teacher is the first full run; it resumes if it stops.
-- **Year labels are Bakalorya-only publicly.** A الثانوية العامة teacher
-  needs a school-system switch.
+- **Year labels are Bakalorya-only publicly** on a stack without
+  `TENANT_GRADES`. A الثانوية العامة teacher should set `sec1,sec2,sec3`.
+  Still keyed on the year number alone even with grades: centre slots, books,
+  PDFs, practice sets, the marketing audience and the admin students filter.
 - **R2 buckets (backups, video) are still manual,** as is the video-host cache
   rule.
 

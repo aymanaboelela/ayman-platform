@@ -30,6 +30,10 @@ export interface YearPage {
   matches: (course: { systemSlug: string; year: number }) => boolean;
   /** The number, for the helpers keyed on it (the foundation course) — null on a grade page. */
   year: number | null;
+  /** The numeral a tile prints: the year inside its stage. */
+  n: number;
+  /** «إعدادي» / «ثانوي» on a grade page — what tells two «1» tiles apart; null otherwise. */
+  stageAr: string | null;
 }
 
 const SPOKEN = [
@@ -38,8 +42,12 @@ const SPOKEN = [
   ['تالتة', 'ثالثة', '٣', '3'],
 ] as const;
 
+function stageOf(grade: Grade): string {
+  return grade.system === 'preparatory' ? 'إعدادي' : grade.system === 'bacalorya' ? 'بكالوريا' : 'ثانوي';
+}
+
 function gradeAliases(grade: Grade): readonly string[] {
-  const stage = grade.system === 'preparatory' ? 'إعدادي' : grade.system === 'bacalorya' ? 'بكالوريا' : 'ثانوي';
+  const stage = stageOf(grade);
   const bare = stage === 'إعدادي' ? 'اعدادي' : stage;
   const [word, plain, indic, ascii] = SPOKEN[grade.year - 1]!;
   return [grade.labelAr, `${word} ${stage}`, `${plain} ${bare}`, `${indic} ${stage}`, `${ascii} ${stage}`];
@@ -52,6 +60,8 @@ function gradePage(grade: Grade): YearPage {
     aliases: gradeAliases(grade),
     matches: (course) => course.systemSlug === grade.system && course.year === grade.year,
     year: null,
+    n: grade.year,
+    stageAr: stageOf(grade),
   };
 }
 
@@ -62,6 +72,8 @@ function numberPage(year: number): YearPage {
     aliases: yearAliasesAr(year),
     matches: (course) => course.year === year,
     year,
+    n: year,
+    stageAr: null,
   };
 }
 

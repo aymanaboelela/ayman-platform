@@ -7259,6 +7259,10 @@ export const copy = {
     studyGeneralHint: 'ثانوي عام',
     studyAzhari: 'أزهري',
     studyAzhariHint: 'ثانوي أزهري',
+    /** The same two hints on a stack that also teaches الإعدادية, where
+     *  «ثانوي» is wrong for most of its students. */
+    studyGeneralHintAnyStage: 'تعليم عام',
+    studyAzhariHintAnyStage: 'تعليم أزهري',
     studyTypeError: 'لازم نحدد نوع الدراسة',
 
     /** Only asked on a stack that has a centre with a slot — see

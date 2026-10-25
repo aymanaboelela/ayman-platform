@@ -217,11 +217,14 @@ async function main(): Promise<void> {
   if (TEACHES_PREPARATORY) {
     const preparatory = await prisma.educationSystem.upsert({
       where: { slug: PREPARATORY_SYSTEM.slug },
-      update: { nameAr: PREPARATORY_SYSTEM.nameAr },
+      // `totalMarks` must be positive — `EducationSystemSchema` refuses 0, and
+      // one refused system empties the whole taxonomy the onboarding reads.
+      // 280 is الشهادة الإعدادية's total.
+      update: { nameAr: PREPARATORY_SYSTEM.nameAr, totalMarks: 280 },
       create: {
         slug: PREPARATORY_SYSTEM.slug,
         nameAr: PREPARATORY_SYSTEM.nameAr,
-        totalMarks: 0,
+        totalMarks: 280,
         passPercent: 50,
         allowsRetakes: false,
         sortOrder: -1,
