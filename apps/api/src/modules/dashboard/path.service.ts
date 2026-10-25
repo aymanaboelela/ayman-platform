@@ -46,7 +46,9 @@ export class PathService {
 
   async forUser(userId: string): Promise<LearningPath> {
     const enrollments = await this.prisma.enrollment.findMany({
-      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
+      // An ARCHIVED course is retired, not paused — it leaves the map
+      // entirely, where a draft stays drawn as closed. See `DashboardService`.
+      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] }, course: { status: { not: 'archived' } } },
       orderBy: [{ enrolledAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true,

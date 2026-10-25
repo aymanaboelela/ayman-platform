@@ -146,13 +146,14 @@ describe('PathService — a course unpublished under an enrolled student', () =>
     expect(path.currentCourseId).not.toBe(courseId);
   });
 
-  it('treats an archived course as closed too, not only a draft', async () => {
+  // Retired, not paused: an archived course leaves the map entirely.
+  it('drops an archived course from the path instead of drawing it closed', async () => {
     await prisma.course.update({ where: { id: courseId }, data: { status: 'archived' } });
 
-    const course = (await service.forUser(userId)).courses.find((e) => e.id === courseId);
+    const path = await service.forUser(userId);
 
-    expect(course?.published).toBe(false);
-    expect(course?.nextLessonId).toBeNull();
+    expect(path.courses.find((e) => e.id === courseId)).toBeUndefined();
+    expect(path.currentCourseId).not.toBe(courseId);
   });
 
   it('still matches the shared contract with the course closed', async () => {

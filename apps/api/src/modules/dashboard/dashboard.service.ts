@@ -76,7 +76,15 @@ export class DashboardService {
          * still matters is done per-field below: `lastLessonId` and
          * `continueWatching` are nulled for a closed course, so nothing offers
          * a resume target the routes will refuse.
+         *
+         * ⚠️ ARCHIVED is filtered out, though — that one is not «مقفول
+         * مؤقتاً». A draft is a course being edited and coming back; an
+         * archived course is retired («يتشال خالص، ملوش دعوة بالمنهج»), and a
+         * permanently locked card on every enrolled student's home screen is
+         * the opposite of retiring it. Their attempts and marks are untouched —
+         * only the course stops being listed.
          */
+        course: { status: { not: 'archived' } },
       },
       orderBy: { updatedAt: 'desc' },
       select: {

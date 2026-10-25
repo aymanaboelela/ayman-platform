@@ -77,7 +77,8 @@ export class EnrollmentService {
    */
   async listOwn(userId: string): Promise<EnrollmentDto[]> {
     const rows = await this.prisma.enrollment.findMany({
-      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
+      // Archived = retired: not listed anywhere a student sees their courses.
+      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] }, course: { status: { not: 'archived' } } },
       orderBy: [{ enrolledAt: 'desc' }, { id: 'desc' }],
       select: ENROLLMENT_SELECT,
     });

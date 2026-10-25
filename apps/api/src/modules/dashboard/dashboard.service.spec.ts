@@ -424,15 +424,15 @@ describe('DashboardService', () => {
       expect((await service.forUser(userId)).continueWatching).toBeNull();
     });
 
-    it('treats an archived course as closed too, not only a draft', async () => {
+    // A draft is paused and stays listed as closed (above); an ARCHIVED
+    // course is retired and leaves «كورساتي» entirely — «يتشال خالص».
+    it('drops an archived course from the list instead of showing it closed', async () => {
       await prisma.course.update({ where: { id: courseId }, data: { status: 'archived' } });
 
-      const course = (await service.forUser(userId)).enrolledCourses.find(
-        (entry) => entry.id === courseId,
-      );
+      const result = await service.forUser(userId);
 
-      expect(course?.published).toBe(false);
-      expect(course?.lastLessonId).toBeNull();
+      expect(result.enrolledCourses.find((entry) => entry.id === courseId)).toBeUndefined();
+      expect(result.continueWatching?.courseId ?? null).not.toBe(courseId);
     });
 
     it('still matches the shared contract with the course closed', async () => {

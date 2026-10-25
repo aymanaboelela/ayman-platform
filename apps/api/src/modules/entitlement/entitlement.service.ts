@@ -555,7 +555,8 @@ export class EntitlementService {
   /** The caller's own enrollments. `userId` comes from the session, never the URL. */
   listOwnEnrollments(userId: string) {
     return this.prisma.enrollment.findMany({
-      where: { userId, status: { in: ['active', 'completed'] } },
+      // Archived = retired; see `DashboardService`.
+      where: { userId, status: { in: ['active', 'completed'] }, course: { status: { not: 'archived' } } },
       orderBy: [{ enrolledAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
