@@ -77,11 +77,12 @@ export type DesignFolderColor = (typeof DESIGN_FOLDER_COLORS)[number];
  * Display text, cleaned the way a filename has to be before it is shown.
  *
  * Bidi controls (U+202A–E, U+2066–9) and zero-width characters are stripped:
- * a name like «غلاف‮gnp.exe» renders as something it is not, and the instructor
+ * a name holding U+202E (RIGHT-TO-LEFT OVERRIDE) before «gnp.exe» renders as something it is not, and the instructor
  * reads these names to decide what to publish. Control characters go for the
  * same reason. What is left is trimmed and collapsed.
  */
-const INVISIBLE = /[\u0000-\u001f\u007f​-‏‪-‮⁠-⁩﻿]/g;
+// eslint-disable-next-line no-control-regex -- stripping control characters is the point
+const INVISIBLE = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;
 
 export function cleanDesignName(raw: string): string {
   return raw.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
