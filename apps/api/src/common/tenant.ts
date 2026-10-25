@@ -1,3 +1,5 @@
+import { PREPARATORY_SYSTEM, parseTenantGrades, type Grade } from '@ayman/contracts/grades';
+
 /**
  * Which stack this API IS — the server-side half of `apps/web/lib/tenant.ts`.
  *
@@ -73,3 +75,14 @@ export const TENANT_SUBJECT = (process.env.TENANT_SUBJECT ?? '').trim() || 'prog
  * on refusing every question that is not about code.
  */
 export const TEACHES_CODE = IS_AYMAN || TENANT_SUBJECT === 'programming_cs';
+
+/**
+ * The grades this stack teaches — `TENANT_GRADES`, parsed by
+ * `@ayman/contracts/grades`. `[]` means the old system → year → track
+ * questions, and his stack is always `[]` whatever its environment says,
+ * for the reason `TEACHES_CODE` gives above.
+ */
+export const TENANT_GRADES: readonly Grade[] = IS_AYMAN ? [] : parseTenantGrades(process.env.TENANT_GRADES);
+
+/** Whether the preparatory stage is one of them — the seed's one question. */
+export const TEACHES_PREPARATORY = TENANT_GRADES.some((g) => g.system === PREPARATORY_SYSTEM.slug);

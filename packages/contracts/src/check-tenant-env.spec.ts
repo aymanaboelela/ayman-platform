@@ -2,7 +2,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // A dependency-free .mjs script so it runs on a bare server before anything is
 // installed; its types sit beside it in `check-tenant-env.d.mts`.
-import { SUBJECT_SLUGS, checkTenantEnv, parseEnvFile } from '../../../scripts/check-tenant-env.mjs';
+import { GRADE_SLUGS, SUBJECT_SLUGS, checkTenantEnv, parseEnvFile } from '../../../scripts/check-tenant-env.mjs';
+import { GRADES } from './grades';
 import { CONTROL_ISSUER, ENTITLEMENTS_VERSION } from './admin/entitlements';
 import { SUBJECTS } from './subjects';
 
@@ -240,6 +241,28 @@ describe('checkTenantEnv', () => {
 
     it('knows exactly the subjects the seed creates', () => {
       expect([...SUBJECT_SLUGS]).toEqual(SUBJECTS.map((subject) => subject.slug));
+    });
+  });
+
+  describe('the grades', () => {
+    it('accepts them empty — the old questions', () => {
+      expect(check({ TENANT_SUBJECT: 'arabic', TENANT_GRADES: '' }).errors).toEqual([]);
+    });
+
+    it('accepts known slugs on a non-programming stack', () => {
+      expect(check({ TENANT_SUBJECT: 'arabic', TENANT_GRADES: 'prep1,prep2, prep3,sec1' }).errors).toEqual([]);
+    });
+
+    it('rejects a typo instead of dropping a grade off the picker', () => {
+      expect(check({ TENANT_SUBJECT: 'arabic', TENANT_GRADES: 'prep1,prpe3' }).errors.join(' ')).toContain('prpe3');
+    });
+
+    it('rejects grades on a programming stack', () => {
+      expect(check({ TENANT_GRADES: 'sec1' }).errors.join(' ')).toContain('TENANT_GRADES');
+    });
+
+    it('knows exactly the grades in contracts', () => {
+      expect([...GRADE_SLUGS]).toEqual(GRADES.map((grade) => grade.slug));
     });
   });
 

@@ -8,6 +8,7 @@ import type {
 import { copy } from '@ayman/contracts';
 import { FIXED_SYSTEM_SLUG } from '@/lib/section-defaults';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
 
 const c = copy.library;
 
@@ -70,6 +71,8 @@ export interface LibraryTrackGroup {
 }
 
 export interface LibraryYearGroup {
+  /** React key — the year alone, or `system:year` on a stack with grades. */
+  key: string;
   year: number;
   labelAr: string;
   courseCount: number;
@@ -93,6 +96,13 @@ export interface LibraryIdentity {
    */
   schoolStream: SchoolStream | null;
   schoolStreamLabelAr: string | null;
+  /**
+   * The student's system slug — read only on a stack with `TENANT_GRADES`,
+   * where «الصف الأول الإعدادي» and «الصف الأول الثانوي» are both year 1 and
+   * the year alone cannot tell their courses apart. Optional so the callers
+   * that build an identity by hand (the dashboard's tests) need not care.
+   */
+  systemSlug?: string | null;
 }
 
 export interface LibraryView {
@@ -231,6 +241,10 @@ export function identityOf(me: ProfileMe, taxonomy: Taxonomy | null): LibraryIde
     trackLabelAr: findTrackLabel(taxonomy, me.profile?.trackId),
     schoolStream,
     schoolStreamLabelAr: schoolStream === null ? null : copy.stream[schoolStream],
+    // Only where it is read, so every other stack's identity is unchanged.
+    ...(ASKS_GRADE
+      ? { systemSlug: taxonomy.systems.find((system) => system.id === me.profile?.systemId)?.slug ?? null }
+      : {}),
   };
 }
 
@@ -268,6 +282,10 @@ function servesStudentStream(course: CatalogCourse, identity: LibraryIdentity): 
 export function isOwnCourse(course: CatalogCourse, identity: LibraryIdentity): boolean {
   return (
     course.year === identity.year &&
+    // On a stack with grades the SYSTEM is half the grade: a «تالتة إعدادي»
+    // student's year 3 is not «تالتة ثانوي»'s. Everywhere else the year has
+    // always been enough, and a profile with no system still matches.
+    (!ASKS_GRADE || !identity.systemSlug || course.systemSlug === identity.systemSlug) &&
     (course.trackLabelAr === null || course.trackLabelAr === identity.trackLabelAr) &&
     servesStudentStream(course, identity)
   );
@@ -330,21 +348,42 @@ export function buildLibrary({
   // The remaining years, ascending — a student browsing outside their own year
   // is looking for what comes before or after it, and a stable ascending run is
   // the only order in which "before" and "after" mean anything.
-  const years = new Map<number, CatalogCourse[]>();
+  //
+  // On a stack with grades a group is a GRADE — (system, year) — in the
+  // order the stack lists its grades, headed with the grade's own name, so
+  // «الصف الأول الإعدادي» and «الصف الأول الثانوي» are two groups and not one
+  // group named after whichever system the student happens to be in.
+  const groupKey = (course: CatalogCourse): string =>
+    ASKS_GRADE ? `${course.systemSlug}:${course.year}` : String(course.year);
+  const years = new Map<string, CatalogCourse[]>();
   for (const course of restCourses) {
-    const bucket = years.get(course.year);
+    const bucket = years.get(groupKey(course));
     if (bucket) bucket.push(course);
-    else years.set(course.year, [course]);
+    else years.set(groupKey(course), [course]);
   }
 
+  const gradeRank = (list: CatalogCourse[]): number => {
+    const index = TENANT_GRADES.findIndex(
+      (grade) => grade.system === list[0]!.systemSlug && grade.year === list[0]!.year,
+    );
+    return index === -1 ? TENANT_GRADES.length + list[0]!.year : index;
+  };
+
   const rest: LibraryYearGroup[] = [...years.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([groupYear, list]) => ({
-      year: groupYear,
-      labelAr: findYearLabel(taxonomy, groupYear, me.profile?.systemId),
-      courseCount: list.length,
-      tracks: byTrack(list.map(toLibraryCourse), list.map(trackKey)),
-    }));
+    .sort(([, a], [, b]) => (ASKS_GRADE ? gradeRank(a) - gradeRank(b) : a[0]!.year - b[0]!.year))
+    .map(([key, list]) => {
+      const groupYear = list[0]!.year;
+      const grade = ASKS_GRADE
+        ? TENANT_GRADES.find((g) => g.system === list[0]!.systemSlug && g.year === groupYear)
+        : undefined;
+      return {
+        key,
+        year: groupYear,
+        labelAr: grade?.labelAr ?? findYearLabel(taxonomy, groupYear, me.profile?.systemId),
+        courseCount: list.length,
+        tracks: byTrack(list.map(toLibraryCourse), list.map(trackKey)),
+      };
+    });
 
   return { identity, yours, rest, totalCourses: courses.length };
 }

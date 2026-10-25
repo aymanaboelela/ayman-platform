@@ -18,6 +18,8 @@ import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
 import { SEEDS_OFFICIAL_SEO, TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
 import { tenantBrandingDefaults } from '@ayman/contracts/admin/tenant-branding';
 import { STACK_SUBJECT_SLUG } from '../common/tenant-subject';
+import { TEACHES_PREPARATORY } from '../common/tenant';
+import { GRADES, PREPARATORY_SYSTEM } from '@ayman/contracts/grades';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -191,6 +193,58 @@ async function main(): Promise<void> {
           sortOrder: y.year,
         },
       });
+    }
+  }
+
+  /*
+   * ── المرحلة الإعدادية — only on a stack whose `TENANT_GRADES` names it ──
+   *
+   * A third system beside the two secondary ones, with three years and no
+   * tracks. Seeded only where it is taught: `GET /api/taxonomy` lists every
+   * system row (there is no `is_active` column), so a row here on his stack
+   * would put «المرحلة الإعدادية» in his course form and every admin picker.
+   * Nothing deletes it if the variable is later emptied — a course or a
+   * profile may point at it by then, and a dangling FK is worse than an
+   * unused row.
+   *
+   * `sortOrder: -1` puts it first: the course form defaults to
+   * `taxonomy.systems[0]`, and on the one stack that has it, most courses are
+   * preparatory. The stack's own subject is opened on all three years
+   * (`trackId: null`, findFirst + create for the NULL-distinct reason the
+   * year-1 block below gives), because `assertOfferingExists` refuses a
+   * course whose (system, year, subject) has no offering.
+   */
+  if (TEACHES_PREPARATORY) {
+    const preparatory = await prisma.educationSystem.upsert({
+      where: { slug: PREPARATORY_SYSTEM.slug },
+      update: { nameAr: PREPARATORY_SYSTEM.nameAr },
+      create: {
+        slug: PREPARATORY_SYSTEM.slug,
+        nameAr: PREPARATORY_SYSTEM.nameAr,
+        totalMarks: 0,
+        passPercent: 50,
+        allowsRetakes: false,
+        sortOrder: -1,
+      },
+    });
+    for (const grade of GRADES.filter((g) => g.system === PREPARATORY_SYSTEM.slug)) {
+      await prisma.academicYear.upsert({
+        where: { systemId_year: { systemId: preparatory.id, year: grade.year } },
+        update: { labelAr: grade.labelAr, badgeAr: grade.year === 3 ? 'سنة شهادة' : 'سنة نقل' },
+        create: {
+          systemId: preparatory.id,
+          year: grade.year,
+          labelAr: grade.labelAr,
+          badgeAr: grade.year === 3 ? 'سنة شهادة' : 'سنة نقل',
+          sortOrder: grade.year,
+        },
+      });
+      if (STACK_SUBJECT_SLUG === null) continue;
+      const where = { systemId: preparatory.id, year: grade.year, trackId: null, subjectId: subjectId(STACK_SUBJECT_SLUG) };
+      const existing = await prisma.subjectOffering.findFirst({ where, select: { id: true } });
+      if (!existing) {
+        await prisma.subjectOffering.create({ data: { ...where, countsTowardTotal: true, sortOrder: 0 } });
+      }
     }
   }
 

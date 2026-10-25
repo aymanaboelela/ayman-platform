@@ -3,6 +3,7 @@ import { isSubjectSlug, subjectNameAr } from '@ayman/contracts/subjects';
 import { fillSubject, subjectCopy } from '@ayman/contracts/copy/subject';
 import { tenantName } from '@/lib/tenant';
 import { TEACHES_CODE, TENANT_SUBJECT } from '@/lib/tenant-subject';
+import { STAGE_WORDS } from '@/lib/tenant-grades';
 
 /**
  * The gate for copy that names the SUBJECT — the same job
@@ -71,7 +72,7 @@ export function bySubject(
   vars: Readonly<Record<string, string>> = {},
 ): string {
   if (TEACHES_CODE) return programming;
-  return fillSubject(neutral, { subject: SUBJECT_NAME_AR, ...vars });
+  return fillSubject(neutral, { subject: SUBJECT_NAME_AR, ...STAGE_WORDS, ...vars });
 }
 
 /** `bySubject` over a list — the ai-catalog's query arrays. */
@@ -80,7 +81,7 @@ export function bySubjectList(
   neutral: readonly string[],
 ): readonly string[] {
   if (TEACHES_CODE) return programming;
-  return neutral.map((line) => fillSubject(line, { subject: SUBJECT_NAME_AR }));
+  return neutral.map((line) => fillSubject(line, { subject: SUBJECT_NAME_AR, ...STAGE_WORDS }));
 }
 
 /**

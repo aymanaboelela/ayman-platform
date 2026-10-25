@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { courseYearLabel } from '@/lib/grade-pages';
+import { ASKS_GRADE } from '@/lib/tenant-grades';
 import { z } from 'zod';
 import { CalendarClock, Layers, Lock } from 'lucide-react';
 import { Badge, cn } from '@ayman/ui';
@@ -54,6 +56,10 @@ const dateFormatter = new Intl.DateTimeFormat('ar-EG', {
   year: 'numeric',
 });
 const numberFormatter = new Intl.NumberFormat('ar-EG');
+
+function courseGradeLabel(systemNameAr: string, year: number): string | null {
+  return ASKS_GRADE ? courseYearLabel({ systemNameAr, year }) : null;
+}
 
 function yearLabel(year: number): string {
   if (year === 1) return copy.years.year1;
@@ -199,7 +205,9 @@ export default async function AdminCoursesPage({
           {courses.map((course) => {
             const href = `/admin/courses/${course.id}`;
             const meta = [
-              yearLabel(course.year),
+              // A stack with grades names the grade («الصف الأول الإعدادي»):
+              // the number's «بكالوريا» spelling is wrong for two of its systems.
+              courseGradeLabel(course.system.nameAr, course.year) ?? yearLabel(course.year),
               course.system.nameAr,
               course.track?.labelAr,
               course.subject.nameAr,

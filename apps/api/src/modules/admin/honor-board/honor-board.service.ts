@@ -97,7 +97,7 @@ export class AdminHonorBoardService {
               lesson: {
                 select: {
                   title: true,
-                  course: { select: { year: true, forGeneral: true, forLanguages: true } },
+                  course: { select: { year: true, forGeneral: true, forLanguages: true, system: { select: { slug: true } } } },
                 },
               },
             },
@@ -109,7 +109,7 @@ export class AdminHonorBoardService {
          مش من حالة النشر. */
       this.prisma.course.findMany({
         orderBy: [{ year: 'asc' }, { title: 'asc' }],
-        select: { id: true, title: true, year: true, forGeneral: true, forLanguages: true },
+        select: { id: true, title: true, year: true, forGeneral: true, forLanguages: true, system: { select: { slug: true } } },
       }),
     ]);
 
@@ -227,7 +227,7 @@ export class AdminHonorBoardService {
       select: {
         id: true,
         title: true,
-        course: { select: { title: true, year: true, forGeneral: true, forLanguages: true } },
+        course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, system: { select: { slug: true } } } },
         quiz: { select: { id: true, openFrom: true, lateAfter: true } },
       },
     });
@@ -525,7 +525,7 @@ export class AdminHonorBoardService {
         id: true,
         title: true,
         courseId: true,
-        course: { select: { year: true, forGeneral: true, forLanguages: true } },
+        course: { select: { year: true, forGeneral: true, forLanguages: true, system: { select: { slug: true } } } },
         quiz: { select: { id: true } },
       },
     });
@@ -672,7 +672,7 @@ const PIN_SELECT = {
   photoKey: true,
   attemptId: true,
   createdAt: true,
-  course: { select: { year: true, forGeneral: true, forLanguages: true } },
+  course: { select: { year: true, forGeneral: true, forLanguages: true, system: { select: { slug: true } } } },
   user: {
     select: {
       studentProfile: {

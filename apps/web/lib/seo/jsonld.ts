@@ -4,7 +4,7 @@ import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
 import { mediaUrl } from '@ayman/ui/branding';
-import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
+import { courseYearAliases, courseYearLabel } from '@/lib/grade-pages';
 import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
@@ -909,7 +909,7 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     // «البكالوريا — الصف الثاني بكالوريا», not «البكالوريا — 2». The bare digit
     // was unmatchable: a student searches «تانية بكالوريا» and an assistant
     // grounding on this node had a number where the phrase should be.
-    educationalLevel: `${course.systemNameAr} — ${yearLabelAr(course.year)}`,
+    educationalLevel: `${course.systemNameAr} — ${courseYearLabel(course)}`,
     /**
      * The same course, under every name a student gives its year.
      *
@@ -925,7 +925,7 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
      * is the difference between an alias and a keyword stuff.
      */
     keywords: [
-      ...yearAliasesAr(course.year),
+      ...courseYearAliases(course),
       course.subjectNameAr,
       course.systemNameAr,
       // «عربي» or «لغات». Two courses on this site carry the same title and
@@ -1188,13 +1188,13 @@ export function articleJsonLd(
     ...(course
       ? {
           about: course.subjectNameAr,
-          educationalLevel: `${course.systemNameAr} — ${yearLabelAr(course.year)}`,
+          educationalLevel: `${course.systemNameAr} — ${courseYearLabel(course)}`,
           isPartOf: {
             '@type': 'Course',
             name: course.title,
             url: absolute(`/courses/${course.slug}`),
           },
-          keywords: [...yearAliasesAr(course.year), course.subjectNameAr],
+          keywords: [...courseYearAliases(course), course.subjectNameAr],
         }
       : {}),
   };

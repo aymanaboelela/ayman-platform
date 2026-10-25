@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { ACCENT_SLOTS } from '@ayman/contracts/admin/settings';
 import { SUBJECTS, type SubjectSlug } from '@ayman/contracts/subjects';
+import { GRADES, type GradeSlug } from '@ayman/contracts/grades';
 
 /**
  * What «اعمل المنصة» sends.
@@ -52,11 +53,14 @@ const host = z
   .pipe(z.string().regex(HOST_PATTERN, c.errHost));
 
 const subjectSlugs = SUBJECTS.map((subject) => subject.slug) as [SubjectSlug, ...SubjectSlug[]];
+const gradeSlugs = GRADES.map((grade) => grade.slug) as [GradeSlug, ...GradeSlug[]];
 
 export const ProvisionRequestSchema = z
   .object({
     displayName: z.string().trim().min(2, c.errDisplayName).max(60, c.errDisplayName),
     subject: z.enum(subjectSlugs, { error: c.errSubject }),
+    /** `TENANT_GRADES` — empty for a secondary teacher asked the old way. */
+    grades: z.array(z.enum(gradeSlugs)),
     adminName: z.string().trim().min(2, c.errAdminName).max(60, c.errAdminName),
     adminEmail: z.string().trim().toLowerCase().pipe(z.email(c.errEmail)),
     whatsapp: z
@@ -88,6 +92,10 @@ export const ProvisionRequestSchema = z
     // so offering it there would be a choice that silently does nothing.
     if (value.landingPreset === 'neon' && value.subject !== 'programming_cs') {
       context.addIssue({ code: 'custom', path: ['landingPreset'], message: c.errPresetNeon });
+    }
+    // The preflight's rule: a programming stack has one fixed section.
+    if (value.grades.length > 0 && value.subject === 'programming_cs') {
+      context.addIssue({ code: 'custom', path: ['grades'], message: c.grades });
     }
     if (value.appHost === value.mediaHost) {
       context.addIssue({ code: 'custom', path: ['mediaHost'], message: c.errSameHost });

@@ -106,6 +106,12 @@ export const SUBJECT_SLUGS = [
   'statistics',
 ];
 
+/**
+ * The grade slugs of `packages/contracts/src/grades.ts`, copied for the same
+ * reason as `SUBJECT_SLUGS`; `check-tenant-env.spec.ts` pins the two together.
+ */
+export const GRADE_SLUGS = ['prep1', 'prep2', 'prep3', 'sec1', 'sec2', 'sec3', 'bac1', 'bac2', 'bac3'];
+
 const errors = [];
 const warnings = [];
 
@@ -270,6 +276,29 @@ export function checkTenantEnv(env, options = {}) {
       `TENANT_SUBJECT "${subject}" is not a known subject. Use one of: ${SUBJECT_SLUGS.join(', ')} ` +
         '(or leave it empty for programming_cs).',
     );
+  }
+
+  // ── The grades ─────────────────────────────────────────────────────────
+  //
+  // An unknown slug is dropped silently at boot, and one typo in
+  // `prep1,prep2,prpe3` would take تالتة إعدادي off the onboarding picker and
+  // out of the seed. Programming is a one-system stack (البكالوريا, fixed
+  // section), so grades there would be a second, contradicting answer.
+  const grades = get(env, 'TENANT_GRADES');
+  if (grades !== '') {
+    const unknown = grades
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => !GRADE_SLUGS.includes(part));
+    if (unknown.length > 0) {
+      fail(
+        `TENANT_GRADES has unknown grade(s): ${unknown.map((u) => `"${u}"`).join(', ')}. ` +
+          `Use a comma list of: ${GRADE_SLUGS.join(', ')} (or leave it empty).`,
+      );
+    }
+    if (subject === '' || subject === 'programming_cs') {
+      fail('TENANT_GRADES is for a non-programming stack; a programming stack has one fixed section.');
+    }
   }
 
   // ── The landing look ───────────────────────────────────────────────────

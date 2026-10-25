@@ -1,6 +1,7 @@
 import type { StudentSection } from '@ayman/contracts/onboarding';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { subjectCopy } from '@ayman/contracts/copy/subject';
+import type { Grade } from '@ayman/contracts/grades';
 import { TENANT_SUBJECT } from '@/lib/tenant-subject';
 
 /**
@@ -83,6 +84,31 @@ export function trackOptionsFor(
 }
 
 /**
+ * The stack's grades as one select's options — on a stack with
+ * `TENANT_GRADES`, where the student picks «الصف الثالث الإعدادي» instead of a
+ * system and then a year. The value is the grade's slug; `gradeSection` turns
+ * it back into the pair.
+ *
+ * A grade whose system or year the taxonomy does not have is left out rather
+ * than offered: picking it would build a section the API refuses (S10), on a
+ * form that cannot tell the student why. That is a seeding gap, not a choice.
+ */
+export function gradeOptions(taxonomy: Taxonomy, grades: readonly Grade[]): SectionOption[] {
+  return grades
+    .filter((grade) => systemOf(taxonomy, grade.system)?.years.some((y) => y.year === grade.year))
+    .map((grade) => ({ value: grade.slug, label: grade.labelAr }));
+}
+
+/** The grade a form's `(system, year)` currently is — the grade select's value. */
+export function gradeValueOf(
+  grades: readonly Grade[],
+  system: string | undefined,
+  year: number | undefined,
+): string {
+  return grades.find((grade) => grade.system === system && grade.year === year)?.slug ?? '';
+}
+
+/**
  * The questions this form can demand but the schema cannot — `system` and
  * `trackId` are optional on `OnboardingSchema`, because a programming stack
  * never sends them. Same shape as `centerFieldErrors`: field → Arabic message.
@@ -149,7 +175,7 @@ export function subjectSectionFor(
 /**
  * A stored system id back to the slug the form speaks — for «بياناتك».
  *
- * Narrowed to the two slugs `OnboardingSystemSchema` accepts: a third system
+ * Narrowed to the slugs `OnboardingSystemSchema` accepts: a third system
  * added to the taxonomy without the schema would otherwise prefill a value the
  * form's own resolver refuses on save.
  */
@@ -159,5 +185,5 @@ export function systemSlugOf(
 ): SystemSlug | undefined {
   if (!systemId) return undefined;
   const slug = taxonomy.systems.find((system) => system.id === systemId)?.slug;
-  return slug === 'bacalorya' || slug === 'thanaweya_amma' ? slug : undefined;
+  return slug === 'bacalorya' || slug === 'thanaweya_amma' || slug === 'preparatory' ? slug : undefined;
 }

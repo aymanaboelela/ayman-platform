@@ -68,6 +68,12 @@ const nextConfig: NextConfig = {
      * hydrates the server's neutral cards back into code windows.
      */
     TENANT_SUBJECT: process.env.TENANT_SUBJECT ?? '',
+    /*
+     * And the grades: the onboarding grade picker and the landing's grade
+     * cards are client trees, so without this a stack teaching الإعدادية
+     * would hydrate back into the system → year selects.
+     */
+    TENANT_GRADES: process.env.TENANT_GRADES ?? '',
   },
   // Emits .next/standalone with a self-contained server.js and only the
   // node_modules actually reached — the runtime image copies that instead of

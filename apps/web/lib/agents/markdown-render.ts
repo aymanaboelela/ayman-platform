@@ -24,6 +24,7 @@ import { subscribeRails, subscribeSteps } from '@/lib/subscribe-steps';
 import { coursePriceBadge, formatEGP } from '@/lib/price';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
+import { courseYearLabel, type YearPage } from '@/lib/grade-pages';
 
 /**
  * The markdown rendering of every public page.
@@ -146,7 +147,7 @@ function courseMeta(course: CatalogCourse): string {
   const a = copy.agents;
   const stream = streamLabel(course);
   return [
-    `- **${a.metaYear}:** ${yearLabelAr(course.year)}`,
+    `- **${a.metaYear}:** ${courseYearLabel(course)}`,
     `- **${a.metaSubject}:** ${course.subjectNameAr}`,
     course.trackLabelAr ? `- **${a.metaTrack}:** ${course.trackLabelAr}` : null,
     // «عربي» / «لغات» — see `streamLabel`. The HTML has shown this as a chip on
@@ -173,7 +174,7 @@ function courseLine(course: CatalogCourse, options: { omitYear?: boolean } = {})
      * as «الصف الثاني بكالوريا» beneath an H1 reading «الصف الثالث بكالوريا».
      * `.filter(Boolean)` below drops it.
      */
-    options.omitYear ? null : yearLabelAr(course.year),
+    options.omitYear ? null : courseYearLabel(course),
     course.subjectNameAr,
     course.trackLabelAr,
     // The one word that tells «منهج البرمجة — تانية بكالوريا (عربي)» from the
@@ -366,6 +367,21 @@ export function renderCoursesMarkdown(courses: readonly CatalogCourse[]): string
  * `foundationCoursesOutsideYear` for why that course is on a year page it does
  * not belong to at all.
  */
+/** A grade page's twin (`/years/prep1.md`) — the year page's shape, without the foundation course. */
+export function renderGradeMarkdown(page: YearPage, courses: readonly CatalogCourse[]): string {
+  const forPage = courses.filter(page.matches);
+  return join([
+    `# ${page.title}`,
+    `> ${bySubject(copy.catalog.subtitle, subjectCopy.catalog.subtitle)}`,
+    `${copy.llms.alsoWritten} ${page.aliases
+      .slice(1)
+      .map((alias) => `«${alias}»`)
+      .join('، ')}.`,
+    forPage.length > 0 ? forPage.map((course) => courseLine(course)).join('\n') : copy.years.empty,
+    footer(`/years/${page.segment}`, copy.agents.contentNote),
+  ]);
+}
+
 export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCourse[]): string {
   const foundation = foundationCoursesOutsideYear(courses, year);
   const forYear = courses.filter((course) => course.year === year);
