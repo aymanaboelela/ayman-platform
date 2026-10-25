@@ -117,7 +117,7 @@ export function classify(status: number, body: string): UploadFailure {
   return 'failed';
 }
 
-function post(
+export function post(
   path: string,
   file: File,
   onProgress?: (fraction: number) => void,

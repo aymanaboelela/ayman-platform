@@ -44,11 +44,13 @@ import {
   PiggyBank,
   BanknoteArrowUp,
   FileDown,
+  Brush,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminPractice } from '@ayman/contracts/copy/admin-practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
+import { designsCopy } from '@ayman/contracts/copy/designs';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -566,6 +568,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: pdfsCopy.admin.title,
     icon: FileDown,
     permission: 'news:read',
+    group: 'site',
+    aymanOnly: true,
+  },
+  {
+    // «التصميمات» — the graphic designer's folders. Beside the other things
+    // the site shows; Ayman's stack only (the API 404s it elsewhere).
+    href: '/admin/designs',
+    labelAr: designsCopy.nav,
+    icon: Brush,
+    permission: 'design:read',
     group: 'site',
     aymanOnly: true,
   },

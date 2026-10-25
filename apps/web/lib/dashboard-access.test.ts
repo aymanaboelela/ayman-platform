@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { canOpenDashboard, DASHBOARD_PERMISSIONS } from './dashboard-access';
+import { canOpenDashboard, DASHBOARD_PERMISSIONS, landingForStaff } from './dashboard-access';
 import type { SessionUser } from './session';
 
 function session(role: string, permissions: readonly string[]): SessionUser {
@@ -33,5 +33,18 @@ describe('canOpenDashboard', () => {
 
   it('leaves a signed-out visitor to the page’s own sign-in handling', () => {
     expect(canOpenDashboard(null)).toBe(true);
+  });
+});
+
+describe('landingForStaff', () => {
+  it('sends a graphic designer to the studio, not to an /admin that 404s for them', () => {
+    const designer = session('designer', ['design:read', 'design:write']);
+    expect(canOpenDashboard(designer)).toBe(false);
+    expect(landingForStaff(designer)).toBe('/studio');
+  });
+
+  it('sends every other staff account to /admin, studio access or not', () => {
+    expect(landingForStaff(session('owner', ['admin:access', 'design:read']))).toBe('/admin');
+    expect(landingForStaff(session('owner', ['admin:access']))).toBe('/admin');
   });
 });

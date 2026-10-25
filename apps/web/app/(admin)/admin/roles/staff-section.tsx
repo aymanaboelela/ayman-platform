@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState, useTransition, type ChangeEvent } from 'react';
 
 import { copy } from '@ayman/contracts/copy/admin';
+import { designsCopy } from '@ayman/contracts/copy/designs';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -17,6 +18,7 @@ import {
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
+import { IS_AYMAN } from '@/lib/tenant';
 
 import { searchAccountsAction, setStaffPasswordAction, setStaffRoleAction, type ActionResult } from './actions';
 import { MemberPermissions } from './member-permissions';
@@ -28,7 +30,8 @@ export interface StaffMember {
   id: string;
   name: string;
   phone: string;
-  /** `owner` للمساعد، `admin` لصاحب المنصة — شوف الكومنت على الزرار تحت. */
+  /** `owner` للمساعد، `designer` لمصمم الجرافيك، `admin` لصاحب المنصة — شوف
+   *  الكومنت على الزرار تحت. */
   role: string;
 }
 
@@ -93,6 +96,12 @@ export function StaffSection({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [picked, setPicked] = useState<Found | null>(null);
+  /*
+   * يتضاف كـإيه. «مصمم جرافيك» دور لوحده (`designer`): ستوديو التصميم وبس،
+   * من غير لوحة التحكم ولا بيانات طلبة — مش مساعد مقفول عليه حاجات. على
+   * ستاك أيمن بس، زي الاستوديو نفسه.
+   */
+  const [addAs, setAddAs] = useState<'owner' | 'designer'>('owner');
   /** نتيجة آخر تغيير دور — بس. */
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   /** المساعد اللي بيتأكّد شيله دلوقتي، وسببه. */
@@ -150,7 +159,7 @@ export function StaffSection({
     }, SEARCH_DEBOUNCE_MS);
   };
 
-  const apply = (userId: string, role: 'owner' | 'student', why: string, done: string) => {
+  const apply = (userId: string, role: 'owner' | 'designer' | 'student', why: string, done: string) => {
     startTransition(async () => {
       const res = await setStaffRoleAction(userId, role, why.trim());
       setMessage(res.ok ? { tone: 'ok', text: done } : { tone: 'error', text: res.message });
@@ -192,7 +201,11 @@ export function StaffSection({
                 </p>
               </div>
               <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                {m.role === 'admin' ? member.adminHasEverything : c.roleOwner}
+                {m.role === 'admin'
+                  ? member.adminHasEverything
+                  : m.role === 'designer'
+                    ? designsCopy.team.roleDesigner
+                    : c.roleOwner}
               </span>
               {m.id === currentUserId ? (
                 // `changeRole` بيرفض إنك تغيّر دورك إنت — فالزرار مايتعرضش
@@ -220,6 +233,13 @@ export function StaffSection({
                   {m.id === founderId ? (
                     <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
                       {member.adminHasEverything}
+                    </span>
+                  ) : m.role === 'designer' ? (
+                    // القفل لكل حساب بيتظبط لـ`owner` بس (`replaceForUser`)،
+                    // والمصمم صلاحياته ثابتة: الاستوديو. لوحة فاضية هنا كانت
+                    // هتقول إنه يقدر ياخد حاجة تانية.
+                    <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                      {designsCopy.team.designerNoPermissions}
                     </span>
                   ) : (
                     <Button
@@ -296,7 +316,7 @@ export function StaffSection({
                 * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
                 * على واحد مفيد، والمودال بيخبّيهم.
                 */}
-              {openMember === m.id && m.role !== 'admin' && m.id !== founderId ? (
+              {openMember === m.id && m.role !== 'admin' && m.role !== 'designer' && m.id !== founderId ? (
                 <div className="w-full basis-full">
                   <MemberPermissions userId={m.id} name={m.name} />
                 </div>
@@ -377,12 +397,44 @@ export function StaffSection({
               onChange={setReason}
             />
             <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{reasonHint}</p>
+            {IS_AYMAN ? (
+              <fieldset className="mt-3">
+                <legend className="text-[length:var(--fs-text-sm)] font-medium text-fg">
+                  {designsCopy.team.addAs}
+                </legend>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                  {(['owner', 'designer'] as const).map((option) => (
+                    <label
+                      key={option}
+                      className="flex cursor-pointer items-start gap-2 rounded-md border border-line p-3 has-[:checked]:border-accent has-[:checked]:bg-surface-3"
+                    >
+                      <input
+                        type="radio"
+                        name="staff-add-as"
+                        value={option}
+                        checked={addAs === option}
+                        onChange={() => setAddAs(option)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block font-medium text-fg">
+                          {option === 'owner' ? designsCopy.team.roleOwner : designsCopy.team.roleDesigner}
+                        </span>
+                        <span className="block text-[length:var(--fs-text-xs)] text-fg-muted">
+                          {option === 'owner' ? designsCopy.team.roleOwnerHint : designsCopy.team.roleDesignerHint}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
             {/* `reasonMin` مش ٣: الزرار كان بيتفتح عند ٣ والسيرفر بيطلب ٨،
                 فسبب من ٤ لـ٧ حروف كان بيرجع «مقدرناش نغيّر الدور». */}
             <Button
               className="mt-3"
               disabled={pending || reason.trim().length < reasonMin}
-              onClick={() => apply(picked.id, 'owner', reason, c.added)}
+              onClick={() => apply(picked.id, IS_AYMAN ? addAs : 'owner', reason, c.added)}
             >
               {pending ? c.adding : c.add}
             </Button>

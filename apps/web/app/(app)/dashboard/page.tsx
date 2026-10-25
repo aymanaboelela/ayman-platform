@@ -24,7 +24,7 @@ import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookCatalogForStudent } from '@/lib/books';
 import { getSession } from '@/lib/session';
-import { canOpenDashboard } from '@/lib/dashboard-access';
+import { canOpenDashboard, landingForStaff } from '@/lib/dashboard-access';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
 import { Achievements } from '@/components/dashboard/achievements';
@@ -139,7 +139,7 @@ export default async function DashboardPage() {
    * المساعد اللي ناقصه صلاحية من اللي الصفحة محتاجاها لسه بيتوجّه لـ/admin.
    */
   const earlySession = await getSession();
-  if (!canOpenDashboard(earlySession)) redirect('/admin');
+  if (!canOpenDashboard(earlySession)) redirect(landingForStaff(earlySession));
 
   const [
     dashboard,

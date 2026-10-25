@@ -137,7 +137,7 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
   {
     key: 'site',
     titleAr: 'الموقع والمحتوى',
-    hintAr: 'الصفحة الرئيسية، القوايم، والأخبار.',
+    hintAr: 'الصفحة الرئيسية، القوايم، الأخبار، وستوديو التصميم.',
     permissions: [
       'home:read',
       'home:write',
@@ -146,6 +146,9 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
       'news:read',
       'news:write',
       'news:publish',
+      'design:read',
+      'design:write',
+      'design:publish',
     ],
   },
   {

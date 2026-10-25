@@ -106,7 +106,7 @@ export async function searchAccountsAction(
  */
 export async function setStaffRoleAction(
   userId: string,
-  role: 'owner' | 'student',
+  role: 'owner' | 'designer' | 'student',
   reason: string,
 ): Promise<ActionResult> {
   /*
