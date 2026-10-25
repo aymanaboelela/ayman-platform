@@ -80,7 +80,7 @@ export default async function AdminOverviewPage() {
           band — which spent a whole horizontal stripe of the page on three
           links. Beside the title they read as what they are: the toolbar for
           this screen. */}
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <header className="admin-hero mb-6 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">
             {copy.admin.title}
@@ -139,9 +139,9 @@ export default async function AdminOverviewPage() {
 
       {stats ? (
         <section className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatTile value={stats.students} label={c.statStudents} icon={Users} />
-          <StatTile value={stats.published} label={c.statPublished} icon={BookMarked} />
-          <StatTile value={stats.drafts} label={c.statDrafts} icon={FileText} />
+          <StatTile value={stats.students} label={c.statStudents} icon={Users} hue="students" />
+          <StatTile value={stats.published} label={c.statPublished} icon={BookMarked} hue="content" />
+          <StatTile value={stats.drafts} label={c.statDrafts} icon={FileText} hue="exams" />
         </section>
       ) : (
         <p className="mb-8 rounded-lg border border-dashed border-line px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
@@ -173,7 +173,7 @@ export default async function AdminOverviewPage() {
             if (items.length === 0) return null;
 
             return (
-              <div key={group.id}>
+              <div key={group.id} className="admin-hued" data-hue={group.id}>
                 <p className="nav-group__head mb-2">{group.labelAr}</p>
                 {/* `auto-rows-fr` so a tile with a two-line blurb does not
                     leave its row-mates short — a grid of cards that are all
@@ -212,18 +212,31 @@ function StatTile({
   value,
   label,
   icon: Icon,
+  hue,
 }: {
   value: string | number;
   label: string;
   icon: LucideIcon;
+  /** One of the sidebar's group hues, so «طالب مسجّل» wears the colour of «الطلبة». */
+  hue: string;
 }) {
   return (
-    <div className="panel stat-tile">
+    <div className="panel stat-tile admin-hued" data-hue={hue}>
       <span className="stat-tile__well" aria-hidden="true">
         <Icon className="size-5" />
       </span>
       <span>
-        <span className="stat-tile__value block">{value}</span>
+        {typeof value === 'number' ? (
+          /* Counts up from zero on arrival — CSS only, see `.stat-count`. The
+             visible digits are a generated counter, so the real number rides
+             alongside for a screen reader and for copy-paste. */
+          <span className="stat-tile__value block">
+            <span className="stat-count" style={{ '--to': value } as React.CSSProperties} aria-hidden="true" />
+            <span className="sr-only">{value}</span>
+          </span>
+        ) : (
+          <span className="stat-tile__value block">{value}</span>
+        )}
         <span className="stat-tile__label block">{label}</span>
       </span>
     </div>

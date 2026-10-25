@@ -16,7 +16,6 @@ import { AdminNavList } from './admin-nav-list';
 import { CommandPalette } from './command-palette';
 import { InboxAlertsToggle } from './inbox-alerts';
 import { activeNavItem } from './nav-items';
-import { StudentViewLink } from './student-view-link';
 
 /**
  * Sticky header: mobile nav trigger, a breadcrumb derived from `ADMIN_NAV` +
@@ -80,9 +79,6 @@ export function AdminHeader({
             <SheetTitle className="mb-5 block">
               <BrandLockup showTagline={false} />
             </SheetTitle>
-            <div className="mb-4 empty:hidden">
-              <StudentViewLink onNavigate={() => setMobileOpen(false)} />
-            </div>
             <nav aria-label={copy.admin.title}>
               <AdminNavList
                 permissions={permissions}

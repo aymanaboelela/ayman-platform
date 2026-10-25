@@ -122,7 +122,9 @@ export function AdminNavList({
         if (items.length === 0) return null;
 
         return (
-          <div key={group.id} className="flex flex-col gap-1">
+          // `data-hue` gives each block its own colour — see `.admin-hued` in
+          // admin.css. Twenty-eight rows in one ink was the «ملخبطين» report.
+          <div key={group.id} className="admin-hued flex flex-col gap-1" data-hue={group.id}>
             {group.labelAr ? <p className="nav-group__head">{group.labelAr}</p> : null}
 
             <ul className="flex flex-col gap-1">
