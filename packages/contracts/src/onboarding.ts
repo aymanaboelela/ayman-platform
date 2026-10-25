@@ -28,7 +28,7 @@ export type SchoolStream = z.infer<typeof SchoolStreamSchema>;
  * the real `systemId` FK (and re-validates everything else against the DB —
  * see the profile service's S10 checks; this schema only proves shape).
  */
-export const OnboardingSystemSchema = z.enum(['bacalorya', 'thanaweya_amma']);
+export const OnboardingSystemSchema = z.enum(['bacalorya', 'thanaweya_amma', 'preparatory']);
 
 const OnboardingShapeSchema = z
   .object({
@@ -176,7 +176,7 @@ const SectionShapeSchema = z
   .strict();
 
 type SectionFields = {
-  system?: 'bacalorya' | 'thanaweya_amma';
+  system?: z.infer<typeof OnboardingSystemSchema>;
   year?: number;
   trackId?: string;
   electiveSubjectId?: string;

@@ -10,16 +10,9 @@ import { isFreeCourse } from '@/lib/price';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { JsonLd } from '@/components/seo/json-ld';
 import { PERSON_ID, SITE_URL, WEBSITE_ID, breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
-import { yearAliasesAr } from '@/lib/year-label';
-import { isYearIndexable } from '@/lib/seo/year-visibility';
+import { isYearPageIndexable, yearPageOf } from '@/lib/grade-pages';
 import { CourseCard } from '@/components/site/course-card';
 import { courseCountLabel, groupBySubject } from '@/lib/course-groups';
-
-const YEAR_TITLES: Record<number, string> = {
-  1: copy.years.year1,
-  2: copy.years.year2,
-  3: copy.years.year3,
-};
 
 /**
  * `all` | `free` — and it is a real query now.
@@ -33,25 +26,20 @@ const YEAR_TITLES: Record<number, string> = {
  */
 type Filter = 'all' | 'free';
 
-function parseYear(raw: string): number | null {
-  // `Number('')` is 0 and `Number(' 1 ')` is 1 — neither is a valid segment,
-  // so the shape is checked before the value.
-  if (!/^[123]$/.test(raw)) return null;
-  return Number(raw);
-}
-
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ year: string }>;
 }): Promise<Metadata> {
-  const year = parseYear((await params).year);
+  // The segment is a number (`/years/2`) or, on a stack with grades, a grade
+  // slug (`/years/prep3`) — `lib/grade-pages.ts`.
+  const page = yearPageOf((await params).year);
   // An unparseable segment calls `notFound()` in the page below. `noindex`
   // rather than `{}` so a bad inbound link (`/years/9`) cannot leave an
   // indexable URL behind — `{}` inherits the root's `index: true`.
-  if (!year) return { robots: { index: false, follow: false } };
+  if (!page) return { robots: { index: false, follow: false } };
 
-  const title = `${copy.years.title} ${YEAR_TITLES[year]}`;
+  const title = `${copy.years.title} ${page.title}`;
 
   /**
    * A year with no published course is `noindex`, and `app/sitemap.ts` drops it
@@ -77,7 +65,7 @@ export async function generateMetadata({
    * on the next build, with no code change.
    */
   const { courses } = await getCatalogOrEmpty();
-  if (!isYearIndexable(courses, year)) {
+  if (!isYearPageIndexable(courses, page)) {
     /*
      * ⚠️ `await`. `buildMetadata` is async, and spreading a PROMISE copies no
      * own enumerable properties at all — so this branch used to return
@@ -88,7 +76,7 @@ export async function generateMetadata({
      * which is why nothing looked broken.
      */
     return {
-      ...(await buildMetadata({ title, path: `/years/${year}` })),
+      ...(await buildMetadata({ title, path: `/years/${page.segment}` })),
       robots: { index: false, follow: true },
     };
   }
@@ -128,8 +116,8 @@ export async function generateMetadata({
      * programming stack have always said, and it is what a physics teacher's
      * three year pages said too, under their own blue link.
      */
-    description: `كورسات ${YEAR_TITLES[year]} — ${yearAliasesAr(year)[1] ?? YEAR_TITLES[year]} — في ${bySubject('البرمجة والذكاء الاصطناعي', '{subject}')} على ${tenantName(copy.site.platformName)}: شرح بالفيديو، تمرين واختبار على كل درس.`,
-    path: `/years/${year}`,
+    description: `كورسات ${page.title} — ${page.aliases[1] ?? page.title} — في ${bySubject('البرمجة والذكاء الاصطناعي', '{subject}')} على ${tenantName(copy.site.platformName)}: شرح بالفيديو، تمرين واختبار على كل درس.`,
+    path: `/years/${page.segment}`,
   });
 }
 
@@ -140,8 +128,9 @@ export default async function YearPage({
   params: Promise<{ year: string }>;
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const year = parseYear((await params).year);
-  if (!year) notFound();
+  const page = yearPageOf((await params).year);
+  if (!page) notFound();
+  const year = page.segment;
 
   const filter: Filter = (await searchParams).filter === 'free' ? 'free' : 'all';
   // `getCatalogOrEmpty`, not `getCatalog`: this page is prerendered at build
@@ -156,11 +145,11 @@ export default async function YearPage({
   // here, and both lists below inherit it.
   const visible =
     filter === 'free' ? courses.filter((course) => isFreeCourse(course)) : courses;
-  const forYear = visible.filter((course) => course.year === year);
+  const forYear = visible.filter(page.matches);
   /* The تأسيس course belongs to whoever has not started yet, not to a year —
      see `foundationCoursesOutsideYear`. Empty on the year that already lists
      it under its own subject, so nothing is ever shown twice. */
-  const foundation = foundationCoursesOutsideYear(visible, year);
+  const foundation = page.year === null ? [] : foundationCoursesOutsideYear(visible, page.year);
   const listed = [...foundation, ...forYear];
 
   /**
@@ -200,8 +189,8 @@ export default async function YearPage({
           '@type': 'CollectionPage',
           '@id': `${SITE_URL}/years/${year}#webpage`,
           url: `${SITE_URL}/years/${year}`,
-          name: `${copy.years.title} ${YEAR_TITLES[year]}`,
-          alternateName: yearAliasesAr(year),
+          name: `${copy.years.title} ${page.title}`,
+          alternateName: page.aliases,
           inLanguage: 'ar',
           isPartOf: { '@id': WEBSITE_ID },
           about: { '@id': PERSON_ID },
@@ -212,12 +201,12 @@ export default async function YearPage({
         data={breadcrumbJsonLd([
           { name: copy.course.breadcrumbHome, path: '/' },
           { name: copy.course.breadcrumbCatalog, path: '/courses' },
-          { name: YEAR_TITLES[year] ?? '', path: `/years/${year}` },
+          { name: page.title, path: `/years/${year}` },
         ])}
       />
       <header className="page-head site-shell">
         <h1 className="page-title">
-          {copy.years.title} {YEAR_TITLES[year]}
+          {copy.years.title} {page.title}
         </h1>
       </header>
 

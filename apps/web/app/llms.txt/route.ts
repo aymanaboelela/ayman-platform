@@ -12,7 +12,7 @@ import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
-import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
+import { yearPages } from '@/lib/grade-pages';
 
 /**
  * `/llms.txt` — llmstxt.org.
@@ -211,9 +211,9 @@ export async function GET(): Promise<Response> {
      * This file is read verbatim, so naming the alternates once here is worth
      * more than any amount of prose around it.
      */
-    ...[1, 2, 3].map(
-      (year) =>
-        `- [${yearLabelAr(year)}](${url(`/years/${year}.md`)}): ${copy.llms.alsoWritten} ${yearAliasesAr(year)
+    ...yearPages().map(
+      (page) =>
+        `- [${page.title}](${url(`/years/${page.segment}.md`)}): ${copy.llms.alsoWritten} ${page.aliases
           .slice(1)
           .map((alias) => `«${alias}»`)
           .join('، ')}`,

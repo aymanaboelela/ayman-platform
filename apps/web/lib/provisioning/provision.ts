@@ -67,6 +67,8 @@ export interface ProvisionSpec {
   key: string;
   displayName: string;
   subject: string;
+  /** `TENANT_GRADES`, comma-joined; '' for none. Optional for older callers. */
+  grades?: string;
   landingPreset: string;
   accent: string;
   adminName: string;
@@ -300,6 +302,7 @@ async function provisionOnce(spec: ProvisionSpec): Promise<ProvisionResult> {
           key: spec.key,
           displayName: spec.displayName,
           subject: spec.subject,
+          grades: spec.grades ?? '',
           landingPreset: spec.landingPreset,
           accent: spec.accent,
           appHost: spec.appHost,

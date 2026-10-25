@@ -1,8 +1,7 @@
 import Link from 'next/link';
 
-import { copy } from '@ayman/contracts/copy';
-
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { yearPages } from '@/lib/grade-pages';
 
 import { StudioHeading } from './studio-heading';
 import { studioCopy } from './studio-copy';
@@ -27,11 +26,14 @@ import { studioCopy } from './studio-copy';
 export async function StudioTracks({ level }: { level: 1 | 2 }) {
   const { courses } = await getCatalogOrEmpty();
 
-  const YEARS = [
-    { year: 1, label: copy.years.year1 },
-    { year: 2, label: copy.years.year2 },
-    { year: 3, label: copy.years.year3 },
-  ] as const;
+  // `yearPages()` is the three years on every stack but one with
+  // `TENANT_GRADES`, where it is the stack's grades (`lib/grade-pages.ts`).
+  const YEARS = yearPages().map((page) => ({
+    key: page.segment,
+    year: page.n,
+    label: page.title,
+    count: courses.filter(page.matches).length,
+  }));
 
   return (
     <section className="st-section" id="years">
@@ -45,11 +47,11 @@ export async function StudioTracks({ level }: { level: 1 | 2 }) {
 
         <ul className="st-years" role="list">
           {YEARS.map((entry) => {
-            const count = courses.filter((course) => course.year === entry.year).length;
+            const count = entry.count;
 
             return (
-              <li className="st-year" key={entry.year}>
-                <Link className="st-year__link" href={`/years/${entry.year}`}>
+              <li className="st-year" key={entry.key}>
+                <Link className="st-year__link" href={`/years/${entry.key}`}>
                   <span className="st-year__n tabular-nums" aria-hidden="true">
                     {entry.year}
                   </span>

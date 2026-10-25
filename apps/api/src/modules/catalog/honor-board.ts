@@ -1,4 +1,5 @@
 import type { HonorBoardPeriod } from '@ayman/contracts/admin/exams';
+import { TENANT_GRADES } from '../../common/tenant';
 
 /**
  * لوحة الشرف — turning pinned attempts into rounds.
@@ -83,10 +84,36 @@ const YEAR_CHIP: Record<number, string> = {
   3: 'تالتة بكالوريا',
 };
 
+/**
+ * The chip on a stack with `TENANT_GRADES`: «تالتة إعدادي», «أولى ثانوي».
+ *
+ * There a year number is two grades, so the system decides. A caller that
+ * did not select it (a manual pin built from a profile) gets the grade only
+ * when exactly one of the stack's grades has that year — and nothing
+ * otherwise, the same "leave the line empty rather than guess" rule as an
+ * unknown year below.
+ */
+const SPOKEN_YEAR = ['أولى', 'تانية', 'تالتة'] as const;
+const SPOKEN_STAGE: Record<string, string> = {
+  preparatory: 'إعدادي',
+  thanaweya_amma: 'ثانوي',
+  bacalorya: 'بكالوريا',
+};
+
+function gradeChip(year: number, systemSlug: string | undefined): string | null {
+  if (TENANT_GRADES.length === 0) return null;
+  const candidates = TENANT_GRADES.filter(
+    (g) => g.year === year && (systemSlug === undefined || g.system === systemSlug),
+  );
+  const grade = candidates.length === 1 ? candidates[0]! : undefined;
+  return grade ? `${SPOKEN_YEAR[grade.year - 1]} ${SPOKEN_STAGE[grade.system]}` : '';
+}
+
 export function courseChip(course: {
   year: number;
   forGeneral: boolean;
   forLanguages: boolean;
+  system?: { slug: string } | null;
 }): string {
   /*
    * التلات سنين مذكورة بالاسم، مش `=== 1 ? … : …`.
@@ -99,7 +126,7 @@ export function courseChip(course: {
    * وسنة برّه التلاتة بترجّع نص فاضي — الكارت بيسيب السطر ملهوش مكان، زي
    * الطالب اللي ما اتسألش أصلًا.
    */
-  const year = YEAR_CHIP[course.year];
+  const year = gradeChip(course.year, course.system?.slug) ?? YEAR_CHIP[course.year];
   if (!year) return '';
   if (course.forGeneral === course.forLanguages) return year;
   return `${year} — ${course.forLanguages ? 'لغات' : 'عربي'}`;

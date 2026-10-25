@@ -140,7 +140,7 @@ export default async function LibraryPage() {
                   three times is how a page starts nagging. */}
               <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.restLead}</p>
               {view.rest.map((year) => (
-                <YearSection group={year} key={year.year} />
+                <YearSection group={year} key={year.key} />
               ))}
             </div>
           )}

@@ -49,7 +49,7 @@ export interface ProfileDefaults {
    * decides both there, and a stored track riding along in the form's values
    * would reach the payload of a year-1 student and be refused.
    */
-  system?: 'bacalorya' | 'thanaweya_amma';
+  system?: Onboarding['system'];
   trackId?: string | null;
   fatherPhone?: string | null;
   studyType?: StudyType | null;

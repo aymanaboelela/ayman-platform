@@ -19,6 +19,10 @@
  * Both land on the same renderer.
  */
 
+// The one import: the grade list is a few short literals and a parser, no
+// copy table — what `proxy.ts` needs to know which `/years/<grade>` exists.
+import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
+
 /**
  * The internal route that actually renders markdown (`app/md/[[...slug]]`).
  * A rewrite target has to be a real, routable path — an underscore-prefixed
@@ -58,6 +62,19 @@ export const STATIC_MARKDOWN_ROUTES = [
 const YEAR_PATTERN = /^\/years\/([123])$/;
 
 /**
+ * `/years/prep1` … — a grade page, on a stack with `TENANT_GRADES` only
+ * (`lib/grade-pages.ts`). There the numbered pages 404, so `YEAR_PATTERN` is
+ * switched off and this answers instead, for the slugs the stack lists.
+ */
+const GRADE_PATTERN = /^\/years\/([a-z]+[123])$/;
+
+function gradeSegment(pathname: string): string | undefined {
+  if (!ASKS_GRADE) return undefined;
+  const segment = GRADE_PATTERN.exec(pathname)?.[1];
+  return TENANT_GRADES.some((grade) => grade.slug === segment) ? segment : undefined;
+}
+
+/**
  * `/courses/<slug>` and nothing deeper. The negative lookahead is the whole
  * point: `/courses/x/lessons/y` is the PLAYER, which is protected
  * (`PROTECTED_LESSON_PATTERN` in `proxy.ts`) and must never be reachable as
@@ -92,6 +109,7 @@ export type MarkdownRoute =
   | { kind: 'news' }
   | { kind: 'subscribe' }
   | { kind: 'year'; year: 1 | 2 | 3 }
+  | { kind: 'grade'; segment: string }
   | { kind: 'course'; slug: string }
   | { kind: 'article'; slug: string };
 
@@ -99,7 +117,8 @@ export type MarkdownRoute =
 export function isMarkdownablePath(pathname: string): boolean {
   return (
     (STATIC_MARKDOWN_ROUTES as readonly string[]).includes(pathname) ||
-    YEAR_PATTERN.test(pathname) ||
+    (!ASKS_GRADE && YEAR_PATTERN.test(pathname)) ||
+    gradeSegment(pathname) !== undefined ||
     COURSE_PATTERN.test(pathname) ||
     ARTICLE_PATTERN.test(pathname)
   );
@@ -152,7 +171,10 @@ export function resolveMarkdownRoute(slug: readonly string[] | undefined): Markd
   // `?.[1]` rather than `[1]!` throughout: the capture group is guaranteed by
   // the pattern, but `noUncheckedIndexedAccess` is on for a reason and a
   // non-null assertion here would be the one place it is switched off.
-  const year = YEAR_PATTERN.exec(pathname)?.[1];
+  const segment = gradeSegment(pathname);
+  if (segment) return { kind: 'grade', segment };
+
+  const year = ASKS_GRADE ? undefined : YEAR_PATTERN.exec(pathname)?.[1];
   if (year) return { kind: 'year', year: Number(year) as 1 | 2 | 3 };
 
   const courseSlug = COURSE_PATTERN.exec(pathname)?.[1];

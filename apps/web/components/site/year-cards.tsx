@@ -5,8 +5,27 @@ import { ArrowLeft } from 'lucide-react';
 import { fillSubject, subjectCopy } from '@ayman/contracts/copy/subject';
 import { ElectricCard } from '@/components/site/electric-card';
 import { useRampHex } from '@/lib/ramp-color';
+import { ASKS_GRADE, STAGE_WORDS, TENANT_GRADES } from '@/lib/tenant-grades';
 
 const s = subjectCopy.landing;
+
+/**
+ * The cards: the three secondary years, or — on a stack with `TENANT_GRADES`
+ * — one per grade, linking to that grade's page (`lib/grade-pages.ts`).
+ */
+const CARDS: readonly { key: string; href: string; title: string; body: string }[] = ASKS_GRADE
+  ? TENANT_GRADES.map((grade) => ({
+      key: grade.slug,
+      href: `/years/${grade.slug}`,
+      title: grade.labelAr,
+      body: fillSubject(s.gradeBody, { grade: grade.labelAr }),
+    }))
+  : s.trackYearTitles.map((title, index) => ({
+      key: String(index + 1),
+      href: `/years/${index + 1}`,
+      title,
+      body: fillSubject(s.trackYearBody, { year: title }),
+    }));
 
 /** `.track`'s `--r-lg`, in pixels — the same number `year-tracks.tsx` keeps. */
 const TRACK_RADIUS = 12;
@@ -65,30 +84,27 @@ export function YearCards() {
           <h2 className="site-h2" style={{ marginTop: '1rem' }}>
             {s.tracksTitle}
           </h2>
-          <p className="site-lead">{s.tracksLead}</p>
+          <p className="site-lead">{fillSubject(s.tracksLead, { ...STAGE_WORDS })}</p>
         </header>
 
         <ul className="tracks__grid" role="list">
-          {s.trackYearTitles.map((title, index) => {
-            const year = index + 1;
-            return (
-              <li key={year}>
-                <ElectricCard color={border} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
-                  <Link href={`/years/${year}`} className="track">
-                    <div className="track__meta">
-                      <p className="track__tag">— {fillSubject(s.trackYearTag, { n: `0${year}` })}</p>
-                      <h3 className="track__title">{title}</h3>
-                      <p className="track__body">{fillSubject(s.trackYearBody, { year: title })}</p>
-                      <span className="track__go">
-                        <ArrowLeft size={16} className="site-btn__arrow" aria-hidden="true" />
-                        {s.trackYearCta}
-                      </span>
-                    </div>
-                  </Link>
-                </ElectricCard>
-              </li>
-            );
-          })}
+          {CARDS.map((card, index) => (
+            <li key={card.key}>
+              <ElectricCard color={border} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
+                <Link href={card.href} className="track">
+                  <div className="track__meta">
+                    <p className="track__tag">— {fillSubject(s.trackYearTag, { n: `0${index + 1}` })}</p>
+                    <h3 className="track__title">{card.title}</h3>
+                    <p className="track__body">{card.body}</p>
+                    <span className="track__go">
+                      <ArrowLeft size={16} className="site-btn__arrow" aria-hidden="true" />
+                      {s.trackYearCta}
+                    </span>
+                  </div>
+                </Link>
+              </ElectricCard>
+            </li>
+          ))}
         </ul>
       </div>
     </section>

@@ -564,7 +564,7 @@ export class DashboardService {
           honoredAt: true,
           rank: true,
           reason: true,
-          course: { select: { year: true, forGeneral: true, forLanguages: true } },
+          course: { select: { year: true, forGeneral: true, forLanguages: true, system: { select: { slug: true } } } },
           user: { select: { studentProfile: { select: { year: true, schoolStream: true } } } },
         },
       }),

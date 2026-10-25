@@ -470,7 +470,9 @@ export function CourseForm({
   // HIDDEN — not disabled — and no value is submitted for it at all. A
   // disabled field with a stale value is exactly how a year-1 course
   // acquires a track.
-  const showTrack = draft.year !== 1;
+  // And hidden in a system that has no tracks at all (المرحلة الإعدادية), where
+  // the select would offer «—» and nothing else.
+  const showTrack = draft.year !== 1 && (system?.tracks.length ?? 0) > 0;
   const track = system?.tracks.find((candidate) => candidate.id === draft.trackId);
 
   /**

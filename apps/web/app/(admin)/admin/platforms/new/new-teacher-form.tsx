@@ -9,6 +9,7 @@ import type { FeatureDeclaration } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { ACCENT_SLOTS, type AccentSlot } from '@ayman/contracts/admin/settings';
 import { SUBJECTS, subjectNameAr } from '@ayman/contracts/subjects';
+import { GRADES } from '@ayman/contracts/grades';
 import { ACCENT_RAMPS } from '@ayman/ui/branding';
 import { cn } from '@ayman/ui/lib/cn';
 import { Button } from '@ayman/ui/components/button';
@@ -59,6 +60,7 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
       // No default: a preselected subject is how a maths teacher ends up with
       // a physics site. The empty option fails validation until one is picked.
       subject: '' as ProvisionRequest['subject'],
+      grades: [],
       adminName: '',
       adminEmail: '',
       whatsapp: '',
@@ -139,6 +141,7 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
                         if (event.target.value !== 'programming_cs' && form.getValues('landingPreset') === 'neon') {
                           form.setValue('landingPreset', 'board');
                         }
+                        if (event.target.value === 'programming_cs') form.setValue('grades', []);
                       },
                     })}
                   >
@@ -153,6 +156,44 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
                   </Select>
                 )}
               />
+              {values.subject && values.subject !== 'programming_cs' ? (
+                <SettingsField
+                  name="grades"
+                  label={c.grades}
+                  description={c.gradesHint}
+                  issues={issues}
+                  render={() => (
+                    <div className="flex flex-wrap gap-2">
+                      {GRADES.map((grade) => {
+                        const on = (values.grades ?? []).includes(grade.slug);
+                        return (
+                          <button
+                            key={grade.slug}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => {
+                              const current = form.getValues('grades') ?? [];
+                              // Kept in GRADES order — the order students see them in.
+                              const next = on ? current.filter((g) => g !== grade.slug) : [...current, grade.slug];
+                              form.setValue(
+                                'grades',
+                                GRADES.map((g) => g.slug).filter((g) => next.includes(g)),
+                              );
+                            }}
+                            className={cn(
+                              'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[length:var(--fs-text-sm)]',
+                              on ? 'border-accent bg-accent/10 text-fg' : 'border-line bg-surface-2 text-fg-muted hover:bg-surface-3',
+                            )}
+                          >
+                            {on ? <Check aria-hidden="true" className="size-4 text-accent-text" /> : null}
+                            {grade.labelAr}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                />
+              ) : null}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <SettingsField
                   name="adminEmail"
@@ -390,6 +431,12 @@ function Summary({ values, cloudflare }: { values: Partial<ProvisionRequest>; cl
             <Row label={c.summaryKey} value={key || '—'} mono />
             <Row label={c.summaryDatabase} value={key ? databaseName(key) : '—'} mono />
             <Row label={c.summarySubject} value={subjectNameAr(values.subject ?? '')} />
+            {values.grades && values.grades.length > 0 ? (
+              <Row
+                label={c.summaryGrades}
+                value={GRADES.filter((g) => values.grades!.includes(g.slug)).map((g) => g.labelAr).join('، ')}
+              />
+            ) : null}
             <Row label={c.summaryDns} value={cloudflare ? c.summaryDnsAuto : c.summaryDnsManual} />
           </dl>
         )}
