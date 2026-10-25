@@ -99,6 +99,56 @@ export function KurrasaCheck() {
   );
 }
 
+/** «السبّورة»'s chalk marks: an arrow toward the buttons and two stars, kept clear of the copy and the art. */
+export function SabbooraChalk() {
+  return (
+    <svg className="pk-orn pk-orn--chalk" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path className="pk-draw" d="M170 470c70 18 160 12 230-18m0 0-30-4m30 4-16 24" pathLength={1} />
+      <path className="pk-draw pk-draw--late" d="M60 60l9 26 27 1-21 17 8 26-23-15-22 15 8-26-21-17 27-1z" pathLength={1} />
+      <path className="pk-draw pk-draw--late" d="M930 440l5 14 15 1-12 9 5 14-13-8-12 8 4-14-11-9 15-1z" pathLength={1} />
+    </svg>
+  );
+}
+
+/** «الرحلة»'s road: one winding route across the opener, pinned at both ends. */
+export function RihlaRoad() {
+  return (
+    <svg className="pk-orn pk-orn--road" viewBox="0 0 1200 500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      {/* Along the foot of the opener only, under the copy, never through it. */}
+      <path className="pk-road-bed" d="M1220 470C1040 470 960 420 800 440S560 490 400 460 160 410-20 440" />
+      <path className="pk-draw pk-road-line" d="M1220 470C1040 470 960 420 800 440S560 490 400 460 160 410-20 440" pathLength={1} />
+      <g className="pk-road-pin pk-road-pin--a" transform="translate(800 440)">
+        <circle r="10" />
+      </g>
+      <g className="pk-road-pin pk-road-pin--b" transform="translate(400 460)">
+        <circle r="10" />
+      </g>
+    </svg>
+  );
+}
+
+/** «النجوم»'s sky: a crescent and a handful of four-point stars that twinkle. */
+export function NujoomSky() {
+  const stars = [
+    [8, 18, 1], [22, 8, 0.7], [35, 30, 0.6], [52, 12, 0.9], [64, 26, 0.5],
+    [78, 10, 0.8], [90, 22, 0.6], [14, 60, 0.5], [44, 70, 0.7], [70, 64, 0.6], [94, 74, 0.8],
+  ] as const;
+  return (
+    <div className="pk-orn pk-orn--sky" aria-hidden="true">
+      <svg className="pk-moon" viewBox="0 0 100 100" focusable="false">
+        <path d="M62 10a42 42 0 1 0 28 72A36 36 0 1 1 62 10z" />
+      </svg>
+      {stars.map(([x, y, s], i) => (
+        <span
+          key={i}
+          className="pk-star"
+          style={{ insetInlineStart: `${x}%`, insetBlockStart: `${y}%`, scale: String(s), animationDelay: `${(i % 5) * 0.7}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
  * The preset's signature behind the opener. `taif` draws its colour field in
  * CSS alone (a conic gradient turning on a registered property), so it has no
@@ -107,6 +157,9 @@ export function KurrasaCheck() {
 export function HeroOrnament({ preset }: { preset: KitPreset }) {
   if (preset === 'ruqaa') return <RuqaaField />;
   if (preset === 'kurrasa') return <KurrasaDoodles />;
+  if (preset === 'sabboora') return <SabbooraChalk />;
+  if (preset === 'rihla') return <RihlaRoad />;
+  if (preset === 'nujoom') return <NujoomSky />;
   return (
     <div className="pk-orn pk-orn--field" aria-hidden="true">
       <span className="pk-orb pk-orb--a" />

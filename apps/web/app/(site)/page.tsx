@@ -202,6 +202,21 @@ export default async function HomePage() {
     return <TaifLanding blocks={blocks} honorBoard={honorBoard} />;
   }
 
+  if (branding.landingPreset === 'sabboora') {
+    const { default: SabbooraLanding } = await import('@/components/site/presets/sabboora/sabboora-landing');
+    return <SabbooraLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
+  if (branding.landingPreset === 'rihla') {
+    const { default: RihlaLanding } = await import('@/components/site/presets/rihla/rihla-landing');
+    return <RihlaLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
+  if (branding.landingPreset === 'nujoom') {
+    const { default: NujoomLanding } = await import('@/components/site/presets/nujoom/nujoom-landing');
+    return <NujoomLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
   /*
    * The page's SHAPE, chosen per instructor from /admin/settings.
    *

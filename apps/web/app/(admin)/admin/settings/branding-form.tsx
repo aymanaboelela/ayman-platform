@@ -119,6 +119,18 @@ const PRESET_LABEL: Record<(typeof LANDING_PRESETS)[number], { name: string; hin
     name: copy.admin.settings.landingPresetTaif,
     hint: copy.admin.settings.landingPresetTaifHint,
   },
+  sabboora: {
+    name: copy.admin.settings.landingPresetSabboora,
+    hint: copy.admin.settings.landingPresetSabbooraHint,
+  },
+  rihla: {
+    name: copy.admin.settings.landingPresetRihla,
+    hint: copy.admin.settings.landingPresetRihlaHint,
+  },
+  nujoom: {
+    name: copy.admin.settings.landingPresetNujoom,
+    hint: copy.admin.settings.landingPresetNujoomHint,
+  },
 };
 
 /**

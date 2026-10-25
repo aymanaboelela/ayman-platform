@@ -337,3 +337,38 @@ export const readex = localFont({
   preload: false,
   adjustFontFallback: false,
 });
+
+/* The second trio of kit presets — «السبّورة», «الرحلة», «النجوم». Same
+   rules as the three above: headings only, the preset's own root, no
+   preload. Lemonada's round strokes read as chalk; El Messiri is the
+   signage face of a map; Lalezar is a poster face that holds up white on
+   a night sky. */
+export const lemonada = localFont({
+  src: [
+    { path: '../node_modules/@fontsource/lemonada/files/lemonada-arabic-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../node_modules/@fontsource/lemonada/files/lemonada-arabic-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-lemonada',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});
+
+export const elMessiri = localFont({
+  src: [
+    { path: '../node_modules/@fontsource/el-messiri/files/el-messiri-arabic-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../node_modules/@fontsource/el-messiri/files/el-messiri-arabic-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-el-messiri',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});
+
+export const lalezar = localFont({
+  src: [{ path: '../node_modules/@fontsource/lalezar/files/lalezar-arabic-400-normal.woff2', weight: '400', style: 'normal' }],
+  variable: '--font-lalezar',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});

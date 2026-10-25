@@ -152,6 +152,9 @@ const RUNTIME_DEFINED = new Set<string>([
   '--font-ruqaa',
   '--font-marhey',
   '--font-readex',
+  '--font-lemonada',
+  '--font-el-messiri',
+  '--font-lalezar',
   // Written by Shiki onto the HTML it generates, per token, at highlight time.
   '--sh-light',
   '--sh-light-bg',

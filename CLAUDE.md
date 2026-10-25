@@ -98,9 +98,11 @@ in every eight messages told the student «أنا مهندس أيمن» ("I'm En
   code comments, cards as code windows, monospace numbers.
 - **`board`**: "the board". Solid blocks, everything centred, big year tiles.
 - **`studio`**: a light page with the teacher's portrait large from the first screen.
-- **`ruqaa` / `kurrasa` / `taif`**: three looks over ONE shared section kit
-  (`presets/kit/`): a Ruqaa manuscript with fixed gold tooling, a ruled
-  exercise book with sticky-note grades, and a bold colour-block page. Each
+- **`ruqaa` / `kurrasa` / `taif` / `sabboora` / `rihla` / `nujoom`**: six
+  looks over ONE shared section kit (`presets/kit/`): a Ruqaa manuscript, a
+  ruled exercise book, a bold colour-block page, a chalkboard, a road map
+  with the grades as stations, and a night sky with the grades as a
+  constellation. Each
   keeps its own folder + dynamic import, so the guards above hold by name.
 
 The non-classic presets are components in `apps/web/components/site/presets/`,

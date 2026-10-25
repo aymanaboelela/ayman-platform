@@ -1,4 +1,4 @@
-import { marhey, readex, ruqaa } from '@/lib/fonts';
+import { elMessiri, lalezar, lemonada, marhey, readex, ruqaa } from '@/lib/fonts';
 import type { KitPreset } from './kit-preset';
 
 /**
@@ -10,4 +10,7 @@ export const KIT_FONT: Record<KitPreset, string> = {
   ruqaa: ruqaa.variable,
   kurrasa: marhey.variable,
   taif: readex.variable,
+  sabboora: lemonada.variable,
+  rihla: elMessiri.variable,
+  nujoom: lalezar.variable,
 };

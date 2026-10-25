@@ -127,6 +127,21 @@ export async function SiteFooter() {
     return <TaifFooter content={footerContent({ contact, features })} />;
   }
 
+  if (branding.landingPreset === 'sabboora') {
+    const { default: SabbooraFooter } = await import('@/components/site/presets/sabboora/sabboora-footer');
+    return <SabbooraFooter content={footerContent({ contact, features })} />;
+  }
+
+  if (branding.landingPreset === 'rihla') {
+    const { default: RihlaFooter } = await import('@/components/site/presets/rihla/rihla-footer');
+    return <RihlaFooter content={footerContent({ contact, features })} />;
+  }
+
+  if (branding.landingPreset === 'nujoom') {
+    const { default: NujoomFooter } = await import('@/components/site/presets/nujoom/nujoom-footer');
+    return <NujoomFooter content={footerContent({ contact, features })} />;
+  }
+
   return (
     <footer className="site-footer">
       <div className="site-footer__glow" aria-hidden="true" />
