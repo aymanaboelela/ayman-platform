@@ -51,7 +51,12 @@ export function FooterDragons() {
 
   const wide = useMediaQuery('(min-width: 64rem)', false);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)', true);
-  const active = IS_AYMAN && wide && !reducedMotion && Boolean(DRAGON_BLAZE);
+  // Not on a tablet. An iPad in landscape clears 64rem, so the width gate
+  // alone let the pair onto it — asked to be removed there outright. A touch
+  // screen is the tablet signal; `true` on the server, so nothing renders
+  // until the client has said otherwise.
+  const touch = useMediaQuery('(pointer: coarse)', true);
+  const active = IS_AYMAN && wide && !touch && !reducedMotion && Boolean(DRAGON_BLAZE);
 
   useEffect(() => {
     const root = ref.current;
