@@ -38,7 +38,7 @@ export default async function StudioLayout({ children }: { children: React.React
             {designsCopy.nav}
           </a>
         ) : null}
-        <SignOutButton className="ds-linkbtn" />
+        <SignOutButton className="w-auto shrink-0 border border-line" />
       </header>
       <main className="ds-shell__main">{children}</main>
     </div>

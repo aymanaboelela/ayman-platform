@@ -196,7 +196,9 @@ export function designDownloadPath(asset: { id: string; version: number }): stri
 
 /** «1.4 ميجا» / «820 كيلو» — sizes as a designer reads them. */
 export function designSizeLabel(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} جيجا`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ميجا`;
+  // One decimal, dropped when it is zero: «60 ميجا», «1.4 ميجا».
+  const short = (value: number) => String(Number(value.toFixed(1)));
+  if (bytes >= 1024 * 1024 * 1024) return `${short(bytes / (1024 * 1024 * 1024))} جيجا`;
+  if (bytes >= 1024 * 1024) return `${short(bytes / (1024 * 1024))} ميجا`;
   return `${Math.max(1, Math.round(bytes / 1024))} كيلو`;
 }

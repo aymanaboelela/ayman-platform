@@ -784,6 +784,7 @@
 .ds-topbar__title {
   font-weight: 700;
   color: var(--n-12);
+  white-space: nowrap;
 }
 
 .ds-topbar__who {
