@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { connection } from 'next/server';
 import { copy } from '@ayman/contracts';
 import { ResumeBookOrder } from '@/components/books/resume-book-order';
-import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getBookCatalogForStudent } from '@/lib/books';
 import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 
@@ -48,11 +49,13 @@ export default async function ResumeBookOrderPage({
 }: {
   params: Promise<{ orderId: string }>;
 }) {
+  // See `getBookCatalogForStudent`: never evaluated at build time.
+  await connection();
   const { orderId } = await params;
 
   const [orders, catalog, { contact }] = await Promise.all([
     getMyBookOrdersOrEmpty(),
-    getBookCatalogOrEmpty(),
+    getBookCatalogForStudent(),
     getPublicSettingsOrDefaults(),
   ]);
 

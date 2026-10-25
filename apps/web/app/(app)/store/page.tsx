@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
+import { connection } from 'next/server';
 import { copy } from '@ayman/contracts';
 import { BooksShippingChip, BooksShop } from '@/components/site/books-shop';
-import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getBookCatalogForStudent } from '@/lib/books';
 import { getEntitlements } from '@/lib/entitlements';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 // The shop's stylesheet, shared verbatim with `/books`. `store.css` is the
@@ -47,7 +48,7 @@ export const metadata = { title: c.pageTitle };
  *
  * ## Failure containment
  *
- * `getBookCatalogOrEmpty` and `getPublicSettingsOrDefaults`, never their
+ * `getBookCatalogForStudent` and `getPublicSettingsOrDefaults`, never their
  * throwing twins — the same rule `(site)/books/page.tsx` states, and the same
  * one `/admin/students` was fixed under: an uncached read that throws is the
  * student's whole page. Both are cached and both answer with an empty shape
@@ -62,10 +63,14 @@ export default async function StorePage() {
    * لقسم مالوش وجود. و`notFound()` مش ٤٠٣ لنفس السبب المكتوب في
    * `(admin)/layout.tsx`: الصفحة دي مش «ممنوعة»، هي مش هنا.
    */
+  // Rendered per request, never prerendered: a prerendered shelf is the
+  // build's shelf, and the build cannot reach the API — see
+  // `getBookCatalogForStudent`.
+  await connection();
   if (!(await getEntitlements()).books) notFound();
 
   const [catalog, { contact }] = await Promise.all([
-    getBookCatalogOrEmpty(),
+    getBookCatalogForStudent(),
     getPublicSettingsOrDefaults(),
   ]);
 

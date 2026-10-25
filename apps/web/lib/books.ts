@@ -56,10 +56,7 @@ export async function getBookShippingRates(): Promise<BookShippingRates> {
   return catalog.shippingRates;
 }
 
-export async function getBookCatalogOrEmpty(): Promise<BookCatalog> {
-  'use cache';
-  cacheLife('minutes');
-  cacheTag(TAG_BOOKS);
+async function loadBookCatalogOrEmpty(): Promise<BookCatalog> {
 
   /*
    * ستاك مش بيبيع كتب: رفوف فاضية، ومن غير ما نضرب راوت إحنا عارفين إنه
@@ -93,4 +90,30 @@ export async function getBookCatalogOrEmpty(): Promise<BookCatalog> {
       total: 0,
     };
   }
+}
+
+export async function getBookCatalogOrEmpty(): Promise<BookCatalog> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag(TAG_BOOKS);
+  return loadBookCatalogOrEmpty();
+}
+
+/**
+ * The same catalogue for the STUDENT shell — `/store`, «حسابي»'s book card, an
+ * order's pay page — under a cache entry of its own.
+ *
+ * ⚠️ «الكتب مش هنا… لازم أعمل ريفرش». `next build` runs with no API, so the
+ * shared entry above is filled with EMPTY shelves at build time, and `/store`
+ * prerendered that emptiness into its shell: the first student after every
+ * deploy saw «لسه مفيش كتب» until a refresh revalidated it. This function is
+ * only ever called from routes that are dynamic per request (`/store` calls
+ * `connection()`; the other two read the session), so nothing evaluates it at
+ * build time and its entry can only ever hold what the live API said.
+ */
+export async function getBookCatalogForStudent(): Promise<BookCatalog> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag(TAG_BOOKS);
+  return loadBookCatalogOrEmpty();
 }
