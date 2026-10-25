@@ -44,7 +44,7 @@ export function CourseRail({
   currentCourseId: string | null;
 }) {
   return (
-    <aside className="lg:sticky lg:top-6 lg:self-start">
+    <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
       <p className="eyebrow mb-3 text-fg-muted">{c.courses}</p>
       {/* كل كورس بلونه (`data-hue`) — نفس اللون اللي راسه ومحطاته واخدينه تحت،
           فالعين بتربط الصف هنا بالخريطة هناك من غير ما تقرا العنوان مرتين. */}

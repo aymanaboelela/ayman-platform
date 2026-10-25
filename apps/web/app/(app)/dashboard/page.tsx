@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
@@ -21,7 +22,7 @@ import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
 import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
-import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getBookCatalogForStudent } from '@/lib/books';
 import { getSession } from '@/lib/session';
 import { canOpenDashboard } from '@/lib/dashboard-access';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
@@ -119,6 +120,9 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
+  // Per request before anything is read — `getBookCatalogForStudent` must
+  // never be filled at build time (see its note).
+  await connection();
   /*
    * ⚠️ طالب بس — عملية حقيقية: صبري عمل حساب مساعد («سهام») بصلاحيات محدودة
    * من `/admin/roles`، وكراشت هنا بالظبط، كود عطل 2315818922. المساعد مش
@@ -208,7 +212,7 @@ export default async function DashboardPage() {
      * The book catalogue: the delivery fee «اطلب الكتاب» quotes on an enrolled
      * course's card, AND the covers «الكتب» renders at the foot of the page.
      *
-     * `getBookCatalogOrEmpty` rather than `getBookShippingRates`, which is a
+     * `getBookCatalogForStudent` rather than `getBookShippingRates`, which is a
      * wrapper that reads exactly this and throws the shelves away. Calling both
      * would not cost a second request — they share one `'use cache'` entry on
      * one coarse tag — but it would mean two names for one value on one page,
@@ -219,7 +223,7 @@ export default async function DashboardPage() {
      * comments keep counting: cached, and shared with `/books` and every course
      * page.
      */
-    getBookCatalogOrEmpty(),
+    getBookCatalogForStudent(),
     /*
      * «كتبي» — this student's own book orders, for the section above the shop.
      *
