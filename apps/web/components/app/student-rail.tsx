@@ -71,8 +71,15 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
         والحالة الطبيعية مابيبقاش فيه حاجة للأب يعملها سكرول أصلًا، والسلوك
         زي ما هو بالحرف. الأب بيتحرّك في حالة واحدة بس: لما الأثاث الثابت
         لوحده مش دخل، وساعتها السكرول هو **الطريقة الوحيدة** توصل للفوتر.
+
+        ## ⚠️ من غير `overscroll-contain`
+
+        كانت هنا وعلى ليستة الكورسات تحت، وكانت بتقفل الصفحة: الماوس فوق الريل
+        والعجلة توصّل الريل لآخره، فالسكرول مايعدّيش للصفحة — «لما بعمل اسكرول
+        مش بتسكرول بالبكرة». على شباك أقصر من الريل ده كان بيحصل في كل صفحة.
+        من غيرها الريل بيتحرك لآخره الأول، وبعدين العجلة بتكمّل في الصفحة.
       */}
-      <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-y-auto overscroll-contain p-3">
+      <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-y-auto p-3">
         {/* `rail__head` — CSS stacks this into a column once the rail is
             collapsed, because the brand and the toggle do not both fit across
             a 76px track. See `globals.css`. */}
@@ -133,7 +140,7 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
           {/* `rail__courses` ممسك، مش ستايل: الأب بقى بيعمل سكرول هو كمان،
               فـ«الحاوية اللي بتعمل سكرول جوّه الريل» بقت اتنين — والتست محتاج
               يشاور على دي بالذات. */}
-          <div className="rail__courses min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="rail__courses min-h-0 flex-1 overflow-y-auto">
             {courses}
           </div>
         </div>
