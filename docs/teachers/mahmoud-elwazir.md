@@ -10,7 +10,7 @@ up again. It holds no secrets: those live in Dokploy only.
 | Display name (`TENANT_DISPLAY_NAME`) | أ. محمود الوزير |
 | Subject (`TENANT_SUBJECT`) | `arabic` |
 | Grades (`TENANT_GRADES`) | `prep1,prep2,prep3,sec1`: الصف الأول/الثاني/الثالث الإعدادي + الصف الأول الثانوي |
-| Look | preset `board`, then `accentHue = 185` (teal, «أخضر شوية») set in his `/admin/settings` → الهوية البصرية |
+| Look | `accentHue = 171` (emerald — the greenest hue allowed; 130–170 is reserved for «إجابة صح»), preset chosen by the owner from board, ruqaa «الرقعة», kurrasa «الكرّاسة», taif «الطيف» (PR for the presets stacks on #688) |
 | Suggested `TENANT_KEY` | `mahmoud-elwazir` |
 | Domain | **still missing**, comes from the owner |
 | WhatsApp number / login email | **still missing**, comes from the owner |
@@ -44,7 +44,7 @@ merge to `main`, with a blue look that later became «أخضر شوية».
    - press «اعمل المنصة», then wait about 10 min until «الموقع بيرد».
 3. If the run created the Cloudflare zone, point the registrar's nameservers
    at the two it prints.
-4. Sign in to his admin. Set الهوية البصرية to «board» with custom hue **185**.
+4. Sign in to his admin. Set الهوية البصرية to the chosen preset with custom hue **171**.
    Then apply the landing content:
    ```bash
    node deploy/tenants/apply-home-blocks.mjs https://<his-domain> <admin-email> '<password>' \
