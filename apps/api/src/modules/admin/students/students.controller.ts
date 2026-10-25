@@ -15,6 +15,7 @@ import {
   AdminStudentDeviceLimitDto,
   AdminStudentPatchDto,
   AdminStudentSetPasswordDto,
+  StudentContactsExportDto,
   StudentListQueryDto,
 } from './students.dto';
 
@@ -31,6 +32,22 @@ export class StudentsController {
   @Get()
   list(@Query() query: StudentListQueryDto) {
     return this.students.list(query);
+  }
+
+  /**
+   * «حفظ في جهات الاتصال» — the filtered list as a vCard file, new students
+   * only unless asked otherwise. `student:read`: every number in the file is
+   * one this permission already shows in the table. POST, not GET, because it
+   * WRITES — it records who was exported, which is what makes the next press
+   * hand over only the new ones.
+   *
+   * Declared before `:userId` so `contacts` is never read as an id.
+   */
+  @RequirePermission('student:read')
+  @Post('contacts')
+  @HttpCode(200)
+  exportContacts(@CurrentUser() user: AuthenticatedUser, @Body() body: StudentContactsExportDto) {
+    return this.students.exportContacts(body, user.id);
   }
 
   @RequirePermission('student:read')

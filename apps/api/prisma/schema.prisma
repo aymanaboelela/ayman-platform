@@ -254,6 +254,10 @@ model User {
   mistakeReviews             MistakeReview[]
   /// «التحديات» — كل سؤال (أو مجموعة صيغ) شافه في لعبة أو ساحة، وإمتى.
   questionExposures          QuestionExposure[]
+  /// «حفظ في جهات الاتصال» — the students this admin already took to their
+  /// phone, and (on a student) the admins whose phones hold them.
+  contactExportsMade         ContactExport[]         @relation("ContactExportAdmin")
+  contactExportsOf           ContactExport[]         @relation("ContactExportStudent")
 
   @@unique([email])
   @@map("users")
@@ -6087,5 +6091,23 @@ model ArenaStat {
 
   @@index([points(sort: Desc)])
   @@map("arena_stats")
+  @@schema("app")
+}
+
+/// «حفظ في جهات الاتصال» on `/admin/students` — one row per student an admin
+/// already exported to their phone as a vCard, so the next press hands over
+/// only the new ones. Per admin: an assistant's phone holding a student says
+/// nothing about the instructor's. See the migration's header.
+model ContactExport {
+  adminUserId   String   @map("admin_user_id")
+  studentUserId String   @map("student_user_id")
+  exportedAt    DateTime @default(now()) @map("exported_at") @db.Timestamptz(3)
+
+  admin   User @relation("ContactExportAdmin", fields: [adminUserId], references: [id], onDelete: Cascade)
+  student User @relation("ContactExportStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, studentUserId])
+  @@index([studentUserId])
+  @@map("contact_exports")
   @@schema("app")
 }

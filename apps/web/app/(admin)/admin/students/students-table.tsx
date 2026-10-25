@@ -82,7 +82,8 @@ export function StudentsTable({
     state.governorate.length > 0 ||
     state.year.length > 0 ||
     state.track.length > 0 ||
-    state.access !== null;
+    state.access !== null ||
+    state.stream !== null;
 
   const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
 
@@ -121,7 +122,7 @@ export function StudentsTable({
         onSearchChange={(value) => void setState({ q: value, page: 1 })}
         hasActiveFilters={hasActiveFilters}
         onClearFilters={() =>
-          void setState({ governorate: [], year: [], track: [], access: null, page: 1 })
+          void setState({ governorate: [], year: [], track: [], access: null, stream: null, page: 1 })
         }
       >
         <FacetedFilter

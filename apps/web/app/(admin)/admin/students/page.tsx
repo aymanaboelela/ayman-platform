@@ -7,6 +7,8 @@ import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { can, getSession } from '@/lib/session';
 import { StudentsTable } from './students-table';
 import { studentsCache } from './search-params';
+import { SaveContactsButton } from './save-contacts-button';
+import { formatCopy } from '@ayman/contracts/format';
 
 const ResponseSchema = listResponse(AdminStudentRowSchema);
 
@@ -34,6 +36,9 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   for (const track of query.track) params.append('track', track);
   if (query.access) params.set('access', query.access);
   if (query.role) params.set('role', query.role);
+  // «عربي / لغات» — the filter changed the URL and nothing else until this
+  // line: the API has read `stream` all along, the page never sent it.
+  if (query.stream) params.set('stream', query.stream);
 
   /**
    * ⚠️ `getTaxonomyOrNull()`, NOT `apiGet('/api/taxonomy', …)`.
@@ -89,9 +94,17 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
-        {copy.admin.nav.students}
-      </h1>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">{copy.admin.nav.students}</h1>
+        {/* The CURRENT filter's total, not the page's — «صفحة ١ من ١١٩» never
+            said how many students that is. */}
+        <span className="course-count__badge course-count__badge--paid">
+          {formatCopy(copy.admin.students.matchingCount, { n: data.rowCount.toLocaleString('en') })}
+        </span>
+        <div className="ms-auto">
+          <SaveContactsButton />
+        </div>
+      </div>
       <StudentsTable
         rows={data.rows}
         rowCount={data.rowCount}

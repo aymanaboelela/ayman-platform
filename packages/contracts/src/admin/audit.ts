@@ -163,6 +163,8 @@ export const AUDIT_ACTIONS = [
   'taxonomy:update',
   'taxonomy:archive',
   'student:update',
+  /** «حفظ في جهات الاتصال» — phone numbers leaving the platform in bulk. */
+  'student:export-contacts',
   'student:role-change',
   /**
    * حظر ورفع الحظر — three separate actions and not one `student:access`

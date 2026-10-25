@@ -708,6 +708,35 @@ export const StudentListQuerySchema = z.object({
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;
 
+/**
+ * «حفظ في جهات الاتصال» — the list screen's filters (no paging, no sort: the
+ * whole filtered set goes, in name order) plus whether to include the students
+ * this admin already exported. Off by default: the second press hands over
+ * only the new ones, which is the point.
+ */
+export const StudentContactsExportSchema = StudentListQuerySchema.omit({
+  page: true,
+  perPage: true,
+  sort: true,
+  dir: true,
+}).extend({
+  includeSaved: z.boolean().default(false),
+});
+
+export type StudentContactsExport = z.infer<typeof StudentContactsExportSchema>;
+
+export const StudentContactsExportResultSchema = z.object({
+  /** A vCard 3.0 file, one card per student. Empty when `exported` is 0. */
+  vcf: z.string(),
+  exported: z.number().int(),
+  /** In the filter, skipped because this admin exported them before. */
+  alreadySaved: z.number().int(),
+  /** In the filter, skipped because the profile has no phone. */
+  withoutPhone: z.number().int(),
+});
+
+export type StudentContactsExportResult = z.infer<typeof StudentContactsExportResultSchema>;
+
 
 /**
  * Opening a closed course for one student — the key to the lock

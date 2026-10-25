@@ -1724,6 +1724,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'students list: anonymous', method: 'get', path: () => '/api/admin/students', actor: 'anonymous', status: 401 },
     { label: 'students list: student', method: 'get', path: () => '/api/admin/students', actor: 'student', status: 403 },
     { label: 'students list: admin', method: 'get', path: () => '/api/admin/students', actor: 'admin', status: 200 },
+    { label: 'students contacts export: anonymous', method: 'post', path: () => '/api/admin/students/contacts', actor: 'anonymous', status: 401, body: () => ({}) },
+    { label: 'students contacts export: student', method: 'post', path: () => '/api/admin/students/contacts', actor: 'student', status: 403, body: () => ({}) },
     { label: 'student detail: student', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student detail: admin', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'admin', status: 200 },
     // `conversation:read`, NOT `student:read` — the payload is message bodies.
