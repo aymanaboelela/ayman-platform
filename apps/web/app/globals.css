@@ -88,20 +88,19 @@
     unicode-bidi: plaintext;
     text-align: start;
   }
-}
 
-/*
- * The same rule for text that is SHOWN rather than typed: question stems,
- * options, answers, messages — anything a person wrote that may be English.
- * Applied to the container AND its block children, because `unicode-bidi` is
- * not inherited and every `<p>`/`<li>` is its own paragraph. `pre` is left
- * alone: code blocks are LTR already.
- */
-.bidi-auto,
-.bidi-auto :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, td, th, figcaption) {
-  unicode-bidi: plaintext;
-  text-align: start;
-}
+  /*
+   * The same rule for text that is SHOWN rather than typed: question stems,
+   * options, answers, messages — anything a person wrote that may be English.
+   * Applied to the container AND its block children, because `unicode-bidi`
+   * is not inherited and every `<p>`/`<li>` is its own paragraph. `pre` is
+   * left alone: code blocks are LTR already.
+   */
+  .bidi-auto,
+  .bidi-auto :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, td, th, figcaption) {
+    unicode-bidi: plaintext;
+    text-align: start;
+  }
 
   html {
     /* Rule 2 — never `line-height: normal`. The two faces produce different
