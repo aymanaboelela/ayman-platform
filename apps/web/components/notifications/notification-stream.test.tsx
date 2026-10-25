@@ -1,5 +1,5 @@
 import { act, render } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const toast = vi.fn();
 vi.mock('sonner', () => ({ toast: (...args: unknown[]) => toast(...args) }));
@@ -57,6 +57,17 @@ async function deliver(source: FakeEventSource) {
 }
 
 describe('NotificationStreamProvider', () => {
+  /*
+   * The handler parses a frame through a DYNAMIC import of the contracts
+   * schema, and `deliver` gives it 20ms. Cold, under a full parallel run, that
+   * first import took longer and two tests failed one run in three — no bug in
+   * the provider, a race in the harness. Loading the module once here makes
+   * every later `import()` a cache hit that resolves in a microtask.
+   */
+  beforeAll(async () => {
+    await import('@ayman/contracts/notifications');
+  });
+
   beforeEach(() => {
     FakeEventSource.instances = [];
     toast.mockClear();
