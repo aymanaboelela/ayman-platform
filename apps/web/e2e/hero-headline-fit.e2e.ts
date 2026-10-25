@@ -148,8 +148,8 @@ test.describe('the hero headline on a phone', () => {
     await page.locator('.hero__cta a, .hero__cta button').first().waitFor();
 
     /*
-     * ⚠️ POLLED, because the hero animates in. `site-hero.tsx` drives every
-     * `[data-hero-line]` with GSAP, so for the first moments the buttons are
+     * ⚠️ POLLED, because the hero animates in. The hero copy rises in on a
+     * CSS entrance (`sections.css`), so for the first moments the buttons are
      * translated below their final position — measured once on load this
      * asserted against a frame of the intro rather than against the layout,
      * and failed on a hero that is actually fine.

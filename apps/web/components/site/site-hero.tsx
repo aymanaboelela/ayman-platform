@@ -91,17 +91,18 @@ export function SiteHero({
       // Guarding rather than deleting: `stats` is an admin-editable prop, so
       // the row can come back from /admin/home without code, and the entrance
       // should be waiting for it when it does.
-      const lines = scope.querySelectorAll('[data-hero-line]');
       const media = scope.querySelector('.hero__media');
       const stats = scope.querySelectorAll('.hero__stat');
 
-      // Entrance is written with `from()` so the resting DOM already carries
-      // the final styles, which is what makes the early return above safe:
-      // nothing is left at `opacity: 0`. See the contract in `use-gsap.ts`.
-      const entrance = gsap.timeline({ defaults: { ease: 'power3.out', duration: 0.9 } });
-      if (lines.length) entrance.from(lines, { y: 28, opacity: 0, stagger: 0.09 }, 0.1);
-      if (media) entrance.from(media, { opacity: 0, duration: 1.4 }, 0);
-      if (stats.length) entrance.from(stats, { y: 16, opacity: 0, stagger: 0.06 }, 0.5);
+      // ⚠️ The copy and the photograph are NOT tweened here any more — their
+      // entrance is CSS (`sections.css`, «Motion on the classic landing»).
+      // A `from()` here ran after hydration, so on a slow phone the hero
+      // painted, dropped to `opacity: 0`, and faded back: the page looked like
+      // it loaded twice. Only the stats row (absent on the shipped page, and
+      // client-mounted when present) still enters from here.
+      if (stats.length) {
+        gsap.from(stats, { y: 16, opacity: 0, stagger: 0.06, ease: 'power3.out', duration: 0.9, delay: 0.5 });
+      }
 
       // The stage drifts up half as fast as the page, so the copy separates
       // from the image on scroll instead of moving with it as one plate.

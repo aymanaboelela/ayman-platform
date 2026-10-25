@@ -4437,3 +4437,117 @@
 .honor-board__slot--filled:has(.honor-board__slot-link:hover) {
   border-color: color-mix(in oklab, var(--a-9) 60%, transparent);
 }
+
+/* ===========================================================================
+   Motion on the classic landing — «سلسة جدًا، أنيميشن في كله بشكل محترم».
+
+   Two layers, both pure CSS:
+
+   1. The hero ENTERS once on load: the photograph fades up, then eyebrow →
+      title → lead → buttons rise in a short stagger. The title moves but never
+      fades — it is the page's LCP, and an element at `opacity: 0` is not
+      counted as painted. This used to be a GSAP `from()` in `site-hero.tsx`,
+      which ran only after hydration: on a slow phone the hero painted, then
+      vanished to `opacity: 0`, then faded back — a second «load» of a page
+      that was already there. CSS starts on the first paint. The photograph
+      FADES rather than scales because GSAP still owns its transform (the
+      scroll parallax), and an animated transform would override it.
+   2. Everything below REVEALS as it scrolls in (`animation-timeline: view()`):
+      a section's heading block rises, then its cards follow one after another.
+      The range ends at `cover 30%`, so nothing is still fading where the eye
+      already is.
+
+   Same two guards as the presets' reveals (`presets.css`, «the page reveals
+   as you read it»): every scroll rule lives inside `@supports`, so a browser
+   without scroll timelines never sees an `opacity: 0` it cannot end; and all
+   of it sits under `prefers-reduced-motion: no-preference`.
+
+   `.tracks` (the dragon stage) is left alone on purpose — it is pinned and
+   driven by its own timeline, and a second transform on it would fight that.
+   =========================================================================== */
+
+@keyframes land-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+}
+
+@keyframes land-rise-solid {
+  from {
+    transform: translateY(1rem);
+  }
+}
+
+@keyframes land-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero .hero__media {
+    animation: land-fade 1.2s ease-out both;
+  }
+
+  .hero .hero__eyebrow,
+  .hero .hero__lead,
+  .hero .hero__cta {
+    animation: land-rise 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .hero .hero__title > span {
+    animation: land-rise-solid 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .hero .hero__eyebrow { animation-delay: 60ms; }
+  .hero .hero__title > span:first-child { animation-delay: 140ms; }
+  .hero .hero__title > .hero__title-accent { animation-delay: 220ms; }
+  .hero .hero__lead { animation-delay: 320ms; }
+  .hero .hero__cta { animation-delay: 420ms; }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* The heading block of every section, and the single-card sections. */
+    main[data-layout] .site-section .site-eyebrow-row,
+    main[data-layout] .site-section .site-shell > .site-badge,
+    main[data-layout] .site-section .site-shell > .site-h2,
+    main[data-layout] .site-section .site-shell > .site-lead,
+    main[data-layout] .honor-board__head,
+    main[data-layout] .books-strip__intro,
+    main[data-layout] .about__body,
+    main[data-layout] .practice-invite__card,
+    .footer-cta > * {
+      animation: land-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 28%;
+    }
+
+    /* The cards, one after another. A stagger on a scroll timeline is a
+       later RANGE, not a delay — a delay would mean nothing on a timeline
+       that is measured in scroll, not time. */
+    main[data-layout] .courses__grid > *,
+    main[data-layout] .books-strip__points > *,
+    main[data-layout] .honor-board__slots > *,
+    main[data-layout] .faq__item {
+      animation: land-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 26%;
+    }
+
+    main[data-layout] .courses__grid > :nth-child(3n + 2),
+    main[data-layout] .books-strip__points > :nth-child(3n + 2),
+    main[data-layout] .honor-board__slots > :nth-child(3n + 2),
+    main[data-layout] .faq__item:nth-child(3n + 2) {
+      animation-range: entry 12% cover 31%;
+    }
+
+    main[data-layout] .courses__grid > :nth-child(3n),
+    main[data-layout] .books-strip__points > :nth-child(3n),
+    main[data-layout] .honor-board__slots > :nth-child(3n),
+    main[data-layout] .faq__item:nth-child(3n) {
+      animation-range: entry 19% cover 36%;
+    }
+  }
+}
