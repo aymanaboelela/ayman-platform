@@ -53,4 +53,42 @@ export class AttemptEventsService {
       WHERE "attempt_id" = ${args.attemptId}::uuid
     `;
   }
+
+  /**
+   * Several rows of one kind in ONE statement, numbered `max + 1 … max + n`.
+   *
+   * For a batch arriving from the browser (the exam runner's signals), where
+   * `append` in a loop would hold the `(attempt_id, seq)` slots it has taken
+   * open across n round trips. Every other writer on this attempt (a flag, a
+   * submit) is competing for the next number in that window, and the loser of
+   * a unique-index race is whoever commits second, which may be the submit.
+   * One statement keeps the window as short as an insert can make it.
+   */
+  async appendMany(
+    tx: TransactionClient,
+    args: {
+      attemptId: string;
+      kind: AttemptEventKind;
+      actorId: string | null;
+      rows: ReadonlyArray<{ attemptQuestionId: string | null; payload: Prisma.InputJsonValue }>;
+    },
+  ): Promise<void> {
+    if (args.rows.length === 0) return;
+    await tx.$executeRaw`
+      INSERT INTO "app"."attempt_events"
+        ("attempt_id", "attempt_question_id", "seq", "kind", "payload", "actor_id", "created_at")
+      SELECT
+        ${args.attemptId}::uuid,
+        (row.value->>'attemptQuestionId')::uuid,
+        base.max_seq + row.ordinality,
+        ${args.kind}::"app"."AttemptEventKind",
+        row.value->'payload',
+        ${args.actorId}::text,
+        (now() AT TIME ZONE 'UTC')
+      FROM
+        (SELECT COALESCE(MAX("seq"), 0) AS max_seq FROM "app"."attempt_events"
+          WHERE "attempt_id" = ${args.attemptId}::uuid) AS base,
+        jsonb_array_elements(${JSON.stringify(args.rows)}::jsonb) WITH ORDINALITY AS row
+    `;
+  }
 }

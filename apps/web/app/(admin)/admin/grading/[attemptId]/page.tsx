@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { AdminGradingAttemptSchema } from '@ayman/contracts/admin/exams';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { GradingPaper } from '@/components/admin/grading/grading-paper';
+import { ExamSignalsPanel } from '@/components/admin/grading/exam-signals-panel';
 import { gradingListHref, normalizeGradingQuery } from '../nav';
 
 const c = copy.admin.grading;
@@ -95,6 +96,7 @@ export default async function AdminGradingPaperPage({
         submittedAtLabel={
           attempt.submittedAt ? submittedAtFormatter.format(new Date(attempt.submittedAt)) : null
         }
+        aside={attempt.signals ? <ExamSignalsPanel signals={attempt.signals} /> : null}
       />
     </>
   );

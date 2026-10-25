@@ -27,6 +27,7 @@ import { SubmitDialog } from './submit-dialog';
 import type { SubmitDialogQuestion } from './submit-confirm-dialog';
 import { NavigatorKey } from './navigator-key';
 import { type AnswerResponse, useAttemptAutosave, AUTOSAVE_STATUS_LABEL } from './use-attempt-autosave';
+import { useExamSignals } from './use-exam-signals';
 
 function toAnswerResponse(value: unknown): AnswerResponse | null {
   if (!value || typeof value !== 'object') return null;
@@ -71,6 +72,14 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     attemptToken: initial.attemptToken,
     initialSeq: initial.nextSeq,
     onSaved: (result) => setServerTime(result.serverTime),
+  });
+
+  // Quiet by design: renders nothing and tells the student nothing. On only
+  // where the server said so (an exam, on Ayman's stack).
+  const examSignals = useExamSignals({
+    enabled: initial.signals,
+    attemptId: initial.attemptId,
+    currentSlot,
   });
 
   /*
@@ -364,6 +373,9 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         z.object({ attemptId: z.string() }),
         { attemptToken: initial.attemptToken },
       );
+      // Before the push: the unmount that follows is the paper being handed
+      // in, not the student wandering off.
+      examSignals.stop();
       // The guard comes off the instant the attempt stops being one, and
       // BEFORE the push to the results page. A student who has just submitted
       // must never be asked whether they meant to leave the exam — least of
@@ -393,6 +405,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
         toast.info(copy.quiz.alreadySubmitted);
+        examSignals.stop();
         // Same reason, and the 409 says it louder: the attempt is already
         // submitted, so there is nothing left to guard.
         releaseBackGuard();
