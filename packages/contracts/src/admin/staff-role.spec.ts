@@ -20,8 +20,8 @@ import { AdminRoleChangeSchema, AdminStaffRoleSchema, StudentListQuerySchema } f
  * `admin` مش قيمة الراوت ده يعرف يقراها. الفرق بين «صعب» و«مستحيل».
  */
 describe('AdminStaffRoleSchema', () => {
-  it('بتقبل owner وstudent', () => {
-    for (const role of ['owner', 'student'] as const) {
+  it('بتقبل owner وdesigner وstudent', () => {
+    for (const role of ['owner', 'designer', 'student'] as const) {
       expect(AdminStaffRoleSchema.safeParse({ role, reason: 'مساعد جديد للمتابعة' }).success).toBe(true);
     }
   });

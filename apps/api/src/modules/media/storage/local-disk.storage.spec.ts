@@ -237,6 +237,28 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+  describe('design studio keys (the shapes DesignsService mints)', () => {
+    // Written WITH the prefix, through the real storage, for the reason every
+    // suite above gives: the last three private prefixes each shipped missing
+    // from `isValidStorageKey` and 500'd on their first real upload.
+    it.each(['png', 'jpg', 'webp'])('accepts a .%s under design/ and round-trips it', async (ext) => {
+      const key = `design/0f/0f8fad5b-d9cb-469f-a165-70867728950e.${ext}`;
+      await storage.put(key, Buffer.from('x'), 'image/png');
+      await expect(storage.stat(key)).resolves.toEqual({ size: 1 });
+      await storage.delete(key);
+      await expect(storage.stat(key)).resolves.toBeNull();
+    });
+
+    it.each([
+      'design/0f/0f8fad5b-d9cb-469f-a165-70867728950e.svg',
+      'design/0f/0f8fad5b-d9cb-469f-a165-70867728950e.html',
+      'design/../../etc/passwd.png',
+      '../design/0f/0f8fad5b-d9cb-469f-a165-70867728950e.png',
+    ])('refuses %s', async (key) => {
+      await expect(storage.put(key, Buffer.from('x'), 'x')).rejects.toThrow();
+    });
+  });
+
   describe('voice note keys (the shape VoiceService mints)', () => {
     // Shipped 2026-09-03 without its extensions in `CONVERSATION_KEY_PATTERN`:
     // every real voice note 500'd for a month behind mocked-storage specs.

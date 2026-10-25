@@ -45,6 +45,7 @@ import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.modul
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
+import { DesignsModule } from '../modules/designs/designs.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
@@ -333,6 +334,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «ملفات PDF» — Ayman-only; the test process runs with no TENANT_KEY,
         // which IS Ayman's stack, so the routes answer rather than 404.
         PdfsModule,
+        // «ستوديو التصميم» — Ayman-only like PdfsModule, so it answers here.
+        DesignsModule,
         // «اختبارات مجانية» — Prisma + `AuditService` only, both already here.
         // Open in this fixture because the run has no `TENANT_KEY` (Ayman's
         // stack), where `practice.enabled` defaults on.
@@ -1966,6 +1969,37 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'pdfs patch: student', method: 'patch', path: () => `/api/admin/pdfs/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'pdfs publish: student', method: 'patch', path: () => `/api/admin/pdfs/${randomUUID()}/published`, actor: 'student', status: 403 },
     { label: 'pdfs delete: student', method: 'delete', path: () => `/api/admin/pdfs/${randomUUID()}`, actor: 'student', status: 403 },
+    // «ستوديو التصميم» — every route closed to a student. The designer's own
+    // role (studio yes, publish and everything else no) is pinned in
+    // `permissions.spec.ts`; a design that does not exist is a 404, not a 500.
+    { label: 'designs studio: anonymous', method: 'get', path: () => '/api/designs', actor: 'anonymous', status: 401 },
+    { label: 'designs studio: student', method: 'get', path: () => '/api/designs', actor: 'student', status: 403 },
+    { label: 'designs folder create: anonymous', method: 'post', path: () => '/api/designs/folders', actor: 'anonymous', status: 401 },
+    { label: 'designs folder create: student', method: 'post', path: () => '/api/designs/folders', actor: 'student', status: 403 },
+    { label: 'designs folder detail: anonymous', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'designs folder detail: student', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'designs folder patch: anonymous', method: 'patch', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'designs folder patch: student', method: 'patch', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'designs folder delete: anonymous', method: 'delete', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'designs folder delete: student', method: 'delete', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'designs upload: anonymous', method: 'post', path: () => `/api/designs/folders/${randomUUID()}/assets`, actor: 'anonymous', status: 401 },
+    { label: 'designs upload: student', method: 'post', path: () => `/api/designs/folders/${randomUUID()}/assets`, actor: 'student', status: 403 },
+    { label: 'designs asset patch: anonymous', method: 'patch', path: () => `/api/designs/assets/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'designs asset patch: student', method: 'patch', path: () => `/api/designs/assets/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'designs asset replace: anonymous', method: 'post', path: () => `/api/designs/assets/${randomUUID()}/replace`, actor: 'anonymous', status: 401 },
+    { label: 'designs asset replace: student', method: 'post', path: () => `/api/designs/assets/${randomUUID()}/replace`, actor: 'student', status: 403 },
+    { label: 'designs asset delete: anonymous', method: 'delete', path: () => `/api/designs/assets/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'designs asset delete: student', method: 'delete', path: () => `/api/designs/assets/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'designs asset preview: anonymous', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/preview`, actor: 'anonymous', status: 401 },
+    { label: 'designs asset preview: student', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/preview`, actor: 'student', status: 403 },
+    { label: 'designs asset download: anonymous', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'anonymous', status: 401 },
+    { label: 'designs asset download: student', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'student', status: 403 },
+    { label: 'designs publish: anonymous', method: 'post', path: () => `/api/admin/designs/assets/${randomUUID()}/publish`, actor: 'anonymous', status: 401 },
+    { label: 'designs publish: student', method: 'post', path: () => `/api/admin/designs/assets/${randomUUID()}/publish`, actor: 'student', status: 403 },
+    { label: 'designs studio: admin', method: 'get', path: () => '/api/designs', actor: 'admin', status: 200 },
+    { label: 'designs folder detail: admin, unknown', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'designs folder detail: admin, not a uuid', method: 'get', path: () => '/api/designs/folders/not-a-uuid', actor: 'admin', status: 404 },
+    { label: 'designs download: admin, unknown', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'admin', status: 404 },
     // «اختبارات مجانية» — two public reads, and the admin side on the question
     // bank's own permissions (`question:read` / `question:write`).
     { label: 'practice public list: anonymous', method: 'get', path: () => '/api/practice/sets', actor: 'anonymous', status: 200 },

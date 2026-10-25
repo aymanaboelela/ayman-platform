@@ -80,6 +80,16 @@ describe('permission catalogue', () => {
     expect(roleHasPermission('student', 'attempt:unlock')).toBe(false);
   });
 
+  // «ستوديو التصميم». A concrete list, so a permission added to the catalogue
+  // later never reaches an account that belongs to someone outside the team.
+  it('designer holds the studio and nothing else — no dashboard, no publishing', () => {
+    expect([...permissionsForRole('designer')].sort()).toEqual(['design:read', 'design:write']);
+    expect(roleHasPermission('designer', 'admin:access')).toBe(false);
+    expect(roleHasPermission('designer', 'design:publish')).toBe(false);
+    expect(roleHasPermission('designer', 'media:write')).toBe(false);
+    expect(roleHasPermission('designer', 'student:read')).toBe(false);
+  });
+
   // The catalogue must be exhaustive: a @RequirePermission string that is not
   // in PERMISSIONS is a route nobody can ever reach, and it fails silently.
   it('every @RequirePermission argument in the repo is catalogued', () => {

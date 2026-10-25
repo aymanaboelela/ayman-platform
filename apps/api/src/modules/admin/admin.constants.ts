@@ -113,6 +113,9 @@ export const AUDIT_RESOURCES = {
   /// the SET (`practice:questions`), because the question rows are renumbered
   /// and deleted freely and «مين لعب في اختبار درس 2-1» is asked of the set.
   practiceSet: 'practice_sets',
+  /// «ستوديو التصميم» — the designer's folders and the pictures in them.
+  designFolder: 'design_folders',
+  designAsset: 'design_assets',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

@@ -279,6 +279,17 @@ export const PERMISSIONS = [
   // في `ROLE_PERMISSIONS` وصفر تغيير في الراوتس.
   'honor:read',
   'honor:write',
+  // «ستوديو التصميم» — the graphic designer's folders.
+  //
+  // Three, and the third is the one that matters. `read` and `write` are the
+  // designer's whole job: see the folders, upload, rename, replace, delete.
+  // `publish` turns a design into an image THE SITE SERVES — a lecture cover
+  // every student sees — and that is the instructor's decision, not the
+  // designer's. The `designer` role below holds the first two and never the
+  // third, so the most a designer account can do is change its own folders.
+  'design:read',
+  'design:write',
+  'design:publish',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -299,7 +310,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * ships to the operator first and reaches the instructor when somebody decides
  * it should — which is exactly the behaviour asked for.
  */
-export type Role = 'admin' | 'owner' | 'student';
+export type Role = 'admin' | 'owner' | 'student' | 'designer';
 
 /**
  * `'*'` grants every permission, including ones added after this line was
@@ -384,6 +395,17 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
     // every row through `user.id` from the session, never a route parameter.
     'homework:submit',
   ]),
+  /**
+   * The graphic designer — «ستوديو التصميم» and nothing else.
+   *
+   * A concrete list, the opposite of `owner`'s «everything minus», on
+   * purpose: this account belongs to somebody outside the teaching team, and
+   * a permission added to the catalogue tomorrow must not reach them the day
+   * it ships. No `admin:access` (the dashboard 404s for them), no student
+   * permissions (no courses, no profile writes), no `design:publish` (the
+   * site's images stay the instructor's call).
+   */
+  designer: new Set<Permission>(['design:read', 'design:write']),
 };
 
 const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));
