@@ -141,6 +141,20 @@ export const LearningPathSchema = z.object({
   percent: z.number().min(0).max(100),
 });
 
+/**
+ * Courses this student was enrolled in that the instructor has since ARCHIVED.
+ *
+ * An archived course leaves every list a student sees (see `DashboardService`),
+ * and leaving without a word reads as «الكورس اتمسح ومحدش قال». This is the
+ * word: «حسابي» shows a card naming it, and the course's old URL renders a page
+ * saying it is out of the journey now — instead of a 404.
+ */
+export const RetiredCoursesSchema = z.object({
+  courses: z.array(z.object({ id: z.string(), slug: z.string(), title: z.string() })),
+});
+
+export type RetiredCourses = z.infer<typeof RetiredCoursesSchema>;
+
 export type PathNode = z.infer<typeof PathNodeSchema>;
 export type PathCourse = z.infer<typeof PathCourseSchema>;
 export type LearningPath = z.infer<typeof LearningPathSchema>;

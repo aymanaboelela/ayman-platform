@@ -39,6 +39,7 @@ import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module
 import { AdminHonorBoardModule } from './modules/admin/honor-board/honor-board.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
 import { NewsModule } from './modules/news/news.module';
+import { PdfsModule } from './modules/pdfs/pdfs.module';
 import { PracticeModule } from './modules/practice/practice.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
@@ -162,6 +163,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     AdminHonorBoardModule,
     MarketingModule,
     NewsModule,
+    PdfsModule,
     // «اختبارات مجانية» — public practice quizzes, gated on `practice.enabled`.
     PracticeModule,
     AuditReadModule,

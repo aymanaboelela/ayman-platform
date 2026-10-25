@@ -151,11 +151,16 @@ const admin = {
     centersFinance: 'فلوس السناتر',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
-    groupTeaching: 'التدريس',
+    groupContent: 'الكورسات والمحتوى',
+    groupQuestions: 'بنك الأسئلة',
+    groupExams: 'الامتحانات والتصحيح',
+    groupStudents: 'الطلبة',
+    groupMoney: 'الفلوس والاشتراكات',
+    groupBooks: 'الكتب',
+    groupMessages: 'الرسايل والتسويق',
     groupCenters: 'السناتر',
     groupSite: 'الموقع',
     groupSystem: 'النظام',
-    groupMarketing: 'التسويق',
   },
   common: {
     create: 'إضافة',
@@ -1157,6 +1162,10 @@ const admin = {
     imagesGone: 'الصور اتمسحت بعد المراجعة — التسليم نفسه لسه متسجّل.',
     imagesExpired: 'الصور اتمسحت بعد ٣٠ يوم — التسليم نفسه لسه متسجّل.',
     yourNote: 'اللي بعتّه',
+    editGrade: 'تعديل الدرجة والرد',
+    saveEdit: 'حفظ التعديل',
+    cancelEdit: 'إلغاء',
+    noGradeGiven: 'من غير درجة',
     /** The `sr-only` sentence beside the sidebar badge. `{n}` is the count. */
     pendingBadgeLabel: '{n} حل مستني مراجعة',
 
@@ -1983,6 +1992,18 @@ const admin = {
    * the tile simply renders without one.
    */
   navBlurb: {
+    '/admin/videos': 'كل محاضرة اترفعت، ومساحتها بتكلّف كام.',
+    '/admin/pdfs': 'ملفات للتحميل المجاني، كل واحد بصفحة في جوجل ولينك لليوتيوب.',
+    '/admin/questions': 'كل أسئلة الكويزات والامتحانات — اكتب، الصق، وعدّل.',
+    '/admin/practice': 'اختبار مجاني على كل درس، من غير حساب.',
+    '/admin/games': 'أسئلة تحدّي الأسئلة والساحة.',
+    '/admin/homework': 'الواجبات اللي اتسلّمت ومستنية تصحيح.',
+    '/admin/honor-board': 'مين على لوحة الشرف، ومين يتضاف عليها.',
+    '/admin/wallet': 'دوّر على طالب، شوف رصيده، واشحنله.',
+    '/admin/wallet/requests': 'طلبات شحن المحفظة اللي مستنية قرار.',
+    '/admin/broadcast': 'رسالة واحدة توصل لطلبة كورس أو سنة.',
+    '/admin/roles': 'المساعدين وصلاحيات كل واحد.',
+    '/admin/profile': 'اسمك وصورتك وكلمة السر.',
     '/admin/exams': 'امتحانات نص الشهر وآخر الشهر — مواعيدها والدروس اللي عليها.',
     '/admin/grading': 'الأسئلة المقالية اللي مستنية درجة منك.',
     '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
@@ -3059,6 +3080,18 @@ const admin = {
    */
   /** The list filter — «مين اللي مسجّلهم مجاني؟». */
   filterStream: 'عربي / لغات',
+  /** Beside the title: how many rows the CURRENT filter holds, not the page. */
+  matchingCount: '{n} طالب',
+  /** «حفظ في جهات الاتصال» — the filtered list as a .vcf for the phone. */
+  saveContacts: 'حفظ في جهات الاتصال',
+  saveContactsBusy: 'بيجهّز الملف…',
+  saveContactsAgain: 'نزّلهم كلهم تاني',
+  saveContactsDone: 'اتجهّز ملف فيه {n} رقم جديد — افتحه وهيتضافوا لجهات الاتصال.',
+  saveContactsNothingNew: 'مفيش حد جديد — الـ{n} اللي في الفلتر ده اتحفظوا قبل كده.',
+  saveContactsEmpty: 'مفيش أرقام في الفلتر ده.',
+  saveContactsFailed: 'الملف ماتجهّزش. جرّب تاني.',
+  /** The vCard's file name, without the extension. */
+  saveContactsFile: 'طلبة',
   /** «مش متسجّل» is a real bucket, not an absence: the onboarding question
    *  postdates a lot of these profiles, and calling them عربي would be a guess
    *  the screen has no business making. */

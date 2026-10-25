@@ -147,7 +147,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           whole admin surface was authored as though `p-16` meant 16px. Every
           admin screen inherited a 96px frame from this one line.
         */}
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
+        <main className="admin-main min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
       {/* «رفع الفيديو» in the corner, on every admin screen — see `UploadDock`. */}
       <UploadDock />

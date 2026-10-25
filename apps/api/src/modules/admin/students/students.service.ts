@@ -21,6 +21,8 @@ import {
   type AdminStudentConversation,
   type AdminStudentPatch,
   type AdminStudentRow,
+  type StudentContactsExport,
+  type StudentContactsExportResult,
   expectedDeleteIdentity,
   deleteIdentityMatches,
 } from '@ayman/contracts/admin/students';
@@ -206,6 +208,26 @@ function accessFilter(access: StudentListQuery['access']): Prisma.StudentProfile
  *  other panels on a record page, not an inbox. */
 const CONVERSATION_PREVIEW_MAX = 30;
 
+/** A ceiling on one contacts file — the whole cohort is ~2,500, and a phone
+ *  importing far more than that in one sheet is not a case worth serving. */
+const CONTACT_EXPORT_MAX = 5000;
+
+/** vCard 3.0 text escaping: backslash, comma, semicolon and newlines. */
+function vcardEscape(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/[,;]/g, (char) => `\\${char}`).replace(/\r?\n/g, '\\n');
+}
+
+/**
+ * One card. `FN` and a bare `N` carry the name as written (Arabic names do not
+ * split into given/family reliably, and a wrong split sorts the contact under
+ * the father's name); `TEL;TYPE=CELL` is the stored number, already E.164.
+ * CRLF line endings — iOS's importer is the strict one.
+ */
+function toVCard(name: string, phone: string): string {
+  const fn = vcardEscape(name.trim() || phone);
+  return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${fn}`, `N:${fn};;;;`, `TEL;TYPE=CELL:${phone}`, 'END:VCARD', ''].join('\r\n');
+}
+
 @Injectable()
 export class StudentsService {
   constructor(
@@ -220,50 +242,7 @@ export class StudentsService {
     const sortKey = Object.hasOwn(STUDENT_SORT_COLUMNS, query.sort) ? query.sort : 'createdAt';
     const column = STUDENT_SORT_COLUMNS[sortKey as keyof typeof STUDENT_SORT_COLUMNS];
 
-    const foldedNames = query.q ? await this.foldedNameMatches(query.q) : [];
-
-    const where: Prisma.StudentProfileWhereInput = {
-      ...(query.q
-        ? {
-            OR: [
-              { fullName: { contains: query.q, mode: 'insensitive' } },
-              // «امجد» لـ«أمجد» — شوف `foldedNameMatches`. فاضية في الغالب،
-              // وساعتها الـwhere هو هو زي قبل الطي بالحرف.
-              ...(foldedNames.length > 0 ? [{ userId: { in: foldedNames } }] : []),
-              { phone: { contains: query.q } },
-              { user: { email: { contains: query.q, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
-      /*
-       * فلتر الدور — «الفريق» مقابل «الطلبة».
-       *
-       * `staff` هي «مش طالب» مش ليستة أدوار مكتوبة: لو اتضاف دور رابع بكرة،
-       * شاشة الفريق بتلاقيه من غير ما حد يفتكر يعدّلها. والعكس بيضمن إن قايمة
-       * الطلبة مابتعرضش المدرّس نفسه ولا مساعدينه.
-       *
-       * ⚠️ `''` بيسيب الـwhere زي ما هي — كل استدعاء موجود دلوقتي بيرجّع نفس
-       * اللي كان بيرجّعه بالحرف.
-       *
-       * ⚠️ جوّه `AND` مش مفتاح `user` على المستوى الأول: `accessFilter` تحت
-       * بيرجّع `{ user: … }` هو كمان، والـspread التاني كان بيمسح الأول —
-       * `role=student&access=paid` كان هيرجّع المساعدين اللي دافعين.
-       */
-      ...(query.role === 'staff' ? { AND: [{ user: { role: { not: 'student' } } }] } : {}),
-      ...(query.role === 'student' ? { AND: [{ user: { role: 'student' } }] } : {}),
-      ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
-      ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
-      ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),
-      /* «مش متسجّل» is `null`, which Prisma cannot express through the same
-         `equals` the other two use — hence the explicit branch rather than a
-         value passed straight through. */
-      ...(query.stream === null
-        ? {}
-        : query.stream === 'unset'
-          ? { schoolStream: null }
-          : { schoolStream: query.stream }),
-      ...accessFilter(query.access),
-    };
+    const where = await this.listWhere(query);
 
     // Count and page in one round trip. `rowCount` is the TOTAL, not the page.
     const [rowCount, records] = await this.prisma.$transaction([
@@ -358,6 +337,115 @@ export class StudentsService {
    * list that silently drops them makes a removal indistinguishable from a
    * grant that was never issued.
    */
+  /**
+   * The list screen's WHERE, shared by the table and by «حفظ في جهات الاتصال»
+   * so the file on the phone is exactly the rows the filter shows.
+   */
+  private async listWhere(
+    query: Pick<StudentListQuery, 'q' | 'role' | 'governorate' | 'year' | 'track' | 'stream' | 'access'>,
+  ): Promise<Prisma.StudentProfileWhereInput> {
+    const foldedNames = query.q ? await this.foldedNameMatches(query.q) : [];
+
+    return {
+      ...(query.q
+        ? {
+            OR: [
+              { fullName: { contains: query.q, mode: 'insensitive' } },
+              // «امجد» لـ«أمجد» — شوف `foldedNameMatches`. فاضية في الغالب،
+              // وساعتها الـwhere هو هو زي قبل الطي بالحرف.
+              ...(foldedNames.length > 0 ? [{ userId: { in: foldedNames } }] : []),
+              { phone: { contains: query.q } },
+              { user: { email: { contains: query.q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+      /*
+       * فلتر الدور — «الفريق» مقابل «الطلبة».
+       *
+       * `staff` هي «مش طالب» مش ليستة أدوار مكتوبة: لو اتضاف دور رابع بكرة،
+       * شاشة الفريق بتلاقيه من غير ما حد يفتكر يعدّلها. والعكس بيضمن إن قايمة
+       * الطلبة مابتعرضش المدرّس نفسه ولا مساعدينه.
+       *
+       * ⚠️ `''` بيسيب الـwhere زي ما هي — كل استدعاء موجود دلوقتي بيرجّع نفس
+       * اللي كان بيرجّعه بالحرف.
+       *
+       * ⚠️ جوّه `AND` مش مفتاح `user` على المستوى الأول: `accessFilter` تحت
+       * بيرجّع `{ user: … }` هو كمان، والـspread التاني كان بيمسح الأول —
+       * `role=student&access=paid` كان هيرجّع المساعدين اللي دافعين.
+       */
+      ...(query.role === 'staff' ? { AND: [{ user: { role: { not: 'student' } } }] } : {}),
+      ...(query.role === 'student' ? { AND: [{ user: { role: 'student' } }] } : {}),
+      ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
+      ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
+      ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),
+      /* «مش متسجّل» is `null`, which Prisma cannot express through the same
+         `equals` the other two use — hence the explicit branch rather than a
+         value passed straight through. */
+      ...(query.stream === null
+        ? {}
+        : query.stream === 'unset'
+          ? { schoolStream: null }
+          : { schoolStream: query.stream }),
+      ...accessFilter(query.access),
+    };
+  }
+
+  /**
+   * «حفظ في جهات الاتصال» — the filtered students as one vCard file, minus the
+   * ones this admin already exported unless `includeSaved` says otherwise.
+   *
+   * The rows are marked exported in the same call that builds the file. A
+   * download the phone then refuses leaves them marked, which is what
+   * «كل الطلبة، حتى اللي اتحفظوا» on the screen is for; the alternative — a
+   * second «اتحفظوا خلاص» round trip — is one the phone's import sheet gives
+   * no moment to send.
+   */
+  async exportContacts(
+    input: StudentContactsExport,
+    adminUserId: string,
+  ): Promise<StudentContactsExportResult> {
+    const where = await this.listWhere(input);
+    const records = await this.prisma.studentProfile.findMany({
+      where,
+      orderBy: [{ fullName: 'asc' }, { userId: 'asc' }],
+      take: CONTACT_EXPORT_MAX,
+      select: { userId: true, fullName: true, phone: true },
+    });
+
+    const withPhone = records.filter((record) => record.phone && record.phone.trim() !== '');
+    const saved = new Set(
+      (
+        await this.prisma.contactExport.findMany({
+          where: { adminUserId, studentUserId: { in: withPhone.map((record) => record.userId) } },
+          select: { studentUserId: true },
+        })
+      ).map((row) => row.studentUserId),
+    );
+    const chosen = input.includeSaved ? withPhone : withPhone.filter((record) => !saved.has(record.userId));
+
+    if (chosen.length > 0) {
+      await this.prisma.contactExport.createMany({
+        data: chosen.map((record) => ({ adminUserId, studentUserId: record.userId })),
+        skipDuplicates: true,
+      });
+    }
+
+    await this.audit.record({
+      action: 'student:export-contacts',
+      resourceType: 'student_profile',
+      resourceId: adminUserId,
+      outcome: 'success',
+      metadata: { exported: chosen.length, includeSaved: input.includeSaved },
+    });
+
+    return {
+      vcf: chosen.map((record) => toVCard(record.fullName, record.phone as string)).join(''),
+      exported: chosen.length,
+      alreadySaved: input.includeSaved ? 0 : withPhone.length - chosen.length,
+      withoutPhone: records.length - withPhone.length,
+    };
+  }
+
   async listGrants(userId: string): Promise<AdminGrantRow[]> {
     const grants = await this.prisma.accessGrant.findMany({
       where: { userId, scope: 'course' },

@@ -1377,3 +1377,181 @@ div.unit[data-open] > .unit__head:hover {
 .grade-confirm__same {
   color: var(--n-11);
 }
+
+/* ---------------------------------------------------------------------------
+   .admin-hued — one colour per sidebar block.
+
+   The sidebar was one ink for forty rows, and «التدريس» alone held twenty-
+   eight of them; it was reported as «ملخبطين جامد». The blocks are split by
+   job now (`ADMIN_NAV_GROUPS`), and each job wears a hue: on its sidebar
+   wells, on its heading's dot, on its tiles in the overview, and on the stat
+   tile that counts the same thing.
+
+   The hue is a CATEGORY MARK and only ever fills the non-interactive well and
+   the dot — the same rule `subject-art.ts` holds the course artwork to. What
+   you press stays amber.
+
+   `--g-ink` mixes (in oklab — see `neutral-mix-space.test.ts`) a mid-lightness hue toward `--n-12`, which is near-black in
+   light mode and near-white in dark, so one formula reads on both without a
+   theme block of its own.
+   --------------------------------------------------------------------------- */
+.admin-hued {
+  --g-hue: 74;
+  --g-ink: color-mix(in oklab, oklch(0.68 0.15 var(--g-hue)), var(--n-12) 14%);
+}
+
+.admin-hued[data-hue='content'] { --g-hue: 285; }
+.admin-hued[data-hue='questions'] { --g-hue: 245; }
+.admin-hued[data-hue='exams'] { --g-hue: 25; }
+.admin-hued[data-hue='students'] { --g-hue: 195; }
+.admin-hued[data-hue='money'] { --g-hue: 150; }
+.admin-hued[data-hue='books'] { --g-hue: 55; }
+.admin-hued[data-hue='messages'] { --g-hue: 330; }
+.admin-hued[data-hue='centers'] { --g-hue: 110; }
+.admin-hued[data-hue='site'] { --g-hue: 220; }
+.admin-hued[data-hue='system'] { --g-hue: 265; }
+
+.admin-hued .nav-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  color: var(--g-ink);
+}
+
+.admin-hued .nav-group__head::before {
+  content: '';
+  flex-shrink: 0;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 999px;
+  background: var(--g-ink);
+  box-shadow: 0 0 0.6rem color-mix(in oklch, var(--g-ink), transparent 40%);
+}
+
+/* The current row keeps the shared amber «you are here» from globals.css;
+   every other row's well wears its block's hue. */
+.admin-hued .nav-pill:not([aria-current]) .nav-pill__well,
+.admin-hued .section-tile__well,
+.admin-hued .stat-tile__well {
+  border-color: color-mix(in oklch, var(--g-ink), transparent 66%);
+  background: color-mix(in oklch, var(--g-ink), transparent 86%);
+  color: var(--g-ink);
+}
+
+/* Overview tiles: a wash of the block's hue from the inline-start corner, and
+   a lift on hover. */
+.admin-hued.stat-tile,
+.admin-hued .section-tile {
+  position: relative;
+  overflow: hidden;
+  background-image: radial-gradient(
+    120% 140% at 100% 0%,
+    color-mix(in oklch, var(--g-ink), transparent 88%),
+    transparent 60%
+  );
+}
+
+.admin-hued .section-tile {
+  transition:
+    transform var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.admin-hued .section-tile:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--g-ink), transparent 50%);
+  box-shadow: 0 0.75rem 1.75rem -1rem color-mix(in oklch, var(--g-ink), transparent 40%);
+}
+
+.admin-hued .section-tile:hover .section-tile__well {
+  border-color: color-mix(in oklch, var(--g-ink), transparent 40%);
+  background: color-mix(in oklch, var(--g-ink), transparent 72%);
+  color: var(--g-ink);
+}
+
+.admin-hued.stat-tile .stat-tile__value {
+  color: var(--g-ink);
+}
+
+/* ---------------------------------------------------------------------------
+   .stat-count — a number that counts up, with no JavaScript.
+
+   `--num` rests at the real value and the animation only runs FROM zero, so
+   reduced motion, or a browser without `@property`, shows the final number
+   immediately rather than a zero.
+   --------------------------------------------------------------------------- */
+@property --num {
+  syntax: '<integer>';
+  initial-value: 0;
+  inherits: false;
+}
+
+.stat-count {
+  --num: var(--to);
+  counter-reset: num var(--num);
+  animation: stat-count 1.1s var(--ease-out) both;
+}
+
+.stat-count::after {
+  content: counter(num);
+}
+
+@keyframes stat-count {
+  from {
+    --num: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   .admin-hero — the overview's title band: a coloured glow behind the title
+   instead of a bare line of text on the page background.
+   --------------------------------------------------------------------------- */
+.admin-hero {
+  position: relative;
+  isolation: isolate;
+  padding: var(--s-24);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background:
+    radial-gradient(60% 120% at 100% 0%, color-mix(in oklch, var(--a-9), transparent 82%), transparent 70%),
+    radial-gradient(50% 120% at 0% 100%, color-mix(in oklch, oklch(0.62 0.16 285), transparent 82%), transparent 70%),
+    var(--n-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Arrival — every admin screen's sections rise in, one after another.
+
+   On `main`'s direct children's children, because every admin page renders
+   ONE wrapper div into `main` and its sections sit inside that. Capped at the
+   eighth: a long list should not still be arriving a second later.
+   --------------------------------------------------------------------------- */
+@keyframes admin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+.admin-main > * > * {
+  animation: admin-rise 420ms var(--ease-out) both;
+}
+
+.admin-main > * > :nth-child(2) { animation-delay: 50ms; }
+.admin-main > * > :nth-child(3) { animation-delay: 100ms; }
+.admin-main > * > :nth-child(4) { animation-delay: 150ms; }
+.admin-main > * > :nth-child(5) { animation-delay: 200ms; }
+.admin-main > * > :nth-child(6) { animation-delay: 250ms; }
+.admin-main > * > :nth-child(7) { animation-delay: 300ms; }
+.admin-main > * > :nth-child(n + 8) { animation-delay: 350ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-main > * > *,
+  .stat-count {
+    animation: none;
+  }
+
+  .admin-hued .section-tile:hover {
+    transform: none;
+  }
+}

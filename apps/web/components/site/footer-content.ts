@@ -7,6 +7,7 @@ import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { IS_AYMAN } from '@/lib/tenant';
 import { tenantName } from '@/lib/tenant';
 import { practiceCopy } from '@ayman/contracts/copy/practice';
+import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 
 const c = copy.landing;
 
@@ -134,6 +135,9 @@ export const PAGE_LINKS = [
   // every page for the reason the rows above give, and gated with them below:
   // the sets are his curriculum (`lib/practice/catalog.ts`).
   { href: '/practice', label: practiceCopy.footerLink },
+  // «ملفات PDF» — linked from every page for the same reason as the two above:
+  // a section whose job is search must not be an orphan. Gated below.
+  { href: '/pdfs', label: pdfsCopy.footerLink },
 ] as const;
 
 export const YEAR_LINKS = [
@@ -183,7 +187,7 @@ export const ACCOUNT_LINKS = [
  * وسبب وجود الفلتر أصلًا لسه قايم: الفوتر ده على كل صفحة تسويق، فلينك ميت
  * فيه مش لينك ميت واحد — ده لينك ميت في فوتر كل صفحة.
  */
-const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links', '/practice'];
+const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links', '/practice', '/pdfs'];
 
 export function footerPageLinks(features: Entitlements): readonly FooterLink[] {
   return PAGE_LINKS.filter((link) => {

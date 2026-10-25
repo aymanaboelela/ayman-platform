@@ -44,6 +44,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
+import { PdfsModule } from '../modules/pdfs/pdfs.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
@@ -329,6 +330,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // إشعار للطالب)، وهو موجود هنا أصلاً من `OutreachModule` تحت.
         AdminHonorBoardModule,
         NewsModule,
+        // «ملفات PDF» — Ayman-only; the test process runs with no TENANT_KEY,
+        // which IS Ayman's stack, so the routes answer rather than 404.
+        PdfsModule,
         // «اختبارات مجانية» — Prisma + `AuditService` only, both already here.
         // Open in this fixture because the run has no `TENANT_KEY` (Ayman's
         // stack), where `practice.enabled` defaults on.
@@ -866,6 +870,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
     { label: 'dashboard: student', method: 'get', path: () => '/api/me/dashboard', actor: 'student', status: 200 },
     { label: 'path: student', method: 'get', path: () => '/api/me/path', actor: 'student', status: 200 },
+    { label: 'retired courses: anonymous', method: 'get', path: () => '/api/me/retired-courses', actor: 'anonymous', status: 401 },
+    { label: 'retired courses: student', method: 'get', path: () => '/api/me/retired-courses', actor: 'student', status: 200 },
     // Same self-scoped shape, but guarded by `quiz:read` rather than the
     // dashboard's own permission — so it earns its own rows instead of riding
     // on theirs. There is no id to tamper with; the session IS the identity.
@@ -1724,6 +1730,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'students list: anonymous', method: 'get', path: () => '/api/admin/students', actor: 'anonymous', status: 401 },
     { label: 'students list: student', method: 'get', path: () => '/api/admin/students', actor: 'student', status: 403 },
     { label: 'students list: admin', method: 'get', path: () => '/api/admin/students', actor: 'admin', status: 200 },
+    { label: 'students contacts export: anonymous', method: 'post', path: () => '/api/admin/students/contacts', actor: 'anonymous', status: 401, body: () => ({}) },
+    { label: 'students contacts export: student', method: 'post', path: () => '/api/admin/students/contacts', actor: 'student', status: 403, body: () => ({}) },
     { label: 'student detail: student', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student detail: admin', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'admin', status: 200 },
     // `conversation:read`, NOT `student:read` — the payload is message bodies.
@@ -1944,6 +1952,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'news publish: student', method: 'patch', path: () => `/api/admin/news/${newsPostId}/published`, actor: 'student', status: 403 },
     { label: 'news delete: anonymous', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
     { label: 'news delete: student', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+    { label: 'pdfs public list: anonymous', method: 'get', path: () => '/api/pdfs', actor: 'anonymous', status: 200 },
+    { label: 'pdfs public detail: anonymous', method: 'get', path: () => '/api/pdfs/no-such-pdf', actor: 'anonymous', status: 404 },
+    { label: 'pdfs download: anonymous, unknown', method: 'get', path: () => '/api/pdfs/no-such-pdf/download', actor: 'anonymous', status: 404 },
+    { label: 'pdfs admin list: anonymous', method: 'get', path: () => '/api/admin/pdfs', actor: 'anonymous', status: 401 },
+    { label: 'pdfs admin list: student', method: 'get', path: () => '/api/admin/pdfs', actor: 'student', status: 403 },
+    { label: 'pdfs admin list: admin', method: 'get', path: () => '/api/admin/pdfs', actor: 'admin', status: 200 },
+    { label: 'pdfs admin detail: student', method: 'get', path: () => `/api/admin/pdfs/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'pdfs create: anonymous', method: 'post', path: () => '/api/admin/pdfs', actor: 'anonymous', status: 401 },
+    { label: 'pdfs create: student', method: 'post', path: () => '/api/admin/pdfs', actor: 'student', status: 403 },
+    { label: 'pdfs patch: student', method: 'patch', path: () => `/api/admin/pdfs/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'pdfs publish: student', method: 'patch', path: () => `/api/admin/pdfs/${randomUUID()}/published`, actor: 'student', status: 403 },
+    { label: 'pdfs delete: student', method: 'delete', path: () => `/api/admin/pdfs/${randomUUID()}`, actor: 'student', status: 403 },
     // «اختبارات مجانية» — two public reads, and the admin side on the question
     // bank's own permissions (`question:read` / `question:write`).
     { label: 'practice public list: anonymous', method: 'get', path: () => '/api/practice/sets', actor: 'anonymous', status: 200 },
@@ -3110,6 +3130,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // in SQL, so a draft is unreachable rather than merely unlinked.
           'GET /api/news',
           'GET /api/news/:slug',
+          /* «ملفات PDF» — the list, a page, and the file. Published rows only
+             (WHERE-clause filter, `PdfsService`); the download is the link
+             that goes under a YouTube video, so it must need no account. */
+          'GET /api/pdfs',
+          'GET /api/pdfs/:slug',
+          'GET /api/pdfs/:slug/download',
           // «اختبارات مجانية». Reads only — grading happens in the visitor's
           // browser and nothing is written back — and the service filters
           // `published: true` in SQL, so a draft set is unreachable.

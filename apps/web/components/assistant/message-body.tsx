@@ -85,7 +85,9 @@ export function MessageBody({
   const lines = body.split('\n');
 
   return (
-    <span className={className}>
+    // `bidi-auto`: each line of a message takes its own direction, so an
+    // English question or a pasted error reads LTR (globals.css).
+    <span className={cn('bidi-auto', className)}>
       {lines.map((line, index) => {
         const card = whatsappCardFor(line);
         const course = card === null && trusted ? courseCardFor(line) : null;

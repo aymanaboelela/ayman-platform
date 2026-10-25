@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { copy, formatCopy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { MarkdownBody } from '@/components/news/markdown-body';
+import { ArticlePdfCard } from '@/components/pdfs/article-pdf-card';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsPost } from '@/lib/news';
@@ -226,6 +227,11 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
         ) : null}
 
         <MarkdownBody blocks={blocks} />
+
+        {/* «حمّل الـPDF» — straight after the body: the reader who finished the
+            article is the one who wants the file. Only a PUBLISHED PDF arrives
+            here (`NewsService.findPublicBySlug`). */}
+        {post.pdf ? <ArticlePdfCard pdf={post.pdf} /> : null}
 
         {/*
           The conversion path, and the reason this section earns its keep. An

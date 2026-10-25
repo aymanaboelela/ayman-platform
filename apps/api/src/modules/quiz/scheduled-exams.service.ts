@@ -571,7 +571,8 @@ export class ScheduledExamsService {
     const now = new Date();
 
     const enrollments = await this.prisma.enrollment.findMany({
-      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
+      // A retired (archived) course schedules nothing for anyone.
+      where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] }, course: { status: { not: 'archived' } } },
       select: { courseId: true },
     });
     const courseIds = enrollments.map((e) => e.courseId);

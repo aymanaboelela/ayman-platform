@@ -1,0 +1,612 @@
+/* ============================================================================
+   «ملفات PDF» — `/pdfs`, `/pdfs/:slug`, and the card inside an article.
+
+   One hue per KIND of file (`data-category`), the same way the admin sidebar
+   gives each block one: a ملخص is teal everywhere it appears, an امتحان red.
+   The hue is a category mark — the drawn sheet, the tag, the group heading's
+   bar — and never what you press: every button here is the site's own
+   `.site-btn`.
+
+   Mixes are `in oklab`: see `lib/neutral-mix-space.test.ts` for what oklch
+   does to a hue mixed toward a neutral.
+   ============================================================================ */
+
+[data-category] {
+  --pc-hue: 245;
+  --pc: oklch(0.64 0.16 var(--pc-hue));
+  --pc-soft: color-mix(in oklab, var(--pc), transparent 86%);
+  --pc-line: color-mix(in oklab, var(--pc), transparent 62%);
+}
+
+[data-category='book'] { --pc-hue: 285; }
+[data-category='summary'] { --pc-hue: 195; }
+[data-category='revision'] { --pc-hue: 150; }
+[data-category='exam'] { --pc-hue: 25; }
+[data-category='notes'] { --pc-hue: 55; }
+[data-category='other'] { --pc-hue: 245; }
+
+/* ── the index head ─────────────────────────────────────────────────────── */
+
+.pdf-hero {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.pdf-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 18rem at 85% 30%, color-mix(in oklab, oklch(0.64 0.16 285), transparent 82%), transparent 70%),
+    radial-gradient(36rem 16rem at 15% 70%, color-mix(in oklab, oklch(0.64 0.16 195), transparent 84%), transparent 70%);
+}
+
+.pdf-hero__eyebrow {
+  margin-block-end: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  color: var(--site-accent-text);
+}
+
+.pdf-hero__stats {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-block-start: 1.25rem;
+  font-size: 0.9375rem;
+  color: var(--site-fg-2);
+}
+
+.pdf-hero__stats span {
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-block-start: 1.75rem;
+}
+
+.pdf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--pc-line);
+  background: var(--pc-soft);
+  color: var(--site-fg);
+  font-size: 0.9375rem;
+  transition:
+    transform var(--d-hover) var(--ease-out),
+    background-color var(--d-hover) var(--ease);
+}
+
+.pdf-chip:hover {
+  transform: translateY(-1px);
+  background: color-mix(in oklab, var(--pc), transparent 76%);
+}
+
+.pdf-chip__n {
+  min-inline-size: 1.5rem;
+  padding: 0 0.375rem;
+  border-radius: var(--r-full);
+  background: var(--pc);
+  color: var(--site-on-accent);
+  font-size: 0.75rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── groups and the grid ────────────────────────────────────────────────── */
+
+.pdf-section {
+  padding-block-start: 1rem;
+}
+
+.pdf-group + .pdf-group {
+  margin-block-start: clamp(2.5rem, 5vw, 4rem);
+}
+
+.pdf-group {
+  scroll-margin-block-start: calc(var(--site-nav-h) + 1.5rem);
+}
+
+.pdf-group__title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block-end: 1.25rem;
+  font-size: clamp(1.375rem, 2.6vw, 1.875rem);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.pdf-group__title::before {
+  content: '';
+  inline-size: 0.375rem;
+  block-size: 1.5rem;
+  border-radius: var(--r-full);
+  background: var(--pc, var(--site-accent-solid));
+}
+
+.pdf-group__n {
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  color: var(--site-fg-2);
+}
+
+.pdf-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+}
+
+/* ── one card ───────────────────────────────────────────────────────────── */
+
+.pdf-card {
+  position: relative;
+  display: flex;
+  gap: 1.125rem;
+  padding: 1.125rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+  transition:
+    transform 220ms var(--ease-out),
+    box-shadow 220ms var(--ease),
+    border-color 220ms var(--ease);
+}
+
+.pdf-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--pc-line);
+  box-shadow:
+    var(--site-shadow-md),
+    0 1.25rem 2.5rem -1.5rem color-mix(in oklab, var(--pc), transparent 45%);
+}
+
+.pdf-card__sheet {
+  flex-shrink: 0;
+  inline-size: 6.5rem;
+}
+
+.pdf-card__body {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.pdf-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.pdf-tag {
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--pc-line);
+  background: var(--pc-soft);
+  color: var(--site-fg);
+  font-size: 0.75rem;
+  font-weight: var(--fw-medium);
+}
+
+.pdf-tag--plain {
+  border-color: var(--site-line);
+  background: transparent;
+  color: var(--site-fg-2);
+}
+
+.pdf-card__title {
+  margin-block-start: 0.5rem;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.pdf-card__title a:hover {
+  color: var(--site-accent-text);
+}
+
+.pdf-card__desc {
+  margin-block-start: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--site-fg-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pdf-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.875rem;
+  margin-block-start: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--site-fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-card__meta span + span::before {
+  content: '·';
+  margin-inline-end: 0.875rem;
+  color: var(--site-line-strong);
+}
+
+.pdf-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: auto;
+  padding-block-start: 0.875rem;
+}
+
+.pdf-card__btn {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+/* ── the drawn sheet ────────────────────────────────────────────────────── */
+
+.pdf-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 3 / 4;
+  inline-size: 100%;
+  overflow: hidden;
+  padding: 0.75rem 0.625rem;
+  border-radius: 0.5rem 1.25rem 0.5rem 0.5rem;
+  border: 1px solid var(--pc-line);
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--pc), transparent 72%), transparent 55%),
+    var(--site-card-2);
+  box-shadow:
+    0 0.5rem 1.25rem -0.5rem color-mix(in oklab, var(--pc), transparent 55%),
+    var(--site-shadow-sm);
+}
+
+/* The folded corner — the one shape that says «ورقة» at a glance. */
+.pdf-sheet__fold {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  background: linear-gradient(225deg, var(--site-bg) 50%, color-mix(in oklab, var(--pc), transparent 30%) 50%);
+}
+
+.pdf-sheet__kind {
+  font-size: 0.625rem;
+  font-weight: var(--fw-bold);
+  color: var(--pc);
+}
+
+.pdf-sheet__title {
+  margin-block-start: 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pdf-sheet__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-block-start: 0.625rem;
+}
+
+.pdf-sheet__lines i {
+  display: block;
+  block-size: 0.1875rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--site-fg), transparent 86%);
+}
+
+.pdf-sheet__lines i:nth-child(2) { inline-size: 80%; }
+.pdf-sheet__lines i:nth-child(3) { inline-size: 60%; }
+
+.pdf-sheet__badge {
+  position: absolute;
+  inset-block-end: 0.5rem;
+  inset-inline-start: 0.5rem;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 0.3125rem;
+  background: var(--pc);
+  color: var(--site-on-accent);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.08em;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.pdf-sheet--cover {
+  padding: 0;
+}
+
+.pdf-sheet__img {
+  object-fit: cover;
+}
+
+.pdf-sheet--hero {
+  padding: 1.75rem 1.5rem;
+  border-radius: 0.75rem 2.5rem 0.75rem 0.75rem;
+}
+
+.pdf-sheet--hero .pdf-sheet__fold {
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+}
+
+.pdf-sheet--hero .pdf-sheet__kind {
+  font-size: 0.9375rem;
+}
+
+.pdf-sheet--hero .pdf-sheet__title {
+  margin-block-start: 0.75rem;
+  font-size: 1.375rem;
+  -webkit-line-clamp: 5;
+}
+
+.pdf-sheet--hero .pdf-sheet__lines {
+  gap: 0.6rem;
+  margin-block-start: 1.5rem;
+}
+
+.pdf-sheet--hero .pdf-sheet__lines i {
+  block-size: 0.375rem;
+}
+
+.pdf-sheet--hero .pdf-sheet__badge {
+  inset-block-end: 1rem;
+  inset-inline-start: 1rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.9375rem;
+}
+
+/* ── one file's page ────────────────────────────────────────────────────── */
+
+.pdf-page {
+  position: relative;
+  isolation: isolate;
+  padding-block: calc(var(--site-nav-h) + clamp(2rem, 5vw, 4rem)) clamp(2.5rem, 5vw, 4rem);
+}
+
+.pdf-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(45rem 24rem at 80% 40%, color-mix(in oklab, var(--pc), transparent 84%), transparent 70%);
+}
+
+.pdf-page__grid {
+  display: grid;
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: center;
+}
+
+@media (min-width: 56rem) {
+  .pdf-page__grid {
+    grid-template-columns: minmax(16rem, 22rem) 1fr;
+  }
+}
+
+.pdf-page__visual {
+  max-inline-size: 22rem;
+  inline-size: 72%;
+  margin-inline: auto;
+  animation: pdf-float-in 600ms var(--ease-out) both;
+}
+
+@media (min-width: 56rem) {
+  .pdf-page__visual {
+    inline-size: 100%;
+  }
+}
+
+@keyframes pdf-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem) rotate(-2deg);
+  }
+}
+
+.pdf-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-block-end: 1rem;
+  font-size: 0.875rem;
+  color: var(--site-fg-2);
+}
+
+.pdf-page__back:hover {
+  color: var(--site-accent-text);
+}
+
+.pdf-page__title {
+  margin-block-start: 0.75rem;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  line-height: 1.3;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--site-fg);
+}
+
+.pdf-page__desc {
+  margin-block-start: 0.875rem;
+  max-inline-size: 40rem;
+  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  line-height: 1.8;
+  color: var(--site-fg-2);
+}
+
+.pdf-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.75rem;
+  max-inline-size: 36rem;
+  margin-block-start: 1.5rem;
+}
+
+.pdf-facts > div {
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+}
+
+.pdf-facts dt {
+  font-size: 0.75rem;
+  color: var(--site-fg-2);
+}
+
+.pdf-facts dd {
+  margin-block-start: 0.25rem;
+  font-size: 1.125rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 1.75rem;
+}
+
+.pdf-page__download {
+  padding: 0.875rem 1.75rem;
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+}
+
+.pdf-page__free {
+  margin-block-start: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--site-fg-2);
+}
+
+.pdf-about {
+  max-inline-size: 48rem;
+}
+
+/* `.article` carries the prose styles «عن الملف» needs, and also the page-top
+   padding that clears the fixed nav — which here is a band half-way down the
+   page, so the padding is dropped. */
+.article.pdf-about {
+  padding-block: 0;
+}
+
+.pdf-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-block-end: clamp(2.5rem, 5vw, 4rem);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line-strong);
+  background:
+    radial-gradient(30rem 12rem at 90% 0%, color-mix(in oklab, var(--site-accent-solid), transparent 80%), transparent 70%),
+    var(--site-card);
+}
+
+.pdf-cta__title {
+  font-size: 1.25rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.pdf-cta__body {
+  margin-block-start: 0.375rem;
+  color: var(--site-fg-2);
+}
+
+/* ── the card inside an article ─────────────────────────────────────────── */
+
+.pdf-inline {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  margin-block: 2rem;
+  padding: 1.25rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--pc-line);
+  background:
+    linear-gradient(120deg, var(--pc-soft), transparent 60%),
+    var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+}
+
+.pdf-inline__sheet {
+  flex-shrink: 0;
+  inline-size: 6rem;
+}
+
+.pdf-inline__body {
+  min-inline-size: 0;
+}
+
+.pdf-inline__eyebrow {
+  font-size: 0.8125rem;
+  font-weight: var(--fw-medium);
+  color: var(--pc);
+}
+
+.pdf-inline__title {
+  margin-block-start: 0.25rem;
+  font-size: 1.125rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.pdf-inline__desc {
+  margin-block-start: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--site-fg-2);
+}
+
+.pdf-inline .site-btn {
+  margin-block-start: 0.875rem;
+}
+
+@media (max-width: 30rem) {
+  .pdf-card__sheet,
+  .pdf-inline__sheet {
+    inline-size: 5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-page__visual {
+    animation: none;
+  }
+
+  .pdf-card:hover,
+  .pdf-chip:hover {
+    transform: none;
+  }
+}

@@ -9,6 +9,7 @@ import { AdminHomeworkDetailSchema } from '@ayman/contracts/homework';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { HomeworkReviewForm } from './review-form';
+import { HomeworkReviewedCard } from './reviewed-card';
 import { HomeworkImage } from './homework-image';
 import { homeworkBackHref } from '../nav';
 
@@ -222,35 +223,35 @@ export default async function AdminHomeworkDetailPage({
         )}
       </section>
 
-      {submission.reviewNote ? (
-        <section className="mt-4 rounded-xl border border-line bg-surface-3 p-4">
-          <h2 className="text-[length:var(--fs-text-sm)] font-semibold text-fg-muted">
-            {c.yourNote}
-          </h2>
-          <p className="mt-1 whitespace-pre-line text-[length:var(--fs-text-base)] text-fg">
-            {submission.reviewNote}
-          </p>
-          {submission.grade !== null ? (
-            <p className="mt-2 text-[length:var(--fs-text-base)] font-semibold text-[color:var(--ok)] tabular-nums">
-              {submission.grade} / 100
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/*
-        The form stays on a submission he has already decided, deliberately.
-        «رجع للطالب» then «مقبول» is the ordinary second half of this workflow —
-        the student redoes it, hands it in again, and the row comes back as
-        `submitted`. What is NOT offered is re-deciding an ACCEPTED one: the
-        photographs are gone, so there is nothing left to judge, and the form
-        says so instead of pretending.
-      */}
-      {submission.status === 'accepted' ? null : (
-        <HomeworkReviewForm
+      {submission.status === 'accepted' ? (
+        <HomeworkReviewedCard
           id={submission.id}
-          suggestions={submission.suggestions}
+          initialGrade={submission.grade}
+          initialNote={submission.reviewNote}
+          suggestions={submission.suggestions.accepted}
         />
+      ) : (
+        <>
+          {submission.reviewNote ? (
+            <section className="mt-4 rounded-xl border border-line bg-surface-3 p-4">
+              <h2 className="text-[length:var(--fs-text-sm)] font-semibold text-fg-muted">
+                {c.yourNote}
+              </h2>
+              <p className="mt-1 whitespace-pre-line text-[length:var(--fs-text-base)] text-fg">
+                {submission.reviewNote}
+              </p>
+              {submission.grade !== null ? (
+                <p className="mt-2 text-[length:var(--fs-text-base)] font-semibold text-[color:var(--ok)] tabular-nums">
+                  {submission.grade} / 100
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+          <HomeworkReviewForm
+            id={submission.id}
+            suggestions={submission.suggestions}
+          />
+        </>
       )}
     </>
   );

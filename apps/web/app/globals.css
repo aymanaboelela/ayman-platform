@@ -70,6 +70,38 @@
     border-color: var(--border);
   }
 
+  /*
+   * English typed into an Arabic page — «الكلام بيظهر معكوس».
+   *
+   * A field inherits `direction: rtl` from the document, so a line of English
+   * or code is laid out as an RTL paragraph: the words are in order but every
+   * neutral at an edge moves — `print("hi")` shows as `("print("hi`, a full
+   * stop jumps to the front, a list of options starts on the wrong side.
+   * `unicode-bidi: plaintext` takes each LINE's direction from its own first
+   * strong letter, so an English line is LTR and an Arabic line is still RTL,
+   * in the same field. `text-align: start` then follows that line.
+   */
+  textarea,
+  input:not([type]),
+  input[type='text'],
+  input[type='search'] {
+    unicode-bidi: plaintext;
+    text-align: start;
+  }
+
+  /*
+   * The same rule for text that is SHOWN rather than typed: question stems,
+   * options, answers, messages — anything a person wrote that may be English.
+   * Applied to the container AND its block children, because `unicode-bidi`
+   * is not inherited and every `<p>`/`<li>` is its own paragraph. `pre` is
+   * left alone: code blocks are LTR already.
+   */
+  .bidi-auto,
+  .bidi-auto :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, td, th, figcaption) {
+    unicode-bidi: plaintext;
+    text-align: start;
+  }
+
   html {
     /* Rule 2 — never `line-height: normal`. The two faces produce different
        line boxes, so every value is explicit and unitless. */
@@ -708,6 +740,19 @@
 
 .route-fade {
   animation: route-fade-in 220ms var(--ease-out) both;
+}
+
+/* The root skeleton stays invisible for its first 250ms — see `app/loading.tsx`
+   for why the landing page needs it. NOT under the reduced-motion query: this
+   is a delay, not movement, and without it the flash is back. */
+@keyframes route-skeleton-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.route-skeleton {
+  animation: route-skeleton-in 160ms ease-out 250ms both;
 }
 
 /* «ملء الشاشة» on a phone with no Fullscreen API for a <div> — the iPhone.

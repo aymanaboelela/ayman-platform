@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { RetiredCoursesSchema } from '@ayman/contracts/path';
+import { RetiredCoursePage } from '@/components/app/retired-course';
 import { ArrowRight, Clock, Layers, Play } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
@@ -40,7 +42,12 @@ export async function generateMetadata({
   // and the PUBLIC `/courses/[slug]` is the one that carries the real title,
   // the canonical and the JSON-LD. Two indexable pages for one course would
   // split its ranking between them.
-  return { ...privateRouteMetadata, title: course?.title ?? copy.course.notFound };
+  if (course) return { ...privateRouteMetadata, title: course.title };
+  // A retired course's old link renders «الكورس ده خلص دوره في رحلتك», and
+  // the tab must not say «مش موجود» above it.
+  const retired = await apiGetAuthed('/api/me/retired-courses', RetiredCoursesSchema).catch(() => null);
+  const isRetired = retired?.courses.some((entry) => entry.slug === safeDecode(slug)) ?? false;
+  return { ...privateRouteMetadata, title: isRetired ? copy.retiredCourse.pageTitle : copy.course.notFound };
 }
 
 /**
@@ -109,7 +116,23 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
     getPublicSettingsOrDefaults(),
   ]);
 
-  if (!course) notFound();
+  /*
+   * An ARCHIVED course is out of the catalog, so `getCourse` is null — but a
+   * student who was in it and opens an old link (a bookmark, a notification,
+   * the lesson player redirecting here) is told why, not handed a 404.
+   */
+  if (!course) {
+    const retired = await apiGetAuthed('/api/me/retired-courses', RetiredCoursesSchema).catch(() => null);
+    const decoded = safeDecode(slug);
+    if (retired?.courses.some((entry) => entry.slug === decoded)) {
+      return (
+        <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-10 md:px-6 md:py-16">
+          <RetiredCoursePage />
+        </main>
+      );
+    }
+    notFound();
+  }
 
   const pathCourse = path.courses.find((entry) => entry.id === course.id) ?? null;
   const outline = buildCourseOutline({ course, path: pathCourse });
@@ -406,4 +429,12 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       ) : null}
     </main>
   );
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

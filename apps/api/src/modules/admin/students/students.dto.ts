@@ -8,6 +8,7 @@ import {
   AdminStudentDeviceLimitSchema,
   AdminStudentPatchSchema,
   AdminStudentSetPasswordSchema,
+  StudentContactsExportSchema,
   StudentListQuerySchema,
 } from '@ayman/contracts/admin/students';
 import { createZodDto } from 'nestjs-zod';
@@ -19,6 +20,7 @@ import { createZodDto } from 'nestjs-zod';
  * directly would silently break the moment a filter has exactly one value.
  */
 export class StudentListQueryDto extends createZodDto(StudentListQuerySchema) {}
+export class StudentContactsExportDto extends createZodDto(StudentContactsExportSchema) {}
 export class AdminStudentPatchDto extends createZodDto(AdminStudentPatchSchema) {}
 export class AdminStudentSetPasswordDto extends createZodDto(AdminStudentSetPasswordSchema) {}
 export class AdminRoleChangeDto extends createZodDto(AdminRoleChangeSchema) {}

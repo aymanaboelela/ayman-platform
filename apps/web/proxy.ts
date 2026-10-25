@@ -134,6 +134,8 @@ export const PROTECTED_PREFIXES = [
     answer for a rail URL; `/books` stays open to everyone and is unaffected.
   */
   '/store',
+  // `/external-books` — opens with an unconditional `apiGetAuthed`.
+  '/external-books',
   /*
     `/notifications` was missing from this list until 2026-08-13, and it is the
     case the paragraph above already describes rather than a new one:

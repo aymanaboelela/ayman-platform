@@ -52,6 +52,11 @@ function makeService() {
     questionBankEntry: { count: jest.fn(async () => 0) },
     questionVersion: { count: jest.fn(async () => 0) },
     newsPost: { count: jest.fn(async () => 0) },
+    // «حفظ في جهات الاتصال» — who this admin already exported.
+    contactExport: {
+      findMany: jest.fn(async () => [] as { studentUserId: string }[]),
+      createMany: jest.fn(async () => ({ count: 0 })),
+    },
     $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
     // `list()`'s hamza-folded name match — the only raw read in the service.
     $queryRaw: jest.fn(async () => [] as { user_id: string }[]),
@@ -1312,5 +1317,54 @@ describe('StudentsService.revokeGrant', () => {
       action: 'student:revoke-course',
       metadata: expect.objectContaining({ enrollmentRevoked: true }),
     });
+  });
+});
+
+describe('StudentsService.exportContacts', () => {
+  const FILTER = { q: '', governorate: [], year: [], track: [], role: '' as const, access: null, stream: null };
+  const ROWS = [
+    { userId: 'a', fullName: 'سارة أحمد', phone: '+201000000001' },
+    { userId: 'b', fullName: 'Omar, Ali; Jr', phone: '+201000000002' },
+    { userId: 'c', fullName: 'بدون رقم', phone: null },
+  ];
+
+  it('hands over only the students this admin has not exported, and records them', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findMany.mockResolvedValueOnce(ROWS as never);
+    prisma.contactExport.findMany.mockResolvedValueOnce([{ studentUserId: 'a' }]);
+
+    const result = await service.exportContacts({ ...FILTER, includeSaved: false }, 'admin-1');
+
+    expect(result).toMatchObject({ exported: 1, alreadySaved: 1, withoutPhone: 1 });
+    expect(result.vcf).toContain('TEL;TYPE=CELL:+201000000002');
+    expect(result.vcf).not.toContain('+201000000001');
+    // vCard escaping: a comma or semicolon in a name must not split the field.
+    expect(result.vcf).toContain('FN:Omar\\, Ali\\; Jr');
+    expect(prisma.contactExport.createMany).toHaveBeenCalledWith({
+      data: [{ adminUserId: 'admin-1', studentUserId: 'b' }],
+      skipDuplicates: true,
+    });
+  });
+
+  it('writes nothing and returns an empty file when everyone was saved before', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findMany.mockResolvedValueOnce(ROWS.slice(0, 1) as never);
+    prisma.contactExport.findMany.mockResolvedValueOnce([{ studentUserId: 'a' }]);
+
+    const result = await service.exportContacts({ ...FILTER, includeSaved: false }, 'admin-1');
+
+    expect(result).toMatchObject({ vcf: '', exported: 0, alreadySaved: 1 });
+    expect(prisma.contactExport.createMany).not.toHaveBeenCalled();
+  });
+
+  it('includes the saved ones again when asked', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findMany.mockResolvedValueOnce(ROWS.slice(0, 1) as never);
+    prisma.contactExport.findMany.mockResolvedValueOnce([{ studentUserId: 'a' }]);
+
+    const result = await service.exportContacts({ ...FILTER, includeSaved: true }, 'admin-1');
+
+    expect(result.exported).toBe(1);
+    expect(result.vcf).toContain('FN:سارة أحمد');
   });
 });

@@ -2,8 +2,10 @@
 
 import { useRef } from 'react';
 import Link from 'next/link';
-import { ChevronDown, KeyRound, UserCog } from 'lucide-react';
+import { ChevronDown, GraduationCap, KeyRound, UserCog } from 'lucide-react';
 import { adminAccount } from '@ayman/contracts/copy/admin-account';
+import { copy } from '@ayman/contracts/copy/admin';
+import { aymanOnly } from '@/lib/tenant';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,6 +76,19 @@ export function AdminAccountMenu({ identity }: { identity: string | null }) {
             </p>
             <DropdownMenuSeparator className="my-1 h-px bg-line-subtle" />
           </>
+        ) : null}
+
+        {/* «الصفحة كطالب» — `/dashboard` with the admin's own session, on
+            Ayman's stack only. It sat at the top of the rail and the mobile
+            sheet; asked for here instead, beside the profile, and nowhere
+            else. */}
+        {aymanOnly(true) ? (
+          <DropdownMenuItem asChild>
+            <Link href="/dashboard">
+              <GraduationCap className="size-4 shrink-0" aria-hidden="true" />
+              {copy.admin.nav.studentView}
+            </Link>
+          </DropdownMenuItem>
         ) : null}
 
         <DropdownMenuItem asChild>

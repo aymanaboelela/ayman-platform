@@ -56,6 +56,19 @@ export class DashboardService {
       الدفعة»)، والكارت هو الحاجة الوحيدة اللي بتقول له.
     */
     const honorBoard = this.honorStandingFor(userId);
+    // Same query as `PathService.retiredFor`, started now so it overlaps the
+    // reads below — and needed on the early return too: a student whose only
+    // course was the retired one has no enrollments left to list.
+    const retiredCourses = this.prisma.enrollment
+      .findMany({
+        where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] }, course: { status: 'archived' } },
+        orderBy: [{ enrolledAt: 'asc' }, { id: 'asc' }],
+        select: { course: { select: { id: true, slug: true, title: true } } },
+      })
+      .then((rows) => rows.map((row) => row.course));
+    // In flight before anything is awaited — see `scores` below for why an
+    // unobserved rejection here would be a dead API pod, not a failed read.
+    void retiredCourses.catch(() => {});
 
     const enrollments = await this.prisma.enrollment.findMany({
       where: {
@@ -76,7 +89,15 @@ export class DashboardService {
          * still matters is done per-field below: `lastLessonId` and
          * `continueWatching` are nulled for a closed course, so nothing offers
          * a resume target the routes will refuse.
+         *
+         * ⚠️ ARCHIVED is filtered out, though — that one is not «مقفول
+         * مؤقتاً». A draft is a course being edited and coming back; an
+         * archived course is retired («يتشال خالص، ملوش دعوة بالمنهج»), and a
+         * permanently locked card on every enrolled student's home screen is
+         * the opposite of retiring it. Their attempts and marks are untouched —
+         * only the course stops being listed.
          */
+        course: { status: { not: 'archived' } },
       },
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -195,6 +216,7 @@ export class DashboardService {
       */
       void scores.catch(() => {});
       return {
+        retiredCourses: await retiredCourses,
         continueWatching: null,
         enrolledCourses: [],
         recentScores: [],
@@ -505,6 +527,7 @@ export class DashboardService {
     }
 
     return {
+      retiredCourses: await retiredCourses,
       continueWatching,
       enrolledCourses,
       recentScores: await scores,

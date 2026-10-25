@@ -15,7 +15,10 @@ import {
   AdminStudentDeviceLimitSchema,
   AdminStudentPatchSchema,
   AdminStudentSetPasswordSchema,
+  StudentContactsExportResultSchema,
+  StudentContactsExportSchema,
   type AdminStudentBulkDeleteResult,
+  type StudentContactsExportResult,
 } from '@ayman/contracts/admin/students';
 import {
   AdminManualSubscribeSchema,
@@ -654,5 +657,28 @@ export async function messageStudentAction(
       ok: false,
       message: error instanceof AdminApiError ? error.message : copy.admin.students.messageFailed,
     };
+  }
+}
+
+/**
+ * «حفظ في جهات الاتصال» — the filtered list as vCard text, which the button
+ * turns into a download. New students only unless `includeSaved`; the API
+ * records who went, so the next press skips them. See
+ * `StudentsService.exportContacts`.
+ */
+export async function exportContactsAction(
+  input: unknown,
+): Promise<({ ok: true } & StudentContactsExportResult) | { ok: false; message: string }> {
+  try {
+    const body = StudentContactsExportSchema.parse(input);
+    const result = await adminSend(
+      'POST',
+      '/api/admin/students/contacts',
+      body,
+      StudentContactsExportResultSchema,
+    );
+    return { ok: true, ...result };
+  } catch {
+    return { ok: false, message: copy.admin.students.saveContactsFailed };
   }
 }

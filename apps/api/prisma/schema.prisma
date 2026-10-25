@@ -182,6 +182,7 @@ model User {
   // is useful long after the person who asked it has gone.
   assistantQuestions         AssistantQuestion[]
   newsPosts                  NewsPost[]
+  pdfFiles                   PdfFile[]
   // التسويق — campaigns this admin wrote, and campaign messages this student
   // was queued for. Both `SetNull` on the far side: a deleted account must not
   // take the record of what went out with it, because that record is the only
@@ -254,6 +255,10 @@ model User {
   mistakeReviews             MistakeReview[]
   /// «التحديات» — كل سؤال (أو مجموعة صيغ) شافه في لعبة أو ساحة، وإمتى.
   questionExposures          QuestionExposure[]
+  /// «حفظ في جهات الاتصال» — the students this admin already took to their
+  /// phone, and (on a student) the admins whose phones hold them.
+  contactExportsMade         ContactExport[]         @relation("ContactExportAdmin")
+  contactExportsOf           ContactExport[]         @relation("ContactExportStudent")
 
   @@unique([email])
   @@map("users")
@@ -4808,9 +4813,15 @@ model NewsPost {
   author        User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
   relatedCourse Course? @relation(fields: [relatedCourseId], references: [id], onDelete: SetNull)
 
+  /// «حمّل الـPDF» — the PDF this article offers as a download card.
+  /// `SetNull`: deleting the PDF leaves the article standing.
+  pdfId String?  @map("pdf_id") @db.Uuid
+  pdf   PdfFile? @relation(fields: [pdfId], references: [id], onDelete: SetNull)
+
   /// The public list is "published, newest first" on a cacheable page, so it
   /// gets a covering index rather than a sort in memory.
   @@index([status, publishedAt(sort: Desc)])
+  @@index([pdfId])
   @@map("news_posts")
   @@schema("app")
 }
@@ -6087,5 +6098,61 @@ model ArenaStat {
 
   @@index([points(sort: Desc)])
   @@map("arena_stats")
+  @@schema("app")
+}
+
+/// «حفظ في جهات الاتصال» on `/admin/students` — one row per student an admin
+/// already exported to their phone as a vCard, so the next press hands over
+/// only the new ones. Per admin: an assistant's phone holding a student says
+/// nothing about the instructor's. See the migration's header.
+model ContactExport {
+  adminUserId   String   @map("admin_user_id")
+  studentUserId String   @map("student_user_id")
+  exportedAt    DateTime @default(now()) @map("exported_at") @db.Timestamptz(3)
+
+  admin   User @relation("ContactExportAdmin", fields: [adminUserId], references: [id], onDelete: Cascade)
+  student User @relation("ContactExportStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, studentUserId])
+  @@index([studentUserId])
+  @@map("contact_exports")
+  @@schema("app")
+}
+
+/// «ملفات PDF» — a public download with its own indexed page (`/pdfs/:slug`).
+/// Ayman's stack only. Same draft/published lifecycle as `NewsPost`, and the
+/// same CHECK that a published row carries a date. See the migration header.
+model PdfFile {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  slug        String     @unique @db.Citext
+  title       String
+  /// The card line AND the meta description — one field, like an article's
+  /// excerpt, so the two cannot drift.
+  description String
+  /// «عن الملف» — Markdown, rendered the way an article body is.
+  body        String     @default("")
+  /// book | summary | revision | exam | notes | other — CHECKed in SQL.
+  category    String
+  /// 1 / 2 بكالوريا, or null for both.
+  year        Int?       @db.SmallInt
+  coverKey    String?    @map("cover_key")
+  /// Private `doc/…` key from `/api/media/documents`. Never served directly;
+  /// `GET /api/pdfs/:slug/download` streams it.
+  fileKey     String     @map("file_key")
+  fileName    String     @map("file_name")
+  sizeBytes   Int        @map("size_bytes")
+  pageCount   Int?       @map("page_count")
+  status      NewsStatus @default(draft)
+  publishedAt DateTime?  @map("published_at")
+  downloads   Int        @default(0) @map("download_count")
+  authorId    String     @map("author_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  newsPosts NewsPost[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@map("pdf_files")
   @@schema("app")
 }

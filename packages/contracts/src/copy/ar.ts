@@ -351,6 +351,23 @@ export const copy = {
     /** The heading over `seo.instructorWhy`. A question, because that is the shape an answer gets lifted out of. */
     whyHim: 'ليه هو بالذات؟',
   },
+  /**
+   * «الكورس ده خلص دوره في رحلتك» — an ARCHIVED course a student was enrolled
+   * in. Said once on «حسابي» and again on the course's old URL, so a course
+   * leaving the list never reads as «اتمسح ومحدش قال». Warm, not apologetic:
+   * the point is that the student loses nothing and has less to carry.
+   */
+  retiredCourse: {
+    eyebrow: 'تحديث في رحلتك',
+    title: '«{course}» خلص دوره في رحلتك',
+    pageTitle: 'الكورس ده خلص دوره في رحلتك',
+    body: 'المنهج هو اللي بيدخل الامتحان، فشلنا الكورس ده من رحلتك عشان وقتك كله يروح في المكان الصح.',
+    kept: 'أي امتحان اتحل فيه ودرجته محفوظين زي ما هما.',
+    points: ['وقت أقل على حاجات مش في الامتحان', 'تركيز كامل على كورس صفّك', 'درجاتك القديمة محفوظة'],
+    cta: 'كمّل مساري',
+    secondary: 'كورساتي',
+    dismiss: 'تمام، فهمت',
+  },
   nav: {
     home: 'الرئيسية',
     courses: 'الكورسات',
@@ -364,6 +381,8 @@ export const copy = {
     essentials: 'التأسيس',
     /** «قسم الكتب» — the shop, in the student's rail and the mobile sheet. */
     books: 'الكتب',
+    /** «الكتب الخارجية» — question banks on outside books, every course at once. */
+    externalBooks: 'الكتب الخارجية',
     playground: 'تجربة الكود',
     /** «كود الكورس» — where a code bought on WhatsApp gets typed in. */
     unlockCodes: 'كود الكورس',

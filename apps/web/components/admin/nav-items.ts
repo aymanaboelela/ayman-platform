@@ -43,10 +43,12 @@ import {
   Library,
   PiggyBank,
   BanknoteArrowUp,
+  FileDown,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminPractice } from '@ayman/contracts/copy/admin-practice';
+import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -61,7 +63,18 @@ import { IS_AYMAN } from '@/lib/tenant';
  * renders above the headings, because it is the destination the crumb trail
  * always starts from rather than a peer of the sections.
  */
-export type AdminNavGroup = 'overview' | 'teaching' | 'centers' | 'marketing' | 'site' | 'system';
+export type AdminNavGroup =
+  | 'overview'
+  | 'content'
+  | 'questions'
+  | 'exams'
+  | 'students'
+  | 'money'
+  | 'books'
+  | 'messages'
+  | 'centers'
+  | 'site'
+  | 'system';
 
 export interface AdminNavItem {
   href: string;
@@ -141,7 +154,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     // whose session reached this component. The route itself requires
     // `course:read-admin`; the sidebar must ask for the same thing.
     permission: 'course:read-admin',
-    group: 'teaching',
+    group: 'content',
   },
   {
     // «الفيديوهات» — every uploaded lecture and what storing it costs. Same
@@ -152,14 +165,14 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Film,
     permission: 'course:read-admin',
     feature: 'video.upload',
-    group: 'teaching',
+    group: 'content',
   },
   {
     href: '/admin/students',
     labelAr: copy.admin.nav.students,
     icon: Users,
     permission: 'student:read',
-    group: 'teaching',
+    group: 'students',
   },
   {
     // Vodafone Cash review queue. Beside «الطلبة»: it is a per-student
@@ -170,7 +183,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.payments,
     icon: Wallet,
     permission: 'payment:read',
-    group: 'teaching',
+    group: 'money',
   },
   {
     // «التحويلات الواردة» — the evidence behind the queue above it. Its own
@@ -183,7 +196,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: ArrowDownLeft,
     permission: 'payment:read',
     feature: 'transfers',
-    group: 'teaching',
+    group: 'money',
   },
   {
     // «الاشتراكات والإيرادات» — directly under the review queue: `payments`
@@ -194,7 +207,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.finance,
     icon: Coins,
     permission: 'payment:read',
-    group: 'teaching',
+    group: 'money',
   },
   {
     // «أكواد الفتح» — under the money pair because it IS a sale, just one
@@ -206,7 +219,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.unlockCodes,
     icon: TicketCheck,
     permission: 'payment:read',
-    group: 'teaching',
+    group: 'money',
   },
   {
     // «شحن المحفظة» — find a student, see the balance, put money in (or take
@@ -218,7 +231,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.wallet,
     icon: PiggyBank,
     permission: 'payment:read',
-    group: 'teaching',
+    group: 'money',
   },
   {
     // «طلبات الشحن» — the live queue of InstaPay / Vodafone Cash top-ups, with
@@ -228,7 +241,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.walletRequests,
     icon: BanknoteArrowUp,
     permission: 'payment:read',
-    group: 'teaching',
+    group: 'money',
   },
   {
     // «الكتب» — the shelf: every title, its cover, its course, its term and
@@ -245,7 +258,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: LibraryBig,
     permission: 'book:read',
     feature: 'books',
-    group: 'teaching',
+    group: 'books',
   },
   {
     // الكتاب الورقي — a shipping queue, same shape as the payment review
@@ -256,7 +269,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: PackageOpen,
     permission: 'book-order:read',
     feature: 'books',
-    group: 'teaching',
+    group: 'books',
   },
   {
     // الواجب — the review queue. Beside «أوراق الامتحانات» because the two are
@@ -268,7 +281,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: NotebookPen,
     permission: 'homework:read',
     feature: 'homework',
-    group: 'teaching',
+    group: 'exams',
   },
   {
     // «ركن الأسئلة» — بنك الأسئلة. The page has existed since the quiz engine
@@ -282,7 +295,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.questions,
     icon: FileQuestion,
     permission: 'question:write',
-    group: 'teaching',
+    group: 'questions',
   },
   {
     // «اختبارات مجانية» — the public no-account self-test per lesson. Right
@@ -296,7 +309,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: adminPractice.nav,
     icon: ClipboardCheck,
     permission: 'question:write',
-    group: 'teaching',
+    group: 'questions',
   },
   {
     // امتحانات الشهر — and the ONLY door to a monthly exam. `LESSON_KINDS` in
@@ -315,7 +328,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: CalendarClock,
     permission: 'quiz:write',
     feature: 'exams',
-    group: 'teaching',
+    group: 'exams',
   },
   {
     // تصحيح الورق — the essay queue. Directly under «امتحانات الشهر» because it
@@ -331,7 +344,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.grading,
     icon: SquarePen,
     permission: 'attempt:grade',
-    group: 'teaching',
+    group: 'exams',
   },
   {
     // لوحة الشرف — تحت التصحيح مباشرة، وده مقصود: الورقة بتتثبّت من الشاشة
@@ -345,7 +358,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Trophy,
     permission: 'honor:read',
     feature: 'honorBoard',
-    group: 'teaching',
+    group: 'students',
   },
   {
     // «أسئلة الألعاب» — `quizGame` مقفولة افتراضيًا على أي ستاك غير أيمن،
@@ -355,7 +368,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Gamepad2,
     permission: 'question:write',
     feature: 'quizGame',
-    group: 'teaching',
+    group: 'questions',
   },
   {
     // «أسئلة كتب خارجية» — نفس `question:write` بالظبط، زي «أسئلة الألعاب»
@@ -364,14 +377,14 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.questionBooks,
     icon: Library,
     permission: 'question:write',
-    group: 'teaching',
+    group: 'questions',
   },
   {
     href: '/admin/attempts',
     labelAr: copy.admin.nav.attempts,
     icon: ClipboardList,
     permission: 'attempt:read',
-    group: 'teaching',
+    group: 'exams',
   },
   {
     // `analytics:read` — the same permission the per-quiz item analysis
@@ -382,7 +395,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.analytics.title,
     icon: ChartColumn,
     permission: 'analytics:read',
-    group: 'teaching',
+    group: 'students',
   },
   {
     // «الأوائل» — تحت التحليلات مباشرة وبنفس صلاحيتها: الاتنين قراية على
@@ -396,7 +409,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.leaderboard,
     icon: Medal,
     permission: 'analytics:read',
-    group: 'teaching',
+    group: 'students',
   },
   {
     // المساعد's inbox. In `teaching`, not `system`: it is student contact,
@@ -407,7 +420,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Inbox,
     permission: 'conversation:read',
     feature: 'assistant',
-    group: 'teaching',
+    group: 'messages',
   },
   {
     // «رسايل م. أيمن». Directly under the inbox because the two screens are
@@ -418,7 +431,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.outreach,
     icon: Send,
     permission: 'outreach:read',
-    group: 'teaching',
+    group: 'messages',
   },
   {
     // The one deliberate exception to «مفيش زرار إرسال للكل» — its own link,
@@ -435,7 +448,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: MessagesSquare,
     permission: 'conversation:reply',
     feature: 'broadcast',
-    group: 'teaching',
+    group: 'messages',
   },
   {
     // «متابعة الطلبة» — between the log and the send button, because it is the
@@ -447,14 +460,14 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.followUp,
     icon: UserRoundSearch,
     permission: 'student:read',
-    group: 'teaching',
+    group: 'students',
   },
   {
     href: '/admin/taxonomy',
     labelAr: copy.admin.nav.taxonomy,
     icon: GraduationCap,
     permission: 'taxonomy:read',
-    group: 'teaching',
+    group: 'content',
   },
 
   {
@@ -502,7 +515,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Megaphone,
     permission: 'marketing:read',
     feature: 'marketing.whatsapp',
-    group: 'marketing',
+    group: 'messages',
   },
 
   {
@@ -544,6 +557,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Newspaper,
     permission: 'news:read',
     group: 'site',
+  },
+  {
+    // «ملفات PDF» — public downloads with their own indexed page. Beside the
+    // articles and on their permissions: the same kind of published content,
+    // by the same people. Ayman's stack only (the API 404s it elsewhere).
+    href: '/admin/pdfs',
+    labelAr: pdfsCopy.admin.title,
+    icon: FileDown,
+    permission: 'news:read',
+    group: 'site',
+    aymanOnly: true,
   },
   {
     // «المساعد يقدر يعمل إيه». في `system` جنب الفلاجات وسجل التدقيق: التلاتة
@@ -614,12 +638,24 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
 ] as const;
 
-/** Render order of the sidebar blocks, and the heading each one carries. */
+/**
+ * Render order of the sidebar blocks, and the heading each one carries.
+ *
+ * «التدريس» used to hold 28 of the 40 rows — courses, money, books, exams and
+ * messages in one run — and the owner could not find anything in it. Each
+ * block is now one job: what you teach, what you ask, what comes back to be
+ * marked, who the students are, the money, the books, and the messages.
+ */
 export const ADMIN_NAV_GROUPS: readonly { id: AdminNavGroup; labelAr: string | null }[] = [
   { id: 'overview', labelAr: null },
-  { id: 'teaching', labelAr: copy.admin.nav.groupTeaching },
+  { id: 'content', labelAr: copy.admin.nav.groupContent },
+  { id: 'questions', labelAr: copy.admin.nav.groupQuestions },
+  { id: 'exams', labelAr: copy.admin.nav.groupExams },
+  { id: 'students', labelAr: copy.admin.nav.groupStudents },
+  { id: 'money', labelAr: copy.admin.nav.groupMoney },
+  { id: 'books', labelAr: copy.admin.nav.groupBooks },
+  { id: 'messages', labelAr: copy.admin.nav.groupMessages },
   { id: 'centers', labelAr: copy.admin.nav.groupCenters },
-  { id: 'marketing', labelAr: copy.admin.nav.groupMarketing },
   { id: 'site', labelAr: copy.admin.nav.groupSite },
   { id: 'system', labelAr: copy.admin.nav.groupSystem },
 ] as const;

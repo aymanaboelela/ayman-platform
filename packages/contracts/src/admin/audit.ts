@@ -163,6 +163,8 @@ export const AUDIT_ACTIONS = [
   'taxonomy:update',
   'taxonomy:archive',
   'student:update',
+  /** «حفظ في جهات الاتصال» — phone numbers leaving the platform in bulk. */
+  'student:export-contacts',
   'student:role-change',
   /**
    * حظر ورفع الحظر — three separate actions and not one `student:access`
@@ -235,6 +237,11 @@ export const AUDIT_ACTIONS = [
   'news:publish',
   'news:unpublish',
   'news:delete',
+  'pdf:create',
+  'pdf:update',
+  'pdf:publish',
+  'pdf:unpublish',
+  'pdf:delete',
   /**
    * التسويق — outbound WhatsApp.
    *

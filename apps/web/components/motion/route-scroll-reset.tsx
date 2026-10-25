@@ -231,7 +231,7 @@ export function shouldResetScroll({
  * Next's own test, restated: scroll only if the top of the new page is NOT in
  * the viewport. `pageTop` is the page's `<main>` measured against the
  * viewport, or `null` when there is none on screen yet (a skeleton is not a
- * landmark — see `(site)/loading.tsx`), in which case any offset at all means
+ * landmark — see `app/loading.tsx`), in which case any offset at all means
  * the reader is not looking at the start of it.
  */
 export function isPageTopOffscreen(
