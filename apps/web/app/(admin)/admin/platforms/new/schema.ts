@@ -75,7 +75,7 @@ export const ProvisionRequestSchema = z
       .regex(TENANT_KEY_PATTERN, c.errKey)
       .refine((value) => !RESERVED_KEYS.has(value), c.errKeyReserved),
     /** The landing look on day one — `contracts/admin/tenant-branding.ts`. */
-    landingPreset: z.enum(['classic', 'board', 'studio', 'neon']),
+    landingPreset: z.enum(['classic', 'board', 'studio', 'neon', 'ruqaa', 'kurrasa', 'taif']),
     accent: z.enum(ACCENT_SLOTS),
     /** Same shape as the signing form's, for the reason written there. */
     features: z.record(z.string(), z.boolean()),

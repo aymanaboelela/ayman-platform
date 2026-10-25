@@ -292,3 +292,48 @@ export const cairo = localFont({
    */
   adjustFontFallback: false,
 });
+
+/*
+ * The three kit presets' display faces — «الرقعة», «الكرّاسة», «الطيف».
+ *
+ * Headlines only: body text on every preset stays Plex Arabic. Applied the
+ * way `cairo` is, on the preset's own root (`<main data-preset>` and its
+ * footer) and never on <html>, so a stack on another preset never references
+ * the family and the browser never downloads it. `preload: false` for the
+ * same reason — a preload is a download on every route of every stack.
+ *
+ * Ruqaa is the hand Egyptian students are taught to write in school, which is
+ * why it heads the calligraphic preset rather than a Naskh or a Kufi.
+ */
+export const ruqaa = localFont({
+  src: [
+    { path: '../node_modules/@fontsource/aref-ruqaa/files/aref-ruqaa-arabic-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../node_modules/@fontsource/aref-ruqaa/files/aref-ruqaa-arabic-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-ruqaa',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});
+
+export const marhey = localFont({
+  src: [
+    { path: '../node_modules/@fontsource/marhey/files/marhey-arabic-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../node_modules/@fontsource/marhey/files/marhey-arabic-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-marhey',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});
+
+export const readex = localFont({
+  src: [
+    { path: '../node_modules/@fontsource/readex-pro/files/readex-pro-arabic-200-normal.woff2', weight: '200', style: 'normal' },
+    { path: '../node_modules/@fontsource/readex-pro/files/readex-pro-arabic-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-readex',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});

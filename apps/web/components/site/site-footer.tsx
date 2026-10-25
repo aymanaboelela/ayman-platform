@@ -112,6 +112,21 @@ export async function SiteFooter() {
     return <StudioFooter content={footerContent({ contact, features })} />;
   }
 
+  if (branding.landingPreset === 'ruqaa') {
+    const { default: RuqaaFooter } = await import('@/components/site/presets/ruqaa/ruqaa-footer');
+    return <RuqaaFooter content={footerContent({ contact, features })} />;
+  }
+
+  if (branding.landingPreset === 'kurrasa') {
+    const { default: KurrasaFooter } = await import('@/components/site/presets/kurrasa/kurrasa-footer');
+    return <KurrasaFooter content={footerContent({ contact, features })} />;
+  }
+
+  if (branding.landingPreset === 'taif') {
+    const { default: TaifFooter } = await import('@/components/site/presets/taif/taif-footer');
+    return <TaifFooter content={footerContent({ contact, features })} />;
+  }
+
   return (
     <footer className="site-footer">
       <div className="site-footer__glow" aria-hidden="true" />

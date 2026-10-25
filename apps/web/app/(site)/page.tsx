@@ -184,6 +184,24 @@ export default async function HomePage() {
     return <StudioLanding blocks={blocks} honorBoard={honorBoard} />;
   }
 
+  // The three kit presets — one shared section kit (`presets/kit/`), three
+  // looks. Each still gets its own folder and its own dynamic import, so the
+  // guard above holds for every preset by name.
+  if (branding.landingPreset === 'ruqaa') {
+    const { default: RuqaaLanding } = await import('@/components/site/presets/ruqaa/ruqaa-landing');
+    return <RuqaaLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
+  if (branding.landingPreset === 'kurrasa') {
+    const { default: KurrasaLanding } = await import('@/components/site/presets/kurrasa/kurrasa-landing');
+    return <KurrasaLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
+  if (branding.landingPreset === 'taif') {
+    const { default: TaifLanding } = await import('@/components/site/presets/taif/taif-landing');
+    return <TaifLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
   /*
    * The page's SHAPE, chosen per instructor from /admin/settings.
    *
