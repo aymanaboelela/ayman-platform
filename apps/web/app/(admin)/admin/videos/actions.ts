@@ -75,3 +75,30 @@ export async function restoreVideoAction(videoId: string, lessonId: string): Pro
   revalidatePath('/admin/videos');
   return { ok: true };
 }
+
+/**
+ * «ارفع فيديو» — the holding lesson a library upload goes into. The upload
+ * itself then runs through the lesson routes like any other (`startUpload`),
+ * so the dock in the corner shows it and a closed tab can resume it.
+ */
+export async function createUploadSlotAction(
+  title: string,
+): Promise<{ ok: true; courseId: string; lessonId: string } | { ok: false; message: string }> {
+  try {
+    const slot = await adminSend(
+      'POST',
+      '/api/admin/videos/upload-slot',
+      { title },
+      z.object({ courseId: z.string(), lessonId: z.string() }),
+    );
+    revalidatePath('/admin/videos');
+    return { ok: true, ...slot };
+  } catch (error) {
+    const body = error instanceof AdminApiError ? error.payload : null;
+    const message =
+      body !== null && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
+        ? body.message
+        : '';
+    return { ok: false, message: /[؀-ۿ]/.test(message) ? message : copy.admin.videos.uploadFailed };
+  }
+}

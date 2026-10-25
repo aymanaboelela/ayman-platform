@@ -1607,6 +1607,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'video key: student, not theirs', method: 'get', path: () => `/api/videos/${'a'.repeat(32)}/key`, actor: 'student', status: 404 },
     { label: 'admin video library list: anonymous', method: 'get', path: () => `/api/admin/videos`, actor: 'anonymous', status: 401 },
     { label: 'admin video library list: student', method: 'get', path: () => `/api/admin/videos`, actor: 'student', status: 403 },
+    { label: 'admin video upload slot: anonymous', method: 'post', path: () => `/api/admin/videos/upload-slot`, actor: 'anonymous', status: 401, body: () => ({ title: 'x' }) },
+    { label: 'admin video upload slot: student', method: 'post', path: () => `/api/admin/videos/upload-slot`, actor: 'student', status: 403, body: () => ({ title: 'x' }) },
     { label: 'admin video library delete: anonymous', method: 'delete', path: () => `/api/admin/videos/${'a'.repeat(32)}`, actor: 'anonymous', status: 401 },
     { label: 'admin video library delete: student', method: 'delete', path: () => `/api/admin/videos/${'a'.repeat(32)}`, actor: 'student', status: 403 },
     { label: 'admin video library restore: anonymous', method: 'post', path: () => `/api/admin/videos/${'a'.repeat(32)}/restore`, actor: 'anonymous', status: 401, body: () => ({ lessonId: scratchLessonId }) },

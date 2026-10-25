@@ -6048,6 +6048,17 @@ const admin = {
    * paid for nothing, and the delete says plainly that it cannot be undone.
    */
   videos: {
+    /** «ارفع فيديو» — upload here first, put it on a lecture later. */
+    upload: 'ارفع فيديو',
+    uploadHint: 'ارفع الفيديو هنا، ولما يخلص تجهيزه هيتنقل لـ«محفوظة» وتحطه في أي محاضرة.',
+    uploadStarted: 'بيترفع — هتلاقيه تحت. لما يخلص تجهيزه هيتنقل لـ«محفوظة».',
+    uploadFailed: 'الرفع مابدأش. جرّب تاني.',
+    uploadTooBig: 'الفيديو أكبر من المسموح.',
+    uploadWrongType: 'ده مش ملف فيديو.',
+    libraryUpload: 'رفع مباشر — لسه مش في محاضرة',
+    /** «شغّل» — watch any video on this screen. */
+    play: 'شغّل',
+    playTitle: 'مشاهدة الفيديو',
     eyebrow: 'المحتوى',
     title: 'الفيديوهات',
     subtitle: 'كل فيديو اترفع على المنصة، حجمه قد إيه، وفي أنهي محاضرة.',

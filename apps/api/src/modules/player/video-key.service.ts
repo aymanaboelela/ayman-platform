@@ -54,6 +54,18 @@ export class VideoKeyService {
             select: { lessonId: true },
           });
     const rows = [...lectures, ...materials.map(({ lessonId }) => ({ lessonId, encrypted: true }))];
+    /*
+     * A video in «محفوظة» is on no lesson, so no student can reach it — but the
+     * admin previews it from «الفيديوهات» (`PlayVideoButton`) before putting
+     * it on one. Admin only, same permission as the branch below.
+     */
+    if (
+      rows.length === 0 &&
+      userHasPermission(user.id, user.role, 'course:read-admin') &&
+      (await this.prisma.archivedVideo.count({ where: { externalId: videoId } })) > 0
+    ) {
+      return this.mirror.videoKey(videoId);
+    }
     if (rows.length === 0) throw new NotFoundException('video not found');
     // Defense in depth — a plain mirror's manifest never has `#EXT-X-KEY`, so
     // hls.js never calls this route for one in practice. A probe that asks

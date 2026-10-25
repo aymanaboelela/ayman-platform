@@ -112,8 +112,11 @@ function build(options: {
             }
           : null;
       },
-      findMany: async (args: { where?: { provider?: string; externalId?: string; mirrorStatus?: string } }) =>
+      findMany: async (args: { where?: { provider?: string; externalId?: string; mirrorStatus?: string; lesson?: unknown } }) =>
         rows
+          // The library-uploads sweep asks for rows in the hidden holding
+          // course; none of these fixture rows live there.
+          .filter(() => args.where?.lesson === undefined)
           .filter((row) => args.where?.provider === undefined || row.provider === args.where.provider)
           .filter((row) => args.where?.mirrorStatus === undefined || row.mirrorStatus === args.where.mirrorStatus)
           .filter((row) => args.where?.externalId === undefined || row.externalId === args.where.externalId)

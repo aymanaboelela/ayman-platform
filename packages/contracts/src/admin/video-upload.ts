@@ -222,6 +222,9 @@ export const VideoLibraryItemSchema = z.object({
   courseId: z.string(),
   courseTitle: z.string(),
   sectionTitle: z.string(),
+  /** A «ارفع فيديو» upload still in its holding lesson — no lecture to open
+   *  yet. Optional so a newer web parses an older API during a deploy. */
+  library: z.boolean().optional(),
 });
 export type VideoLibraryItem = z.infer<typeof VideoLibraryItemSchema>;
 
@@ -309,6 +312,24 @@ export type ReusableVideos = z.infer<typeof ReusableVideosSchema>;
 
 export const VideoAttachSchema = z.object({ lessonId: z.uuid() }).strict();
 export type VideoAttach = z.infer<typeof VideoAttachSchema>;
+
+/* ── «ارفع فيديو» من صفحة الفيديوهات ──────────────────────────────────────
+ *
+ * Upload first, put it on a lecture later. The upload pipeline is built around
+ * a lesson row (the session, the encode, the progress all live on
+ * `lesson_videos`), so a library upload gets a lesson of its own — in ONE
+ * hidden course, `VIDEO_LIBRARY_COURSE_SLUG`, archived so no student list can
+ * ever show it. When the encode finishes, the video moves to «محفوظة» and the
+ * holding lesson is deleted; from there «رجّعه لمحاضرة» puts it on any lesson.
+ * See `VideoLibraryService.createUploadSlot`.
+ */
+export const VIDEO_LIBRARY_COURSE_SLUG = 'video-library-uploads';
+
+export const VideoUploadSlotSchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
+export type VideoUploadSlot = z.infer<typeof VideoUploadSlotSchema>;
+
+export const VideoUploadSlotResultSchema = z.object({ courseId: z.uuid(), lessonId: z.uuid() });
+export type VideoUploadSlotResult = z.infer<typeof VideoUploadSlotResultSchema>;
 
 /* ── «رفع فيديو» جوّه مواد الدرس ──────────────────────────────────────────
  *

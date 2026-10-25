@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { VIDEO_LIBRARY_COURSE_SLUG } from '@ayman/contracts/admin/video-upload';
 import type {
   CourseCreateInput,
   CourseUpdateInput,
@@ -915,6 +916,9 @@ export class CourseService {
   list(filter: { sort?: CourseListSort; status?: CourseStatus; q?: string } = {}) {
     return this.prisma.course.findMany({
       where: {
+        // The hidden holder of library uploads is not a course anyone teaches
+        // or opens — see `VIDEO_LIBRARY_COURSE_SLUG`.
+        slug: { not: VIDEO_LIBRARY_COURSE_SLUG },
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.q
           ? {
