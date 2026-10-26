@@ -1,0 +1,365 @@
+/* =============================================================================
+   «المتراكم» — `/backlog`.
+
+   نفس لغة «مساري» (`components/path/path.css`): هيرو بجريدينت من طبقة الـviz،
+   بس دافي (كهرماني ← وردي) لأن الصفحة دي «في حاجة مستنياك» مش «إنت فين».
+
+   كل نوع ليه لون واحد في الشاشة كلها — الكارت اللي فوق، أيقونة السطر، والزرار:
+   محاضرة أزرق، كويز بنفسجي، امتحان وردي، واجب تركواز. `--k` هو اللي بيتقري.
+   ========================================================================== */
+
+.bl-tile[data-tile='all'] { --k: var(--viz-1); }
+.bl-tile[data-tile='lectures'],
+.bl-row[data-kind='lecture'] { --k: var(--viz-5); }
+.bl-tile[data-tile='quizzes'],
+.bl-row[data-kind='quiz'] { --k: var(--viz-3); }
+.bl-row[data-kind='exam'] { --k: var(--viz-4); }
+.bl-tile[data-tile='homework'],
+.bl-row[data-kind='homework'] { --k: var(--viz-2); }
+
+/* ── الهيرو ─────────────────────────────────────────────────────────────── */
+.bl-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 1.5rem 1.25rem 1.75rem;
+  border-radius: var(--r-lg);
+  color: #fff;
+  background:
+    radial-gradient(90% 90% at 100% 0%, color-mix(in oklab, var(--viz-1) 75%, transparent) 0%, transparent 60%),
+    radial-gradient(80% 90% at 0% 100%, color-mix(in oklab, var(--viz-3) 55%, transparent) 0%, transparent 62%),
+    linear-gradient(135deg, var(--viz-4) 0%, var(--viz-3) 100%);
+  box-shadow: var(--shadow-md);
+}
+@media (min-width: 768px) {
+  .bl-hero { padding: 2rem 2.5rem; }
+}
+.bl-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgb(255 255 255 / 0.16) 1px, transparent 1.5px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 90%);
+}
+.bl-hero__shapes { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.bl-shape { position: absolute; display: block; }
+.bl-shape--ring {
+  inset-block-start: -3rem;
+  inset-inline-end: 8%;
+  width: 9rem;
+  height: 9rem;
+  border-radius: 50%;
+  border: 14px solid rgb(255 255 255 / 0.12);
+}
+.bl-shape--blob {
+  inset-block-end: -5rem;
+  inset-inline-end: -3rem;
+  width: 14rem;
+  height: 14rem;
+  border-radius: 42% 58% 60% 40% / 45% 40% 60% 55%;
+  background: color-mix(in oklab, var(--viz-1) 40%, transparent);
+}
+.bl-hero__pill,
+.bl-hero__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.bl-hero__pill {
+  background: rgb(255 255 255 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  backdrop-filter: blur(6px);
+}
+.bl-hero__chip {
+  margin-top: 1rem;
+  background: rgb(0 0 0 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.22);
+}
+.bl-hero__total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.85rem;
+  margin-top: 0.75rem;
+}
+/* رقم جوّه صفحة عربي: معزول عشان مايتقلبش مع اللي جنبه. */
+.bl-hero__num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: clamp(3.5rem, 11vw, 5.5rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+.bl-hero__label {
+  font-size: clamp(1.25rem, 3.5vw, 1.75rem);
+  font-weight: var(--fw-bold);
+}
+
+/* ── الكروت = الفلتر ────────────────────────────────────────────────────── */
+.bl-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-block: 1.25rem 2rem;
+}
+@media (min-width: 768px) {
+  .bl-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+}
+.bl-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'icon n' 'icon label';
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1.5px solid color-mix(in oklab, var(--k) 28%, var(--color-line));
+  background: color-mix(in oklab, var(--k) 8%, var(--color-surface-1));
+  color: var(--color-fg);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    transform var(--d-hover) var(--ease-out),
+    background-color var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out),
+    box-shadow var(--d-hover) var(--ease-out);
+}
+.bl-tile:hover { border-color: var(--k); box-shadow: var(--shadow-sm); }
+.bl-tile[aria-pressed='true'] {
+  background: var(--k);
+  border-color: var(--k);
+  color: #fff;
+  box-shadow: 0 8px 22px -10px var(--k);
+}
+.bl-tile:focus-visible { outline: 2px solid var(--k); outline-offset: 2px; }
+.bl-tile__icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-full);
+  background: var(--k);
+  color: #fff;
+}
+.bl-tile[aria-pressed='true'] .bl-tile__icon { background: rgb(255 255 255 / 0.22); }
+.bl-tile__n {
+  grid-area: n;
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+  justify-self: start;
+}
+.bl-tile__label {
+  grid-area: label;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg-muted);
+}
+.bl-tile[aria-pressed='true'] .bl-tile__label { color: rgb(255 255 255 / 0.85); }
+
+/* ── كارت الكورس ────────────────────────────────────────────────────────── */
+/* `minmax(0, 1fr)`, not the implicit `auto` track: an implicit column is never
+   narrower than its widest row's min-content, so on a phone the rows hung off
+   the inline start with their buttons cut — the same trap `(app)/path/page.tsx`
+   documents. */
+.bl-courses { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+.bl-course {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+  box-shadow: var(--shadow-sm);
+}
+.bl-course__head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-block-end: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+}
+.bl-course__art {
+  position: relative;
+  display: none;
+  flex-shrink: 0;
+  width: 5rem;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--r-md);
+}
+@media (min-width: 640px) {
+  .bl-course__art { display: block; }
+}
+.bl-course__title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.bl-course__count {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--viz-4) 14%, transparent);
+  color: color-mix(in oklab, var(--viz-4), var(--color-fg) 35%);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.bl-course__open {
+  flex-shrink: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--color-fg-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.bl-course__open:hover { color: var(--color-fg); }
+
+/* ── السطر ─────────────────────────────────────────────────────────────── */
+.bl-rows { display: grid; grid-template-columns: minmax(0, 1fr); }
+.bl-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.8rem 1rem;
+  border-inline-start: 4px solid var(--k);
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+.bl-row + .bl-row { border-block-start: 1px solid var(--color-line); }
+.bl-row:hover { background: color-mix(in oklab, var(--k) 6%, transparent); }
+.bl-row__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--k) 15%, transparent);
+  color: var(--k);
+}
+.bl-row__title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.5;
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.bl-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+  font-size: var(--fs-text-xs);
+}
+.bl-row__kind { font-weight: var(--fw-semibold); color: var(--k); }
+.bl-row__status {
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--color-surface-2);
+  color: var(--color-fg-muted);
+}
+.bl-row__status[data-status='in_progress'],
+.bl-row__status[data-status='redo'] {
+  background: color-mix(in oklab, var(--viz-1) 18%, transparent);
+  color: color-mix(in oklab, var(--viz-1), var(--color-fg) 40%);
+  font-weight: var(--fw-semibold);
+}
+.bl-row__cta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  border-radius: var(--r-full);
+  background: var(--k);
+  color: #fff;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  transition:
+    transform var(--d-hover) var(--ease-out),
+    box-shadow var(--d-hover) var(--ease-out);
+}
+.bl-row__cta:hover { box-shadow: 0 6px 16px -8px var(--k); }
+.bl-row__cta:focus-visible { outline: 2px solid var(--k); outline-offset: 2px; }
+
+.bl-empty-filter {
+  padding: 2rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1px dashed var(--color-line);
+  text-align: center;
+  color: var(--color-fg-muted);
+}
+
+/* ── مفيش حاجة متراكمة ─────────────────────────────────────────────────── */
+.bl-clear {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1.25rem;
+  border-radius: var(--r-lg);
+  text-align: center;
+  color: #fff;
+  background:
+    radial-gradient(90% 90% at 100% 0%, color-mix(in oklab, var(--viz-2) 70%, transparent) 0%, transparent 60%),
+    linear-gradient(135deg, var(--viz-6) 0%, var(--viz-2) 100%);
+  box-shadow: var(--shadow-md);
+}
+.bl-clear__badge {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.2);
+  border: 1px solid rgb(255 255 255 / 0.35);
+}
+.bl-clear__title { font-size: var(--fs-title-3); font-weight: var(--fw-bold); }
+.bl-clear__body { max-width: 34rem; opacity: 0.92; }
+.bl-clear__awaiting {
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.18);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.bl-clear__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: var(--r-full);
+  background: #fff;
+  color: var(--on-light-ink);
+  font-weight: var(--fw-bold);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bl-tile:hover,
+  .bl-row__cta:hover { transform: translateY(-1px); }
+}
