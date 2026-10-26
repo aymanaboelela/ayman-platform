@@ -47,3 +47,31 @@ describe('StudentNavFooterList — same guard on the footer group', () => {
     }
   });
 });
+
+/**
+ * The rail follows the stack's entitlements as they arrive — the shape that
+ * lets the owner open «شهاداتي» for a teacher without a code change.
+ */
+describe('StudentNavList — entitlement rows', () => {
+  it('hides a feature row the stack reports off, and shows it once on', async () => {
+    const { StudentFeaturesSync } = await import('./student-features');
+    const { allEnabled } = await import('@ayman/contracts/admin/entitlements');
+    const off = { ...allEnabled(), shareCards: false };
+
+    const { container, rerender } = render(
+      <>
+        <StudentFeaturesSync features={off} />
+        <StudentNavList />
+      </>,
+    );
+    expect(container.querySelector('a[href="/certificates"]')).toBeNull();
+
+    rerender(
+      <>
+        <StudentFeaturesSync features={allEnabled()} />
+        <StudentNavList />
+      </>,
+    );
+    expect(container.querySelector('a[href="/certificates"]')).not.toBeNull();
+  });
+});

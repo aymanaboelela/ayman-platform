@@ -447,6 +447,7 @@ export const copy = {
     arena: 'ساحة التحدي',
     /** «دفتر غلطاتي». الكوبي كلها في `copy/mistakes.ts`. */
     mistakes: 'غلطاتي',
+    certificates: 'شهاداتي',
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
@@ -7353,6 +7354,66 @@ export const copy = {
     cardNoBooking: 'الحضور «سنتر»، ولسه مفيش ميعاد محجوز.',
     cardPickSlot: 'اختيار الميعاد من «بياناتك»',
     cardOnline: 'الحضور أونلاين — والكود نفسه بيشتغل في أي حصة في السنتر.',
+  },
+  /**
+   * «كارت النتيجة» و«شهادة الإتمام» — الصورتين اللي الطالب بينزّلهم ستوري.
+   *
+   * ⚠️ كل جملة هنا بتتطبع على صورة بتتنشر باسم الطالب، فمافيش ولا فعل أمر ولا
+   * فعل ماضي بيحدّد ولد ولا بنت («أتمّ»، «ابدأ»، «امسح» كلها ممنوعة هنا).
+   * الصيغ اللي اتاخدت: مصدر («بإتمام»)، مبني للمجهول («تُمنح»)، أو متكلّم
+   * («بذاكر»)، وده اللي بيشيل الجنس من غير ما الجملة تبان غريبة.
+   *
+   * `{teacher}` و`{site}` بيتملوا من `tenantName()` ودومين الستاك نفسه.
+   */
+  shareCard: {
+    openResult: 'كارت النتيجة',
+    openCertificate: 'شهادة الإتمام',
+    dialogResultTitle: 'كارت نتيجتك جاهز',
+    dialogCertificateTitle: 'شهادتك جاهزة',
+    dialogHint: 'صورة جاهزة للستوري — واللي يشوفها يعرف المذاكرة بتحصل فين.',
+    download: 'تنزيل الصورة',
+    downloadPdf: 'تنزيل PDF',
+    share: 'مشاركة',
+    close: 'إغلاق',
+    rendering: 'بنجهّز الصورة…',
+    failed: 'الصورة ماتجهّزتش — محاولة تانية؟',
+    resultKicker: 'نتيجتي في',
+    scoreOf: 'من {total}',
+    studyWith: 'بذاكر مع {teacher}',
+    qrHint: 'الكود ده بيوديك للمنصة',
+    tiers: {
+      perfect: 'الدرجة النهائية',
+      legendary: 'أداء أسطوري',
+      high: 'مستوى عالي',
+      onTrack: 'في الطريق الصح',
+    },
+    tierLines: {
+      perfect: 'ولا غلطة واحدة.',
+      legendary: 'قريب جدًا من الكمال.',
+      high: 'شغل نضيف ومذاكرة باينة.',
+      onTrack: 'خطوة كمان والدرجة تعلى.',
+    },
+    certificateTitle: 'شهادة إتمام',
+    certificateTitleEn: 'CERTIFICATE OF COMPLETION',
+    certificateGrantedTo: 'تُمنح هذه الشهادة إلى',
+    certificateFor: 'تقديرًا لإتمام كورس',
+    certificateTeacher: 'مدرّس المادة',
+    certificateDate: 'تاريخ الإتمام',
+    certificatePlatform: 'المنصة',
+    certificateSeal: 'إتمام',
+    pageTitle: 'شهاداتي',
+    pageLead: 'كل كورس بيكتمل بيطلعله شهادة باسمك — جاهزة للتنزيل وللستوري.',
+    earnedHeading: 'الشهادات',
+    lockedHeading: 'في الطريق',
+    earnedOn: 'اكتملت في {date}',
+    lockedBadge: 'لسه',
+    continueCourse: 'استكمال الكورس',
+    waitingForContent: 'الدروس كلها خلصانة — الشهادة بتتفتح أول ما المنهج كله ينزل.',
+    emptyTitle: 'مافيش كورسات لسه',
+    emptyBody: 'أول ما يبقى عندك كورس، الشهادة بتاعته هتستناك هنا لحد ما يكتمل.',
+    emptyCta: 'الكورسات',
+    certificateLocked: 'الشهادة بتتفتح بعد إتمام كل دروس الكورس.',
+    certificateProgress: 'الدروس المكتملة: {done} من {total}',
   },
 } as const;
 

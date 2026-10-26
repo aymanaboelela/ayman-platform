@@ -123,6 +123,17 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'لعبة سباق وقت على أسئلة الكويزات اللي الطالب امتحنها قبل كده.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول» — اتعملت بطلبه، ومقفولة على أي ستاك تاني لحد ما يفتحها
+     * لمدرّس بعينه من المستند. الكارت بيحمل اسم المدرّس ولينك منصته هو، فلما
+     * تتفتح بتشتغل على طول من غير أي ضبط؛ التنين بس ورا `aymanOnly`.
+     */
+    key: 'shareCards',
+    nameAr: 'كارت النتيجة والشهادة',
+    descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

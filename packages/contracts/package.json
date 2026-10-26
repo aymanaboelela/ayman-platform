@@ -144,6 +144,7 @@
     "./copy/arena": "./src/copy/arena.ts",
     "./admin/profile": "./src/admin/profile.ts",
     "./mistakes": "./src/mistakes.ts",
+    "./share-cards": "./src/share-cards.ts",
     "./copy/mistakes": "./src/copy/mistakes.ts",
     "./backlog": "./src/backlog.ts",
     "./copy/backlog": "./src/copy/backlog.ts"

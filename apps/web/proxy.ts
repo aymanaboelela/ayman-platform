@@ -123,6 +123,8 @@ export const PROTECTED_PREFIXES = [
   '/mistakes',
   // «المتراكم» — نفس السبب: `apiGetAuthed` من غير شرط.
   '/backlog',
+  // «شهاداتي» — `apiGetAuthed` على المسار والتسجيلات من غير شرط.
+  '/certificates',
   '/foundations',
   '/playground',
   /*

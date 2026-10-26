@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
@@ -11,6 +12,7 @@ import { sanitizeRichText } from '@/lib/sanitize-html';
 import { ResultHeader } from '@/components/quiz/result-header';
 import { ReviewLocked } from '@/components/quiz/review-locked';
 import { ReviewList } from '@/components/quiz/review-list';
+import { ResultShareSlot } from '@/components/share-card/share-slots';
 
 const ReviewOptionSchema = z.object({ id: z.string(), bodyHtml: z.string() });
 
@@ -144,6 +146,16 @@ export default async function QuizReviewPage({
             pendingOutOf={review.pendingOutOf}
             gradedOutOf={review.gradedOutOf || review.gradeOutOf}
           />
+
+          {/* «كارت النتيجة» — only on a FINAL mark: a card printed while an
+              essay is still waiting for the teacher would show a score that
+              is about to change. The API says the same (404), this just skips
+              the round trip. Streams in after the score; see the slot. */}
+          {review.pendingOutOf > 0 ? null : (
+            <Suspense fallback={null}>
+              <ResultShareSlot attemptId={attemptId} />
+            </Suspense>
+          )}
 
           {/* Sanitized HERE, once, rather than inside `<ReviewQuestion>` on
               every render — see `sanitizeReview` below. */}

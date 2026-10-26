@@ -59,6 +59,7 @@ import { HomeworkModule } from './modules/homework/homework.module';
 import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
 import { ArenaModule } from './modules/arena/arena.module';
 import { MistakesModule } from './modules/mistakes/mistakes.module';
+import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
 
 @Module({
@@ -193,6 +194,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     ArenaModule,
     // «دفتر غلطاتي» — كل سؤال غلط فيه الطالب (فلاج `mistakes.enabled`).
     MistakesModule,
+    ShareCardsModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,
   ],

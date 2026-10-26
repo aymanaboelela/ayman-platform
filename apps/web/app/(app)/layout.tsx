@@ -37,6 +37,7 @@ import {
 import { RailCourses, RailCoursesSkeleton } from '@/components/app/rail-courses';
 import { ChromeUnlessAttempt } from '@/components/app/chrome-unless-attempt';
 import { StudentShell } from '@/components/app/student-shell';
+import { StudentFeaturesSlot } from '@/components/app/student-features-slot';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
@@ -188,6 +189,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       }
     >
       {children}
+      {/* Renders nothing: publishes this stack's entitlements to the rail,
+          which hides the rows of features it does not have. Its own
+          `<Suspense>` for the reason the slots above have theirs — the layout
+          stays synchronous. See `components/app/student-features.tsx`. */}
+      <Suspense fallback={null}>
+        <StudentFeaturesSlot />
+      </Suspense>
     </StudentShell>
   );
 }

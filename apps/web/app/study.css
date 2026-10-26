@@ -5448,3 +5448,225 @@ label.runner-option {
     transform: none;
   }
 }
+
+/* ============================================================================
+   «كارت النتيجة» / «شهادة الإتمام» — the button under the score or the course
+   progress, and the dialog that previews the image. The button burns: it is
+   the one call to action on a result screen that markets the platform, so it
+   is drawn louder than the quiet chips around it.
+   ============================================================================ */
+
+.share-card-cta {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  inline-size: 100%;
+  min-block-size: 3.25rem;
+  padding-inline: var(--s-20);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: linear-gradient(115deg, var(--a-11), var(--a-9) 55%, var(--a-10));
+  color: var(--n-1);
+  font-weight: 700;
+  font-size: var(--fs-text-base);
+  box-shadow: 0 10px 30px -12px var(--a-9);
+  cursor: pointer;
+  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+/* A highlight that sweeps across once a few seconds — the «ember» on the
+   button. Off for reduced motion. */
+.share-card-cta::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -40%;
+  inline-size: 40%;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--n-1) 35%, transparent), transparent);
+  transform: skewX(-18deg);
+  animation: share-card-sweep 3.6s ease-in-out infinite;
+}
+
+.share-card-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px -12px var(--a-9);
+}
+
+.share-card-cta--gold {
+  background: linear-gradient(115deg, var(--a-12), var(--a-10) 50%, var(--a-12));
+}
+
+.share-card-cta__tier {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--n-12) 22%, transparent);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+}
+
+@keyframes share-card-sweep {
+  0%, 55% { inset-inline-start: -40%; }
+  100% { inset-inline-start: 120%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-card-cta::after { animation: none; display: none; }
+}
+
+.share-card-dialog__stage {
+  display: grid;
+  place-items: center;
+  min-block-size: 16rem;
+  margin-block: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--n-12);
+}
+
+.share-card-dialog__img {
+  display: block;
+  max-inline-size: 100%;
+  max-block-size: min(62vh, 40rem);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.share-card-dialog__status {
+  color: var(--n-3);
+  font-size: var(--fs-text-sm);
+}
+
+/* ============================================================================
+   «شهاداتي» — `/certificates`. An earned certificate is drawn as a small
+   black-and-gold certificate (the `--ink` surface, which does not flip with
+   the theme, so it reads as an object rather than a panel); a locked one is
+   an ordinary panel with its progress.
+   ============================================================================ */
+
+.certs-hero {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-16);
+  margin-block-end: var(--s-32);
+  padding: var(--s-20);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--print-gold) 30%, transparent), transparent 60%),
+    var(--ink);
+  color: var(--ink-fg);
+}
+
+.certs-hero__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 3.25rem;
+  block-size: 3.25rem;
+  border-radius: var(--r-full);
+  background: linear-gradient(135deg, var(--print-gold), var(--print-gold-deep));
+  color: var(--ink);
+  box-shadow: 0 0 28px color-mix(in oklab, var(--print-gold) 55%, transparent);
+}
+
+.certs-hero__title {
+  font-size: var(--fs-title-2);
+  font-weight: 700;
+}
+
+.certs-hero__lead {
+  margin-block-start: var(--s-4);
+  color: color-mix(in oklab, var(--ink-fg) 70%, transparent);
+  font-size: var(--fs-text-sm);
+}
+
+.certs-hero__count {
+  color: var(--print-gold);
+  font-size: var(--fs-title-3);
+  font-weight: 700;
+}
+
+.certs-heading {
+  margin-block-end: var(--s-12);
+  font-size: var(--fs-title-4);
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.certs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--s-16);
+}
+
+.cert-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+}
+
+.cert-tile__frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  padding: var(--s-20) var(--s-16);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+
+.cert-tile--earned {
+  background: var(--ink);
+  box-shadow: 0 18px 40px -22px color-mix(in oklab, var(--print-gold) 80%, transparent);
+}
+
+.cert-tile--earned .cert-tile__frame {
+  border: 2px solid var(--print-gold);
+  outline: 1px solid color-mix(in oklab, var(--print-gold) 40%, transparent);
+  outline-offset: -8px;
+  background: radial-gradient(90% 80% at 50% 0%, color-mix(in oklab, var(--print-gold) 18%, transparent), transparent 70%);
+  color: var(--ink-fg);
+}
+
+.cert-tile__kicker {
+  color: var(--print-gold);
+  font-family: var(--font-lalezar, inherit);
+  font-size: var(--fs-title-3);
+}
+
+.cert-tile__course {
+  font-size: var(--fs-text-lg);
+  font-weight: 700;
+}
+
+.cert-tile__date {
+  font-size: var(--fs-text-sm);
+  opacity: 0.75;
+}
+
+.cert-tile--locked {
+  border: var(--hairline) solid var(--border);
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+}
+
+.cert-tile--locked .cert-tile__frame {
+  text-align: start;
+  padding: var(--s-8);
+}
+
+.cert-tile__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  align-self: flex-start;
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--r-full);
+  background: var(--color-surface-3);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-xs);
+}
