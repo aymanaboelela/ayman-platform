@@ -1,8 +1,10 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RetiredCoursesSchema } from '@ayman/contracts/path';
 import { RetiredCoursePage } from '@/components/app/retired-course';
+import { CertificateSlot } from '@/components/share-card/share-slots';
 import { ArrowRight, Clock, Layers, Play } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
@@ -306,6 +308,17 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
             </p>
           </div>
           <LessonProgressBar percent={outline.progressPercent} label={course.title} />
+
+          {/* «شهادة الإتمام» — the same condition as «خلّصنا الكورس» above:
+              100% of a syllabus the teacher has marked complete. 100% of what
+              has been published so far is not a finished course. */}
+          {outline.progressPercent === 100 && course.contentComplete ? (
+            <div className="mt-4">
+              <Suspense fallback={null}>
+                <CertificateSlot courseId={course.id} courseTitle={course.title} />
+              </Suspense>
+            </div>
+          ) : null}
 
           {outline.nextLessonId ? (
             <Link

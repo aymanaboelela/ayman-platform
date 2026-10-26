@@ -5448,3 +5448,94 @@ label.runner-option {
     transform: none;
   }
 }
+
+/* ============================================================================
+   «كارت النتيجة» / «شهادة الإتمام» — the button under the score or the course
+   progress, and the dialog that previews the image. The button burns: it is
+   the one call to action on a result screen that markets the platform, so it
+   is drawn louder than the quiet chips around it.
+   ============================================================================ */
+
+.share-card-cta {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  inline-size: 100%;
+  min-block-size: 3.25rem;
+  padding-inline: var(--s-20);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: linear-gradient(115deg, var(--a-11), var(--a-9) 55%, var(--a-10));
+  color: var(--n-1);
+  font-weight: 700;
+  font-size: var(--fs-text-base);
+  box-shadow: 0 10px 30px -12px var(--a-9);
+  cursor: pointer;
+  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+/* A highlight that sweeps across once a few seconds — the «ember» on the
+   button. Off for reduced motion. */
+.share-card-cta::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -40%;
+  inline-size: 40%;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--n-1) 35%, transparent), transparent);
+  transform: skewX(-18deg);
+  animation: share-card-sweep 3.6s ease-in-out infinite;
+}
+
+.share-card-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px -12px var(--a-9);
+}
+
+.share-card-cta--gold {
+  background: linear-gradient(115deg, var(--a-12), var(--a-10) 50%, var(--a-12));
+}
+
+.share-card-cta__tier {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--n-12) 22%, transparent);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+}
+
+@keyframes share-card-sweep {
+  0%, 55% { inset-inline-start: -40%; }
+  100% { inset-inline-start: 120%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-card-cta::after { animation: none; display: none; }
+}
+
+.share-card-dialog__stage {
+  display: grid;
+  place-items: center;
+  min-block-size: 16rem;
+  margin-block: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--n-12);
+}
+
+.share-card-dialog__img {
+  display: block;
+  max-inline-size: 100%;
+  max-block-size: min(62vh, 40rem);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.share-card-dialog__status {
+  color: var(--n-3);
+  font-size: var(--fs-text-sm);
+}
