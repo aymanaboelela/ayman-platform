@@ -15,16 +15,19 @@ import type { QrMatrix } from './model';
 /** A4 landscape at ~212 dpi — sharp on a phone, prints clean on A4. */
 export const CERT = { w: 2480, h: 1754 } as const;
 
-export interface CertificateInput {
+export interface UnitCertificateInput {
   studentName: string;
+  unitTitle: string;
   courseTitle: string;
-  completedAt: string;
+  earnedAt: string;
   text: {
     platform: string;
     title: string;
     titleEn: string;
     grantedTo: string;
-    forCourse: string;
+    forUnit: string;
+    /** «بمتوسط ٩٢٪ في كويزات الوحدة», already formatted. */
+    average: string;
     teacher: string;
     teacherLabel: string;
     dateLabel: string;
@@ -37,15 +40,16 @@ export interface CertificateInput {
 }
 
 /**
- * The certificate: black and gold with a fire edge, the name in Ruqaa, a seal,
- * the teacher's «signature», and the date.
+ * «شهادة إتمام وحدة»: black and gold with a fire edge, the name in Ruqaa, a
+ * seal, the teacher's «signature», and the date. The EXAM certificate is a
+ * different object on purpose (`draw-exam-certificate.ts`) — ivory, navy and
+ * gold — so the two can never be mistaken for each other in a story.
  *
- * It states only what the platform knows — that this account finished every
- * published lesson of this course on this date. No grade, no «with honours»,
- * no serial number pretending to be verifiable: there is no endpoint that
- * could verify one.
+ * It states only what the platform knows: that this account sat every quiz of
+ * this unit and averaged what it says. No serial number pretending to be
+ * verifiable — there is no endpoint that could verify one.
  */
-export function drawCertificate(canvas: HTMLCanvasElement, input: CertificateInput): void {
+export function drawUnitCertificate(canvas: HTMLCanvasElement, input: UnitCertificateInput): void {
   const { w, h } = CERT;
   canvas.width = w;
   canvas.height = h;
@@ -53,7 +57,7 @@ export function drawCertificate(canvas: HTMLCanvasElement, input: CertificateInp
   if (!ctx) throw new Error('2d context unavailable');
   const { fonts, text } = input;
   const cx = w / 2;
-  const seed = seedOf(`${input.studentName}|${input.courseTitle}`);
+  const seed = seedOf(`${input.studentName}|${input.unitTitle}|${input.courseTitle}`);
 
   ctx.fillStyle = FIRE.ink;
   ctx.fillRect(0, 0, w, h);
@@ -114,22 +118,29 @@ export function drawCertificate(canvas: HTMLCanvasElement, input: CertificateInp
   ctx.shadowBlur = 0;
   flourish(ctx, cx, 985, 620);
 
-  // ── The course ──────────────────────────────────────────────────────────
+  // ── The unit ────────────────────────────────────────────────────────────
   ctx.fillStyle = FIRE.ash;
-  ctx.font = `500 50px ${fonts.body}`;
-  centerText(ctx, text.forCourse, cx, 1080);
+  ctx.font = `500 48px ${fonts.body}`;
+  centerText(ctx, text.forUnit, cx, 1066);
   ctx.fillStyle = FIRE.white;
-  ctx.font = `700 76px ${fonts.body}`;
-  const courseLines = wrapLines(ctx, input.courseTitle, 1600, 2);
-  courseLines.forEach((line, i) => centerText(ctx, line, cx, 1172 + i * 88));
+  const unitSize = fitFontSize(ctx, input.unitTitle, (s) => `700 ${s}px ${fonts.body}`, 88, 1600, 48);
+  ctx.font = `700 ${unitSize}px ${fonts.body}`;
+  centerText(ctx, input.unitTitle, cx, 1160);
+  ctx.fillStyle = FIRE.gold;
+  ctx.font = `600 42px ${fonts.body}`;
+  const courseLine = wrapLines(ctx, input.courseTitle, 1500, 1)[0] ?? '';
+  centerText(ctx, courseLine, cx, 1228);
+  ctx.fillStyle = FIRE.ash;
+  ctx.font = `500 38px ${fonts.body}`;
+  centerText(ctx, text.average, cx, 1290);
 
   // ── Seal, signature, date ───────────────────────────────────────────────
-  const rowY = 1480;
-  const date = new Date(input.completedAt);
+  const rowY = 1500;
+  const date = new Date(input.earnedAt);
   const dateText = Number.isNaN(date.getTime())
     ? ''
     : date.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' });
-  drawSeal(ctx, cx, rowY, 150, text.seal, Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ar-EG', { year: 'numeric' }), fonts);
+  drawSeal(ctx, cx, rowY, 140, text.seal, Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ar-EG', { year: 'numeric' }), fonts);
 
   // RTL: the signature sits on the reader's starting side (right).
   const sigX = cx + 600;

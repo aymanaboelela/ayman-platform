@@ -5670,3 +5670,36 @@ label.runner-option {
   color: var(--color-fg-muted);
   font-size: var(--fs-text-xs);
 }
+
+/* «شهادات التفوّق» — the exam certificate's tile is ivory, navy and gold, the
+   same object as the certificate it opens, so the two kinds never look alike
+   on the page either. The paper colours are the print tokens. */
+.cert-tile--exam {
+  background: var(--print-gold-wash);
+  border: 2px solid var(--print-gold-deep);
+  box-shadow: 0 18px 40px -24px var(--print-gold-deep);
+}
+
+.cert-tile--exam .cert-tile__frame {
+  border: 3px double var(--print-gold-deep);
+  color: var(--on-light-ink);
+}
+
+.cert-tile--exam .cert-tile__kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  color: var(--print-gold-deep);
+}
+
+.cert-tile__score {
+  color: var(--print-gold-deep);
+  font-size: var(--fs-title-2);
+  font-weight: 700;
+}
+
+.share-card-cta--ivory {
+  background: linear-gradient(115deg, var(--print-gold-wash), var(--print-gold) 55%, var(--print-gold-wash));
+  color: var(--on-light-ink);
+}

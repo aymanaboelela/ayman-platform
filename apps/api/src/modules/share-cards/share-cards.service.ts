@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CertificatesPayload, ResultCardPayload } from '@ayman/contracts/share-cards';
+import {
+  CERTIFICATE_MIN_PERCENT,
+  type CertificatesPayload,
+  type ResultCardPayload,
+} from '@ayman/contracts/share-cards';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AttemptService } from '../quiz/attempt.service';
+import { buildCertificates, isExamLesson, percentOf, type AttemptRow, type QuizLessonRow } from './certificates';
 
 /**
  * The data behind «كارت النتيجة» and «شهاداتي». The images themselves are
@@ -23,6 +28,9 @@ export class ShareCardsService {
    * the review window — a card must not print a score the review page is
    * still withholding. Then two more of its own: no essay still with the
    * teacher, and a score that exists.
+   *
+   * `examCertificate` rides along so the review page can offer the exam
+   * certificate in the same breath as the card, without a second round trip.
    */
   async resultCard(userId: string, attemptId: string): Promise<ResultCardPayload> {
     const review = await this.attempts.review(userId, attemptId);
@@ -31,53 +39,128 @@ export class ShareCardsService {
     const [attempt, studentName] = await Promise.all([
       this.prisma.quizAttempt.findFirst({
         where: { id: attemptId, userId },
-        select: { quiz: { select: { lesson: { select: { title: true } } } } },
+        select: {
+          submittedAt: true,
+          quiz: {
+            select: {
+              lesson: {
+                select: {
+                  id: true,
+                  title: true,
+                  courseId: true,
+                  sectionId: true,
+                  position: true,
+                  section: { select: { title: true, position: true } },
+                  course: { select: { id: true, slug: true, title: true, examLessonId: true } },
+                },
+              },
+            },
+          },
+        },
       }),
       this.studentName(userId),
     ]);
-    if (!attempt) throw new NotFoundException();
+    if (!attempt?.submittedAt) throw new NotFoundException();
+
+    const { lesson } = attempt.quiz;
+    const isExam = isExamLesson(
+      {
+        id: lesson.id,
+        title: lesson.title,
+        courseId: lesson.courseId,
+        sectionId: lesson.sectionId,
+        sectionTitle: lesson.section.title,
+        sectionPosition: lesson.section.position,
+      },
+      lesson.course,
+    );
 
     return {
       studentName,
-      examTitle: attempt.quiz.lesson.title,
+      examTitle: lesson.title,
+      courseTitle: lesson.course.title,
       score: review.scaledScore,
       total: review.gradeOutOf,
+      examCertificate: isExam && percentOf(review.scaledScore, review.gradeOutOf) >= CERTIFICATE_MIN_PERCENT,
+      submittedAt: attempt.submittedAt.toISOString(),
     };
   }
 
   /**
-   * One certificate per course this student has FINISHED: the enrolment's
-   * `completedAt` (stamped by `CourseProgressService` the first time progress
-   * reaches 100%, cleared when new lessons are published) on a live course
-   * the teacher has marked `contentComplete`. The second half is the course
-   * page's own «خلّصنا الكورس» rule — 100% of a half-published syllabus is
-   * not a finished course, and a certificate for it would have to be taken
-   * back.
+   * Every unit of every course the student is in — earned or on the way — and
+   * every exam certificate earned. See `certificates.ts` for the rules.
+   *
+   * Three reads, each bounded by the student: their enrolments, the quiz
+   * lessons of those courses, and their own final attempts on those lessons.
    */
   async certificates(userId: string): Promise<CertificatesPayload> {
-    const [rows, studentName] = await Promise.all([
-      this.prisma.enrollment.findMany({
-        where: {
-          userId,
-          status: { in: ['active', 'completed'] },
-          completedAt: { not: null },
-          progressPercent: { gte: 100 },
-          course: { status: 'published', contentComplete: true },
-        },
-        orderBy: { completedAt: 'desc' },
-        select: { completedAt: true, course: { select: { id: true, slug: true, title: true } } },
-      }),
+    const enrolments = await this.prisma.enrollment.findMany({
+      where: { userId, status: { in: ['active', 'completed'] }, course: { status: 'published' } },
+      orderBy: { enrolledAt: 'asc' },
+      select: { course: { select: { id: true, slug: true, title: true, examLessonId: true } } },
+    });
+    const courses = enrolments.map((row) => row.course);
+    const courseIds = courses.map((course) => course.id);
+
+    const [lessonRows, studentName] = await Promise.all([
+      courseIds.length === 0
+        ? Promise.resolve([])
+        : this.prisma.lesson.findMany({
+            where: {
+              courseId: { in: courseIds },
+              kind: 'quiz',
+              isPublished: true,
+              section: { isPublished: true },
+              quiz: { isPublished: true },
+            },
+            orderBy: [{ position: 'asc' }],
+            select: {
+              id: true,
+              title: true,
+              courseId: true,
+              sectionId: true,
+              section: { select: { title: true, position: true } },
+            },
+          }),
       this.studentName(userId),
     ]);
 
+    const lessons: QuizLessonRow[] = lessonRows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      courseId: row.courseId,
+      sectionId: row.sectionId,
+      sectionTitle: row.section.title,
+      sectionPosition: row.section.position,
+    }));
+
+    const attemptRows =
+      lessons.length === 0
+        ? []
+        : await this.prisma.quizAttempt.findMany({
+            where: {
+              userId,
+              // `submitted` only: `pending_review` still has an essay with the
+              // teacher, and a mark that will move earns nothing yet.
+              state: 'submitted',
+              scaledScore: { not: null },
+              submittedAt: { not: null },
+              quiz: { lessonId: { in: lessons.map((lesson) => lesson.id) } },
+            },
+            select: { scaledScore: true, gradeOutOf: true, submittedAt: true, quiz: { select: { lessonId: true } } },
+          });
+
+    const attempts: AttemptRow[] = attemptRows.map((row) => ({
+      lessonId: row.quiz.lessonId,
+      score: Number(row.scaledScore),
+      total: Number(row.gradeOutOf),
+      submittedAt: row.submittedAt!,
+    }));
+
     return {
       studentName,
-      certificates: rows.map((row) => ({
-        courseId: row.course.id,
-        slug: row.course.slug,
-        title: row.course.title,
-        completedAt: (row.completedAt ?? new Date()).toISOString(),
-      })),
+      minPercent: CERTIFICATE_MIN_PERCENT,
+      ...buildCertificates(courses, lessons, attempts),
     };
   }
 
