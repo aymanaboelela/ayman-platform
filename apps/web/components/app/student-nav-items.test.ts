@@ -179,6 +179,7 @@ describe('STUDENT_TABS', () => {
     expect(rest.length + STUDENT_TABS.length).toBe(primary.length);
     expect(rest.map((item) => item.href)).toEqual([
       '/rank',
+      '/certificates',
       '/game',
       '/arena',
       '/mistakes',
@@ -234,7 +235,8 @@ describe('STUDENT_NAV on a stack that teaches physics', () => {
         (href) =>
           href !== '/foundations' &&
           href !== '/playground' &&
-          // The three rows that were already Ayman-only; this stack is not his.
+          // The rows that are Ayman-only; this stack is not his.
+          href !== '/certificates' &&
           href !== '/game' &&
           href !== '/arena' &&
           href !== '/mistakes',
