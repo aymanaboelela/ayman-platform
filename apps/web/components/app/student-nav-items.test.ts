@@ -235,13 +235,26 @@ describe('STUDENT_NAV on a stack that teaches physics', () => {
         (href) =>
           href !== '/foundations' &&
           href !== '/playground' &&
-          // The rows that are Ayman-only; this stack is not his.
+          // The rows that are Ayman-only; this stack is not his. (`/game` and
+          // `/certificates` are NOT here: they stay in the table behind their
+          // entitlement and the rail hides them at render — see below.)
           href !== '/backlog' &&
-          href !== '/certificates' &&
-          href !== '/game' &&
           href !== '/arena' &&
           href !== '/mistakes',
       ),
     );
+  });
+});
+
+/**
+ * Entitlement rows are in the table on EVERY stack, keyed to their feature,
+ * so the rail can show them the moment the owner opens the feature for a
+ * teacher — `aymanOnly` would have removed them at build time for good.
+ */
+describe('STUDENT_NAV entitlement rows', () => {
+  it('ties each opt-in feature to its row', () => {
+    const byHref = new Map(STUDENT_NAV.map((item) => [item.href, item.feature]));
+    expect(byHref.get('/certificates')).toBe('shareCards');
+    expect(byHref.get('/game')).toBe('quizGame');
   });
 });

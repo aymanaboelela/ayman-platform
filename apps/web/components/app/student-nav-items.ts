@@ -18,6 +18,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
+import type { FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy';
 import { aymanOnly } from '@/lib/tenant';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
@@ -44,6 +45,13 @@ export interface StudentNavItem {
    * for.
    */
   tab?: boolean;
+  /**
+   * An entitlement the row needs. The row is in the table on every stack and
+   * the rail hides it until the stack reports the feature on
+   * (`student-features.tsx`) — so a feature the owner opens for a teacher
+   * from `/admin/platforms` shows up in that teacher's rail by itself.
+   */
+  feature?: FeatureKey;
 }
 
 /**
@@ -85,16 +93,16 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
   /*
    * «شهاداتي» — بعد «نتائجي» و«ترتيبي» لأنها آخر محطة في نفس السؤال: الدرجات،
-   * المكان وسط الدفعة، وبعدين الكورس اللي اكتمل. نفس بوابة «الألعاب»: البند
-   * عند أيمن بس (القايمة بتتبني وقت البيلد ومابتقراش الصلاحيات)، والصفحة
-   * نفسها ورا `shareCards` — مفتوحة عنده ومقفولة عند الباقي.
+   * المكان وسط الدفعة، وبعدين الكورس اللي اكتمل. ورا `shareCards` (`feature`
+   * فوق): مفتوحة عند أيمن، وبتظهر عند أي مدرّس صاحب المنصة يفتحهاله.
    */
-  ...(aymanOnly(true) ? [{ href: '/certificates', labelAr: copy.nav.certificates, icon: Award }] : []),
+  { href: '/certificates', labelAr: copy.nav.certificates, icon: Award, feature: 'shareCards' },
   /*
-   * «تحدّي الأسئلة» — لأيمن بس (اتطلبت كده). `aymanOnly` بيشيل الصف كله على
-   * أي ستاك تاني، والصفحة والـAPI عليهم حارس `quizGame` كمان.
+   * «تحدّي الأسئلة» — ورا فيتشر `quizGame`: مفتوحة عند أيمن (اتطلبت له)،
+   * ومقفولة على أي ستاك تاني لحد ما صاحب المنصة يفتحها؛ الصف بيظهر لوحده
+   * ساعتها. الصفحة والـAPI عليهم نفس الحارس.
    */
-  ...(aymanOnly(true) ? [{ href: '/game', labelAr: copy.nav.game, icon: Gamepad2 }] : []),
+  { href: '/game', labelAr: copy.nav.game, icon: Gamepad2, feature: 'quizGame' },
   /*
    * «ساحة التحدي» — ماتش مباشر. نفس بوابة «الألعاب»: البند عند أيمن بس، والصفحة
    * والـAPI ورا فلاج `arena.enabled` (مفتوح عنده افتراضيًا ومقفول عند الباقي).

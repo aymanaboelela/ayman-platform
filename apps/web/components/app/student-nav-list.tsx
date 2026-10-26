@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { MouseEvent } from 'react';
 import { isPlainPress } from '@/lib/welcome-motion';
+import { useStudentFeatureGate } from './student-features';
 import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
 
 /**
@@ -68,9 +69,10 @@ export function StudentNavList({
 }) {
   const pathname = usePathname();
   const active = activeStudentNav(pathname);
+  const allowed = useStudentFeatureGate();
 
   const items = STUDENT_NAV.filter((item) => {
-    if (item.footer) return false;
+    if (item.footer || !allowed(item.feature)) return false;
     if (only === 'tabs') return item.tab === true;
     if (only === 'rest') return item.tab !== true;
     return true;
@@ -113,10 +115,11 @@ export function StudentNavList({
 export function StudentNavFooterList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = activeStudentNav(pathname);
+  const allowed = useStudentFeatureGate();
 
   return (
     <ul className="flex flex-col gap-1">
-      {STUDENT_NAV.filter((item) => item.footer).map((item) => {
+      {STUDENT_NAV.filter((item) => item.footer && allowed(item.feature)).map((item) => {
         const isActive = active?.href === item.href;
         return (
           <li key={item.href}>
