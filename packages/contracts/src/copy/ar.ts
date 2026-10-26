@@ -377,6 +377,8 @@ export const copy = {
     register: 'حساب جديد',
     dashboard: 'حسابي',
     path: 'مساري',
+    /** «المتراكم» — `/backlog`, Ayman's stack only. The page's own words live in `copy/backlog.ts`. */
+    backlog: 'المتراكم',
     // ── the signed-in shell ──────────────────────────────────────────────
     essentials: 'التأسيس',
     /** «قسم الكتب» — the shop, in the student's rail and the mobile sheet. */

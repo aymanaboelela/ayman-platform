@@ -10,9 +10,9 @@ const e = copy.essentials;
  *
  * The definitions are shared with the public `/essentials` (see
  * `lib/essentials-terms.ts`), so nothing here re-asserts their wording. What
- * this pins is the reason the route exists: clicking «التأسيس» in the rail no
- * longer throws a signed-in student onto a marketing page with a «نختار صفّك»
- * call to action they answered weeks ago.
+ * this pins is the reason the route exists: a signed-in student reaching it is
+ * not thrown onto a marketing page with a «نختار صفّك» call to action they
+ * answered weeks ago. (It is no longer in the rail — see `student-nav-items.ts`.)
  */
 test.describe('foundations', () => {
   test('is closed to anonymous visitors', async ({ page }) => {
@@ -34,17 +34,16 @@ test.describe('foundations', () => {
     await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveCount(12);
   });
 
-  test('«التأسيس» is the current nav item here', async ({ page }) => {
+  test('is no longer in the rail', async ({ page }) => {
+    // Taken out of the rail on request; the page still answers its own URL.
     test.skip(test.info().project.name !== 'desktop', 'no rail below the md breakpoint');
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
 
     await page.goto('/foundations');
     await expect(
-      page
-        .getByRole('navigation', { name: copy.nav.mainNav })
-        .getByRole('link', { name: copy.nav.essentials }),
-    ).toHaveAttribute('aria-current', 'page');
+      page.getByRole('navigation', { name: copy.nav.mainNav }).getByRole('link', { name: copy.nav.essentials }),
+    ).toHaveCount(0);
   });
 
   test('has no serious or critical axe violations', async ({ page }) => {
