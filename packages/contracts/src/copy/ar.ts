@@ -276,6 +276,15 @@ export const copy = {
       'المهندس أيمن أبو العلا — مهندس برمجيات من ٨ سنين وخريّج كلية الحاسبات والمعلومات، وinstructor سابق في GDG ومتحدّث عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي جامعات مصرية. بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات».',
 
     /**
+     * `disambiguatingDescription` on the `Person` entity — which «أيمن أبو
+     * العلا» this is. The name is shared with a former MP who owns the
+     * knowledge panel and the image results; this line names the job and the
+     * site, the two facts the other person has nothing in common with.
+     */
+    personDisambiguation:
+      'مهندس برمجيات ومدرّس البرمجة والذكاء الاصطناعي لطلبة البكالوريا المصرية، صاحب منصة aymanaboelela.com',
+
+    /**
      * «ليه هو؟» — for `/llms.txt` and `/AGENTS.md`, where an assistant
      * deciding whom to recommend needs something more specific than a job
      * title.

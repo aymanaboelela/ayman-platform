@@ -1,11 +1,19 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { AboutInstructor } from '@/components/site/about-instructor';
 import { SiteFaq } from '@/components/site/site-faq';
 import { JsonLd } from '@/components/seo/json-ld';
-import { PERSON_ID, SITE_URL, breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
+import {
+  INSTRUCTOR_IMAGE,
+  INSTRUCTOR_IMAGE_PATH,
+  PERSON_ID,
+  SITE_URL,
+  breadcrumbJsonLd,
+  faqPageJsonLd,
+} from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { aymanOnly, tenantName } from '@/lib/tenant';
 import { bySubject } from '@/lib/subject-copy';
@@ -150,6 +158,15 @@ export default function AboutPage() {
           description: ABOUT_DESCRIPTION,
           inLanguage: 'ar',
           mainEntity: { '@id': PERSON_ID },
+          ...(INSTRUCTOR_IMAGE
+            ? {
+                primaryImageOfPage: {
+                  '@type': 'ImageObject',
+                  url: INSTRUCTOR_IMAGE,
+                  caption: ABOUT_ROLE_TITLE,
+                },
+              }
+            : {}),
         }}
       />
       <JsonLd
@@ -162,6 +179,25 @@ export default function AboutPage() {
       <header className="page-head site-shell">
         {/* The `<h1>` is the name alone. Everything a crawler weighs most —
             title, h1, first paragraph — says the same thing the query does. */}
+        {/* His face, visibly, on the page about him. The `Person.image` had
+            pointed at this file since August while no page ever SHOWED it, so
+            an image search for the name had nothing on this site to match and
+            returned a former MP's photographs instead. `unoptimized` keeps the
+            indexed URL `/team/ayman.jpg` — the same one the JSON-LD and the
+            image sitemap name — rather than a `/_next/image?…` variant per
+            width. Off his stack the path is `undefined` and nothing renders. */}
+        {INSTRUCTOR_IMAGE_PATH ? (
+          <span className="about-headshot">
+            <Image
+              src={INSTRUCTOR_IMAGE_PATH}
+              alt={ABOUT_ROLE_TITLE}
+              width={900}
+              height={1200}
+              priority
+              unoptimized
+            />
+          </span>
+        ) : null}
         <h1 className="page-title">{ABOUT_TITLE}</h1>
         <p className="site-lead">{bySubject(c.aboutPageLead, subjectCopy.landing.aboutPageLead)}</p>
       </header>

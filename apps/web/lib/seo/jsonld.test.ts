@@ -245,6 +245,13 @@ describe('personJsonLd name parts', () => {
     expect(personJsonLd().familyName).toBe('أبو العلا');
     expect(personJsonLd().givenName).toBe('أيمن');
   });
+
+  /** The name is shared with a former MP; this line says which person this is. */
+  it('says which person of that name this is, and carries his photograph', () => {
+    const data = personJsonLd();
+    expect(data.disambiguatingDescription).toBe(copy.seo.personDisambiguation);
+    expect(data.image).toBe(`${SITE_URL}/team/ayman.jpg`);
+  });
 });
 
 describe('courseJsonLd', () => {

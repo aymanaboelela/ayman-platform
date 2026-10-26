@@ -11,6 +11,30 @@
   text-align: center;
 }
 
+/* /about — his photograph above the name. The source is a 3:4 seated shot with
+   the face small in the upper third, so the circle zooms onto it instead of
+   showing the whole room. Zoomed in CSS, not re-cut, so the one URL the
+   JSON-LD and the image sitemap name stays the one on the page. */
+.about-headshot {
+  display: block;
+  inline-size: clamp(6.5rem, 18vw, 8.5rem);
+  aspect-ratio: 1;
+  margin: 0 auto 1.25rem;
+  border-radius: 50%;
+  border: 3px solid var(--site-accent-solid);
+  overflow: hidden;
+}
+
+.about-headshot img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
+  transform: scale(2);
+  transform-origin: 51% 37%;
+}
+
 .page-head .site-lead {
   margin-inline: auto;
   max-width: 40rem;

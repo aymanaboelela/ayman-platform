@@ -48,7 +48,8 @@ const absolute = (path: string): string => `${SITE_URL}${path}`;
  * no logo in its structured data is incomplete, and one with a stranger's is
  * wrong.
  */
-const INSTRUCTOR_IMAGE = aymanOnly(absolute('/team/ayman.jpg'));
+export const INSTRUCTOR_IMAGE_PATH = aymanOnly('/team/ayman.jpg');
+export const INSTRUCTOR_IMAGE = INSTRUCTOR_IMAGE_PATH ? absolute(INSTRUCTOR_IMAGE_PATH) : undefined;
 
 /**
  * The subset of `CatalogCourse` the JSON-LD builders actually read — a
@@ -299,6 +300,15 @@ const ALTERNATE_NAMES = aymanOnly(copy.seo.alternateNames);
 const PERSON_DESCRIPTION = aymanOnly(copy.seo.personDescription);
 
 /**
+ * `disambiguatingDescription` — the schema.org field for exactly the problem
+ * this name has. A bare «أيمن أبو العلا» search resolves to a former MP's
+ * knowledge panel, with his photographs under it; `description` is a CV, and
+ * this is the one short line that says WHICH person of that name this is.
+ * Gated like the CV: on another stack it would disambiguate a stranger.
+ */
+const PERSON_DISAMBIGUATION = aymanOnly(copy.seo.personDisambiguation);
+
+/**
  * `jobTitle` and `hasOccupation.name` — the job, through the SUBJECT gate.
  *
  * «مدرّس البرمجة وعلوم الحاسب» is true of every programming stack and is what
@@ -377,6 +387,7 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
     // with a name and nothing else. It IS gated by SUBJECT — see `JOB_TITLE`.
     jobTitle: JOB_TITLE,
     ...(PERSON_DESCRIPTION ? { description: PERSON_DESCRIPTION } : {}),
+    ...(PERSON_DISAMBIGUATION ? { disambiguatingDescription: PERSON_DISAMBIGUATION } : {}),
     knowsLanguage: ['ar', 'en'],
     /**
      * ⚠️ This list used to be the four topics a programming teacher generically
