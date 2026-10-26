@@ -3,6 +3,7 @@ import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { ProgressModule } from '../progress/progress.module';
 import { QuizModule } from '../quiz/quiz.module';
 import { QuizScoreFeed } from '../quiz/quiz-score-feed';
+import { BacklogService } from './backlog.service';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 import { PathService } from './path.service';
@@ -14,7 +15,7 @@ import { SCORE_FEED } from './score-feed';
   // below; no contract change, no UI change.
   imports: [EnrollmentModule, QuizModule, ProgressModule],
   controllers: [DashboardController],
-  providers: [DashboardService, PathService, { provide: SCORE_FEED, useClass: QuizScoreFeed }],
+  providers: [DashboardService, PathService, BacklogService, { provide: SCORE_FEED, useClass: QuizScoreFeed }],
   /*
    * Exported for `AssistantStudentService`, which renders a student's own
    * courses and marks into the assistant's prompt.

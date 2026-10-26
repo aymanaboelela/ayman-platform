@@ -6,10 +6,10 @@ import {
   Gamepad2,
   Library,
   LayoutDashboard,
+  ListTodo,
   MonitorSmartphone,
   NotebookPen,
   Route,
-  Sprout,
   Swords,
   Terminal,
   Ticket,
@@ -39,7 +39,7 @@ export interface StudentNavItem {
    *
    * The four are the ones a student opens on a normal evening — «حسابي» to see
    * where they are, «مساري» for what is next, «الكورسات» to watch, «نتائجي» for
-   * the mark. Everything else («التأسيس»، «تجربة الكود»، «كود الكورس»،
+   * the mark. Everything else («المتراكم»، «تجربة الكود»، «كود الكورس»،
    * «الكتب») is a deliberate visit, and a deliberate visit is what a menu is
    * for.
    */
@@ -70,6 +70,12 @@ export interface StudentNavItem {
 export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard, tab: true },
   { href: '/path', labelAr: copy.nav.path, icon: Route, tab: true },
+  /*
+   * «المتراكم» — right under «مساري», because it is the same question asked
+   * the other way round: not «what is next» but «what did I leave behind».
+   * Ayman's stack only (asked for that way); the API answers 404 elsewhere.
+   */
+  ...(aymanOnly(true) ? [{ href: '/backlog', labelAr: copy.nav.backlog, icon: ListTodo }] : []),
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true },
   /*
    * «ترتيبي» — جنب «نتائجي» لأنه نفس السؤال من زاوية تانية: «درجاتي كام» ثم
@@ -117,13 +123,6 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    */
   { href: '/wallet', labelAr: copy.nav.wallet, icon: Wallet },
   /*
-   * «التأسيس» and «تجربة الكود» (below) are the two programming tools, and
-   * both routes 404 on a stack whose subject is not code — so neither row
-   * exists there. Spread in place rather than filtered afterwards, so the
-   * rail's ORDER on a programming stack is exactly what it was.
-   */
-  ...(TEACHES_CODE ? [{ href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout }] : []),
-  /*
    * `/store`, NOT `/books`, and the difference is the whole point of the
    * route.
    *
@@ -148,6 +147,15 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * reachable from the foot of each course page.
    */
   { href: '/external-books', labelAr: copy.nav.externalBooks, icon: Library },
+  /*
+   * «تجربة الكود» 404s on a stack whose subject is not code, so the row does
+   * not exist there. Spread in place rather than filtered afterwards, so the
+   * rail's ORDER on a programming stack is exactly what it was.
+   *
+   * «التأسيس» (`/foundations`) used to sit above «الكتب» under the same gate.
+   * Taken out of the rail on request — the page itself still answers its own
+   * URL, it just is not a destination a student is sent to any more.
+   */
   ...(TEACHES_CODE ? [{ href: '/playground', labelAr: copy.nav.playground, icon: Terminal }] : []),
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },

@@ -52,7 +52,7 @@ describe('activeStudentNav', () => {
       '/dashboard',
       '/path',
       '/library',
-      '/foundations',
+      '/backlog',
       '/playground',
       '/settings/devices',
     ]) {
@@ -178,6 +178,7 @@ describe('STUDENT_TABS', () => {
 
     expect(rest.length + STUDENT_TABS.length).toBe(primary.length);
     expect(rest.map((item) => item.href)).toEqual([
+      '/backlog',
       '/rank',
       '/certificates',
       '/game',
@@ -185,7 +186,6 @@ describe('STUDENT_TABS', () => {
       '/mistakes',
       '/codes',
       '/wallet',
-      '/foundations',
       '/store',
       '/external-books',
       '/playground',
@@ -236,6 +236,7 @@ describe('STUDENT_NAV on a stack that teaches physics', () => {
           href !== '/foundations' &&
           href !== '/playground' &&
           // The rows that are Ayman-only; this stack is not his.
+          href !== '/backlog' &&
           href !== '/certificates' &&
           href !== '/game' &&
           href !== '/arena' &&

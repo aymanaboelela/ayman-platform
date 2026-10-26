@@ -1,8 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, NotFoundException } from '@nestjs/common';
 import type { Dashboard } from '@ayman/contracts';
+import type { StudentBacklog } from '@ayman/contracts/backlog';
 import type { LearningPath, RetiredCourses } from '@ayman/contracts/path';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { IS_AYMAN } from '../../common/tenant';
+import { BacklogService } from './backlog.service';
 import { DashboardService } from './dashboard.service';
 import { PathService } from './path.service';
 
@@ -11,6 +14,7 @@ export class DashboardController {
   constructor(
     private readonly dashboard: DashboardService,
     private readonly path: PathService,
+    private readonly backlog: BacklogService,
   ) {}
 
   @RequirePermission('enrollment:read')
@@ -30,6 +34,18 @@ export class DashboardController {
   @Get('path')
   path_(@CurrentUser() user: AuthenticatedUser): Promise<LearningPath> {
     return this.path.forUser(user.id);
+  }
+
+  /**
+   * «المتراكم عليّا» — Ayman's stack only (asked for that way). Every other
+   * stack answers 404, the same as a route that does not exist, and has no
+   * rail entry pointing here either.
+   */
+  @RequirePermission('enrollment:read')
+  @Get('backlog')
+  backlog_(@CurrentUser() user: AuthenticatedUser): Promise<StudentBacklog> {
+    if (!IS_AYMAN) throw new NotFoundException();
+    return this.backlog.forUser(user.id);
   }
 
   /** «الكورس ده خلص دوره في رحلتك» — the archived courses this student was in. */
