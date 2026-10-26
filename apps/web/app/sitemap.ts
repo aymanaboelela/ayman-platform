@@ -6,6 +6,7 @@ import { getNewsListOrEmpty } from '@/lib/news';
 import { getPdfListOrEmpty } from '@/lib/pdfs';
 import { getPracticeListOrEmpty, practicePath } from '@/lib/practice/catalog';
 import { INSTRUCTOR_IMAGE, SITE_URL } from '@/lib/seo/jsonld';
+import { INSTRUCTOR_PHOTOS } from '@/lib/seo/instructor-photos';
 import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
 import { isYearPageIndexable, yearPages } from '@/lib/grade-pages';
@@ -34,7 +35,7 @@ import { isYearPageIndexable, yearPages } from '@/lib/grade-pages';
  */
 const EDITORIAL_LAST_MODIFIED = new Date('2026-09-16T00:00:00.000Z');
 
-/** `/about` gained his photograph on 2026-10-26; the rest of the copy did not move. */
+/** `/about` gained his photographs on 2026-10-26; the rest of the copy did not move. */
 const ABOUT_LAST_MODIFIED = new Date('2026-10-26T00:00:00.000Z');
 
 /**
@@ -113,7 +114,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
    * this person: the file existed only inside JSON-LD. `undefined` off his
    * stack (see `INSTRUCTOR_IMAGE`), and the key is spread away, not emptied.
    */
-  const instructorImages = INSTRUCTOR_IMAGE ? { images: [INSTRUCTOR_IMAGE] } : {};
+  const portraits = [
+    ...(INSTRUCTOR_PHOTOS[0] ? [`${SITE_URL}${INSTRUCTOR_PHOTOS[0].path}`] : []),
+    ...(INSTRUCTOR_IMAGE ? [INSTRUCTOR_IMAGE] : []),
+  ];
+  const instructorImages = portraits.length > 0 ? { images: portraits } : {};
+  // `/about` renders all of them — the headshot and the photo strip.
+  const aboutImages =
+    INSTRUCTOR_PHOTOS.length > 0
+      ? { images: INSTRUCTOR_PHOTOS.map((photo) => `${SITE_URL}${photo.path}`) }
+      : {};
 
   return [
     { url: `${SITE_URL}/`, lastModified: homeModified, changeFrequency: 'weekly', priority: 1, ...instructorImages },
@@ -127,7 +137,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: ABOUT_LAST_MODIFIED,
       changeFrequency: 'monthly',
       priority: 0.9,
-      ...instructorImages,
+      ...aboutImages,
     },
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.

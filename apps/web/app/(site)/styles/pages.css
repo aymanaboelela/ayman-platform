@@ -12,8 +12,8 @@
 }
 
 /* /about — his photograph above the name. The source is a 3:4 seated shot with
-   the face small in the upper third, so the circle zooms onto it instead of
-   showing the whole room. Zoomed in CSS, not re-cut, so the one URL the
+   the face in the upper third, so the circle zooms onto it instead of showing
+   the whole room. Zoomed in CSS, not re-cut, so the one URL the
    JSON-LD and the image sitemap name stays the one on the page. */
 .about-headshot {
   display: block;
@@ -31,8 +31,38 @@
   block-size: 100%;
   object-fit: cover;
   object-position: 50% 30%;
-  transform: scale(2);
-  transform-origin: 51% 37%;
+  transform: scale(1.8);
+  transform-origin: 53% 37%;
+}
+
+/* /about — the photo strip. A masonry of columns rather than a grid, because
+   the photos are a mix of portrait and landscape and cropping them would cut
+   the banners and logos that say where each one was taken. */
+.about-photos {
+  columns: 3 16rem;
+  column-gap: 1rem;
+  margin-top: 2rem;
+}
+
+.about-photos__item {
+  break-inside: avoid;
+  margin: 0 0 1rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+}
+
+.about-photos__item img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.about-photos__item figcaption {
+  padding: 0.625rem 0.875rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--site-fg-2);
 }
 
 .page-head .site-lead {
