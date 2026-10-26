@@ -1,4 +1,5 @@
 import {
+  Award,
   BarChart3,
   BookMarked,
   BookOpen,
@@ -76,6 +77,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
    */
   { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
+  /*
+   * «شهاداتي» — بعد «نتائجي» و«ترتيبي» لأنها آخر محطة في نفس السؤال: الدرجات،
+   * المكان وسط الدفعة، وبعدين الكورس اللي اكتمل. نفس بوابة «الألعاب»: البند
+   * عند أيمن بس (القايمة بتتبني وقت البيلد ومابتقراش الصلاحيات)، والصفحة
+   * نفسها ورا `shareCards` — مفتوحة عنده ومقفولة عند الباقي.
+   */
+  ...(aymanOnly(true) ? [{ href: '/certificates', labelAr: copy.nav.certificates, icon: Award }] : []),
   /*
    * «تحدّي الأسئلة» — لأيمن بس (اتطلبت كده). `aymanOnly` بيشيل الصف كله على
    * أي ستاك تاني، والصفحة والـAPI عليهم حارس `quizGame` كمان.

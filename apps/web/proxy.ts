@@ -121,6 +121,8 @@ export const PROTECTED_PREFIXES = [
   '/arena',
   // «دفتر غلطاتي» — نفس سبب الساحة بالظبط: `apiGetAuthed` من غير شرط.
   '/mistakes',
+  // «شهاداتي» — `apiGetAuthed` على المسار والتسجيلات من غير شرط.
+  '/certificates',
   '/foundations',
   '/playground',
   /*

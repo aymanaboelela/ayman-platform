@@ -17,7 +17,7 @@ import { ResultShare } from './result-share';
  */
 
 /** The full name the student registered with, falling back to the session's. */
-async function studentName(): Promise<string | null> {
+export async function studentName(): Promise<string | null> {
   const [profile, session] = await Promise.all([
     apiGetAuthed('/api/profile/me', ProfileMeSchema).catch(() => null),
     getSession(),
