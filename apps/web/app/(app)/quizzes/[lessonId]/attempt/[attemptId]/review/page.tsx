@@ -149,10 +149,11 @@ export default async function QuizReviewPage({
 
           {/* «كارت النتيجة» — only on a FINAL mark: a card printed while an
               essay is still waiting for the teacher would show a score that
-              is about to change. Streams in after the score; see the slot. */}
+              is about to change. The API says the same (404), this just skips
+              the round trip. Streams in after the score; see the slot. */}
           {review.pendingOutOf > 0 ? null : (
             <Suspense fallback={null}>
-              <ResultShareSlot lessonId={lessonId} score={review.scaledScore} total={review.gradeOutOf} />
+              <ResultShareSlot attemptId={attemptId} />
             </Suspense>
           )}
 

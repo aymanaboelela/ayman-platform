@@ -315,7 +315,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           {outline.progressPercent === 100 && course.contentComplete ? (
             <div className="mt-4">
               <Suspense fallback={null}>
-                <CertificateSlot courseId={course.id} courseTitle={course.title} />
+                <CertificateSlot courseId={course.id} />
               </Suspense>
             </div>
           ) : null}

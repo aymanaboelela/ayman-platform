@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Download, FileDown, Share2 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
@@ -23,7 +23,8 @@ export interface ShareCardDialogProps {
   draw: (canvas: HTMLCanvasElement, fonts: CardFonts, hero: HTMLImageElement | undefined) => void;
 }
 
-type State = { kind: 'idle' } | { kind: 'rendering' } | { kind: 'ready'; url: string; blob: Blob } | { kind: 'failed' };
+/** `null` while drawing; set once, asynchronously, when the image is ready or failed. */
+type Outcome = { kind: 'ready'; url: string; blob: Blob } | { kind: 'failed' };
 
 /**
  * Draws the image when the dialog opens, shows it, and hands it over three
@@ -37,16 +38,16 @@ type State = { kind: 'idle' } | { kind: 'rendering' } | { kind: 'ready'; url: st
 export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, pdf, draw }: ShareCardDialogProps) {
   const fontsRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [state, setState] = useState<State>({ kind: 'idle' });
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const state = outcome ?? { kind: 'rendering' as const };
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     let url: string | null = null;
-    setState({ kind: 'rendering' });
     (async () => {
       const host = fontsRef.current;
-      if (!host) return;
+      if (!host) throw new Error('font host not mounted');
       const fonts = resolveFonts(host);
       // A failed hero is not a failed card: the card has its own fire for that.
       const [, hero] = await Promise.all([loadFonts(fonts), heroSrc ? loadImage(heroSrc).catch(() => undefined) : undefined]);
@@ -56,9 +57,9 @@ export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, 
       if (cancelled) return;
       canvasRef.current = canvas;
       url = URL.createObjectURL(blob);
-      setState({ kind: 'ready', url, blob });
+      setOutcome({ kind: 'ready', url, blob });
     })().catch(() => {
-      if (!cancelled) setState({ kind: 'failed' });
+      if (!cancelled) setOutcome({ kind: 'failed' });
     });
     return () => {
       cancelled = true;
@@ -66,7 +67,10 @@ export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, 
     };
   }, [open, heroSrc, draw]);
 
-  const file = state.kind === 'ready' ? new File([state.blob], `${fileName}.png`, { type: 'image/png' }) : null;
+  const file = useMemo(
+    () => (outcome?.kind === 'ready' ? new File([outcome.blob], `${fileName}.png`, { type: 'image/png' }) : null),
+    [outcome, fileName],
+  );
   const canShare =
     file !== null && typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
 
@@ -96,7 +100,15 @@ export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, 
           dialog, because the dialog's content mounts in a portal after `open`
           flips, later than the effect that needs this. */}
       <div ref={fontsRef} className={`${lalezar.variable} ${ruqaa.variable}`} hidden />
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          // Cleared on close, in the event — not in the effect — so the next
+          // open starts at «drawing» instead of flashing the previous image.
+          if (!next) setOutcome(null);
+          onOpenChange(next);
+        }}
+      >
         <DialogContent closeLabel={c.close} className="share-card-dialog">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -105,7 +117,6 @@ export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, 
 
           <div className="share-card-dialog__stage" data-state={state.kind}>
             {state.kind === 'ready' ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a local blob: URL, nothing for next/image to optimise
               <img src={state.url} alt={title} className="share-card-dialog__img" />
             ) : (
               <p className="share-card-dialog__status">{state.kind === 'failed' ? c.failed : c.rendering}</p>

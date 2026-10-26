@@ -2,15 +2,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Award, Lock } from 'lucide-react';
-import { EnrollmentSchema, copy, formatCopy } from '@ayman/contracts';
-import { LearningPathSchema, type PathCourse } from '@ayman/contracts/path';
+import { copy, formatCopy } from '@ayman/contracts';
+import { LearningPathSchema } from '@ayman/contracts/path';
+import { CertificatesPayloadSchema } from '@ayman/contracts/share-cards';
+import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { lalezar } from '@/lib/fonts';
-import { shareBrand, shareCardsEnabled } from '@/lib/share-card/brand';
+import { shareBrand } from '@/lib/share-card/brand';
 import { LtrRatio } from '@/components/ltr-ratio';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { CertificateShare } from '@/components/share-card/certificate-share';
-import { studentName } from '@/components/share-card/share-slots';
 
 export const metadata: Metadata = { title: copy.shareCard.pageTitle };
 
@@ -20,28 +21,31 @@ const c = copy.shareCard;
  * «شهاداتي» — every enrolled course as a certificate: earned ones open the
  * certificate dialog, the rest show how far is left.
  *
- * «Earned» is the course page's own rule, not a second one: 100% of the
- * lectures AND `contentComplete`. A course at 100% of what has been published
- * so far sits in «في الطريق» with its own line saying why, because a
- * certificate for half a syllabus would have to be taken back.
+ * «Earned» is the API's answer (`/api/me/share-cards/certificates`), which
+ * applies the course page's own rule: 100% of the lectures AND
+ * `contentComplete`. A course at 100% of what has been published so far sits
+ * in «في الطريق» with its own line saying why, because a certificate for half
+ * a syllabus would have to be taken back.
  *
- * Behind `shareCards` like the buttons: a stack without it 404s here, and the
- * rail never lists it there anyway (`aymanOnly` in `student-nav-items.ts`).
+ * Behind `shareCards` like the buttons: the API answers 404 on a stack
+ * without it, and so does this page. The rail never lists it there anyway
+ * (`aymanOnly` in `student-nav-items.ts`).
  */
 export default async function CertificatesPage() {
-  if (!(await shareCardsEnabled())) notFound();
-
-  const [path, enrollments, name] = await Promise.all([
+  const [payload, path] = await Promise.all([
+    apiGetAuthed('/api/me/share-cards/certificates', CertificatesPayloadSchema).catch((error: unknown) => {
+      if (error instanceof ApiRequestError && error.status === 404) notFound();
+      throw error;
+    }),
     apiGetAuthed('/api/me/path', LearningPathSchema),
-    apiGetAuthed('/api/enrollments', EnrollmentSchema.array()).catch(() => []),
-    studentName(),
   ]);
 
+  const earnedIds = new Set(payload.certificates.map((cert) => cert.courseId));
   const courses = path.courses.filter((course) => course.totalLessons > 0);
-  const earned = courses.filter(isEarned);
-  const pending = courses.filter((course) => !isEarned(course));
-  const completedAt = (courseId: string) =>
-    enrollments.find((e) => e.courseId === courseId)?.completedAt ?? new Date().toISOString();
+  const earned = payload.certificates;
+  const pending = courses.filter((course) => !earnedIds.has(course.id));
+  const total = new Set([...courses.map((course) => course.id), ...earnedIds]).size;
+  const name = payload.studentName;
   const brand = shareBrand();
 
   return (
@@ -55,11 +59,11 @@ export default async function CertificatesPage() {
           <p className="certs-hero__lead">{c.pageLead}</p>
         </div>
         <p className="certs-hero__count mono tabular" aria-hidden="true">
-          <LtrRatio value={earned.length} of={courses.length} />
+          <LtrRatio value={earned.length} of={total} />
         </p>
       </header>
 
-      {courses.length === 0 ? (
+      {total === 0 ? (
         <section className="panel grid justify-items-center gap-2 px-6 py-10 text-center">
           <Award className="mb-2 text-fg-muted" aria-hidden="true" />
           <h2 className="text-xl font-bold text-fg">{c.emptyTitle}</h2>
@@ -74,28 +78,29 @@ export default async function CertificatesPage() {
         <section className="mb-10">
           <h2 className="certs-heading">{c.earnedHeading}</h2>
           <div className="certs-grid">
-            {earned.map((course) => {
-              const date = completedAt(course.id);
-              return (
-                <article key={course.id} className="cert-tile cert-tile--earned">
-                  <div className="cert-tile__frame">
-                    <span className="cert-tile__kicker">{c.certificateTitle}</span>
-                    <h3 className="cert-tile__course">{course.title}</h3>
-                    <p className="cert-tile__date">
-                      {formatCopy(c.earnedOn, {
-                        date: new Date(date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }),
-                      })}
-                    </p>
-                  </div>
-                  {name ? (
-                    <CertificateShare
-                      data={{ studentName: name, courseTitle: course.title, completedAt: date }}
-                      brand={brand}
-                    />
-                  ) : null}
-                </article>
-              );
-            })}
+            {earned.map((cert) => (
+              <article key={cert.courseId} className="cert-tile cert-tile--earned">
+                <div className="cert-tile__frame">
+                  <span className="cert-tile__kicker">{c.certificateTitle}</span>
+                  <h3 className="cert-tile__course">{cert.title}</h3>
+                  <p className="cert-tile__date">
+                    {formatCopy(c.earnedOn, {
+                      date: new Date(cert.completedAt).toLocaleDateString('ar-EG', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      }),
+                    })}
+                  </p>
+                </div>
+                {name ? (
+                  <CertificateShare
+                    data={{ studentName: name, courseTitle: cert.title, completedAt: cert.completedAt }}
+                    brand={brand}
+                  />
+                ) : null}
+              </article>
+            ))}
           </div>
         </section>
       ) : null}
@@ -134,8 +139,4 @@ export default async function CertificatesPage() {
       ) : null}
     </main>
   );
-}
-
-function isEarned(course: PathCourse): boolean {
-  return course.progressPercent === 100 && course.contentComplete;
 }

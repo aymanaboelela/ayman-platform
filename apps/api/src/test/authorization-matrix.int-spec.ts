@@ -105,6 +105,7 @@ import { WalletService } from '../modules/wallet/wallet.service';
 import { BooksService } from '../modules/books/books.service';
 import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
+import { ShareCardsModule } from '../modules/share-cards/share-cards.module';
 import { AdminAttemptsOverviewController } from '../modules/quiz/admin-attempts-overview.controller';
 import { AttemptsOverviewService } from '../modules/quiz/attempts-overview.service';
 
@@ -350,6 +351,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         ArenaModule,
         // «دفتر غلطاتي» — بيقرا كويزات الطالب بس، مفيش Redis ولا تايمرز.
         MistakesModule,
+        ShareCardsModule,
         AdminProfileModule,
       ],
       providers: [
@@ -926,6 +928,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'mistakes notebook: student', method: 'get', path: () => '/api/me/mistakes', actor: 'student', status: 200 },
     { label: 'mistakes answer: anonymous', method: 'post', path: () => `/api/me/mistakes/${randomUUID()}/answer`, actor: 'anonymous', status: 401, body: () => ({ optionIds: [randomUUID()] }) },
     { label: 'mistakes answer: student, a question not in their mistakes', method: 'post', path: () => `/api/me/mistakes/${randomUUID()}/answer`, actor: 'student', status: 404, body: () => ({ optionIds: [randomUUID()] }) },
+    // «كارت النتيجة» و«شهاداتي» — `quiz:read` + فيتشر `shareCards` (مفتوحة
+    // هنا لأن التستات بتجري كستاك أيمن). محاولة مش بتاعته = ٤٠٤.
+    { label: 'share cards certificates: anonymous', method: 'get', path: () => '/api/me/share-cards/certificates', actor: 'anonymous', status: 401 },
+    { label: 'share cards certificates: student', method: 'get', path: () => '/api/me/share-cards/certificates', actor: 'student', status: 200 },
+    { label: 'share cards result: anonymous', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'share cards result: student, an attempt that is not theirs', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'student', status: 404 },
     { label: 'game round: anonymous', method: 'get', path: () => '/api/me/game/round', actor: 'anonymous', status: 401 },
     { label: 'game round: student', method: 'get', path: () => '/api/me/game/round', actor: 'student', status: 200 },
     { label: 'game hub: anonymous', method: 'get', path: () => '/api/me/game/hub', actor: 'anonymous', status: 401 },

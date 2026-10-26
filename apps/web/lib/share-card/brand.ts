@@ -1,19 +1,9 @@
 import 'server-only';
 import { copy } from '@ayman/contracts';
 import { getBrandAsset } from '@/lib/brand-assets';
-import { getEntitlements } from '@/lib/entitlements';
 import { SITE_URL } from '@/lib/seo/site-url';
 import { tenantName } from '@/lib/tenant';
 import { qrMatrix, type ShareBrand } from './model';
-
-/**
- * Whether this stack offers the share images at all — the `shareCards`
- * entitlement: on for Ayman, off for every other teacher until the owner
- * opens it for them.
- */
-export async function shareCardsEnabled(): Promise<boolean> {
-  return (await getEntitlements()).shareCards;
-}
 
 /**
  * Who the images advertise, resolved through the tenant gates.
