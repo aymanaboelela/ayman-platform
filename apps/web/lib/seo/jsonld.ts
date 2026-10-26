@@ -2,7 +2,7 @@ import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
 // The SUBPATH, not the root barrel — importing a runtime value through the
 // barrel is what stops the API booting. Same import the footer uses.
 import { waMeHref } from '@ayman/contracts/whatsapp';
-import { SAME_AS } from '@ayman/contracts/site-profiles';
+import { OFFICIAL_EXTRA_PROFILES, SAME_AS } from '@ayman/contracts/site-profiles';
 import { mediaUrl } from '@ayman/ui/branding';
 import { courseYearAliases, courseYearLabel } from '@/lib/grade-pages';
 import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
@@ -17,6 +17,7 @@ import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
  * Re-exported, not defined here any more — see `./site-url` for the cycle this
  * broke. Every existing `import { SITE_URL } from './jsonld'` keeps working.
  */
+import { INSTRUCTOR_PHOTOS } from './instructor-photos';
 export { SITE_URL } from './site-url';
 import { SITE_URL } from './site-url';
 
@@ -48,7 +49,19 @@ const absolute = (path: string): string => `${SITE_URL}${path}`;
  * no logo in its structured data is incomplete, and one with a stranger's is
  * wrong.
  */
-const INSTRUCTOR_IMAGE = aymanOnly(absolute('/team/ayman.jpg'));
+export const INSTRUCTOR_IMAGE_PATH = aymanOnly('/team/ayman.jpg');
+export const INSTRUCTOR_IMAGE = INSTRUCTOR_IMAGE_PATH ? absolute(INSTRUCTOR_IMAGE_PATH) : undefined;
+
+/**
+ * Every photograph of him the site shows — the `/about` strip first, the old
+ * portrait last. A `Person.image` LIST: one picture is a guess for an image
+ * index to make about a contested name, eight captioned ones are a pattern.
+ * Empty off his stack, where both sources are `undefined`/`[]`.
+ */
+const PERSON_IMAGES: readonly string[] = [
+  ...INSTRUCTOR_PHOTOS.map((photo) => absolute(photo.path)),
+  ...(INSTRUCTOR_IMAGE ? [INSTRUCTOR_IMAGE] : []),
+];
 
 /**
  * The subset of `CatalogCourse` the JSON-LD builders actually read — a
@@ -242,6 +255,13 @@ export interface ProfilesForJsonLd {
 }
 
 function sameAsFrom(contact?: ProfilesForJsonLd): readonly string[] {
+  // His page and LinkedIn ride along with whichever four are current — see
+  // `OFFICIAL_EXTRA_PROFILES`. Gated like the fallback below.
+  const base = coreSameAs(contact);
+  return IS_AYMAN ? [...new Set([...base, ...OFFICIAL_EXTRA_PROFILES])] : base;
+}
+
+function coreSameAs(contact?: ProfilesForJsonLd): readonly string[] {
   const live = [contact?.facebook, contact?.youtube, contact?.instagram, contact?.tiktok].filter(
     (url): url is string => typeof url === 'string' && url.trim().length > 0,
   );
@@ -297,6 +317,15 @@ const ALTERNATE_NAMES = aymanOnly(copy.seo.alternateNames);
  * student acts on it. Gated OUT, not renamed: there is no generic CV.
  */
 const PERSON_DESCRIPTION = aymanOnly(copy.seo.personDescription);
+
+/**
+ * `disambiguatingDescription` — the schema.org field for exactly the problem
+ * this name has. A bare «أيمن أبو العلا» search resolves to a former MP's
+ * knowledge panel, with his photographs under it; `description` is a CV, and
+ * this is the one short line that says WHICH person of that name this is.
+ * Gated like the CV: on another stack it would disambiguate a stranger.
+ */
+const PERSON_DISAMBIGUATION = aymanOnly(copy.seo.personDisambiguation);
 
 /**
  * `jobTitle` and `hasOccupation.name` — the job, through the SUBJECT gate.
@@ -370,13 +399,14 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
       : {}),
     ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
-    ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE } : {}),
+    ...(PERSON_IMAGES.length > 0 ? { image: PERSON_IMAGES } : {}),
     // `jobTitle` stays ungated by TENANT: «مدرّس البرمجة وعلوم الحاسب»
     // describes the job any programming instructor on this platform holds, and
     // it is the one line that keeps a gated Person node from being an entity
     // with a name and nothing else. It IS gated by SUBJECT — see `JOB_TITLE`.
     jobTitle: JOB_TITLE,
     ...(PERSON_DESCRIPTION ? { description: PERSON_DESCRIPTION } : {}),
+    ...(PERSON_DISAMBIGUATION ? { disambiguatingDescription: PERSON_DISAMBIGUATION } : {}),
     knowsLanguage: ['ar', 'en'],
     /**
      * ⚠️ This list used to be the four topics a programming teacher generically

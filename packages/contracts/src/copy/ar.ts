@@ -276,6 +276,15 @@ export const copy = {
       'المهندس أيمن أبو العلا — مهندس برمجيات من ٨ سنين وخريّج كلية الحاسبات والمعلومات، وinstructor سابق في GDG ومتحدّث عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي جامعات مصرية. بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات».',
 
     /**
+     * `disambiguatingDescription` on the `Person` entity — which «أيمن أبو
+     * العلا» this is. The name is shared with a former MP who owns the
+     * knowledge panel and the image results; this line names the job and the
+     * site, the two facts the other person has nothing in common with.
+     */
+    personDisambiguation:
+      'مهندس برمجيات ومدرّس البرمجة والذكاء الاصطناعي لطلبة البكالوريا المصرية، صاحب منصة aymanaboelela.com',
+
+    /**
      * «ليه هو؟» — for `/llms.txt` and `/AGENTS.md`, where an assistant
      * deciding whom to recommend needs something more specific than a job
      * title.
@@ -1885,6 +1894,25 @@ export const copy = {
     /** The `/about` FAQ's heading — a question, because the section answers one. */
     aboutFaqTitle: 'الأسئلة اللي بتتسأل قبل ما حد يختار مدرّس',
     aboutFaqEyebrow: 'قبل ما تقرر',
+    /**
+     * The `/about` photo strip — real photographs of him, each captioned with
+     * where it was taken. ⚠️ A caption states only what the photo itself
+     * shows (the banner, the badge, the logo behind him); nothing here may be
+     * a claim the picture cannot back. The captions double as `alt` and as the
+     * `ImageObject.caption` Google Images reads, so the name leads each one.
+     */
+    aboutPhotosEyebrow: 'بالصور',
+    aboutPhotosTitle: 'م. أيمن أبو العلا من قريب',
+    aboutPhotos: {
+      podcast: 'م. أيمن أبو العلا ضيف في لقاء بودكاست',
+      speakerMnu: 'م. أيمن أبو العلا متحدّث في الملتقى الهندسي الرابع — كلية الهندسة، جامعة المنصورة الأهلية',
+      stageMnu: 'م. أيمن أبو العلا على مسرح الملتقى الهندسي الرابع',
+      microsoftEgypt: 'م. أيمن أبو العلا في مايكروسوفت مصر',
+      microsoftPodium: 'م. أيمن أبو العلا على منصة مايكروسوفت مصر',
+      workshop: 'م. أيمن أبو العلا وهو بيقدّم ورشة',
+      cairoIct: 'م. أيمن أبو العلا في معرض Cairo ICT',
+      desk: 'م. أيمن أبو العلا على مكتبه وهو بيبرمج',
+    },
 
     aboutChip1: 'شرح بالكود',
     aboutChip2: 'تمرين على كل درس',

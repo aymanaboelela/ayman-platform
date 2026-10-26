@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { AboutInstructor } from '@/components/site/about-instructor';
 import { SiteFaq } from '@/components/site/site-faq';
 import { JsonLd } from '@/components/seo/json-ld';
-import { PERSON_ID, SITE_URL, breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
+import {
+  PERSON_ID,
+  SITE_URL,
+  breadcrumbJsonLd,
+  faqPageJsonLd,
+} from '@/lib/seo/jsonld';
+import { INSTRUCTOR_PHOTOS } from '@/lib/seo/instructor-photos';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { aymanOnly, tenantName } from '@/lib/tenant';
 import { bySubject } from '@/lib/subject-copy';
@@ -101,6 +108,17 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
+/** The headshot — the first of his photographs, `undefined` off his stack. */
+const PORTRAIT = INSTRUCTOR_PHOTOS[0];
+
+const photoObject = (photo: (typeof INSTRUCTOR_PHOTOS)[number]) => ({
+  '@type': 'ImageObject',
+  contentUrl: `${SITE_URL}${photo.path}`,
+  width: photo.width,
+  height: photo.height,
+  caption: photo.caption,
+});
+
 /**
  * `/about` — the page a search for «أيمن أبو العلا» should land on.
  *
@@ -150,6 +168,14 @@ export default function AboutPage() {
           description: ABOUT_DESCRIPTION,
           inLanguage: 'ar',
           mainEntity: { '@id': PERSON_ID },
+          /* Every photo on the page, captioned — the machine-readable copy of
+             the strip below, in the same order. Empty off his stack. */
+          ...(PORTRAIT
+            ? {
+                primaryImageOfPage: photoObject(PORTRAIT),
+                image: INSTRUCTOR_PHOTOS.map(photoObject),
+              }
+            : {}),
         }}
       />
       <JsonLd
@@ -162,6 +188,24 @@ export default function AboutPage() {
       <header className="page-head site-shell">
         {/* The `<h1>` is the name alone. Everything a crawler weighs most —
             title, h1, first paragraph — says the same thing the query does. */}
+        {/* His face, visibly, on the page about him. The `Person.image` had
+            pointed at a photo since August while no page ever SHOWED one, so
+            an image search for the name had nothing on this site to match and
+            returned a former MP's photographs instead. `unoptimized` keeps the
+            indexed URL the same one the JSON-LD and the image sitemap name,
+            rather than a `/_next/image?…` variant per width. */}
+        {PORTRAIT ? (
+          <span className="about-headshot">
+            <Image
+              src={PORTRAIT.path}
+              alt={PORTRAIT.caption}
+              width={PORTRAIT.width}
+              height={PORTRAIT.height}
+              priority
+              unoptimized
+            />
+          </span>
+        ) : null}
         <h1 className="page-title">{ABOUT_TITLE}</h1>
         <p className="site-lead">{bySubject(c.aboutPageLead, subjectCopy.landing.aboutPageLead)}</p>
       </header>
@@ -170,6 +214,36 @@ export default function AboutPage() {
           correctly UNDER an `<h1>` of the name — a question about the subject,
           below the subject. */}
       <AboutInstructor />
+
+      {/* The rest of the photographs, each with the caption Google Images
+          reads beside it. Lazy: all of it is below the fold. */}
+      {INSTRUCTOR_PHOTOS.length > 1 ? (
+        <section className="site-section">
+          <div className="site-shell">
+            <div style={{ textAlign: 'center' }}>
+              <span className="site-badge">{c.aboutPhotosEyebrow}</span>
+              <h2 className="site-h2" style={{ marginTop: '1rem' }}>
+                {aymanOnly(c.aboutPhotosTitle)}
+              </h2>
+            </div>
+            <div className="about-photos">
+              {INSTRUCTOR_PHOTOS.slice(1).map((photo) => (
+                <figure className="about-photos__item" key={photo.path}>
+                  <Image
+                    src={photo.path}
+                    alt={photo.caption}
+                    width={photo.width}
+                    height={photo.height}
+                    loading="lazy"
+                    unoptimized
+                  />
+                  <figcaption>{photo.caption}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/*
         The FAQ, and the reason it is on this page.

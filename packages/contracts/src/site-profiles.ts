@@ -54,7 +54,13 @@ export const OFFICIAL_PROFILES = {
    * a live deployment that has ever been seeded keeps the old value until the
    * setting itself is changed — see `/admin/settings`.
    */
-  youtube: 'https://www.youtube.com/@aymanaboelela1',
+  /*
+   * ⚠️ CHANGED again on 2026-10-26: the channel (UCrRVMLofuer4GqF4weh1xaQ) took
+   * the handle `@eng.aymanaboelela`. `@aymanaboelela1` still redirects today,
+   * but YouTube releases a dropped handle after a grace period, and then
+   * `sameAs` would name whoever claims it next.
+   */
+  youtube: 'https://www.youtube.com/@eng.aymanaboelela',
   instagram: 'https://www.instagram.com/2ayman6',
   tiktok: 'https://www.tiktok.com/@2ayman_6',
   facebook: 'https://www.facebook.com/aymanaboelela2',
@@ -89,6 +95,21 @@ export const OFFICIAL_WHATSAPP_CHANNEL = 'https://whatsapp.com/channel/0029VbDg0
  * `+200102…` is not a number that exists.
  */
 export const OFFICIAL_WHATSAPP_E164 = '+201021196367';
+
+/**
+ * Profiles that are him but have no slot in the footer's four.
+ *
+ * The 28K-follower Facebook PAGE «المهندس ايمن ابو العلا» (the one whose bio
+ * links this site; `facebook` above is his personal profile) and his LinkedIn.
+ * Both are the same person as the `Person` node, so both belong in `sameAs` —
+ * the more independent profiles agree on one entity, the less a bare-name
+ * query has to guess between him and the MP who shares the name. Resolved in
+ * his own browser on 2026-10-26; LinkedIn's share parameters stripped.
+ */
+export const OFFICIAL_EXTRA_PROFILES: readonly string[] = [
+  'https://www.facebook.com/profile.php?id=61593743246050',
+  'https://www.linkedin.com/in/aymanaboelela',
+];
 
 export type OfficialProfileKey = keyof typeof OFFICIAL_PROFILES;
 

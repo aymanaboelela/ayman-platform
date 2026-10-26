@@ -5,7 +5,8 @@ import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { getPdfListOrEmpty } from '@/lib/pdfs';
 import { getPracticeListOrEmpty, practicePath } from '@/lib/practice/catalog';
-import { SITE_URL } from '@/lib/seo/jsonld';
+import { INSTRUCTOR_IMAGE, SITE_URL } from '@/lib/seo/jsonld';
+import { INSTRUCTOR_PHOTOS } from '@/lib/seo/instructor-photos';
 import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
 import { isYearPageIndexable, yearPages } from '@/lib/grade-pages';
@@ -33,6 +34,9 @@ import { isYearPageIndexable, yearPages } from '@/lib/grade-pages';
  * URL look stale on arrival.
  */
 const EDITORIAL_LAST_MODIFIED = new Date('2026-09-16T00:00:00.000Z');
+
+/** `/about` gained his photographs on 2026-10-26; the rest of the copy did not move. */
+const ABOUT_LAST_MODIFIED = new Date('2026-10-26T00:00:00.000Z');
 
 /**
  * Every URL a crawler should know about, and no others.
@@ -103,14 +107,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     Math.max(coursesModified.getTime(), postsModified.getTime(), EDITORIAL_LAST_MODIFIED.getTime()),
   );
 
+  /*
+   * His photograph, declared against the two pages a bare-name search lands
+   * on. Google Images for «أيمن أبو العلا» returns a former MP's photos,
+   * because until now this site never told an image crawler which picture IS
+   * this person: the file existed only inside JSON-LD. `undefined` off his
+   * stack (see `INSTRUCTOR_IMAGE`), and the key is spread away, not emptied.
+   */
+  const portraits = [
+    ...(INSTRUCTOR_PHOTOS[0] ? [`${SITE_URL}${INSTRUCTOR_PHOTOS[0].path}`] : []),
+    ...(INSTRUCTOR_IMAGE ? [INSTRUCTOR_IMAGE] : []),
+  ];
+  const instructorImages = portraits.length > 0 ? { images: portraits } : {};
+  // `/about` renders all of them — the headshot and the photo strip.
+  const aboutImages =
+    INSTRUCTOR_PHOTOS.length > 0
+      ? { images: INSTRUCTOR_PHOTOS.map((photo) => `${SITE_URL}${photo.path}`) }
+      : {};
+
   return [
-    { url: `${SITE_URL}/`, lastModified: homeModified, changeFrequency: 'weekly', priority: 1 },
+    { url: `${SITE_URL}/`, lastModified: homeModified, changeFrequency: 'weekly', priority: 1, ...instructorImages },
     { url: `${SITE_URL}/courses`, lastModified: coursesModified, changeFrequency: 'daily', priority: 0.9 },
     // The page a bare-name search should land on. High priority and a slow
     // change frequency for the same reason: it is one of the two or three URLs
     // on this site that will not move, and it is the one that answers
     // «أيمن أبو العلا» rather than «منصة أيمن أبو العلا».
-    { url: `${SITE_URL}/about`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.9 },
+    {
+      url: `${SITE_URL}/about`,
+      lastModified: ABOUT_LAST_MODIFIED,
+      changeFrequency: 'monthly',
+      priority: 0.9,
+      ...aboutImages,
+    },
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     // ⚠️ أيمن بس. «التأسيس» مسار بمحتواه هو؛ على ستاك تاني الصفحة موجودة

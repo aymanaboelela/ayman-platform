@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts';
-import { SAME_AS } from '@ayman/contracts/site-profiles';
+import { OFFICIAL_EXTRA_PROFILES, SAME_AS } from '@ayman/contracts/site-profiles';
 import {
   ORGANIZATION_ID,
   PERSON_ID,
@@ -213,10 +213,12 @@ describe('sameAs', () => {
     expect(personJsonLd(contact).sameAs).toEqual([
       'https://facebook.com/someone-else',
       'https://youtube.com/@someone-else',
+      ...OFFICIAL_EXTRA_PROFILES,
     ]);
     expect(organizationJsonLd(contact).sameAs).toEqual([
       'https://facebook.com/someone-else',
       'https://youtube.com/@someone-else',
+      ...OFFICIAL_EXTRA_PROFILES,
     ]);
   });
 
@@ -226,9 +228,10 @@ describe('sameAs', () => {
    * no `sameAs` at all — and `sameAs: []` would be a claim of "no profiles".
    */
   it('falls back to the shipped profiles when the row is empty', () => {
-    expect(personJsonLd({}).sameAs).toEqual(SAME_AS);
-    expect(personJsonLd({ youtube: '  ' }).sameAs).toEqual(SAME_AS);
-    expect(personJsonLd().sameAs).toEqual(SAME_AS);
+    const shipped = [...SAME_AS, ...OFFICIAL_EXTRA_PROFILES];
+    expect(personJsonLd({}).sameAs).toEqual(shipped);
+    expect(personJsonLd({ youtube: '  ' }).sameAs).toEqual(shipped);
+    expect(personJsonLd().sameAs).toEqual(shipped);
   });
 });
 
@@ -244,6 +247,14 @@ describe('personJsonLd name parts', () => {
   it('states both words of the family name rather than leaving it to be split', () => {
     expect(personJsonLd().familyName).toBe('أبو العلا');
     expect(personJsonLd().givenName).toBe('أيمن');
+  });
+
+  /** The name is shared with a former MP; this line says which person this is. */
+  it('says which person of that name this is, and carries his photograph', () => {
+    const data = personJsonLd();
+    expect(data.disambiguatingDescription).toBe(copy.seo.personDisambiguation);
+    expect(data.image).toContain(`${SITE_URL}/team/ayman.jpg`);
+    expect(data.image).toContain(`${SITE_URL}/team/ayman-abo-el-ela-podcast.jpg`);
   });
 });
 

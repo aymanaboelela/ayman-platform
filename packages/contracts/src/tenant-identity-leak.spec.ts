@@ -131,6 +131,9 @@ const GATED_AT_POINT_OF_USE: readonly { path: string; gate: string }[] = [
   // nodes. Gated where the node is built, not where the path is written.
   // Verified: `INSTRUCTOR_IMAGE = aymanOnly(absolute('/team/ayman.jpg'))`.
   { path: 'apps/web/lib/seo/jsonld.ts', gate: 'aymanOnly' },
+  // The `/about` photo strip and the image sitemap's list. Verified:
+  // `INSTRUCTOR_PHOTOS = aymanOnly([...]) ?? []` — an empty list off his stack.
+  { path: 'apps/web/lib/seo/instructor-photos.ts', gate: 'aymanOnly' },
   // The agent skill descriptions — English prose naming him as the instructor,
   // served at `/.well-known/agent-skills/`. Verified: the literal is one arm of
   // an `IS_AYMAN ?` on `description`, swapped whole rather than interpolated
@@ -199,6 +202,7 @@ const FORBIDDEN: readonly { literal: string; what: string }[] = [
    * in a template, a `path.join` in a build script.
    */
   { literal: 'ayman.jpg', what: "Ayman's portrait — public/team/ayman.jpg" },
+  { literal: 'ayman-abo-el-ela-', what: 'his photographs — public/team/ayman-abo-el-ela-*.jpg' },
   { literal: 'ayman-mark-2.webp', what: "Ayman's face, worn as the nav mark" },
   {
     literal: 'hero-ai-dragon-2.webp',
