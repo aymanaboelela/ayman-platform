@@ -42,7 +42,12 @@ export async function GET(
   if (!(await getEntitlements()).referrals) return new Response(null, { status: 404 });
 
   const { code: raw } = await params;
-  const code = normalizeReferralCode(decodeURIComponent(raw));
+  let code: string | null = null;
+  try {
+    code = normalizeReferralCode(decodeURIComponent(raw));
+  } catch {
+    // A malformed escape is not a code — the visitor still lands on sign-up.
+  }
 
   const response = new NextResponse(null, {
     status: 307,

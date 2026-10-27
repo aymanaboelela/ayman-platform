@@ -92,7 +92,15 @@ export class ReferralNoticeService {
       select: {
         id: true,
         referrerRewardCents: true,
-        referrer: { select: { id: true, name: true, phoneNumber: true, bannedAt: true } },
+        referrer: {
+          select: {
+            id: true,
+            name: true,
+            phoneNumber: true,
+            bannedAt: true,
+            studentProfile: { select: { phone: true } },
+          },
+        },
       },
     });
 
@@ -104,7 +112,10 @@ export class ReferralNoticeService {
       });
       if (claimed.count === 0) continue;
 
-      const phone = row.referrer.phoneNumber ? normalizeEgyptianPhone(row.referrer.phoneNumber) : null;
+      // The account's number first; an email-only account still has the
+      // profile's — the number they typed at onboarding.
+      const raw = row.referrer.phoneNumber ?? row.referrer.studentProfile?.phone ?? null;
+      const phone = raw ? normalizeEgyptianPhone(raw) : null;
       if (!phone || row.referrer.bannedAt) {
         await this.settle(row.id, 'no_phone');
         continue;
