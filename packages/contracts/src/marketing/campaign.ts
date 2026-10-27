@@ -419,7 +419,12 @@ export const WhatsappDeviceSchema = z.object({
 export type WhatsappDevice = z.infer<typeof WhatsappDeviceSchema>;
 
 /** Who asked the device to send — the ledger's `source`. */
-export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'test', 'other'] as const;
+/**
+ * `outreach` is «رسايل الواتساب التلقائية» — the abandoned-checkout reminder
+ * and the signup nudge (`AutoOutreachSweeper`). Its own source so the device
+ * page can tell an automatic message from a campaign one.
+ */
+export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'outreach', 'test', 'other'] as const;
 export type WhatsappSendSource = (typeof WHATSAPP_SEND_SOURCES)[number];
 
 /**

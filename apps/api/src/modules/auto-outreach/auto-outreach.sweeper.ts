@@ -6,7 +6,12 @@ import { AUTO_WHATSAPP_KINDS } from '@ayman/contracts/outreach/kinds';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { isFeatureEnabled } from '../../common/entitlements';
-import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
+import {
+  DeviceCeilingError,
+  NotOnWhatsAppError,
+  WhatsappDeviceService,
+  WhatsappRestrictedError,
+} from '../marketing/whatsapp-device.service';
 import {
   OutreachService,
   type WhatsappLeg,
@@ -32,8 +37,11 @@ import { cairoDayStart, sendGate } from './auto-outreach.rules';
  *      NOTHING is marked sent, so nothing is used up: the morning it is
  *      linked, whatever is still inside its window goes out by itself;
  *   3. 10:00–22:00 Cairo, the campaign window;
- *   4. under the daily ceiling (`autoWhatsappDailyCap`), counted from the
- *      ledger, so a restart cannot reset it;
+ *   4. under TWO daily ceilings: this feature's own (`autoWhatsappDailyCap`,
+ *      counted from `outreach_messages`), and the NUMBER's, shared with
+ *      campaigns and shipping notices and warmed up for a new number
+ *      (`WhatsappDeviceService.assertWithinCeiling`, `device-ceiling.ts`) —
+ *      both counted from ledgers, so a restart cannot reset either;
  *   5. a 90s–4m gap since the last one (`gapAfter`), derived from the ledger
  *      too, so the traffic has no beat and a deploy cannot zero it.
  *
@@ -129,6 +137,16 @@ export class AutoOutreachSweeper {
     });
     if (!gate.open) return 'blocked';
 
+    // The number's own ceiling, asked BEFORE the scan rather than discovered
+    // at the send: `send()` would refuse anyway, but only after the chat copy
+    // had been composed for a student who then gets nothing.
+    try {
+      await this.device.assertWithinCeiling(now);
+    } catch (error) {
+      if (error instanceof DeviceCeilingError) return 'blocked';
+      throw error;
+    }
+
     /*
      * Checkout reminders first. A student mid-payment is the most time-bound
      * message the platform has, and the money it recovers is the reason this
@@ -163,7 +181,18 @@ export class AutoOutreachSweeper {
          * first in line next minute, and a device that has really gone away
          * will say so on the next `status()`.
          */
-        this.logger.warn({ err: error, kind: item.input.kind }, 'auto outreach send failed — retrying next tick');
+        /*
+         * Including the two the device service raises itself: the number's
+         * ceiling (`DeviceCeilingError`) and WhatsApp refusing new chats right
+         * now (`WhatsappRestrictedError` — sending into that deepens the
+         * restriction, nack 463). Both are "not now", never "not this
+         * student", which is exactly what returning with nothing written means.
+         */
+        const restricted = error instanceof WhatsappRestrictedError || error instanceof DeviceCeilingError;
+        this.logger.warn(
+          { err: error, kind: item.input.kind },
+          restricted ? 'auto outreach held — the number is not sending new chats now' : 'auto outreach send failed — retrying next tick',
+        );
         return 'blocked';
       }
 
@@ -209,7 +238,9 @@ export class AutoOutreachSweeper {
     if (optedOut) return { status: 'opted_out' };
 
     try {
-      const result = await this.device.send({ phone, text: body });
+      // `source: 'outreach'` puts it on the number-wide `whatsapp_sends`
+      // ledger under its own name, inside the same ceiling as everything else.
+      const result = await this.device.send({ phone, text: body, source: 'outreach' });
       return { status: 'sent', messageId: result.messageId };
     } catch (error) {
       if (error instanceof NotOnWhatsAppError) return { status: 'not_on_whatsapp' };

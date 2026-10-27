@@ -51,6 +51,12 @@ ALTER TABLE "app"."outreach_messages"
     CHECK ("whatsapp_status" IS NULL
            OR "whatsapp_status" IN ('sent', 'opted_out', 'not_on_whatsapp', 'no_phone'));
 
+-- The number-wide send ledger (`20261027120000_whatsapp_send_ledger`) learns
+-- the automatic sender as a source of its own.
+ALTER TABLE "app"."whatsapp_sends" DROP CONSTRAINT "whatsapp_sends_source_check";
+ALTER TABLE "app"."whatsapp_sends" ADD CONSTRAINT "whatsapp_sends_source_check"
+  CHECK ("source" IN ('campaign', 'shipping', 'outreach', 'test', 'other'));
+
 CREATE INDEX "outreach_messages_whatsapp_message_id_idx"
   ON "app"."outreach_messages"("whatsapp_message_id")
   WHERE "whatsapp_message_id" IS NOT NULL;

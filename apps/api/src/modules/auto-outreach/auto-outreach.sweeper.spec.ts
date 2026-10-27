@@ -1,5 +1,9 @@
 import { OutreachSettingsSchema } from '@ayman/contracts/admin/settings';
-import { NotOnWhatsAppError } from '../marketing/whatsapp-device.service';
+import {
+  DeviceCeilingError,
+  NotOnWhatsAppError,
+  WhatsappRestrictedError,
+} from '../marketing/whatsapp-device.service';
 import type { DeliverInput, WhatsappRelay } from '../outreach/outreach.service';
 import type { DueMessage } from './auto-outreach-candidates.service';
 import { AutoOutreachSweeper } from './auto-outreach.sweeper';
@@ -34,6 +38,7 @@ function build(options: {
   optedOut?: string[];
   send?: jest.Mock;
   sentToday?: number;
+  ceiling?: jest.Mock;
 }) {
   const settings = OutreachSettingsSchema.parse({});
   const updates: unknown[] = [];
@@ -70,6 +75,7 @@ function build(options: {
   const device = {
     enabled: true,
     status: jest.fn().mockResolvedValue({ state: options.state ?? 'connected' }),
+    assertWithinCeiling: options.ceiling ?? jest.fn().mockResolvedValue(undefined),
     send,
   };
   const candidates = {
@@ -144,6 +150,29 @@ describe('AutoOutreachSweeper.step', () => {
     expect(t.delivered).toEqual([]);
     expect(t.updates).toEqual([]);
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops at the number ceiling (shared with campaigns) before composing anything', async () => {
+    const ceiling = jest.fn().mockRejectedValue(new DeviceCeilingError(20, new Date()));
+    const t = build({ queue: [due('u01')], ceiling });
+    expect(await t.sweeper.step(AFTERNOON)).toBe('blocked');
+    expect(t.candidates.checkoutDue).not.toHaveBeenCalled();
+    expect(t.outreach.deliver).not.toHaveBeenCalled();
+  });
+
+  it('holds, with nothing written, while WhatsApp is refusing new chats', async () => {
+    const send = jest.fn().mockRejectedValue(new WhatsappRestrictedError('timelock', null));
+    const t = build({ queue: [due('u01'), due('u02')], send });
+    expect(await t.sweeper.step(AFTERNOON)).toBe('blocked');
+    expect(t.delivered).toEqual([]);
+    expect(t.updates).toEqual([]);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts its sends on the number-wide ledger as `outreach`', async () => {
+    const t = build({ queue: [due('u01')] });
+    await t.sweeper.step(AFTERNOON);
+    expect(t.send).toHaveBeenCalledWith(expect.objectContaining({ source: 'outreach' }));
   });
 
   it('does nothing at all when both kinds are switched off', async () => {
