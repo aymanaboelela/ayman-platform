@@ -89,7 +89,7 @@ export function UploadDock() {
                 </>
               ) : null}
               <Link
-                href={`/admin/courses/${upload.courseId}`}
+                href={upload.href ?? `/admin/courses/${upload.courseId}`}
                 className="ms-auto font-medium text-accent-text hover:underline"
               >
                 {c.videoUploadDockOpen}
