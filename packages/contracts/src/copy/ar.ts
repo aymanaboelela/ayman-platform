@@ -5109,6 +5109,30 @@ export const copy = {
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
     walletQueue: 'طلبات الشحن',
     walletSubtitle: 'المحفظة',
+    /*
+     * ADMIN, push only — «لوحة التحكم على الموبايل» (`adminMobile`). None of
+     * these is a feed row: each says something about the platform right now,
+     * and a row read the next morning would be stale. Worded about the thing,
+     * never to the reader — a teacher may be a man or a woman.
+     *
+     * The night summary is one line built from three parts, joined with « · »
+     * by `daily-summary.ts`. Whole pounds, Western digits.
+     */
+    dailySummaryTitle: 'ملخص النهارده',
+    /** `{n}` paid subscriptions, split into first-timers and renewals. */
+    dailySummarySubs: '{n} اشتراك ({fresh} جديد، {renewal} تجديد)',
+    dailySummaryNoSubs: 'مفيش اشتراكات النهارده',
+    /** `{amount}` — the finance screen's own «الصافي» for today. */
+    dailySummaryNet: 'الصافي {amount} جنيه',
+    dailySummaryPending: '{n} طلب مستني مراجعة',
+    dailySummaryNothingPending: 'مفيش طلبات مستنية',
+    whatsappDown: 'الواتساب فصل',
+    whatsappDownDetail: 'الرسايل مش هتتبعت لحد ما الرقم يترابط تاني.',
+    whatsappBack: 'الواتساب رجع يشتغل',
+    whatsappBackDetail: 'الرقم مترابط والرسايل بتتبعت تاني.',
+    /** `{lesson}` — the lecture whose upload gave up for good. */
+    videoFailed: 'رفع فيديو فشل — {lesson}',
+    videoFailedDetail: 'اتجرّب أكتر من مرة ومنفعش، والسبب مكتوب في صفحة الفيديوهات.',
     /**
      * ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». `{quiz}` is the lecture the
      * quiz sits on. Worded about the QUESTION, never to the reader: a teacher
