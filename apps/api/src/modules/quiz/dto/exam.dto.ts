@@ -57,6 +57,12 @@ export const AdminGradingResultsQuerySchema = z.object({
   /** One CAIRO calendar day, `YYYY-MM-DD`. Validated by shape here and used
    *  as a `::date` parameter, never spliced into the SQL. */
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /** «أدوّر على طالب» — a name or a phone. A GET form submits `q=` for an
+   *  empty box, and that must read as «no search», not as a match on ''. */
+  q: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().max(120).optional(),
+  ),
   /** `coerce`, because a query string is always text. The service clamps it
    *  again — this bound is the contract, that one is the protection. */
   limit: z.coerce.number().int().min(1).max(300).optional(),
