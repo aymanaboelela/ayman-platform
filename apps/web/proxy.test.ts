@@ -226,6 +226,15 @@ describe('enrollmentOpensCourse — who gets sent to /library instead of the sal
   });
 });
 
+describe('decideRedirect — a designer or a video editor', () => {
+  it('sends them from the student dashboard straight to their own page', () => {
+    const editor = { authenticated: true, onboardingCompleted: true, staffShell: '/montage' as const };
+    expect(decideRedirect('/dashboard', editor)).toBe('staff-shell');
+    expect(decideRedirect('/montage', editor)).toBeNull();
+    expect(decideRedirect('/dashboard', { authenticated: true, onboardingCompleted: true, staffShell: null })).toBeNull();
+  });
+});
+
 describe('decideRedirect — the redirect matrix, every cell', () => {
   const anonymous: AuthState = { authenticated: false, onboardingCompleted: false };
   const incomplete: AuthState = { authenticated: true, onboardingCompleted: false };

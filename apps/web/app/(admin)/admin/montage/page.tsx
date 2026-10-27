@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 import { MontageInbox } from '@/components/montage/montage-inbox';
 import { loadMontage } from '@/components/montage/load-montage';
+import { MontageEditorsSchema } from '@ayman/contracts/montage';
+import { adminGet } from '@/lib/admin-api';
 import { featureEnabled } from '@/lib/entitlements';
 import { can, getSession } from '@/lib/session';
 
@@ -15,7 +17,11 @@ export default async function AdminMontagePage() {
   if (!(await featureEnabled('montage'))) notFound();
   const session = await getSession();
   if (!can(session, 'montage:read')) notFound();
-  const list = await loadMontage();
+  const canPublish = can(session, 'montage:publish');
+  const [list, editors] = await Promise.all([
+    loadMontage(),
+    canPublish ? adminGet('/api/admin/montage/editors', MontageEditorsSchema) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-[72rem]">
@@ -26,8 +32,9 @@ export default async function AdminMontagePage() {
       <MontageInbox
         initial={list}
         canWrite={can(session, 'montage:write')}
-        canPublish={can(session, 'montage:publish')}
+        canPublish={canPublish}
         href="/admin/montage"
+        editors={editors?.editors}
       />
     </div>
   );

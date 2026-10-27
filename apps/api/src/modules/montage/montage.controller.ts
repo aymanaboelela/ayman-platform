@@ -1,9 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, UsePipes } from '@nestjs/common';
+import { permissionsForUser } from '../../auth/permissions';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import {
+  MontageEditorCreateDto,
+  MontageEditorPasswordDto,
   MontagePublishDto,
   MontageUploadCompleteDto,
   MontageUploadResumeDto,
@@ -60,12 +63,18 @@ export class MontageController {
     return this.montage.patch(id, body);
   }
 
-  /** Also «إلغاء» for an upload still in flight — the parts go with the row. */
+  /**
+   * Also «إلغاء» for an upload still in flight — the parts go with the row.
+   *
+   * A video that has ARRIVED is the instructor's to delete, not the editor's:
+   * `montage:write` cancels an upload, `montage:publish` is what deletes a
+   * finished one. The owner's words: «بعد الرفع هو ميقدرش يمسح… أنا اللي أقدر».
+   */
   @RequirePermission('montage:write')
   @Delete('montage/:id')
   @HttpCode(204)
-  async remove(@Param('id', Id) id: string): Promise<void> {
-    await this.montage.remove(id);
+  async remove(@Param('id', Id) id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.montage.remove(id, permissionsForUser(user.id, user.role).includes('montage:publish'));
   }
 
   @RequirePermission('montage:read')
@@ -78,6 +87,45 @@ export class MontageController {
   @Get('admin/montage/targets')
   targets() {
     return this.montage.targets();
+  }
+
+  /*
+   * «المونتيرين». `montage:publish` — the instructor's side of the feature —
+   * and every service method refuses an account that is not `video_editor`,
+   * so none of these can reach a student, an assistant or the instructor.
+   */
+  @RequirePermission('montage:publish')
+  @Get('admin/montage/editors')
+  editors() {
+    return this.montage.editors();
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors')
+  createEditor(@Body() body: MontageEditorCreateDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.montage.createEditor(body, user.id);
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors/:userId/password')
+  setEditorPassword(
+    @Param('userId') userId: string,
+    @Body() body: MontageEditorPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.montage.setEditorPassword(userId, body.password, user.id);
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors/:userId/disable')
+  disableEditor(@Param('userId') userId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.montage.setEditorDisabled(userId, true, user.id);
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors/:userId/enable')
+  enableEditor(@Param('userId') userId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.montage.setEditorDisabled(userId, false, user.id);
   }
 
   @RequirePermission('montage:publish')

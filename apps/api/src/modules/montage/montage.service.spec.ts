@@ -4,7 +4,7 @@
  * Asserted on the EFFECT: what the bucket holds afterwards, what the lesson's
  * video row says, and which video went to «محفوظة» — not on call order alone.
  */
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { montageSourceKey } from '@ayman/contracts/montage';
 import type { AuditService } from '../../audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -218,17 +218,24 @@ describe('MontageService.publish — «حطه في درس»', () => {
 });
 
 describe('MontageService.remove', () => {
-  it('deletes the original and the row', async () => {
+  it('deletes the original and the row — for the instructor', async () => {
     const t = build({});
-    await t.service.remove(MONTAGE_ID);
+    await t.service.remove(MONTAGE_ID, true);
     expect(t.bucket.size).toBe(0);
     expect(t.montageDeleted()).toBe(true);
     expect(t.aborted).toEqual([]);
   });
 
-  it('throws away the parts of an upload that never finished', async () => {
+  it('refuses the editor once the video has arrived, and keeps every byte', async () => {
+    const t = build({});
+    await expect(t.service.remove(MONTAGE_ID, false)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(t.bucket.size).toBe(1);
+    expect(t.montageDeleted()).toBe(false);
+  });
+
+  it('lets the editor cancel an upload that never finished, parts and all', async () => {
     const t = build({ montage: { status: 'uploading', uploadId: 'mp-1' } });
-    await t.service.remove(MONTAGE_ID);
+    await t.service.remove(MONTAGE_ID, false);
     expect(t.aborted).toEqual([montageSourceKey(STORAGE_ID)]);
     expect(t.montageDeleted()).toBe(true);
   });
@@ -243,5 +250,66 @@ describe('MontageService.list', () => {
 
     const half = build({ montage: { status: 'uploading', uploadId: 'mp-1' } });
     expect((await half.service.list()).totalBytes).toBe(0);
+  });
+});
+
+describe('MontageService — the editor accounts', () => {
+  function accounts(users: { id: string; role: string; phoneNumber: string | null }[]) {
+    const writes: string[] = [];
+    const prisma = {
+      user: {
+        findFirst: async (args: { where: { id: string; role: string } }) =>
+          users.find((user) => user.id === args.where.id && user.role === args.where.role) ?? null,
+        findMany: async () =>
+          users
+            .filter((user) => user.role === 'video_editor')
+            .map((user) => ({ ...user, name: 'مونتير', bannedAt: null, createdAt: new Date() })),
+        update: async () => {
+          writes.push('user.update');
+          return {};
+        },
+      },
+      montageVideo: { groupBy: async () => [] },
+      account: {
+        upsert: async () => {
+          writes.push('account.upsert');
+          return {};
+        },
+      },
+      session: { deleteMany: async () => writes.push('session.deleteMany') },
+      sessionDevice: { deleteMany: async () => writes.push('sessionDevice.deleteMany') },
+      $transaction: async (ops: unknown[]) => Promise.all(ops),
+    } as unknown as PrismaService;
+    const service = new MontageService(
+      prisma,
+      { objectStorage: null } as unknown as VideoMirrorService,
+      {} as VideoArchiveService,
+      {} as LessonService,
+      { record: async () => undefined } as unknown as AuditService,
+    );
+    return { service, writes };
+  }
+
+  it('never sets a password on an account that is not an editor', async () => {
+    const t = accounts([{ id: 'student-1', role: 'student', phoneNumber: '+201000000001' }]);
+    await expect(t.service.setEditorPassword('student-1', 'montage2026', 'admin')).rejects.toBeInstanceOf(NotFoundException);
+    expect(t.writes).toEqual([]);
+  });
+
+  it('a new password ends every session the editor had', async () => {
+    const t = accounts([{ id: 'ed-1', role: 'video_editor', phoneNumber: '+201500000777' }]);
+    const editor = await t.service.setEditorPassword('ed-1', 'montage2026', 'admin');
+    expect(editor.id).toBe('ed-1');
+    expect(t.writes).toEqual(expect.arrayContaining(['account.upsert', 'session.deleteMany']));
+  });
+
+  it('stopping an editor signs them out everywhere; never touches anyone else', async () => {
+    const t = accounts([
+      { id: 'ed-1', role: 'video_editor', phoneNumber: null },
+      { id: 'owner-1', role: 'owner', phoneNumber: null },
+    ]);
+    await t.service.setEditorDisabled('ed-1', true, 'admin');
+    expect(t.writes).toEqual(['user.update', 'session.deleteMany', 'sessionDevice.deleteMany']);
+    await expect(t.service.setEditorDisabled('owner-1', true, 'admin')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

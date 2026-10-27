@@ -1,4 +1,6 @@
 import {
+  MontageEditorCreateSchema,
+  MontageEditorPasswordSchema,
   MontagePublishSchema,
   MontageUploadCompleteSchema,
   MontageUploadResumeSchema,
@@ -12,3 +14,5 @@ export class MontageUploadResumeDto extends createZodDto(MontageUploadResumeSche
 export class MontageUploadCompleteDto extends createZodDto(MontageUploadCompleteSchema) {}
 export class MontageVideoPatchDto extends createZodDto(MontageVideoPatchSchema) {}
 export class MontagePublishDto extends createZodDto(MontagePublishSchema) {}
+export class MontageEditorCreateDto extends createZodDto(MontageEditorCreateSchema) {}
+export class MontageEditorPasswordDto extends createZodDto(MontageEditorPasswordSchema) {}

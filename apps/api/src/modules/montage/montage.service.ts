@@ -1,7 +1,9 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import * as argon2 from 'argon2';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,6 +14,8 @@ import { VIDEO_LIBRARY_COURSE_SLUG } from '@ayman/contracts/admin/video-upload';
 import { uploadPartCount, uploadPartSize, uploadSourceKey } from '@ayman/contracts/video';
 import {
   montageSourceKey,
+  type MontageEditor,
+  type MontageEditors,
   type MontageDownload,
   type MontageList,
   type MontagePublish,
@@ -24,6 +28,10 @@ import {
   type MontageVideo,
   type MontageVideoPatch,
 } from '@ayman/contracts/montage';
+import { ARGON2_OPTIONS } from '../../auth/argon2-options';
+import { accountThrottleKey, phoneIdentifier, throttleKeyFor } from '../../auth/credential-check.service';
+import { loginThrottle } from '../../auth/login-throttle.instance';
+import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
@@ -104,6 +112,7 @@ export class MontageService {
         sizeBytes: Number(row.sizeBytes),
         status: row.status === 'ready' ? 'ready' : 'uploading',
         uploadedBy: row.uploadedBy === null ? null : (names.get(row.uploadedBy) ?? null),
+        uploadedById: row.uploadedBy,
         createdAt: row.createdAt.toISOString(),
         lesson:
           lesson === undefined || row.publishedAt === null
@@ -234,9 +243,15 @@ export class MontageService {
    * Gone — the row AND the bytes. An unfinished upload's parts are aborted
    * too: they are stored and billed and appear in no listing. A lesson the
    * video was put on keeps playing: it has its own copy.
+   *
+   * `mayDeleteReady` is `montage:publish`: the editor may cancel their own
+   * upload, but a video that has arrived stays until the instructor removes it.
    */
-  async remove(id: string): Promise<void> {
+  async remove(id: string, mayDeleteReady: boolean): Promise<void> {
     const row = await this.row(id);
+    if (row.status === 'ready' && !mayDeleteReady) {
+      throw new ForbiddenException('الفيديو اترفع خلاص — المسح للمدرّس بس');
+    }
     const storage = this.storage();
     const key = montageSourceKey(row.storageId);
     if (row.uploadId !== null) await storage.abortMultipart(key, row.uploadId);
@@ -396,6 +411,163 @@ export class MontageService {
     });
     this.logger.log({ montageId: id, lessonId, videoId }, 'montage video put on a lesson');
     return { courseId, lessonId };
+  }
+
+  /* ── «المونتيرين» — the editor accounts ─────────────────────────────────
+   *
+   * Every method below acts on a `video_editor` account and nothing else: the
+   * lookup filters on the role, so an id that belongs to a student, an
+   * assistant or the instructor is a 404 here. That is what makes a password
+   * set from this screen safe to hand to `montage:publish` rather than to the
+   * platform owner alone.
+   */
+
+  async editors(): Promise<MontageEditors> {
+    const users = await this.prisma.user.findMany({
+      where: { role: 'video_editor' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, phoneNumber: true, bannedAt: true, createdAt: true },
+    });
+    const stats = await this.prisma.montageVideo.groupBy({
+      by: ['uploadedBy'],
+      where: { uploadedBy: { in: users.map((user) => user.id) }, status: 'ready' },
+      _count: { _all: true },
+      _sum: { sizeBytes: true },
+      _max: { createdAt: true },
+    });
+    const byUser = new Map(stats.map((row) => [row.uploadedBy, row]));
+    return {
+      editors: users.map((user): MontageEditor => {
+        const stat = byUser.get(user.id);
+        return {
+          id: user.id,
+          name: user.name,
+          phone: user.phoneNumber,
+          disabled: user.bannedAt !== null,
+          videoCount: stat?._count._all ?? 0,
+          totalBytes: Number(stat?._sum.sizeBytes ?? 0),
+          lastUploadAt: stat?._max.createdAt?.toISOString() ?? null,
+          createdAt: user.createdAt.toISOString(),
+        };
+      }),
+    };
+  }
+
+  /**
+   * A new editor, ready to sign in with the phone and password typed here.
+   *
+   * Made directly rather than through the sign-up form: that form makes a
+   * STUDENT, who is then sent through onboarding and has to be promoted by
+   * hand. Here the account is born `video_editor`, with a credential hashed by
+   * the same Argon2 settings sign-in verifies with (`ARGON2_OPTIONS`).
+   */
+  async createEditor(input: { name: string; phone: string; password: string }, actorId: string): Promise<MontageEditor> {
+    const id = randomBytes(24).toString('base64url').replace(/[-_]/g, '').slice(0, 32);
+    const hash = await argon2.hash(input.password, ARGON2_OPTIONS);
+    try {
+      await this.prisma.$transaction([
+        this.prisma.user.create({
+          data: {
+            id,
+            name: input.name,
+            email: null,
+            emailVerified: false,
+            role: 'video_editor',
+            phoneNumber: input.phone,
+            phoneNumberVerified: false,
+          },
+        }),
+        this.prisma.account.create({
+          data: { id: randomUUID(), providerId: 'credential', accountId: id, userId: id, password: hash },
+        }),
+      ]);
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new ConflictException('الرقم ده عليه حساب قبل كده — اكتب رقم تاني');
+      throw error;
+    }
+    await this.audit.record({
+      action: 'montage:editor-create',
+      resourceType: 'user',
+      resourceId: id,
+      outcome: 'success',
+      metadata: { name: input.name, phone: input.phone, actorId },
+    });
+    return this.editor(id);
+  }
+
+  /**
+   * A new password. Every session the editor had ends with it, and the
+   * sign-in lock for their number is lifted — `StudentsService.setPassword`'s
+   * two halves, for the same two reasons.
+   */
+  async setEditorPassword(id: string, password: string, actorId: string): Promise<MontageEditor> {
+    const user = await this.editorRow(id);
+    const hash = await argon2.hash(password, ARGON2_OPTIONS);
+    await this.prisma.$transaction([
+      this.prisma.account.upsert({
+        where: { providerId_accountId: { providerId: 'credential', accountId: id } },
+        update: { password: hash },
+        create: { id: randomUUID(), providerId: 'credential', accountId: id, userId: id, password: hash },
+      }),
+      this.prisma.session.deleteMany({ where: { userId: id } }),
+    ]);
+    if (user.phoneNumber) loginThrottle.clear(throttleKeyFor(phoneIdentifier(user.phoneNumber)));
+    loginThrottle.clear(accountThrottleKey(id));
+    await this.audit.record({
+      action: 'montage:editor-password',
+      resourceType: 'user',
+      resourceId: id,
+      outcome: 'success',
+      metadata: { actorId },
+    });
+    return this.editor(id);
+  }
+
+  /**
+   * «إيقاف الحساب» — the editor cannot sign in again, and is signed out of
+   * every device now. Their videos stay where they are: who uploaded what is
+   * still worth knowing after they leave. `false` lets them back in.
+   */
+  async setEditorDisabled(id: string, disabled: boolean, actorId: string): Promise<MontageEditor> {
+    await this.editorRow(id);
+    if (disabled) {
+      await this.prisma.$transaction([
+        this.prisma.user.update({
+          where: { id },
+          data: { bannedAt: new Date(), bannedReason: 'حساب المونتير اتوقف.', bannedByUserId: actorId },
+        }),
+        this.prisma.session.deleteMany({ where: { userId: id } }),
+        this.prisma.sessionDevice.deleteMany({ where: { userId: id } }),
+      ]);
+    } else {
+      await this.prisma.user.update({
+        where: { id },
+        data: { bannedAt: null, bannedReason: null, bannedByUserId: null },
+      });
+    }
+    await this.audit.record({
+      action: disabled ? 'montage:editor-disable' : 'montage:editor-enable',
+      resourceType: 'user',
+      resourceId: id,
+      outcome: 'success',
+      metadata: { actorId },
+    });
+    return this.editor(id);
+  }
+
+  private async editorRow(id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, role: 'video_editor' },
+      select: { id: true, phoneNumber: true },
+    });
+    if (user === null) throw new NotFoundException('الحساب ده مش حساب مونتير');
+    return user;
+  }
+
+  private async editor(id: string): Promise<MontageEditor> {
+    const found = (await this.editors()).editors.find((editor) => editor.id === id);
+    if (found === undefined) throw new NotFoundException('الحساب ده مش حساب مونتير');
+    return found;
   }
 
   /** `VideoLibraryService.targetLesson`'s refusals: a video lesson, not mid-upload. */

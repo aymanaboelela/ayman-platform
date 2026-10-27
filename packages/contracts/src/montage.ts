@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { MAX_UPLOAD_VIDEO_BYTES, UPLOAD_ID_RE, UPLOAD_VIDEO_MIME } from '@ayman/contracts/video';
+import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 
 /**
  * «المونتاج» — where the video editor hands finished videos over.
@@ -70,6 +71,8 @@ export const MontageVideoSchema = z.object({
   status: MontageStatusSchema,
   /** The account that uploaded it — the editor, or the instructor themself. */
   uploadedBy: z.string().nullable(),
+  /** Its id, so the instructor's screen can show one editor's work at a time. */
+  uploadedById: z.string().nullable(),
   createdAt: z.string(),
   /** The lesson it was last put on, while that lesson still exists. */
   lesson: z
@@ -197,3 +200,62 @@ export const MontageTargetsSchema = z.object({
   ),
 });
 export type MontageTargets = z.infer<typeof MontageTargetsSchema>;
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ * «المونتيرين» — the editor accounts, managed from the dashboard
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Every editor is their own account, so the instructor can see whose video is
+ * whose, change one password, or stop one person, without touching the rest.
+ * The routes act on `video_editor` accounts ONLY: a password set from here can
+ * never land on a student, an assistant or the instructor.
+ */
+export const MontageEditorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  /** Stopped: cannot sign in, every session already ended. */
+  disabled: z.boolean(),
+  videoCount: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+  lastUploadAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type MontageEditor = z.infer<typeof MontageEditorSchema>;
+
+export const MontageEditorsSchema = z.object({ editors: z.array(MontageEditorSchema) });
+export type MontageEditors = z.infer<typeof MontageEditorsSchema>;
+
+/** Long enough that a guess is not a sign-in, short enough to say over the phone. */
+export const MONTAGE_EDITOR_PASSWORD_MIN = 8;
+
+const EditorPassword = z
+  .string()
+  .min(MONTAGE_EDITOR_PASSWORD_MIN, 'كلمة السر ٨ حروف أو أرقام على الأقل')
+  .max(128);
+
+/** `POST /api/admin/montage/editors` — a new editor, ready to sign in. */
+export const MontageEditorCreateSchema = z
+  .object({
+    name: z.string().trim().min(2, 'اكتب اسم المونتير').max(80),
+    /** Typed the way people type it (`010…`); stored E.164, as sign-in looks it up. */
+    phone: z
+      .string()
+      .trim()
+      .transform((value, ctx) => {
+        const normalized = normalizeEgyptianPhone(value);
+        if (normalized === null) {
+          ctx.addIssue({ code: 'custom', message: 'رقم موبايل مصري صحيح' });
+          return z.NEVER;
+        }
+        return normalized;
+      }),
+    password: EditorPassword,
+  })
+  .strict();
+export type MontageEditorCreate = z.input<typeof MontageEditorCreateSchema>;
+
+/** `POST /api/admin/montage/editors/:id/password`. */
+export const MontageEditorPasswordSchema = z.object({ password: EditorPassword }).strict();
+export type MontageEditorPassword = z.infer<typeof MontageEditorPasswordSchema>;

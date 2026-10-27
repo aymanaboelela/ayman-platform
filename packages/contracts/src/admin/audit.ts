@@ -581,6 +581,11 @@ export const AUDIT_ACTIONS = [
   'montage:update',
   'montage:delete',
   'montage:publish',
+  // The editor accounts themselves, managed from «المونتاج».
+  'montage:editor-create',
+  'montage:editor-password',
+  'montage:editor-disable',
+  'montage:editor-enable',
   /*
    * «لوحته» — the platform owner opened this stack's admin from his control
    * plane, with no password (`admin/owner-sign-in.ts`). The instructor's own
