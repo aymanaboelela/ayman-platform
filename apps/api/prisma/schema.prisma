@@ -5929,6 +5929,10 @@ model MarketingRecipient {
   /// ٠ فشل». This is the second tick, and it is the only column that can tell
   /// the two apart.
   deliveredAt DateTime? @map("delivered_at")
+  /// WhatsApp's own refusal code (`463`, `479`, …) when it refused the
+  /// message. `error` carries the Arabic sentence for it; this carries the
+  /// number, so the failures can be grouped and searched for.
+  errorCode   String?   @map("error_code") @db.VarChar(16)
 
   campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   user     User?             @relation("MarketingRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
@@ -5942,6 +5946,49 @@ model MarketingRecipient {
   /// The receipt route's only query: which row sent this WhatsApp message id.
   @@index([messageId])
   @@map("marketing_recipients")
+  @@schema("app")
+}
+
+/// Every WhatsApp message the platform put on the wire, whichever feature
+/// sent it — a campaign, a «الكتاب اتشحن» notice, a test send — and what
+/// WhatsApp said happened to it afterwards.
+///
+/// ## Why a ledger beside `marketing_recipients`
+///
+/// Delivery used to be visible only for campaign rows. A shipping notice that
+/// WhatsApp refused, or a test send whose receipt arrived after the page was
+/// closed, left no trace anywhere, so «is the number delivering?» had no
+/// answer that covered the whole number. This table is that answer: the device
+/// page's 24-hour delivery rate, last delivery and refusal reasons are all read
+/// from here, and so is the number's own daily ceiling (every sender together —
+/// see `packages/contracts/src/marketing/device-ceiling.ts`).
+///
+/// Written best-effort AFTER the send: a ledger insert that fails must never
+/// turn a delivered message into a failed send.
+model WhatsappSend {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  /// WhatsApp's message id — what a receipt arrives carrying.
+  messageId   String    @unique @map("message_id") @db.VarChar(64)
+  /// `campaign` | `shipping` | `test` | `other`. CHECKed in the migration.
+  source      String    @db.VarChar(16)
+  /// E.164 of the recipient.
+  toPhone     String    @map("to_phone") @db.VarChar(20)
+  /// E.164 of the linked number that sent it. The warm-up ramp is aged by the
+  /// first row of each sender, so linking a new number restarts it.
+  fromPhone   String?   @map("from_phone") @db.VarChar(20)
+  sentAt      DateTime  @default(now()) @map("sent_at")
+  /// The second tick.
+  deliveredAt DateTime? @map("delivered_at")
+  readAt      DateTime? @map("read_at")
+  /// WhatsApp's refusal code, and when it arrived.
+  errorCode   String?   @map("error_code") @db.VarChar(16)
+  refusedAt   DateTime? @map("refused_at")
+
+  /// The 24-hour window and today's ceiling count.
+  @@index([sentAt(sort: Desc)])
+  /// The warm-up ramp: the first send of a given number.
+  @@index([fromPhone, sentAt])
+  @@map("whatsapp_sends")
   @@schema("app")
 }
 

@@ -62,6 +62,7 @@ import { ArenaModule } from './modules/arena/arena.module';
 import { MistakesModule } from './modules/mistakes/mistakes.module';
 import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
+import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
 
 @Module({
@@ -200,6 +201,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     ShareCardsModule,
     // «دعوة الصحاب» — share links, and the wallet reward on a friend's first real payment.
     ReferralsModule,
+    AdminMobileModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,
   ],

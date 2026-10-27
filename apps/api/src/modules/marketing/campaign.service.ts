@@ -20,6 +20,8 @@ import {
   type Pacing,
 } from '@ayman/contracts/marketing/pacing';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
+import { waErrorFor } from '@ayman/contracts/marketing/wa-errors';
+import { copy } from '@ayman/contracts/copy/admin';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -172,10 +174,13 @@ export class CampaignService {
    * ack, not about a failure, and overwriting a successful delivery with a
    * refusal would be the one way this route could make things worse.
    */
-  async markRefused(messageId: string, detail: string): Promise<void> {
+  async markRefused(messageId: string, code: string | null): Promise<void> {
     await this.prisma.marketingRecipient.updateMany({
       where: { messageId, deliveredAt: null },
-      data: { error: detail.slice(0, 300) },
+      data: {
+        error: (waErrorFor(code) ?? copy.marketing.waErrorNoCode).slice(0, 300),
+        errorCode: code?.slice(0, 16) ?? null,
+      },
     });
   }
 
