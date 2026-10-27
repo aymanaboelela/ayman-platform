@@ -19,6 +19,7 @@ import { IS_AYMAN } from '@/lib/tenant';
 import { OverviewQueues } from '@/components/admin/overview-queues';
 import { OverviewCourses } from '@/components/admin/overview-courses';
 import { SuspectKeysBand } from '@/components/admin/suspect-keys-band';
+import { TodayBand } from '@/components/admin/today-band';
 import { VideoUsageOverview } from './video-usage-overview';
 
 export const metadata = { title: copy.admin.title };
@@ -114,6 +115,15 @@ export default async function AdminOverviewPage() {
           </div>
         ) : null}
       </header>
+
+      {/* «النهارده» — the night push and the ops alerts, standing. First,
+          because it is the one band that is always about right now. Streamed:
+          the WhatsApp half asks the sidecar, which may take seconds. */}
+      {features.adminMobile ? (
+        <Suspense fallback={null}>
+          <TodayBand />
+        </Suspense>
+      ) : null}
 
       <OverviewQueues />
 

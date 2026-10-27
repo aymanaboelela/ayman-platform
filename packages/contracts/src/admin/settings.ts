@@ -511,6 +511,46 @@ export const OutreachSettingsSchema = z
      * it is enforced in the delivery path, not in each sweep.
      */
     maxPerStudentPerDay: z.number().int().min(1).max(10).default(2),
+    /*
+     * ── The two AUTOMATIC WhatsApp kinds ─────────────────────────────────
+     *
+     * Read only where the `outreach.whatsapp` entitlement is on — which is
+     * what keeps a default of `true` here from switching anything on for a
+     * teacher who never asked: on their stack the sweeper never runs and the
+     * screen never draws these rows. On Ayman's it means the messages start
+     * by themselves the moment a device is linked, which is what he asked for.
+     *
+     * Every one is a NEW key with a `.default()`, so a stored row written
+     * before this existed parses with them filled in (see the note on
+     * `maxInvitesPerStudent` for why adding is safe and renaming is not).
+     */
+    /** «كمّل الدفع» — one reminder after a payment step was left open. */
+    checkoutRecovery: z.boolean().default(true),
+    /**
+     * How long an opened payment step may sit before the reminder. Floor of
+     * one hour: anything shorter reaches a student still on the page, or one
+     * whose transfer is simply taking a while to send.
+     */
+    checkoutRecoveryAfterHours: z.number().int().min(1).max(47).default(3),
+    /** Days before the SAME course or order may be reminded about again. */
+    checkoutRecoveryEveryDays: z.number().int().min(1).max(60).default(7),
+    /** «الحساب جاهز» — to an account that has bought nothing. */
+    signupNudge: z.boolean().default(true),
+    /** Hours after sign-up before the first nudge. */
+    signupNudgeAfterHours: z.number().int().min(1).max(144).default(24),
+    /**
+     * Days after the FIRST nudge before the second. `0` turns the second one
+     * off — one number rather than a switch and a number, because a second
+     * nudge with no delay is not a thing anybody would want.
+     */
+    signupNudgeSecondAfterDays: z.number().int().min(0).max(30).default(4),
+    /**
+     * The ceiling on these automatic WhatsApp messages per Cairo day, across
+     * both kinds. Deliberately far under a campaign's 200: they go out from
+     * the same number with nobody watching, and a freshly linked number is
+     * exactly the one WhatsApp is quickest to restrict.
+     */
+    autoWhatsappDailyCap: z.number().int().min(1).max(200).default(30),
   })
   .strict();
 

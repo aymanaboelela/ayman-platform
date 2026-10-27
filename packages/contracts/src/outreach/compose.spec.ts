@@ -34,6 +34,17 @@ import {
   WHATSAPP_OPENERS,
   WHATSAPP_TAGALONGS,
 } from '@ayman/contracts/copy/outreach';
+import {
+  CHECKOUT_BODIES,
+  CHECKOUT_BOOK_OPENERS,
+  CHECKOUT_CLOSERS,
+  CHECKOUT_COURSE_OPENERS,
+  SIGNUP_BODIES,
+  SIGNUP_BODIES_UNKNOWN,
+  SIGNUP_CLOSERS,
+  SIGNUP_OPENERS,
+  SIGNUP_SECOND_OPENERS,
+} from '@ayman/contracts/copy/outreach-auto';
 import { OUTREACH_KINDS } from '@ayman/contracts/outreach/kinds';
 import {
   bandFor,
@@ -119,6 +130,15 @@ const EVERY_LINE: readonly string[] = [
   ...WHATSAPP_BODIES,
   ...WHATSAPP_CLOSERS,
   ...WHATSAPP_TAGALONGS,
+  ...CHECKOUT_COURSE_OPENERS,
+  ...CHECKOUT_BOOK_OPENERS,
+  ...CHECKOUT_BODIES,
+  ...CHECKOUT_CLOSERS,
+  ...SIGNUP_OPENERS,
+  ...SIGNUP_SECOND_OPENERS,
+  ...SIGNUP_BODIES,
+  ...SIGNUP_BODIES_UNKNOWN,
+  ...SIGNUP_CLOSERS,
 ];
 
 describe('composeOutreach — variety', () => {
@@ -458,6 +478,10 @@ describe('composeOutreach — content', () => {
       { kind: 'follow_up', missedLessons: [], missedQuizzes: ['الدوال', 'المصفوفات'] },
       { kind: 'subscribe_nudge', courseTitle: 'الصف الأول', url: 'https://x.test/courses/y1' },
       { kind: 'subscribe_nudge', courseTitle: null, url: 'https://x.test/courses' },
+      { kind: 'checkout_recovery', target: 'course', title: 'البرمجة', url: 'https://x.test/courses/p/subscribe' },
+      { kind: 'checkout_recovery', target: 'book_order', title: null, url: 'https://x.test/store/orders/1/pay' },
+      { kind: 'signup_nudge', step: 1, courseTitle: 'الصف الأول', url: 'https://x.test/courses/y1' },
+      { kind: 'signup_nudge', step: 2, courseTitle: null, url: 'https://x.test/courses' },
       { kind: 'referral_reward', amount: '50' },
     ];
     for (const kind of facts) {
@@ -595,6 +619,15 @@ describe('the voice — one message, written for either reader', () => {
     ...REFERRAL_REWARD_OPENERS,
     ...REFERRAL_REWARD_BODIES,
     ...REFERRAL_REWARD_CLOSERS,
+    ...CHECKOUT_COURSE_OPENERS,
+    ...CHECKOUT_BOOK_OPENERS,
+    ...CHECKOUT_BODIES,
+    ...CHECKOUT_CLOSERS,
+    ...SIGNUP_OPENERS,
+    ...SIGNUP_SECOND_OPENERS,
+    ...SIGNUP_BODIES,
+    ...SIGNUP_BODIES_UNKNOWN,
+    ...SIGNUP_CLOSERS,
   ];
 
   it('never addresses the student as a boy', () => {
@@ -686,6 +719,8 @@ describe('the kind catalogue', () => {
       'whatsapp_invite',
       'follow_up',
       'subscribe_nudge',
+      'checkout_recovery',
+      'signup_nudge',
     ];
     expect([...OUTREACH_KINDS].sort()).toEqual([...composed].sort());
   });
@@ -829,5 +864,87 @@ describe('composeOutreach — subscribe_nudge', () => {
       expect(SUBSCRIBE_BODIES_UNKNOWN.some((line) => body.includes(line))).toBe(true);
       expect(SUBSCRIBE_BODIES.some((line) => body.includes(line.replace('{course}', '')))).toBe(false);
     }
+  });
+});
+
+/**
+ * «كمّل الدفع» and «الحساب جاهز» — the two kinds that are read on WhatsApp
+ * first. Everything below is about the one property both depend on: the link
+ * is in the message, alone on its line, exactly once, and nothing else in the
+ * message competes with it.
+ */
+describe('composeOutreach — the automatic WhatsApp kinds', () => {
+  const checkoutCourse: OutreachFacts = {
+    kind: 'checkout_recovery',
+    target: 'course',
+    title: 'البرمجة — الصف الثاني',
+    url: 'https://x.test/courses/programming-2/subscribe?month=a',
+  };
+  const checkoutBook: OutreachFacts = {
+    kind: 'checkout_recovery',
+    target: 'book_order',
+    title: null,
+    url: 'https://x.test/store/orders/abc/pay',
+  };
+  const signup = (step: 1 | 2, courseTitle: string | null): OutreachFacts => ({
+    kind: 'signup_nudge',
+    step,
+    courseTitle,
+    url: courseTitle ? 'https://x.test/courses/y2' : 'https://x.test/courses',
+  });
+
+  it.each([
+    ['a course checkout', checkoutCourse],
+    ['a book checkout', checkoutBook],
+    ['a first signup nudge', signup(1, 'البرمجة')],
+    ['a second signup nudge with no course', signup(2, null)],
+  ])('carries the deep link alone on its own line, once — %s', (_label, facts) => {
+    const url = (facts as { url: string }).url;
+    for (let index = 0; index < 20; index += 1) {
+      const { body } = composeOutreach(
+        input({ facts, seed: `a${index}`, whatsappUrl: 'https://whatsapp.com/channel/x' }),
+      );
+      const lines = body.split('\n');
+      expect(lines.filter((line) => line === url)).toHaveLength(1);
+      // No channel tag-along: a second link would steal WhatsApp's preview.
+      expect(body).not.toContain('whatsapp.com/channel');
+    }
+  });
+
+  it('names the course on a course checkout, and never prints an empty title on a book', () => {
+    const course = composeOutreach(input({ facts: checkoutCourse })).body;
+    expect(course).toContain('«البرمجة — الصف الثاني»');
+    for (let index = 0; index < 20; index += 1) {
+      const book = composeOutreach(input({ facts: checkoutBook, seed: `b${index}` })).body;
+      expect(book).not.toContain('«»');
+      expect(CHECKOUT_BOOK_OPENERS.some((line) => book.includes(line))).toBe(true);
+    }
+  });
+
+  it('opens the second nudge differently from the first', () => {
+    for (let index = 0; index < 20; index += 1) {
+      const second = composeOutreach(input({ facts: signup(2, 'البرمجة'), seed: `s${index}` })).body;
+      expect(SIGNUP_SECOND_OPENERS.some((line) => second.includes(line))).toBe(true);
+      expect(SIGNUP_OPENERS.some((line) => second.includes(line))).toBe(false);
+    }
+  });
+
+  it('does not invent a course for a profile that names none', () => {
+    for (let index = 0; index < 20; index += 1) {
+      const body = composeOutreach(input({ facts: signup(1, null), seed: `u${index}` })).body;
+      expect(body).not.toContain('«»');
+      expect(SIGNUP_BODIES_UNKNOWN.some((line) => body.includes(line))).toBe(true);
+    }
+  });
+
+  it('never says WHEN the checkout was left — «من ٣ ساعات» reads as being watched', () => {
+    for (const line of [...CHECKOUT_COURSE_OPENERS, ...CHECKOUT_BOOK_OPENERS, ...CHECKOUT_BODIES]) {
+      expect(line).not.toMatch(/ساع|دقيق|امبارح/u);
+    }
+  });
+
+  it('varies across a sequence like every other kind', () => {
+    const { bodies } = sequence(4, { facts: checkoutCourse });
+    expect(new Set(bodies).size).toBe(4);
   });
 });

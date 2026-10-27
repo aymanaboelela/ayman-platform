@@ -8,7 +8,7 @@ import {
   type OutreachStats,
 } from '@ayman/contracts/outreach/admin';
 import { composeOutreach, type OutreachFacts } from '@ayman/contracts/outreach/compose';
-import { OUTREACH_KINDS } from '@ayman/contracts/outreach/kinds';
+import { OUTREACH_KINDS, isAutoWhatsappKind } from '@ayman/contracts/outreach/kinds';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OUTREACH_INSTRUCTOR_NAME, OutreachService } from './outreach.service';
 import { OutreachSweeper } from './outreach-sweeper.service';
@@ -168,6 +168,14 @@ export class OutreachLogService {
     const history: string[] = [];
 
     for (const kind of OUTREACH_KINDS) {
+      /*
+       * The two automatic WhatsApp kinds are previewed on their own card
+       * (`GET /api/admin/outreach/auto`), which sits behind the
+       * `outreach.whatsapp` entitlement. Listing them here too would show a
+       * teacher without the feature samples of messages their stack never
+       * sends — and has no facts here to compose them from anyway.
+       */
+      if (isAutoWhatsappKind(kind)) continue;
       for (let index = 0; index < SAMPLES_PER_KIND; index += 1) {
         const composed = composeOutreach({
           firstName: 'محمد',
