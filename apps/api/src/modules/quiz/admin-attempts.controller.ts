@@ -182,6 +182,7 @@ export class AdminAttemptsController {
       sort: query.sort,
       lessonId: query.lessonId,
       day: query.day,
+      q: query.q,
       limit: query.limit,
     });
   }

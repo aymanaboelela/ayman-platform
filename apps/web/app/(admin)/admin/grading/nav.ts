@@ -21,6 +21,7 @@ export type GradingListState = {
   sort?: string;
   exam?: string;
   day?: string;
+  q?: string;
 };
 
 /** Every filter lives in the URL, so each control has to rebuild the whole
@@ -32,6 +33,7 @@ export function gradingListHref(state: GradingListState): string {
   if (state.sort) params.set('sort', state.sort);
   if (state.exam) params.set('exam', state.exam);
   if (state.day) params.set('day', state.day);
+  if (state.q) params.set('q', state.q);
   const query = params.toString();
   return query ? `/admin/grading?${query}` : '/admin/grading';
 }
@@ -46,6 +48,7 @@ export function normalizeGradingQuery(query: {
   sort?: string;
   exam?: string;
   day?: string;
+  q?: string;
 }): GradingListState {
   const tab: GradingTab = GRADING_TABS.includes(query.tab as GradingTab)
     ? (query.tab as GradingTab)
@@ -53,5 +56,8 @@ export function normalizeGradingQuery(query: {
   const sort = GradingSortSchema.safeParse(query.sort).data;
   const exam = query.exam && query.exam.length > 0 ? query.exam : undefined;
   const day = query.day && /^\d{4}-\d{2}-\d{2}$/.test(query.day) ? query.day : undefined;
-  return { tab, sort, exam, day };
+  // Trimmed and capped exactly as the API's DTO bounds it (120), so a back
+  // link never carries a search the list would have refused.
+  const q = query.q?.trim().slice(0, 120) || undefined;
+  return { tab, sort, exam, day, q };
 }
