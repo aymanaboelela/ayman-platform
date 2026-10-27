@@ -145,8 +145,13 @@ export class ReferralNoticeService {
           await this.settle(row.id, 'not_on_whatsapp');
           continue;
         }
-        // The device, not the number. Hand the row back and stop: the next
-        // tick that finds the device up tries it again.
+        // The device, not the number — dropped, or holding back (with #705:
+        // the number's daily ceiling, `DeviceCeilingError`, or a WhatsApp
+        // new-chat restriction, `WhatsappRestrictedError`, both refused before
+        // anything reached the wire). Hand the row back and stop: the next
+        // tick that finds the device willing tries it again, while the reward
+        // is still inside the fresh window. Sends count toward that ceiling as
+        // `source: 'other'`, the service's default.
         await this.prisma.referral.updateMany({
           where: { id: row.id, noticeOutcome: 'sending' },
           data: { noticeAt: null, noticeOutcome: null },
