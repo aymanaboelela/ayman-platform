@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -234,9 +235,15 @@ export class MontageService {
    * Gone — the row AND the bytes. An unfinished upload's parts are aborted
    * too: they are stored and billed and appear in no listing. A lesson the
    * video was put on keeps playing: it has its own copy.
+   *
+   * `mayDeleteReady` is `montage:publish`: the editor may cancel their own
+   * upload, but a video that has arrived stays until the instructor removes it.
    */
-  async remove(id: string): Promise<void> {
+  async remove(id: string, mayDeleteReady: boolean): Promise<void> {
     const row = await this.row(id);
+    if (row.status === 'ready' && !mayDeleteReady) {
+      throw new ForbiddenException('الفيديو اترفع خلاص — المسح للمدرّس بس');
+    }
     const storage = this.storage();
     const key = montageSourceKey(row.storageId);
     if (row.uploadId !== null) await storage.abortMultipart(key, row.uploadId);

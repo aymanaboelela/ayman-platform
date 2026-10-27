@@ -4,7 +4,7 @@
  * Asserted on the EFFECT: what the bucket holds afterwards, what the lesson's
  * video row says, and which video went to «محفوظة» — not on call order alone.
  */
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { montageSourceKey } from '@ayman/contracts/montage';
 import type { AuditService } from '../../audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -218,17 +218,24 @@ describe('MontageService.publish — «حطه في درس»', () => {
 });
 
 describe('MontageService.remove', () => {
-  it('deletes the original and the row', async () => {
+  it('deletes the original and the row — for the instructor', async () => {
     const t = build({});
-    await t.service.remove(MONTAGE_ID);
+    await t.service.remove(MONTAGE_ID, true);
     expect(t.bucket.size).toBe(0);
     expect(t.montageDeleted()).toBe(true);
     expect(t.aborted).toEqual([]);
   });
 
-  it('throws away the parts of an upload that never finished', async () => {
+  it('refuses the editor once the video has arrived, and keeps every byte', async () => {
+    const t = build({});
+    await expect(t.service.remove(MONTAGE_ID, false)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(t.bucket.size).toBe(1);
+    expect(t.montageDeleted()).toBe(false);
+  });
+
+  it('lets the editor cancel an upload that never finished, parts and all', async () => {
     const t = build({ montage: { status: 'uploading', uploadId: 'mp-1' } });
-    await t.service.remove(MONTAGE_ID);
+    await t.service.remove(MONTAGE_ID, false);
     expect(t.aborted).toEqual([montageSourceKey(STORAGE_ID)]);
     expect(t.montageDeleted()).toBe(true);
   });

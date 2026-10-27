@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, UsePipes } from '@nestjs/common';
+import { permissionsForUser } from '../../auth/permissions';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
@@ -60,12 +61,18 @@ export class MontageController {
     return this.montage.patch(id, body);
   }
 
-  /** Also «إلغاء» for an upload still in flight — the parts go with the row. */
+  /**
+   * Also «إلغاء» for an upload still in flight — the parts go with the row.
+   *
+   * A video that has ARRIVED is the instructor's to delete, not the editor's:
+   * `montage:write` cancels an upload, `montage:publish` is what deletes a
+   * finished one. The owner's words: «بعد الرفع هو ميقدرش يمسح… أنا اللي أقدر».
+   */
   @RequirePermission('montage:write')
   @Delete('montage/:id')
   @HttpCode(204)
-  async remove(@Param('id', Id) id: string): Promise<void> {
-    await this.montage.remove(id);
+  async remove(@Param('id', Id) id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.montage.remove(id, permissionsForUser(user.id, user.role).includes('montage:publish'));
   }
 
   @RequirePermission('montage:read')

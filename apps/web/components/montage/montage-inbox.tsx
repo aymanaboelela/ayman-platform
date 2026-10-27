@@ -472,16 +472,18 @@ function VideoRow({
           </Button>
         ) : null}
         {canWrite ? (
-          <>
-            <Button size="sm" variant="ghost" onClick={onEdit}>
-              <Pencil className="size-4" aria-hidden="true" />
-              {c.rename}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onDelete} className="text-err hover:text-err">
-              {sending ? <X className="size-4" aria-hidden="true" /> : <Trash2 className="size-4" aria-hidden="true" />}
-              {sending ? c.cancelUpload : c.delete}
-            </Button>
-          </>
+          <Button size="sm" variant="ghost" onClick={onEdit}>
+            <Pencil className="size-4" aria-hidden="true" />
+            {c.rename}
+          </Button>
+        ) : null}
+        {/* A video that has arrived is the instructor's to delete (`montage:publish`);
+            the editor can only cancel an upload that has not finished. */}
+        {canWrite && (video.status !== 'ready' || canPublish) ? (
+          <Button size="sm" variant="ghost" onClick={onDelete} className="text-err hover:text-err">
+            {sending ? <X className="size-4" aria-hidden="true" /> : <Trash2 className="size-4" aria-hidden="true" />}
+            {sending ? c.cancelUpload : c.delete}
+          </Button>
         ) : null}
       </div>
     </li>
