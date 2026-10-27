@@ -48,9 +48,16 @@ export async function replyAction(
    * here is three short strings.
    */
   attachment?: MessageAttachmentInput | null,
+  /** The message this one quotes — «اسحبها وأرد عليها». */
+  replyToId?: string | null,
 ): Promise<InboxActionResult> {
   try {
-    const body = ReplySchema.parse({ message, attachment: attachment ?? null });
+    // Only when there IS a quote, so a plain reply's body is what it always was.
+    const body = ReplySchema.parse({
+      message,
+      attachment: attachment ?? null,
+      ...(replyToId ? { replyToId } : {}),
+    });
     await adminSendVoid('POST', `/api/admin/conversations/${id}/reply`, body);
     revalidatePath('/admin/inbox');
     revalidatePath(`/admin/inbox/${id}`);

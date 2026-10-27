@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useEffect,
   useRef,
   useState,
   useTransition,
@@ -22,8 +23,9 @@ import { formatBytes } from '@/components/assistant/message-attachment';
 import { useAutoGrow } from '@/components/assistant/use-auto-grow';
 import { uploadConversationAttachment, type UploadFailure } from '@/lib/upload-client';
 import { VoiceRecorder } from '@/components/assistant/voice-recorder';
+import { ReplyQuote } from '@/components/assistant/reply-quote';
 import { replyAction, setStatusAction } from '../actions';
-import type { PendingReply } from './admin-chat';
+import { useReplyTarget, type PendingReply } from './admin-chat';
 
 const c = copy.assistant.inbox;
 const cc = copy.assistant.chat;
@@ -86,6 +88,14 @@ export function ThreadActions({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  const { target, setTarget } = useReplyTarget();
+  /*
+   * A swipe means «I am about to answer this» — the cursor goes to the box,
+   * as it does in WhatsApp, so the next thing typed is the reply.
+   */
+  useEffect(() => {
+    if (target) field.current?.focus();
+  }, [target]);
   const [pending, startTransition] = useTransition();
   /*
    * Its own transition, so a reply in flight does not relabel the close button
@@ -151,6 +161,7 @@ export function ThreadActions({
 
     const body = message;
     const staged = attachment;
+    const quoting = target;
     /*
      * The box empties the moment he presses send — a messenger's contract,
      * and the placeholder bubble above is where the words went. They come
@@ -161,12 +172,14 @@ export function ThreadActions({
      */
     setMessage('');
     setAttachment(null);
+    setTarget(null);
     startTransition(async () => {
-      onPending?.({ body, attachment: staged, at: new Date().toISOString() });
-      const result = await replyAction(id, body, staged);
+      onPending?.({ body, attachment: staged, reply: quoting, at: new Date().toISOString() });
+      const result = await replyAction(id, body, staged, quoting?.quote.id ?? null);
       if (result.ok) return;
       setMessage(body);
       setAttachment(staged);
+      setTarget(quoting);
       toast.error(c.replyFailed);
     });
   }
@@ -180,6 +193,12 @@ export function ThreadActions({
    * `isComposing` because an IME's Enter confirms a candidate, not a message.
    */
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // Escape drops the quote, WhatsApp Web's way, and leaves the words.
+    if (event.key === 'Escape' && target) {
+      event.preventDefault();
+      setTarget(null);
+      return;
+    }
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
     if (!window.matchMedia('(pointer: fine)').matches) return;
     event.preventDefault();
@@ -224,6 +243,15 @@ export function ThreadActions({
       ) : null}
 
       <div className="chat-composer__inner">
+        {target ? (
+          <ReplyQuote
+            reply={target.quote}
+            name={target.name}
+            own={target.quote.author === 'admin'}
+            onCancel={() => setTarget(null)}
+          />
+        ) : null}
+
         {/*
           The staged file, above the box — where it reads as part of the
           message being composed rather than as a setting. Uploaded ALREADY:

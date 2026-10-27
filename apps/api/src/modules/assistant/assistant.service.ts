@@ -13,10 +13,12 @@ import type {
   InboxSort,
   MessageAttachment,
   MessageAttachmentInput,
+  MessageReplyRef,
 } from '@ayman/contracts/assistant/conversation';
 import { mimeForStorageKey } from '@ayman/contracts/admin/media';
 import {
   parseAssistantTranscript,
+  replyPreviewOf,
   serializeAssistantTranscript,
   type AssistantTranscriptTurn,
 } from '@ayman/contracts/assistant/conversation';
@@ -384,6 +386,7 @@ export class AssistantService {
      * Absent for every ordinary follow-up somebody types by hand.
      */
     transcript?: readonly AssistantTranscriptTurn[] | null,
+    replyToId?: string | null,
   ): Promise<ConversationThread> {
     const where = this.ownerWhere(userId, guestToken);
     if (!where) throw new ForbiddenException();
@@ -408,6 +411,8 @@ export class AssistantService {
     if (conversation.status === 'closed') {
       throw new ForbiddenException('conversation is closed');
     }
+
+    if (replyToId) await this.assertQuotable(conversation.id, replyToId);
 
     const carried = transcript?.length ? serializeAssistantTranscript(transcript) : null;
 
@@ -448,7 +453,13 @@ export class AssistantService {
         });
       }
       await tx.conversationMessage.create({
-        data: { conversationId: conversation.id, author: 'visitor', body, createdAt: askedAt },
+        data: {
+          conversationId: conversation.id,
+          author: 'visitor',
+          body,
+          createdAt: askedAt,
+          replyToId: replyToId ?? null,
+        },
       });
       await tx.conversation.update({
         where: { id: conversation.id },
@@ -684,6 +695,7 @@ export class AssistantService {
             attachmentBytes: true,
             attachmentDurationSeconds: true,
             editedAt: true,
+            replyTo: { select: REPLY_REF_SELECT },
           },
         },
       },
@@ -788,12 +800,18 @@ export class AssistantService {
         createdAt: message.createdAt.toISOString(),
         adminReaction: message.adminReaction,
         editedAt: message.editedAt?.toISOString() ?? null,
+        replyTo: toReplyRef(message.replyTo),
         attachment: toAttachment(message, `/api/admin/conversations/${row.id}`),
       })),
     };
   }
 
-  async reply(id: string, body: string, attachment?: MessageAttachmentInput | null): Promise<void> {
+  async reply(
+    id: string,
+    body: string,
+    attachment?: MessageAttachmentInput | null,
+    replyToId?: string | null,
+  ): Promise<void> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
       select: { id: true, userId: true, status: true },
@@ -802,6 +820,7 @@ export class AssistantService {
     if (conversation.status === 'closed') {
       throw new ForbiddenException('conversation is closed');
     }
+    if (replyToId) await this.assertQuotable(id, replyToId);
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
@@ -810,6 +829,7 @@ export class AssistantService {
           conversationId: id,
           author: 'admin',
           body,
+          replyToId: replyToId ?? null,
           /*
            * All three or none — the DB says so too
            * (`conversation_messages_attachment_complete`). Written from one
@@ -954,6 +974,23 @@ export class AssistantService {
   // ── internals ─────────────────────────────────────────────────────────
 
   /**
+   * A quote must name a message in THIS thread.
+   *
+   * The id comes from the client, and the FK only proves the row exists — on
+   * its own it would let a reply quote a message from another student's
+   * conversation, and the join on read would then hand that student's words
+   * to this one. Ownership in the WHERE, like every other method here; a
+   * miss is a 400 rather than a 404 because the thread itself was found.
+   */
+  private async assertQuotable(conversationId: string, replyToId: string): Promise<void> {
+    const quoted = await this.prisma.conversationMessage.findFirst({
+      where: { id: replyToId, conversationId },
+      select: { id: true },
+    });
+    if (!quoted) throw new BadRequestException('reply target is not in this conversation');
+  }
+
+  /**
    * The ownership filter for a visitor-side request, or `null` when the caller
    * presented no identity at all.
    *
@@ -1051,6 +1088,7 @@ export class AssistantService {
             attachmentBytes: true,
             attachmentDurationSeconds: true,
             editedAt: true,
+            replyTo: { select: REPLY_REF_SELECT },
           },
         },
       },
@@ -1084,6 +1122,7 @@ export class AssistantService {
         createdAt: message.createdAt.toISOString(),
         adminReaction: message.adminReaction,
         editedAt: message.editedAt?.toISOString() ?? null,
+        replyTo: toReplyRef(message.replyTo),
         // The VISITOR's route, not the admin's. Same bytes, a different door
         // — and the student would get a 403 at the other one.
         attachment: toAttachment(message, `/api/assistant/conversations/${row.id}`),
@@ -1123,6 +1162,40 @@ export class AssistantService {
 const INBOX_WHERE: Prisma.ConversationWhereInput = {
   OR: [{ origin: 'visitor' }, { messages: { some: { author: 'visitor' } } }],
 };
+
+/** What a quote needs of the row it quotes — see `MessageReplyRefSchema`. */
+const REPLY_REF_SELECT = {
+  id: true,
+  author: true,
+  body: true,
+  attachmentKey: true,
+} as const;
+
+/**
+ * The quoted message, cut down to what the quote draws.
+ *
+ * A quoted machine transcript (المساعد's handoff) is shown as no words at all
+ * rather than as its storage format — the marks in that body are a wire shape,
+ * not something either person said.
+ */
+function toReplyRef(
+  quoted: { id: string; author: MessageAuthor; body: string; attachmentKey: string | null } | null,
+): MessageReplyRef | null {
+  if (!quoted) return null;
+  const mime = quoted.attachmentKey ? mimeForStorageKey(quoted.attachmentKey) : null;
+  return {
+    id: quoted.id,
+    author: quoted.author,
+    body: parseAssistantTranscript(quoted.body) === null ? replyPreviewOf(quoted.body) : '',
+    attachmentKind: !mime
+      ? null
+      : mime.startsWith('audio/')
+        ? 'voice'
+        : mime.startsWith('image/')
+          ? 'image'
+          : 'document',
+  };
+}
 
 /**
  * The thread shape as the wire wants it, from the three columns as the table

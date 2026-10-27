@@ -336,6 +336,8 @@ export const PostMessageSchema = z
      * the service writes it the same way.
      */
     transcript: z.array(AssistantTranscriptTurnSchema).max(TRANSCRIPT_TURNS_MAX).optional(),
+    /** The message this one answers — see `MessageReplyRefSchema`. */
+    replyToId: z.uuid().nullish(),
   })
   .strict();
 
@@ -441,6 +443,8 @@ export const ReplySchema = z
   .object({
     message: z.string().trim().max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`),
     attachment: MessageAttachmentInputSchema.nullish(),
+    /** The message this one answers — see `MessageReplyRefSchema`. */
+    replyToId: z.uuid().nullish(),
   })
   .strict()
   .refine(
@@ -484,6 +488,42 @@ export const SetReactionSchema = z
   .object({ reaction: MessageReactionSchema.nullable() })
   .strict();
 
+/**
+ * «اسحبها وأرد عليها» — the message a reply quotes, WhatsApp style.
+ *
+ * ## A snapshot of the OTHER row, joined at read time
+ *
+ * Not copied into the reply when it is sent. The quote is the original
+ * message, so an edit to it shows in the quote too, and a deleted original
+ * takes its quote with it (`ON DELETE SET NULL`) — a quote of words that were
+ * taken back would put them back on the screen.
+ *
+ * ## Why the body is cut on the SERVER
+ *
+ * The quote is two lines in a bubble. Shipping the whole original — up to
+ * `MESSAGE_MAX` characters, and an outreach message is long — once per reply
+ * that quotes it would multiply the thread's payload for text no one sees.
+ *
+ * `attachmentKind` is what a quote of a photo or a voice note says when there
+ * are no words to show; it is derived from the key exactly as
+ * `MessageAttachmentSchema.kind` is.
+ */
+export const REPLY_PREVIEW_MAX = 140;
+
+export const MessageReplyRefSchema = z.object({
+  id: z.uuid(),
+  author: MessageAuthorSchema,
+  body: z.string().max(REPLY_PREVIEW_MAX),
+  attachmentKind: z.enum(['image', 'document', 'voice']).nullable(),
+});
+export type MessageReplyRef = z.infer<typeof MessageReplyRefSchema>;
+
+/** The quote's text, cut to fit — one rule for the server and the composer. */
+export function replyPreviewOf(body: string): string {
+  const flat = body.replace(/\s+/g, ' ').trim();
+  return flat.length <= REPLY_PREVIEW_MAX ? flat : `${flat.slice(0, REPLY_PREVIEW_MAX - 1)}…`;
+}
+
 export const ConversationMessageSchema = z.object({
   id: z.uuid(),
   author: MessageAuthorSchema,
@@ -508,6 +548,8 @@ export const ConversationMessageSchema = z.object({
    * happened travels with the text.
    */
   editedAt: z.iso.datetime().nullable(),
+  /** The message this one answers, or `null` — see `MessageReplyRefSchema`. */
+  replyTo: MessageReplyRefSchema.nullable(),
 });
 
 /**

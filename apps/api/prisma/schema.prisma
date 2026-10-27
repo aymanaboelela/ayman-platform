@@ -5586,11 +5586,27 @@ model ConversationMessage {
   /// platform.
   editedAt DateTime? @map("edited_at")
 
+  /// «اسحبها وأرد عليها» — the message in the SAME thread this one quotes, or
+  /// NULL. Either side may set it.
+  ///
+  /// `SetNull` on delete: a quote of a message the instructor took back would
+  /// put the deleted words straight back on the student's screen. The reply
+  /// itself stays — it was said.
+  ///
+  /// Same-thread is enforced by the service (`assertQuotable`), not by a
+  /// composite FK: the only composite shape that could say it would null
+  /// `conversation_id` along with the quote on delete.
+  replyToId String?               @map("reply_to_id") @db.Uuid
+  replyTo   ConversationMessage?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ConversationMessage[] @relation("MessageReply")
+
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   outreach     OutreachMessage?
 
   /// The thread, in order, straight off the index with no sort.
   @@index([conversationId, createdAt])
+  /// What `ON DELETE SET NULL` scans when a message goes.
+  @@index([replyToId])
   @@map("conversation_messages")
   @@schema("app")
 }
