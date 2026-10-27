@@ -25,10 +25,13 @@ export const adminReferralsCopy = {
   saving: 'بيتحفظ…',
   saved: 'اتحفظ',
   invalid: 'فيه رقم مش مظبوط في الإعدادات',
+  failed: 'حصل خطأ، نجرّب تاني',
+  alreadyClosed: 'الدعوة دي اتقفلت قبل كده — تحميل الصفحة تاني بيبيّن حالتها.',
 
   totalsJoined: 'تسجيل من غير دفع',
   totalsCredited: 'مكافآت نزلت',
   totalsCreditedCents: 'إجمالي الرصيد اللي نزل',
+  currency: 'جنيه',
   totalsReversed: 'اترجعت',
   totalsBlocked: 'اترفضت',
   totalsVoided: 'اتلغت',

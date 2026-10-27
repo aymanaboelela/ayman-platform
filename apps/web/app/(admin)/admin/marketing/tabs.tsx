@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminReferralsCopy } from '@ayman/contracts/copy/admin-referrals';
 import { cn } from '@ayman/ui/lib/cn';
+import { useFeature } from '@/components/admin/entitlements-context';
 
 const c = copy.marketing;
 
@@ -11,11 +13,13 @@ const TABS = [
   { href: '/admin/marketing/campaigns', label: c.title },
   { href: '/admin/marketing/device', label: c.deviceTitle },
   { href: '/admin/marketing/opt-outs', label: c.optOutsTitle },
+  // «دعوة الصحاب» — behind its own entitlement, hidden below where it is off.
+  { href: '/admin/marketing/referrals', label: adminReferralsCopy.tab, feature: 'referrals' },
 ] as const;
 
 /**
- * The three screens behind «التسويق»: campaigns, the device that sends them,
- * and who has opted out of ever receiving one.
+ * The screens behind «التسويق»: campaigns, the device that sends them, who has
+ * opted out of ever receiving one, and «دعوة الصحاب» where that is open.
  *
  * A client component only for `usePathname` — the tab bar itself renders the
  * same three links on every page under this section, and each page decides
@@ -23,10 +27,11 @@ const TABS = [
  */
 export function MarketingTabs() {
   const pathname = usePathname();
+  const referrals = useFeature('referrals');
 
   return (
-    <nav className="mb-6 flex gap-1 border-b border-line-subtle">
-      {TABS.map((tab) => {
+    <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line-subtle">
+      {TABS.filter((tab) => !('feature' in tab) || referrals).map((tab) => {
         const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
         return (
           <Link

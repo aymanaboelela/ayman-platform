@@ -1,6 +1,7 @@
 import {
   CircleMinus,
   Clock3,
+  Gift,
   GraduationCap,
   History,
   Landmark,
@@ -33,6 +34,8 @@ const KIND_ICON: Record<WalletTransactionKind, typeof Wallet> = {
   refund: Undo2,
   course_purchase: GraduationCap,
   admin_debit: CircleMinus,
+  referral_reward: Gift,
+  referral_reversal: Undo2,
 };
 
 /** What the line was, in the words the student would use for it. */
