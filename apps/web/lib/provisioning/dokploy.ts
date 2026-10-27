@@ -1,4 +1,5 @@
 import 'server-only';
+import { readFile } from 'node:fs/promises';
 
 /**
  * Dokploy's HTTP API — the half of the control plane that builds stacks.
@@ -16,6 +17,15 @@ import 'server-only';
  * cannot answer. `web` is already attached to `dokploy-network`, where the
  * panel is the `dokploy` service on port 3000, so that is the default and
  * the request never leaves the box. `CONTROL_PLANE_DOKPLOY_URL` overrides it.
+ *
+ * ⚠️ And when the service name does not answer, the published port on the
+ * host does. «Dokploy مردّش دلوقتي — project.all: fetch failed» on
+ * `/admin/platforms` (2026-10-27) while every CI deploy went through the same
+ * Dokploy: the panel was up, `dokploy:3000` was not reachable from `web`.
+ * Dokploy publishes 3000 on `0.0.0.0` of the box (host mode), so the
+ * container's default gateway — the host itself — reaches it without a name,
+ * without Cloudflare and without the provider firewall that drops 3000 from
+ * OUTSIDE (that one only sees traffic that leaves the box). See `candidates`.
  *
  * ## What this key can do, and why it lives in ONE place
  *
@@ -40,9 +50,86 @@ export class DokployError extends Error {
   }
 }
 
-function baseUrl(): string {
+const SERVICE_URL = 'http://dokploy:3000';
+
+/**
+ * The container's default gateway, from the kernel's own routing table —
+ * the host, on whatever bridge this compose was given. `null` off Linux (a
+ * dev machine) and on any table this cannot read: then there is simply one
+ * candidate fewer.
+ */
+async function hostGatewayUrl(): Promise<string | null> {
+  try {
+    const table = await readFile('/proc/net/route', 'utf8');
+    for (const line of table.split('\n').slice(1)) {
+      const [, destination, gateway] = line.trim().split(/\s+/);
+      if (destination !== '00000000' || !gateway || gateway === '00000000') continue;
+      // Little-endian hex: `0100A8C0` is 192.168.0.1.
+      const octets = gateway.match(/../g)?.map((byte) => parseInt(byte, 16)).reverse();
+      if (octets?.length === 4) return `http://${octets.join('.')}:3000`;
+    }
+  } catch {
+    // No procfs — not a container.
+  }
+  return null;
+}
+
+/** Where the last call got an answer; tried first next time. */
+let lastReachable: string | null = null;
+
+/**
+ * Every origin worth trying, best first: the configured one (or the service
+ * name), then the service name if something else was configured, then the
+ * host's published port. Only a NETWORK failure moves to the next one — an
+ * HTTP answer, even a 401, is Dokploy speaking and is final.
+ */
+async function candidates(): Promise<string[]> {
   const configured = (process.env.CONTROL_PLANE_DOKPLOY_URL ?? '').trim().replace(/\/+$/, '');
-  return configured || 'http://dokploy:3000';
+  const list = [configured || SERVICE_URL, SERVICE_URL, await hostGatewayUrl()].filter(
+    (url): url is string => Boolean(url),
+  );
+  if (lastReachable) list.unshift(lastReachable);
+  return [...new Set(list)];
+}
+
+function causeCode(error: unknown): string | null {
+  const cause = error instanceof Error ? (error as Error & { cause?: { code?: unknown } }).cause : null;
+  return typeof cause?.code === 'string' ? cause.code : null;
+}
+
+/**
+ * Failures where the request provably never reached anything — no name, no
+ * listener, no route. Only these let a MUTATION move on to the next origin:
+ * a timeout after connecting may already have queued a deploy, and sending it
+ * again is two builds on four cores (CLAUDE.md §5).
+ */
+const NEVER_SENT = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+/**
+ * `fetch failed` is undici's whole message for every network failure; the
+ * reason — `ENOTFOUND dokploy`, `ECONNREFUSED 10.0.1.4:3000`, a connect
+ * timeout — is on `cause`. Without it the screen could only say «مردّش».
+ */
+function networkReason(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (cause && typeof cause === 'object') {
+    const { code, message } = cause as { code?: unknown; message?: unknown };
+    // `getaddrinfo ENOTFOUND dokploy` already carries its code; a bare
+    // `other side closed` does not.
+    if (typeof message === 'string' && message !== '') {
+      return typeof code === 'string' && !message.includes(code) ? `${code} ${message}` : message;
+    }
+    if (typeof code === 'string') return code;
+  }
+  return error.message;
 }
 
 function apiKey(): string {
@@ -58,7 +145,6 @@ export function dokployConfigured(): boolean {
 type Input = Record<string, unknown>;
 
 async function call<T>(procedure: string, input: Input, kind: 'query' | 'mutation'): Promise<T> {
-  const url = new URL(`${baseUrl()}/api/${procedure}`);
   const init: RequestInit = {
     method: kind === 'query' ? 'GET' : 'POST',
     // ⚠️ EXACTLY `application/json` on a mutation: Dokploy's REST adapter
@@ -69,26 +155,33 @@ async function call<T>(procedure: string, input: Input, kind: 'query' | 'mutatio
         ? { 'x-api-key': apiKey(), accept: 'application/json' }
         : { 'x-api-key': apiKey(), accept: 'application/json', 'content-type': 'application/json' },
     cache: 'no-store',
-    // A deploy is QUEUED by the call, not run by it — every procedure here
-    // answers in well under a second when the panel is healthy.
-    signal: AbortSignal.timeout(20_000),
   };
-  if (kind === 'query') {
-    for (const [key, value] of Object.entries(input)) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
-    }
-  } else {
-    init.body = JSON.stringify(input);
-  }
+  if (kind === 'mutation') init.body = JSON.stringify(input);
 
-  let response: Response;
-  try {
-    response = await fetch(url, init);
-  } catch (error) {
-    throw new DokployError(
-      `${procedure}: ${error instanceof Error ? error.message : String(error)}`,
-      'unreachable',
-    );
+  let response: Response | null = null;
+  const failures: string[] = [];
+  for (const base of await candidates()) {
+    const url = new URL(`${base}/api/${procedure}`);
+    if (kind === 'query') {
+      for (const [key, value] of Object.entries(input)) {
+        if (value !== undefined) url.searchParams.set(key, String(value));
+      }
+    }
+    try {
+      // A deploy is QUEUED by the call, not run by it — every procedure here
+      // answers in well under a second when the panel is healthy. Per attempt,
+      // so one dead origin does not spend the next one's budget.
+      response = await fetch(url, { ...init, signal: AbortSignal.timeout(20_000) });
+      lastReachable = base;
+      break;
+    } catch (error) {
+      failures.push(`${url.host} → ${networkReason(error)}`);
+      if (lastReachable === base) lastReachable = null;
+      if (kind === 'mutation' && !NEVER_SENT.has(causeCode(error) ?? '')) break;
+    }
+  }
+  if (!response) {
+    throw new DokployError(`${procedure}: ${failures.join(' · ')}`, 'unreachable');
   }
 
   const text = await response.text();
