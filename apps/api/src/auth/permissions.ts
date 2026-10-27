@@ -290,6 +290,14 @@ export const PERMISSIONS = [
   'design:read',
   'design:write',
   'design:publish',
+  // «استوديو البوستات». Three for the same reason as marketing's split:
+  // reading the drafts and editing a caption are private and reversible;
+  // publishing puts a post on the teacher's own Facebook Page and Instagram
+  // under their name, and it cannot be recalled from here. `publish` also
+  // guards the Page token itself — whoever may set it may post as the Page.
+  'social:read',
+  'social:write',
+  'social:publish',
   // «المونتاج» — the video editor's hand-overs. The same split as the studio
   // above, for the same reason: `read`/`write` are the editor's whole job
   // (upload, rename, download, delete), and `publish` — putting a video on a

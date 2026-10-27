@@ -46,6 +46,7 @@ import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
 import { DesignsModule } from '../modules/designs/designs.module';
+import { SocialPostsModule } from '../modules/social-posts/social-posts.module';
 import { MontageModule } from '../modules/montage/montage.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
@@ -380,6 +381,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «دفتر غلطاتي» — بيقرا كويزات الطالب بس، مفيش Redis ولا تايمرز.
         MistakesModule,
         ShareCardsModule,
+        // «استوديو البوستات» — Prisma, `AuditService` and `MediaModule`, all
+        // already here. Its crons are inert without `ScheduleModule`, and the
+        // Graph client is never called by a 401/403 row.
+        SocialPostsModule,
         AdminProfileModule,
       ],
       providers: [
@@ -2096,6 +2101,31 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'designs publish: anonymous', method: 'post', path: () => `/api/admin/designs/assets/${randomUUID()}/publish`, actor: 'anonymous', status: 401 },
     { label: 'designs publish: student', method: 'post', path: () => `/api/admin/designs/assets/${randomUUID()}/publish`, actor: 'student', status: 403 },
     { label: 'designs studio: admin', method: 'get', path: () => '/api/designs', actor: 'admin', status: 200 },
+    // «استوديو البوستات» — `socialPosts` is open here (no TENANT_KEY = Ayman's stack).
+    { label: 'social posts list: anonymous', method: 'get', path: () => '/api/admin/social/posts', actor: 'anonymous', status: 401 },
+    { label: 'social posts list: student', method: 'get', path: () => '/api/admin/social/posts', actor: 'student', status: 403 },
+    { label: 'social post detail: anonymous', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'social post detail: student', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'social scan: anonymous', method: 'post', path: () => '/api/admin/social/scan', actor: 'anonymous', status: 401 },
+    { label: 'social scan: student', method: 'post', path: () => '/api/admin/social/scan', actor: 'student', status: 403 },
+    { label: 'social post patch: anonymous', method: 'patch', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'social post patch: student', method: 'patch', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'social post image: anonymous', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/image`, actor: 'anonymous', status: 401 },
+    { label: 'social post image: student', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/image`, actor: 'student', status: 403 },
+    { label: 'social post publish: anonymous', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/publish`, actor: 'anonymous', status: 401 },
+    { label: 'social post publish: student', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/publish`, actor: 'student', status: 403 },
+    { label: 'social post mark published: anonymous', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/mark-published`, actor: 'anonymous', status: 401 },
+    { label: 'social post mark published: student', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/mark-published`, actor: 'student', status: 403 },
+    { label: 'social connection read: anonymous', method: 'get', path: () => '/api/admin/social/connection', actor: 'anonymous', status: 401 },
+    { label: 'social connection read: student', method: 'get', path: () => '/api/admin/social/connection', actor: 'student', status: 403 },
+    { label: 'social connection write: anonymous', method: 'put', path: () => '/api/admin/social/connection', actor: 'anonymous', status: 401 },
+    { label: 'social connection write: student', method: 'put', path: () => '/api/admin/social/connection', actor: 'student', status: 403 },
+    { label: 'social connection test: anonymous', method: 'post', path: () => '/api/admin/social/connection/test', actor: 'anonymous', status: 401 },
+    { label: 'social connection test: student', method: 'post', path: () => '/api/admin/social/connection/test', actor: 'student', status: 403 },
+    // The token is write-only: the admin read answers tokenSet, never the value.
+    { label: 'social connection read: admin', method: 'get', path: () => '/api/admin/social/connection', actor: 'admin', status: 200 },
+    { label: 'social post detail: admin, unknown', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'social post detail: admin, not a uuid', method: 'get', path: () => '/api/admin/social/posts/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, unknown', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, not a uuid', method: 'get', path: () => '/api/designs/folders/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs download: admin, unknown', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'admin', status: 404 },

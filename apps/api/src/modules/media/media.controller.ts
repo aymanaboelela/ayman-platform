@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { OUTPUT_MIME, STORAGE_KEY_PATTERN } from '@ayman/contracts/admin/media';
+import { OUTPUT_MIME, SOCIAL_POST_KEY_PATTERN, STORAGE_KEY_PATTERN } from '@ayman/contracts/admin/media';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { MAX_DOCUMENT_BYTES, MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
@@ -170,12 +170,18 @@ export class MediaController {
     // cannot address them — but Express decodes `%2F` inside a parameter, so
     // `/media/payment-proof%2F0a/<uuid>.webp` arrived as `prefix` =
     // `payment-proof/0a` and served a student's receipt, `public, immutable`.
-    if (!STORAGE_KEY_PATTERN.test(key)) throw new NotFoundException();
+    //
+    // The one other public shape is a «استوديو البوستات» picture, `sp/<uuid>.jpg`:
+    // two segments on purpose, because Instagram downloads the image of a post
+    // from an open URL. It is a JPEG the API re-encoded itself, so it gets its
+    // own Content-Type and every other header below unchanged.
+    const social = SOCIAL_POST_KEY_PATTERN.test(key);
+    if (!social && !STORAGE_KEY_PATTERN.test(key)) throw new NotFoundException();
     const info = await this.media.statByKey(key);
     if (!info) throw new NotFoundException();
 
     response.set({
-      'Content-Type': OUTPUT_MIME,
+      'Content-Type': social ? 'image/jpeg' : OUTPUT_MIME,
       'Content-Length': String(info.size),
       'X-Content-Type-Options': 'nosniff',
       'Content-Disposition': `inline; filename="${name}"`,
