@@ -66,7 +66,7 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
   {
     key: 'courses',
     titleAr: 'الكورسات والمحاضرات',
-    hintAr: 'إنشاء الكورسات ونشرها، الوحدات والمحاضرات، وأكواد الفتح.',
+    hintAr: 'إنشاء الكورسات ونشرها، الوحدات والمحاضرات، أكواد الفتح، وفيديوهات المونتاج.',
     permissions: [
       'course:read',
       'course:read-admin',
@@ -87,6 +87,9 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
       'media:read',
       'media:write',
       'media:delete',
+      'montage:read',
+      'montage:write',
+      'montage:publish',
     ],
   },
   {

@@ -47,6 +47,7 @@ import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
 import { DesignsModule } from '../modules/designs/designs.module';
 import { SocialPostsModule } from '../modules/social-posts/social-posts.module';
+import { MontageModule } from '../modules/montage/montage.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
@@ -338,6 +339,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         PdfsModule,
         // «ستوديو التصميم» — Ayman-only like PdfsModule, so it answers here.
         DesignsModule,
+        // «المونتاج» — `montage` is on for Ayman's stack (no TENANT_KEY here).
+        MontageModule,
         // «اختبارات مجانية» — Prisma + `AuditService` only, both already here.
         // Open in this fixture because the run has no `TENANT_KEY` (Ayman's
         // stack), where `practice.enabled` defaults on.
@@ -2040,6 +2043,30 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'designs folder detail: admin, unknown', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, not a uuid', method: 'get', path: () => '/api/designs/folders/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs download: admin, unknown', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'admin', status: 404 },
+    // «المونتاج» — every route closed to a student; the editor's own reach is
+    // pinned in `permissions.spec.ts`. An unknown or malformed id is a 404.
+    { label: 'montage list: anonymous', method: 'get', path: () => '/api/montage', actor: 'anonymous', status: 401 },
+    { label: 'montage list: student', method: 'get', path: () => '/api/montage', actor: 'student', status: 403 },
+    { label: 'montage upload start: anonymous', method: 'post', path: () => '/api/montage/uploads', actor: 'anonymous', status: 401, body: () => ({ title: 'x', fileName: 'x.mp4', sizeBytes: 1, contentType: 'video/mp4' }) },
+    { label: 'montage upload start: student', method: 'post', path: () => '/api/montage/uploads', actor: 'student', status: 403, body: () => ({ title: 'x', fileName: 'x.mp4', sizeBytes: 1, contentType: 'video/mp4' }) },
+    { label: 'montage upload resume: anonymous', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/resume`, actor: 'anonymous', status: 401, body: () => ({ sizeBytes: 1 }) },
+    { label: 'montage upload resume: student', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/resume`, actor: 'student', status: 403, body: () => ({ sizeBytes: 1 }) },
+    { label: 'montage upload complete: anonymous', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/complete`, actor: 'anonymous', status: 401, body: () => ({ uploadId: 'x', parts: [{ partNumber: 1, etag: 'x' }] }) },
+    { label: 'montage upload complete: student', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/complete`, actor: 'student', status: 403, body: () => ({ uploadId: 'x', parts: [{ partNumber: 1, etag: 'x' }] }) },
+    { label: 'montage patch: anonymous', method: 'patch', path: () => `/api/montage/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ title: 'x' }) },
+    { label: 'montage patch: student', method: 'patch', path: () => `/api/montage/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ title: 'x' }) },
+    { label: 'montage delete: anonymous', method: 'delete', path: () => `/api/montage/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'montage delete: student', method: 'delete', path: () => `/api/montage/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'montage download: anonymous', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'anonymous', status: 401 },
+    { label: 'montage download: student', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'student', status: 403 },
+    { label: 'montage targets: anonymous', method: 'get', path: () => '/api/admin/montage/targets', actor: 'anonymous', status: 401 },
+    { label: 'montage targets: student', method: 'get', path: () => '/api/admin/montage/targets', actor: 'student', status: 403 },
+    { label: 'montage publish: anonymous', method: 'post', path: () => `/api/admin/montage/${randomUUID()}/publish`, actor: 'anonymous', status: 401, body: () => ({ lessonId: randomUUID() }) },
+    { label: 'montage publish: student', method: 'post', path: () => `/api/admin/montage/${randomUUID()}/publish`, actor: 'student', status: 403, body: () => ({ lessonId: randomUUID() }) },
+    { label: 'montage list: admin', method: 'get', path: () => '/api/montage', actor: 'admin', status: 200 },
+    { label: 'montage targets: admin', method: 'get', path: () => '/api/admin/montage/targets', actor: 'admin', status: 200 },
+    { label: 'montage download: admin, unknown', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'admin', status: 404 },
+    { label: 'montage download: admin, not a uuid', method: 'get', path: () => '/api/montage/not-a-uuid/download', actor: 'admin', status: 404 },
     // «اختبارات مجانية» — two public reads, and the admin side on the question
     // bank's own permissions (`question:read` / `question:write`).
     { label: 'practice public list: anonymous', method: 'get', path: () => '/api/practice/sets', actor: 'anonymous', status: 200 },

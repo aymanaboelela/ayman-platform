@@ -29,7 +29,11 @@ export function canOpenDashboard(session: SessionUser | null): boolean {
  * `admin:access` — so sending them to `/admin` was a 404 straight after
  * signing in. Everyone else who lands here is staff with the dashboard.
  */
-export function landingForStaff(session: SessionUser | null): '/admin' | '/studio' {
-  if (session && !can(session, 'admin:access') && can(session, 'design:read')) return '/studio';
+export function landingForStaff(session: SessionUser | null): '/admin' | '/studio' | '/montage' {
+  if (session && !can(session, 'admin:access')) {
+    if (can(session, 'design:read')) return '/studio';
+    // The video editor (`video_editor`) — «المونتاج» and nothing else.
+    if (can(session, 'montage:read')) return '/montage';
+  }
   return '/admin';
 }

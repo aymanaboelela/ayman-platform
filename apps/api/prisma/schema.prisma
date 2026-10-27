@@ -6275,3 +6275,30 @@ model SocialSettings {
   @@map("social_settings")
   @@schema("app")
 }
+
+/// «المونتاج» — a finished video the editor handed over, kept as it arrived.
+/// See `@ayman/contracts/montage` for why it is not a `lesson_videos` row.
+model MontageVideo {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  title             String
+  note              String?
+  fileName          String    @map("file_name")
+  /// The 32-hex id the bucket key is built from (`montageSourceKey`).
+  storageId         String    @unique @map("storage_id")
+  /// The bucket's multipart id while the upload is open; null once sealed.
+  uploadId          String?   @map("upload_id")
+  sizeBytes         BigInt    @map("size_bytes")
+  /// uploading | ready
+  status            String    @default("uploading")
+  uploadedBy        String?   @map("uploaded_by")
+  /// The lesson it was last put on. No FK: a deleted lesson leaves the
+  /// hand-over exactly as it was, and the list simply stops naming it.
+  publishedLessonId String?   @map("published_lesson_id") @db.Uuid
+  publishedAt       DateTime? @map("published_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("montage_videos")
+  @@schema("app")
+}
