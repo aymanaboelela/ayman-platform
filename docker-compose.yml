@@ -380,7 +380,7 @@ services:
       dockerfile: apps/web/Dockerfile
       # Clean build every deploy — see `api`. The Redis `'use cache'` entries
       # the previous build wrote are wiped by the new one at boot
-      # (`cache-handler/redis.js`, `purgeOtherBuilds`).
+      # (`cache-handler/redis.js`, `purgeIfNewBuild`, PR #701).
       no_cache: true
       args:
         # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.

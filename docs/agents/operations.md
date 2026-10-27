@@ -117,7 +117,7 @@ What the deploy job does:
 `api`, `web` and `wa`, so no layer from an earlier image is ever reused — on
 every stack, whichever trigger fired. On boot, a new web build wipes the
 `'use cache'` entries the previous build left in Redis (`next:cache:*`,
-`next:tags`; see `apps/web/cache-handler/redis.js`), while a plain restart of
+`next:tags`; `purgeIfNewBuild` in `apps/web/cache-handler/redis.js`, PR #701), while a plain restart of
 the same build keeps them. Nobody needs to clear a cache by hand after a
 deploy. The price is a cold build every time (~12 minutes; longer while
 another stack builds on the same server).
