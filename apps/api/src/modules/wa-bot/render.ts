@@ -96,27 +96,44 @@ export function planLine(course: CourseFact): string {
   return payable.length > 0 ? plans.join(' · ') : bot.reply.coursePlansAsk;
 }
 
+/**
+ * At most this many courses in one reply. A year with a dozen courses is a
+ * page on the site, not a WhatsApp message: the rest get one link to the
+ * catalogue.
+ */
+export const MAX_COURSES_PER_REPLY = 5;
+
+function capped(courses: readonly CourseFact[], appUrl: string, line: (c: CourseFact) => string, gap: string): string {
+  const shown = courses.slice(0, MAX_COURSES_PER_REPLY).map(line).join(gap);
+  return courses.length > MAX_COURSES_PER_REPLY
+    ? `${shown}${gap}${fill(bot.reply.moreCourses, { url: `${appUrl}/courses` })}`
+    : shown;
+}
+
 export function priceBlock(courses: readonly CourseFact[], appUrl: string): string {
-  return courses.map((c) => `📘 ${c.title}\n${planLine(c)}\n${courseUrl(appUrl, c.slug)}`).join('\n\n');
+  return capped(courses, appUrl, (c) => `📘 ${c.title}\n${planLine(c)}\n${courseUrl(appUrl, c.slug)}`, '\n\n');
 }
 
 export function courseBlock(courses: readonly CourseFact[], appUrl: string): string {
-  return courses.map((c) => `📘 ${c.title}\n${courseUrl(appUrl, c.slug)}`).join('\n');
+  return capped(courses, appUrl, (c) => `📘 ${c.title}\n${courseUrl(appUrl, c.slug)}`, '\n');
 }
 
 /** Only courses that are bought — a free one has no subscribe page worth sending. */
 export function subscribeBlock(courses: readonly CourseFact[], appUrl: string): string {
   const paid = courses.filter((c) => c.requiresGrant);
   const list = paid.length > 0 ? paid : courses;
-  return list
-    .map((c) => `📘 ${c.title}\n${c.requiresGrant ? subscribeUrl(appUrl, c.slug) : courseUrl(appUrl, c.slug)}`)
-    .join('\n');
+  return capped(
+    list,
+    appUrl,
+    (c) => `📘 ${c.title}\n${c.requiresGrant ? subscribeUrl(appUrl, c.slug) : courseUrl(appUrl, c.slug)}`,
+    '\n',
+  );
 }
 
 export function freeLessonsBlock(courses: readonly CourseFact[], appUrl: string): string {
   const withFree = courses.filter((c) => c.freeLessons > 0 || !c.requiresGrant);
   if (withFree.length === 0) return bot.reply.freeLessonsNo;
-  const lines = withFree.map((c) =>
+  const lines = withFree.slice(0, MAX_COURSES_PER_REPLY).map((c) =>
     fill(bot.reply.freeLessonsLine, {
       title: c.title,
       count: c.requiresGrant ? arabicCount(c.freeLessons, bot.reply.freeLessonsCount) : bot.reply.coursePlansFree,
@@ -129,6 +146,7 @@ export function freeLessonsBlock(courses: readonly CourseFact[], appUrl: string)
 export function scheduleBlock(courses: readonly CourseFact[]): string {
   return courses
     .filter((c) => c.scheduleNote)
+    .slice(0, MAX_COURSES_PER_REPLY)
     .map((c) => fill(bot.reply.scheduleLine, { title: c.title, note: c.scheduleNote ?? '' }))
     .join('\n');
 }

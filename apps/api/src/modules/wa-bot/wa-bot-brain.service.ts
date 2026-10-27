@@ -187,7 +187,7 @@ export class WaBotBrainService {
     // ── the year first, when the answer depends on it ────────────────────
     const needsYear = intents.some((key) => YEAR_INTENTS.includes(key as BotIntent));
     if (needsYear && !known && options.length > 1 && input.chat.yearAsks < MAX_YEAR_ASKS && !input.chat.awaitingYear) {
-      return this.askYear(options, input.chat, intents, false, patch);
+      return withSalam(this.askYear(options, input.chat, intents, false, patch), text);
     }
 
     // ── the answers ───────────────────────────────────────────────────────
@@ -385,6 +385,12 @@ export class WaBotBrainService {
     }
     return opener ? `${opener}\n${rendered}` : rendered;
   }
+}
+
+/** «وعليكم السلام» above the year question too — it is the first thing they read back. */
+function withSalam(result: BrainResult, text: string): BrainResult {
+  if (!result.reply || !/(^| )s?salam|سلام/u.test(normalizeArabic(text))) return result;
+  return { ...result, reply: `${bot.reply.greetSalam}\n${result.reply}` };
 }
 
 function silent(reason: string): BrainResult {

@@ -25,6 +25,9 @@ import { mediaUrl } from '@ayman/ui/branding';
 import { Button } from '@ayman/ui/components/button';
 import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
 import { Checkbox } from '@ayman/ui/components/checkbox';
+import { copy as bot } from '@ayman/contracts/copy/wa-bot';
+import { LEAD_STATUSES } from '@ayman/contracts/wa-bot/schemas';
+import { useFeature } from '@/components/admin/entitlements-context';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
@@ -63,6 +66,8 @@ const CHANNEL_OPTIONS = CampaignChannelSchema.options;
 
 export function CampaignForm({ courses }: { courses: CourseOption[] }) {
   const router = useRouter();
+  // «المهتمين» only where the bot runs — the API resolves it to nobody elsewhere.
+  const botOn = useFeature('whatsapp.bot');
   const [pending, startTransition] = useTransition();
 
   const [name, setName] = useState('');
@@ -96,7 +101,7 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
    * saying the same thing is a second thing that can disagree with the first.
    * The button below sets those two switches; this reads them back.
    */
-  const onlyExtraPhones = !audience.students && !audience.parents && extraPhones.length > 0;
+  const onlyExtraPhones = !audience.students && !audience.parents && !audience.leads && extraPhones.length > 0;
 
   // Re-price the audience whenever it or the pacing changes — debounced, so
   // typing a list of phone numbers does not fire a request per keystroke.
@@ -227,6 +232,48 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
               <span className="ms-2 text-[length:var(--fs-text-xs)] text-fg-muted">{c.audienceParentsHint}</span>
             </span>
           </label>
+
+          {botOn ? (
+            <div className="rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_60%)] bg-[color-mix(in_oklch,var(--ok),transparent_92%)] p-3">
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={audience.leads}
+                  onCheckedChange={(v) => setAudience((a) => ({ ...a, leads: v === true }))}
+                />
+                <span>
+                  {bot.admin.audienceLeads}
+                  <span className="ms-2 text-[length:var(--fs-text-xs)] text-fg-muted">{bot.admin.audienceLeadsHint}</span>
+                </span>
+              </label>
+              {audience.leads ? (
+                <div className="mt-2">
+                  <Label>{bot.admin.audienceLeadStatuses}</Label>
+                  <div className="mt-1 flex flex-wrap gap-3">
+                    {LEAD_STATUSES.map((status) => (
+                      <label key={status} className="flex items-center gap-1.5">
+                        <Checkbox
+                          checked={audience.leadStatuses.includes(status)}
+                          onCheckedChange={(v) =>
+                            setAudience((a) => ({
+                              ...a,
+                              leadStatuses:
+                                v === true
+                                  ? [...a.leadStatuses, status]
+                                  : a.leadStatuses.filter((s) => s !== status),
+                            }))
+                          }
+                        />
+                        <span>{bot.admin.statuses[status]}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {audience.leadStatuses.length === 0 ? bot.admin.audienceLeadStatusesAll : null}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -402,7 +449,7 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => setAudience((a) => ({ ...a, students: false, parents: false }))}
+                  onClick={() => setAudience((a) => ({ ...a, students: false, parents: false, leads: false }))}
                 >
                   {c.audienceOnlyTheseAction}
                 </Button>

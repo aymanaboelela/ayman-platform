@@ -48,7 +48,7 @@ describe('the WhatsApp bot’s voice', () => {
   });
 
   it('every placeholder an answer uses is one the screen documents', () => {
-    const documented = new Set(copy.placeholders.map(([token]) => token));
+    const documented = new Set<string>(copy.placeholders.map(([token]) => token));
     for (const [path, line] of lines(copy.answers, 'answers')) {
       for (const token of line.match(/\{\{[^{}]+\}\}/gu) ?? []) {
         expect(documented.has(token), `${path} uses ${token}, which the admin screen never explains`).toBe(true);

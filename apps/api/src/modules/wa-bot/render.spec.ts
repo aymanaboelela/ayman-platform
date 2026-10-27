@@ -1,5 +1,5 @@
 import { copy as bot } from '@ayman/contracts/copy/wa-bot';
-import { egp, localPhone, planLine, renderTemplate, type CourseFact } from './render';
+import { MAX_COURSES_PER_REPLY, courseBlock, egp, localPhone, planLine, renderTemplate, type CourseFact } from './render';
 
 const COURSE: CourseFact = {
   slug: 'c',
@@ -55,4 +55,11 @@ describe('prices', () => {
 it('writes a transfer number the way a student types it', () => {
   expect(localPhone('+201012345678')).toBe('01012345678');
   expect(localPhone('+966501234567')).toBe('+966501234567');
+});
+
+it('never turns a reply into a catalogue — the rest of the courses are one link', () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({ ...COURSE, slug: `c${i}`, title: `كورس ${i}` }));
+  const block = courseBlock(many, 'https://p.test');
+  expect(block.split('📘')).toHaveLength(MAX_COURSES_PER_REPLY + 1);
+  expect(block).toContain('https://p.test/courses');
 });

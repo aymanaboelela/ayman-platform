@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
+import { copy as bot } from '@ayman/contracts/copy/wa-bot';
 import { cn } from '@ayman/ui/lib/cn';
+import { getEntitlements } from '@/lib/entitlements';
 
 const c = copy.admin.inboxTabs;
 
@@ -9,7 +11,16 @@ export const INBOX_TABS = [
   { href: '/admin/inbox/questions', label: c.tabQuestions },
 ] as const;
 
-export type InboxTabHref = (typeof INBOX_TABS)[number]['href'];
+/**
+ * «واتساب» — the auto-reply bot's handoffs and every chat on the linked
+ * number. A tab here rather than a screen under «التسويق» because it is the
+ * same job as the two beside it: somebody asked, and a person answers. Shown
+ * only where `whatsapp.bot` is on; the two المساعد tabs only where
+ * `assistant` is, so a stack with one and not the other gets no dead tab.
+ */
+const WHATSAPP_TAB = { href: '/admin/inbox/whatsapp', label: bot.admin.tabInbox } as const;
+
+export type InboxTabHref = (typeof INBOX_TABS)[number]['href'] | typeof WHATSAPP_TAB.href;
 
 /**
  * «صندوق الوارد» — the two halves of one subject.
@@ -32,10 +43,15 @@ export type InboxTabHref = (typeof INBOX_TABS)[number]['href'];
  * which tab it is, and shipping `usePathname` for a border colour would be the
  * whole client runtime for a highlight.
  */
-export function InboxTabs({ active }: { active: InboxTabHref }) {
+export async function InboxTabs({ active }: { active: InboxTabHref }) {
+  const features = await getEntitlements();
+  const tabs = [
+    ...(features.assistant ? INBOX_TABS : []),
+    ...(features['whatsapp.bot'] ? [WHATSAPP_TAB] : []),
+  ];
   return (
     <nav className="mt-4 flex flex-wrap gap-1.5" aria-label={c.ariaLabel}>
-      {INBOX_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}
