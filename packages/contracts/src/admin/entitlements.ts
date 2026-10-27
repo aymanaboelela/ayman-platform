@@ -134,6 +134,17 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول» — اتعملت بطلبه بعد ما ركّب اللوحة على الآيفون. ولا حاجة
+     * فيها بتحمل اسمه، فلما تتفتح لمدرّس بتشتغل على طول.
+     */
+    key: 'adminMobile',
+    nameAr: 'لوحة التحكم على الموبايل',
+    descriptionAr:
+      'رقم الطلبات المستنية على أيقونة التطبيق، ومراجعة الاشتراكات واحد واحد، وملخص آخر اليوم، وتنبيه لو الواتساب فصل أو رفع فيديو فشل.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];
