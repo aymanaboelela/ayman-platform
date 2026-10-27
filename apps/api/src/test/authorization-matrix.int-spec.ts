@@ -87,6 +87,9 @@ import { AdminPaymentsController } from '../modules/payments/admin-payments.cont
 import { AdminTransfersController } from '../modules/payments/admin-transfers.controller';
 import { TransfersIngestController } from '../modules/payments/transfers-ingest.controller';
 import { AdminFinanceController } from '../modules/payments/admin-finance.controller';
+import { AdminMobileController } from '../modules/admin-mobile/admin-mobile.controller';
+import { AdminMobileService } from '../modules/admin-mobile/admin-mobile.service';
+import { PushService } from '../modules/notifications/push.service';
 import { PaymentsService } from '../modules/payments/payments.service';
 import { TransfersService } from '../modules/payments/transfers.service';
 import { FinanceService } from '../modules/payments/finance.service';
@@ -274,6 +277,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `NotificationsService`) are all already available from this
         // fixture's other entries.
         AdminFinanceController,
+        // «لوحة التحكم على الموبايل» — the icon number. Its service is listed
+        // below with `PushService`, which nothing else here injects.
+        AdminMobileController,
         // الكتاب الورقي. `BookOrdersService`'s own dependencies (Prisma,
         // `AuditService`, `MediaService`) are all already available from
         // `AuditModule`/`MediaModule` above, same reasoning as
@@ -454,6 +460,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FinanceService,
         // «الفلوس يوم بيوم» — `AdminFinanceController`'s second dependency.
         FinanceDailyService,
+        AdminMobileService,
+        PushService,
         BookOrdersService,
         BookOrderCourierService,
         TorodClient,
@@ -2845,6 +2853,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin homework pending count: anonymous', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'anonymous', status: 401 },
     { label: 'admin homework pending count: student', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'student', status: 403 },
     { label: 'admin homework pending count: admin', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'admin', status: 200 },
+    // «لوحة التحكم على الموبايل» — رقم الأيقونة. `admin:access` + فيتشر `adminMobile`.
+    { label: 'admin mobile pending: anonymous', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'anonymous', status: 401 },
+    { label: 'admin mobile pending: student', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'student', status: 403 },
+    { label: 'admin mobile pending: admin', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'admin', status: 200 },
     { label: 'admin homework lessons: anonymous', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'anonymous', status: 401 },
     { label: 'admin homework lessons: student', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'student', status: 403 },
     { label: 'admin homework lessons: admin', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'admin', status: 200 },

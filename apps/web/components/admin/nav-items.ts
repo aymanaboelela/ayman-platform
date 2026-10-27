@@ -35,6 +35,7 @@ import {
   NotebookPen,
   PackageOpen,
   Wallet,
+  Smartphone,
   ShieldCheck,
   School,
   ScanLine,
@@ -187,6 +188,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.payments,
     icon: Wallet,
     permission: 'payment:read',
+    group: 'money',
+  },
+  {
+    // «مراجعة سريعة» — the same queue, one card at a time, for the phone a
+    // push lands on. Right under the table it is a second view of, and gated
+    // like the page itself (`adminMobile`), which also 404s on its own.
+    href: '/admin/review',
+    labelAr: copy.admin.nav.review,
+    icon: Smartphone,
+    permission: 'payment:read',
+    feature: 'adminMobile',
     group: 'money',
   },
   {
