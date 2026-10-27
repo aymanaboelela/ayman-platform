@@ -61,7 +61,11 @@ export interface StudentNavItem {
    * from `/admin/platforms` shows up in that teacher's rail by itself.
    */
   feature?: FeatureKey;
+  /** The rail section the row is drawn under — see `STUDENT_NAV_GROUPS`. */
+  group: StudentNavGroup;
 }
+
+export type StudentNavGroup = 'main' | 'study' | 'grades' | 'play' | 'money';
 
 /**
  * The signed-in student's navigation, in render order. One table, FOUR
@@ -85,85 +89,107 @@ export interface StudentNavItem {
  * permissions for a single row.
  */
 export const STUDENT_NAV: readonly StudentNavItem[] = [
-  { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard, tab: true },
-  { href: '/path', labelAr: copy.nav.path, icon: Route, tab: true },
-  /*
-   * «المتراكم» — right under «مساري», because it is the same question asked
-   * the other way round: not «what is next» but «what did I leave behind».
-   * Ayman's stack only (asked for that way); the API answers 404 elsewhere.
-   */
-  ...(aymanOnly(true) ? [{ href: '/backlog', labelAr: copy.nav.backlog, icon: ListTodo }] : []),
-  /*
-   * «خطة المذاكرة» and «سؤال اليوم» — the two daily habits, right under the
-   * backlog the plan is built from. Behind their entitlements (`feature`):
-   * on for Ayman, and they appear by themselves on any stack the owner opens
-   * them for.
-   */
-  { href: '/plan', labelAr: copy.nav.plan, icon: CalendarCheck, feature: 'studyPlan' },
-  { href: '/daily', labelAr: copy.nav.daily, icon: Flame, feature: 'dailyQuestion' },
-  /* «أوضة المذاكرة» — the third habit: the timer to study by. */
-  { href: '/focus', labelAr: copy.nav.focus, icon: Timer, feature: 'focusRoom' },
-  { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true },
-  /*
-   * «ترتيبي» — جنب «نتائجي» لأنه نفس السؤال من زاوية تانية: «درجاتي كام» ثم
-   * «أنا فين وسط دفعتي». مش tab: الشريط اللي تحت أربعة بالعدد (شوف `tab`
-   * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
-   */
-  { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
-  /* «دوري الأسبوع» — the same «where am I», over this week's work instead of grades. */
-  { href: '/league', labelAr: copy.nav.league, icon: Crown, feature: 'weeklyLeague' },
-  /*
-   * «شهاداتي» — بعد «نتائجي» و«ترتيبي» لأنها آخر محطة في نفس السؤال: الدرجات،
-   * المكان وسط الدفعة، وبعدين الكورس اللي اكتمل. ورا `shareCards` (`feature`
-   * فوق): مفتوحة عند أيمن، وبتظهر عند أي مدرّس صاحب المنصة يفتحهاله.
-   */
-  /* «أوسمتي» before «شهاداتي»: the ladder first, the paper at the top of it. */
-  { href: '/badges', labelAr: copy.nav.badges, icon: Medal, feature: 'badges' },
-  { href: '/certificates', labelAr: copy.nav.certificates, icon: Award, feature: 'shareCards' },
-  { href: '/recap', labelAr: copy.nav.recap, icon: Sparkles, feature: 'monthlyRecap' },
-  /*
-   * «تحدّي الأسئلة» — ورا فيتشر `quizGame`: مفتوحة عند أيمن (اتطلبت له)،
-   * ومقفولة على أي ستاك تاني لحد ما صاحب المنصة يفتحها؛ الصف بيظهر لوحده
-   * ساعتها. الصفحة والـAPI عليهم نفس الحارس.
-   */
-  { href: '/game', labelAr: copy.nav.game, icon: Gamepad2, feature: 'quizGame' },
-  /*
-   * «ساحة التحدي» — ماتش مباشر. نفس بوابة «الألعاب»: البند عند أيمن بس، والصفحة
-   * والـAPI ورا فلاج `arena.enabled` (مفتوح عنده افتراضيًا ومقفول عند الباقي).
-   * القايمة بتتبني وقت البيلد ومابتقراش فلاجات، فستاك تاني فتح الفلاج بيوصلها
-   * من الرابط لحد ما يتعمل للقايمة باب بيقرا الفلاج.
-   */
-  ...(aymanOnly(true) ? [{ href: '/arena', labelAr: copy.nav.arena, icon: Swords }] : []),
-  /*
-   * «دفتر غلطاتي» — نفس بوابة «ساحة التحدي» بالظبط: البند عند أيمن بس، فلاج
-   * `mistakes.enabled` مفتوح عنده افتراضيًا ومقفول عند الباقي.
-   */
-  ...(aymanOnly(true) ? [{ href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen }] : []),
-  /* «ملاحظاتي» — the other study notebook, beside «غلطاتي». */
-  { href: '/notes', labelAr: copy.nav.notes, icon: StickyNote, feature: 'lessonNotes' },
-  { href: '/cards', labelAr: copy.nav.cards, icon: Layers, feature: 'flashCards' },
-  { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
+  /* ── main: no heading — where a student lands and what they came to open. ── */
+  { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard, tab: true, group: 'main' },
+  { href: '/path', labelAr: copy.nav.path, icon: Route, tab: true, group: 'main' },
+  { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true, group: 'main' },
   /*
    * «كود الكورس» — right under the courses, because that is where a student
    * who just got a code on WhatsApp looks first: «فين أحط الكود؟». A code
    * opens a piece of a course, so it belongs with the courses, not with the
    * account settings in the footer.
    */
-  { href: '/codes', labelAr: copy.nav.unlockCodes, icon: Ticket },
+  { href: '/codes', labelAr: copy.nav.unlockCodes, icon: Ticket, group: 'main' },
+
+  /* ── «المذاكرة»: the tools a student studies WITH, daily habits first. ── */
   /*
-   * «المحفظة» — right under «كود الكورس», and for the same reason: it is the
-   * other thing a student does with money a teacher sent them (a wallet code
-   * is typed here too). Not a tab: the bottom bar is four by count, so on a
-   * phone it lives in «حاجات تانية».
+   * «خطة المذاكرة» and «سؤال اليوم» — the two daily habits. Behind their
+   * entitlements (`feature`): on for Ayman, and they appear by themselves on
+   * any stack the owner opens them for.
    */
-  { href: '/wallet', labelAr: copy.nav.wallet, icon: Wallet },
+  { href: '/plan', labelAr: copy.nav.plan, icon: CalendarCheck, feature: 'studyPlan', group: 'study' },
+  /*
+   * «المتراكم» — right under the plan, because the plan is built from it: not
+   * «what is next» but «what did I leave behind». Ayman's stack only (asked
+   * for that way); the API answers 404 elsewhere.
+   */
+  ...(aymanOnly(true)
+    ? [{ href: '/backlog', labelAr: copy.nav.backlog, icon: ListTodo, group: 'study' as const }]
+    : []),
+  { href: '/daily', labelAr: copy.nav.daily, icon: Flame, feature: 'dailyQuestion', group: 'study' },
+  /* «أوضة المذاكرة» — the third habit: the timer to study by. */
+  { href: '/focus', labelAr: copy.nav.focus, icon: Timer, feature: 'focusRoom', group: 'study' },
+  /*
+   * «دفتر غلطاتي» — البند عند أيمن بس، فلاج `mistakes.enabled` مفتوح عنده
+   * افتراضيًا ومقفول عند الباقي (نفس بوابة «ساحة التحدي»).
+   */
+  ...(aymanOnly(true)
+    ? [{ href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen, group: 'study' as const }]
+    : []),
+  /* «ملاحظاتي» — the other study notebook, beside «غلطاتي». */
+  { href: '/notes', labelAr: copy.nav.notes, icon: StickyNote, feature: 'lessonNotes', group: 'study' },
+  { href: '/cards', labelAr: copy.nav.cards, icon: Layers, feature: 'flashCards', group: 'study' },
+  /*
+   * «تجربة الكود» 404s on a stack whose subject is not code, so the row does
+   * not exist there. Spread in place rather than filtered afterwards, so the
+   * rail's ORDER on a programming stack is exactly what it was.
+   *
+   * «التأسيس» (`/foundations`) used to sit above «الكتب» under the same gate.
+   * Taken out of the rail on request — the page itself still answers its own
+   * URL, it just is not a destination a student is sent to any more.
+   */
+  ...(TEACHES_CODE
+    ? [{ href: '/playground', labelAr: copy.nav.playground, icon: Terminal, group: 'study' as const }]
+    : []),
+
+  /* ── «درجاتي»: one question asked four ways — the mark, the place, the paper. ── */
+  { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true, group: 'grades' },
+  /*
+   * «ترتيبي» — جنب «نتائجي» لأنه نفس السؤال من زاوية تانية: «درجاتي كام» ثم
+   * «أنا فين وسط دفعتي». مش tab: الشريط اللي تحت أربعة بالعدد (شوف `tab`
+   * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
+   */
+  { href: '/rank', labelAr: copy.nav.rank, icon: Trophy, group: 'grades' },
+  /*
+   * «أوسمتي» before «شهاداتي»: the ladder first, the paper at the top of it.
+   * «شهاداتي» ورا `shareCards` (`feature` فوق): مفتوحة عند أيمن، وبتظهر عند أي
+   * مدرّس صاحب المنصة يفتحهاله.
+   */
+  { href: '/badges', labelAr: copy.nav.badges, icon: Medal, feature: 'badges', group: 'grades' },
+  { href: '/certificates', labelAr: copy.nav.certificates, icon: Award, feature: 'shareCards', group: 'grades' },
+  { href: '/recap', labelAr: copy.nav.recap, icon: Sparkles, feature: 'monthlyRecap', group: 'grades' },
+
+  /* ── «التحديات»: everything played against someone else. ── */
+  /*
+   * «تحدّي الأسئلة» — ورا فيتشر `quizGame`: مفتوحة عند أيمن (اتطلبت له)،
+   * ومقفولة على أي ستاك تاني لحد ما صاحب المنصة يفتحها؛ الصف بيظهر لوحده
+   * ساعتها. الصفحة والـAPI عليهم نفس الحارس.
+   */
+  { href: '/game', labelAr: copy.nav.game, icon: Gamepad2, feature: 'quizGame', group: 'play' },
+  /*
+   * «ساحة التحدي» — ماتش مباشر. البند عند أيمن بس، والصفحة والـAPI ورا فلاج
+   * `arena.enabled` (مفتوح عنده افتراضيًا ومقفول عند الباقي). القايمة بتتبني
+   * وقت البيلد ومابتقراش فلاجات، فستاك تاني فتح الفلاج بيوصلها من الرابط لحد
+   * ما يتعمل للقايمة باب بيقرا الفلاج.
+   */
+  ...(aymanOnly(true) ? [{ href: '/arena', labelAr: copy.nav.arena, icon: Swords, group: 'play' as const }] : []),
+  /* «دوري الأسبوع» — the same «where am I» as «ترتيبي», but a race over this week's work. */
+  { href: '/league', labelAr: copy.nav.league, icon: Crown, feature: 'weeklyLeague', group: 'play' },
+
+  /* ── «المحفظة والكتب»: everything with a price on it. ── */
+  /*
+   * «المحفظة» — the other thing a student does with money a teacher sent them
+   * (a wallet code is typed here too). Not a tab: the bottom bar is four by
+   * count, so on a phone it lives in «حاجات تانية».
+   */
+  { href: '/wallet', labelAr: copy.nav.wallet, icon: Wallet, group: 'money' },
   /*
    * «دعوة صحابك» — right under «المحفظة», because that is where its reward
    * lands: a student who just saw «مكافأة دعوة» on the statement finds the link
    * that earned it one row down. Behind `referrals` (`feature`): on for Ayman,
    * and it appears on a teacher's rail by itself once the owner opens it.
    */
-  { href: '/invite', labelAr: copy.nav.invite, icon: Gift, feature: 'referrals' },
+  { href: '/invite', labelAr: copy.nav.invite, icon: Gift, feature: 'referrals', group: 'money' },
   /*
    * `/store`, NOT `/books`, and the difference is the whole point of the
    * route.
@@ -179,28 +205,36 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * indexed URL that the footer, the landing strip and every WhatsApp message
    * point at. See `app/(app)/store/page.tsx` for why they cannot be one route.
    *
-   * `BookOpen`, not `BookMarked` — that one is «الكورسات» four rows up, and
-   * two book icons in one rail is a rail nobody can scan.
+   * `BookOpen`, not `BookMarked` — that one is «الكورسات», and two identical
+   * book icons in one rail is a rail nobody can scan.
    */
-  { href: '/store', labelAr: copy.nav.books, icon: BookOpen },
+  { href: '/store', labelAr: copy.nav.books, icon: BookOpen, group: 'money' },
   /*
    * «الكتب الخارجية» — under the shop, a third book icon on purpose: `Library`
    * reads as a shelf, not a single volume. Before this row the books were only
    * reachable from the foot of each course page.
    */
-  { href: '/external-books', labelAr: copy.nav.externalBooks, icon: Library },
-  /*
-   * «تجربة الكود» 404s on a stack whose subject is not code, so the row does
-   * not exist there. Spread in place rather than filtered afterwards, so the
-   * rail's ORDER on a programming stack is exactly what it was.
-   *
-   * «التأسيس» (`/foundations`) used to sit above «الكتب» under the same gate.
-   * Taken out of the rail on request — the page itself still answers its own
-   * URL, it just is not a destination a student is sent to any more.
-   */
-  ...(TEACHES_CODE ? [{ href: '/playground', labelAr: copy.nav.playground, icon: Terminal }] : []),
-  { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
-  { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
+  { href: '/external-books', labelAr: copy.nav.externalBooks, icon: Library, group: 'money' },
+
+  { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true, group: 'main' },
+  { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true, group: 'main' },
+] as const;
+
+/**
+ * The rail's sections, in render order. Twenty-odd rows in one column was the
+ * «رتّبهم بشكل كويس» report: a student looking for «شهاداتي» had to read past
+ * the timer, the games and the notebooks to find it. `main` has no heading —
+ * it is the top of the rail, and a heading there only pushes «حسابي» down.
+ *
+ * The table above is ALSO written in this order, so a reader of the file sees
+ * what the rail draws; the list component groups by this array regardless.
+ */
+export const STUDENT_NAV_GROUPS: ReadonlyArray<{ id: StudentNavGroup; labelAr?: string }> = [
+  { id: 'main' },
+  { id: 'study', labelAr: copy.nav.groupStudy },
+  { id: 'grades', labelAr: copy.nav.groupGrades },
+  { id: 'play', labelAr: copy.nav.groupPlay },
+  { id: 'money', labelAr: copy.nav.groupMoney },
 ] as const;
 
 /**
@@ -209,8 +243,8 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
  * ⚠️ ORDER MATTERS and it is not the rail's. The bar reads right-to-left like
  * the rest of the product, and «حسابي» — where a student lands after signing
  * in — has to be the outermost thumb-reachable slot, then «مساري»،
- * «الكورسات»، «نتائجي». The rail's order puts «نتائجي» third because a rail is
- * scanned top to bottom at leisure; a thumb is not.
+ * «الكورسات»، «نتائجي». The rail files «نتائجي» under its own «درجاتي»
+ * section because a rail is scanned top to bottom at leisure; a thumb is not.
  */
 export const STUDENT_TABS: readonly StudentNavItem[] = [
   '/dashboard',

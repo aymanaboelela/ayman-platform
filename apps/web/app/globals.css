@@ -2516,6 +2516,17 @@ html[data-player-fullscreen] .route-fade {
   color: var(--n-10);
 }
 
+/* A section heading in the STUDENT rail and phone sheet. Not `.nav-group__head`:
+   that one is `--n-10`, a placeholder step that misses 4.5:1 on the light
+   washes — the same reason `.drawer__eyebrow` reads `--n-11`. */
+.nav-section__head {
+  padding-inline: var(--s-12);
+  padding-block-end: var(--s-2);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
 /* Collapsing is NOT re-implemented here. Every rail link keeps `.rail__item`
    alongside `.nav-pill`, so the existing `html[data-rail='collapsed']` rules —
    which are guarded by `@media (min-width: 48rem)` for a reason documented at

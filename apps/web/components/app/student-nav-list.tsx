@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import type { MouseEvent } from 'react';
 import { isPlainPress } from '@/lib/welcome-motion';
 import { useStudentFeatureGate } from './student-features';
-import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
+import { STUDENT_NAV, STUDENT_NAV_GROUPS, activeStudentNav, type StudentNavItem } from './student-nav-items';
 
 /**
  * اللينك اللي الطالب واقف عليه أصلًا: `<Link>` بيدفع history entry جديدة حتى
@@ -78,31 +78,59 @@ export function StudentNavList({
     return true;
   });
 
+  const renderItem = (item: StudentNavItem) => {
+    const isActive = active?.href === item.href;
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          onClick={guardActiveLink(isActive, onNavigate)}
+          title={item.labelAr}
+          aria-current={isActive ? 'page' : undefined}
+          // `.rail__item` stays alongside `.nav-pill`: the collapsed-rail
+          // rules in globals.css are keyed on it, and they are guarded by
+          // a breakpoint this component must not second-guess.
+          className="nav-pill rail__item"
+        >
+          <span className="nav-pill__well" aria-hidden="true">
+            <item.icon className="size-4" />
+          </span>
+          <span className="nav-pill__label rail__label">{item.labelAr}</span>
+        </Link>
+      </li>
+    );
+  };
+
+  // The sheet's «الوصول السريع» block is four rows under its own eyebrow —
+  // section headings inside it would be four headings for four rows.
+  if (only === 'tabs') {
+    return (
+      <ul className={['flex flex-col gap-1', className].filter(Boolean).join(' ')}>
+        {items.map(renderItem)}
+      </ul>
+    );
+  }
+
+  /*
+   * One block per section. The heading carries `.rail__label`, so the
+   * collapsed rail drops it with every other word and the block gap alone
+   * keeps the sections apart. A section with nothing allowed in it (every row
+   * behind an entitlement the stack has off) renders nothing — not an orphan
+   * heading.
+   */
   return (
-    <ul className={['flex flex-col gap-1', className].filter(Boolean).join(' ')}>
-      {items.map((item) => {
-        const isActive = active?.href === item.href;
+    <div className={['flex flex-col gap-4', className].filter(Boolean).join(' ')}>
+      {STUDENT_NAV_GROUPS.map((group) => {
+        const rows = items.filter((item) => item.group === group.id);
+        if (rows.length === 0) return null;
         return (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              onClick={guardActiveLink(isActive, onNavigate)}
-              title={item.labelAr}
-              aria-current={isActive ? 'page' : undefined}
-              // `.rail__item` stays alongside `.nav-pill`: the collapsed-rail
-              // rules in globals.css are keyed on it, and they are guarded by
-              // a breakpoint this component must not second-guess.
-              className="nav-pill rail__item"
-            >
-              <span className="nav-pill__well" aria-hidden="true">
-                <item.icon className="size-4" />
-              </span>
-              <span className="nav-pill__label rail__label">{item.labelAr}</span>
-            </Link>
-          </li>
+          <div key={group.id} className="flex flex-col gap-1">
+            {group.labelAr ? <p className="nav-section__head rail__label">{group.labelAr}</p> : null}
+            <ul className="flex flex-col gap-1">{rows.map(renderItem)}</ul>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
