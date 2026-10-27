@@ -106,6 +106,9 @@ import { BooksService } from '../modules/books/books.service';
 import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
 import { ShareCardsModule } from '../modules/share-cards/share-cards.module';
+import { ReferralsController } from '../modules/referrals/referrals.controller';
+import { AdminReferralsController } from '../modules/referrals/admin-referrals.controller';
+import { ReferralsService } from '../modules/referrals/referrals.service';
 import { AdminAttemptsOverviewController } from '../modules/quiz/admin-attempts-overview.controller';
 import { AttemptsOverviewService } from '../modules/quiz/attempts-overview.service';
 
@@ -294,6 +297,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `quiz.authz.spec.ts` (see `COVERED_BY_QUIZ_AUTHZ_SPEC`), and this one
         // needs nothing but Prisma, so it costs no extra wiring here.
         AdminAttemptsOverviewController,
+        // «دعوة الصحاب» — the two controllers, not `ReferralsModule`: that
+        // imports `MarketingModule` for the WhatsApp notice, which drags in
+        // `CampaignRunner` and the global Redis (see «التسويق» below).
+        ReferralsController,
+        AdminReferralsController,
       ],
       imports: [
         DiscoveryModule,
@@ -453,6 +461,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         WalletService,
         // `AdminAttemptsOverviewController`'s only dependency.
         AttemptsOverviewService,
+        // Both referral controllers' only dependency (Prisma, audit and
+        // notifications are all already here). The sweeper and the WhatsApp
+        // notice are crons with no route, so they stay out.
+        ReferralsService,
       ],
     })
     class FixtureModule {}
@@ -936,6 +948,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'share cards certificates: student', method: 'get', path: () => '/api/me/share-cards/certificates', actor: 'student', status: 200 },
     { label: 'share cards result: anonymous', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'share cards result: student, an attempt that is not theirs', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'student', status: 404 },
+    // «دعوة صحابك» — `payment:submit` (self-scoped) + فيتشر `referrals`، مفتوحة هنا
+    // لأن التستات بتجري كستاك أيمن. الأدمن: `marketing:read`/`marketing:write`،
+    // والإلغاء `payment:review` لأنه بيرجّع فلوس من محفظتين.
+    { label: 'my referrals: anonymous', method: 'get', path: () => '/api/me/referrals', actor: 'anonymous', status: 401 },
+    { label: 'my referrals: student', method: 'get', path: () => '/api/me/referrals', actor: 'student', status: 200 },
+    { label: 'admin referrals list: anonymous', method: 'get', path: () => '/api/admin/referrals', actor: 'anonymous', status: 401 },
+    { label: 'admin referrals list: student', method: 'get', path: () => '/api/admin/referrals', actor: 'student', status: 403 },
+    { label: 'admin referrals program: anonymous', method: 'get', path: () => '/api/admin/referrals/program', actor: 'anonymous', status: 401 },
+    { label: 'admin referrals program: student', method: 'get', path: () => '/api/admin/referrals/program', actor: 'student', status: 403 },
+    { label: 'admin referrals program update: anonymous', method: 'put', path: () => '/api/admin/referrals/program', actor: 'anonymous', status: 401, body: () => ({ enabled: true, referrerRewardCents: 5000, friendRewardCents: 2500, monthlyCap: 10, windowDays: 30, whatsappNotice: true }) },
+    { label: 'admin referrals program update: student', method: 'put', path: () => '/api/admin/referrals/program', actor: 'student', status: 403, body: () => ({ enabled: true, referrerRewardCents: 5000, friendRewardCents: 2500, monthlyCap: 10, windowDays: 30, whatsappNotice: true }) },
+    { label: 'admin referrals top: anonymous', method: 'get', path: () => '/api/admin/referrals/top', actor: 'anonymous', status: 401 },
+    { label: 'admin referrals top: student', method: 'get', path: () => '/api/admin/referrals/top', actor: 'student', status: 403 },
+    { label: 'admin referral void: anonymous', method: 'post', path: () => `/api/admin/referrals/${randomUUID()}/void`, actor: 'anonymous', status: 401, body: () => ({ reason: 'تجربة الصلاحيات' }) },
+    { label: 'admin referral void: student', method: 'post', path: () => `/api/admin/referrals/${randomUUID()}/void`, actor: 'student', status: 403, body: () => ({ reason: 'تجربة الصلاحيات' }) },
     { label: 'game round: anonymous', method: 'get', path: () => '/api/me/game/round', actor: 'anonymous', status: 401 },
     { label: 'game round: student', method: 'get', path: () => '/api/me/game/round', actor: 'student', status: 200 },
     { label: 'game hub: anonymous', method: 'get', path: () => '/api/me/game/hub', actor: 'anonymous', status: 401 },

@@ -448,6 +448,8 @@ export const copy = {
     /** «دفتر غلطاتي». الكوبي كلها في `copy/mistakes.ts`. */
     mistakes: 'غلطاتي',
     certificates: 'شهاداتي',
+    /** «دعوة صحابك» — the share link. Nominal, not «ادعي»: one label for every reader. */
+    invite: 'دعوة صحابك',
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
@@ -5104,6 +5106,7 @@ export const copy = {
     walletCreditedTopup: 'اتشحن {amount} جنيه في المحفظة',
     walletCreditedAdmin: 'اتضاف {amount} جنيه للمحفظة',
     walletCreditedRefund: 'رجع {amount} جنيه للمحفظة',
+    walletCreditedReferral: 'مكافأة دعوة: نزل {amount} جنيه في المحفظة',
     walletTopupRejected: 'طلب شحن المحفظة ({amount} جنيه) مااتقبلش',
     /** ADMIN — `{name}` at the end, same reason as `paymentSubmitted`. */
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
@@ -7267,6 +7270,8 @@ export const copy = {
       refund: 'فلوس رجعت من اشتراك',
       course_purchase: 'اشتراك',
       admin_debit: 'خصم من الإدارة',
+      referral_reward: 'مكافأة دعوة',
+      referral_reversal: 'مكافأة دعوة اترجعت',
     },
     via: {
       instapay: 'إنستاباي',

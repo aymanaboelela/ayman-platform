@@ -530,6 +530,16 @@ export const AUDIT_ACTIONS = [
   'wallet:purchase',
   'wallet:refund',
   /*
+   * «ادعي صاحبك». `reward` is the money landing in both wallets, `block` an
+   * abuse rule refusing it, `reverse` it coming back after a refund, `void`
+   * an admin cancelling it, `settings` the program's numbers changing.
+   */
+  'referral:reward',
+  'referral:block',
+  'referral:reverse',
+  'referral:void',
+  'referral:settings',
+  /*
    * «ستوديو التصميم». Every act on the designer's folders is audited, the
    * designer's own included: the account belongs to someone outside the
    * teaching team, and «مين مسح التصميم ده» has to have an answer that does not

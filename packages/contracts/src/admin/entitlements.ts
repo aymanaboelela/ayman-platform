@@ -134,6 +134,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول» — on for him, off on every other stack until the owner
+     * opens it. It moves WALLET MONEY (a credit to two students per paying
+     * friend), so a teacher must decide to fund it; and even once opened the
+     * program itself stays off until that teacher sets the amounts and turns
+     * it on from «التسويق ← دعوة الصحاب».
+     */
+    key: 'referrals',
+    nameAr: 'دعوة الصحاب',
+    descriptionAr: 'لينك دعوة لكل طالب، ورصيد في المحفظة له ولصاحبه لما صاحبه يدفع أول مرة.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

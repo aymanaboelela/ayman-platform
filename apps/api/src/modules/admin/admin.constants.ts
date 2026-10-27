@@ -90,6 +90,9 @@ export const AUDIT_RESOURCES = {
   walletTransaction: 'wallet_transactions',
   /// «طلبات الشحن» — the InstaPay / Vodafone Cash top-up requests.
   walletTopup: 'wallet_topups',
+  /// «دعوة الصحاب» — one friend attributed to one share link; and the program row.
+  referral: 'referrals',
+  referralProgram: 'referral_program',
   /// «السناتر» — see `CentersService`.
   center: 'centers',
   centerSlot: 'center_slots',
