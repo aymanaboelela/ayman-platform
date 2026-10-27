@@ -134,6 +134,7 @@ describe('CampaignRunner — channel', () => {
       send: async (input: { phone: string; text: string }) => {
         sent.push({ phone: input.phone, text: input.text });
       },
+      assertWithinCeiling: async () => undefined,
     } as unknown as WhatsappDeviceService;
 
     runner = new CampaignRunner(

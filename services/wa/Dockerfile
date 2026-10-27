@@ -9,6 +9,11 @@ FROM node:22.23.4-slim
 
 WORKDIR /app
 
+# Note (2026-10-27, Baileys 7.0.0-rc14): the lockfile no longer has ANY git
+# dependency — 7.x takes `libsignal` from the npm registry, with an integrity
+# hash. `git` and the `insteadOf` rewrites below are kept only so a future
+# lockfile that reintroduces one cannot fail the build; they cost seconds.
+#
 # ⚠️ `git` **لازم** يكون موجود هنا، وده مش تفضيل — Baileys بيعتمد على
 # `libsignal: github:WhiskeySockets/libsignal-node`، وnpm بيحتاج يعمل
 # `git clone` عشان يجيب باكيدج متبعتش على npm registry أصلاً. من غيره

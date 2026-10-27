@@ -3856,31 +3856,7 @@ export const copy = {
      *  rediscover it. */
     closedClose: 'تمام',
   },
-  /**
-   * صفحة ولي الأمر.
-   *
-   * النبرة هنا مش نبرة الطالب: الأب مش بيذاكر، هو بيطمن. فمفيش «يلا نكمّل»
-   * ولا أي دعوة لفعل — الصفحة بتقول الحقيقة وخلاص، والفعل عند ابنه.
-   */
-  guardian: {
-    eyebrow: 'متابعة ولي الأمر',
-    title: 'متابعة الطالب',
-    of: 'من',
-    noCourses: 'لسه مش مشترك في أي كورس.',
-    /** «سلّم ٣ من ٥» — المقام مش زينة: رقم من غير مقام مالوش معنى لحد مش
-     *  عارف الكورس فيه كام واجب. */
-    homeworkLabel: 'الواجبات',
-    needsWork: '{n} محتاج يتعاد',
-    quizzesLabel: 'امتحانات دخلها',
-    passedOf: 'عدّى في {passed}',
-    averageLabel: 'متوسط الدرجات',
-    /** مكان المتوسط قبل أول ورقة. «٠٪» بيقرا «امتحن وجاب صفر» — وهي جملة
-     *  تانية خالص في بيت. */
-    noAverage: 'لسه ماامتحنش',
-    papersTitle: 'آخر الامتحانات',
-    passed: 'عدّى',
-    failed: 'مامشيش',
-  },
+  /* صفحة ولي الأمر — `copy/guardian.ts` (موديول لوحده، زي `copy/backlog.ts`). */
 
   dashboard: {
     eyebrow: '01 / حسابي',
@@ -5109,6 +5085,30 @@ export const copy = {
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
     walletQueue: 'طلبات الشحن',
     walletSubtitle: 'المحفظة',
+    /*
+     * ADMIN, push only — «لوحة التحكم على الموبايل» (`adminMobile`). None of
+     * these is a feed row: each says something about the platform right now,
+     * and a row read the next morning would be stale. Worded about the thing,
+     * never to the reader — a teacher may be a man or a woman.
+     *
+     * The night summary is one line built from three parts, joined with « · »
+     * by `daily-summary.ts`. Whole pounds, Western digits.
+     */
+    dailySummaryTitle: 'ملخص النهارده',
+    /** `{n}` paid subscriptions, split into first-timers and renewals. */
+    dailySummarySubs: '{n} اشتراك ({fresh} جديد، {renewal} تجديد)',
+    dailySummaryNoSubs: 'مفيش اشتراكات النهارده',
+    /** `{amount}` — the finance screen's own «الصافي» for today. */
+    dailySummaryNet: 'الصافي {amount} جنيه',
+    dailySummaryPending: '{n} طلب مستني مراجعة',
+    dailySummaryNothingPending: 'مفيش طلبات مستنية',
+    whatsappDown: 'الواتساب فصل',
+    whatsappDownDetail: 'الرسايل مش هتتبعت لحد ما الرقم يترابط تاني.',
+    whatsappBack: 'الواتساب رجع يشتغل',
+    whatsappBackDetail: 'الرقم مترابط والرسايل بتتبعت تاني.',
+    /** `{lesson}` — the lecture whose upload gave up for good. */
+    videoFailed: 'رفع فيديو فشل — {lesson}',
+    videoFailedDetail: 'اتجرّب أكتر من مرة ومنفعش، والسبب مكتوب في صفحة الفيديوهات.',
     /**
      * ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». `{quiz}` is the lecture the
      * quiz sits on. Worded about the QUESTION, never to the reader: a teacher

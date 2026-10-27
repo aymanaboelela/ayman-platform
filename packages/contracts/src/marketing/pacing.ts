@@ -14,14 +14,14 @@
  *
  * ## The four brakes, and what each one is actually for
  *
- * · **the gap** (30–90s, randomised) — a fixed interval is a fingerprint. Two
+ * · **the gap** (45–120s by default, randomised) — a fixed interval is a fingerprint. Two
  *   hundred messages exactly 30.0s apart is not something a person does, and
  *   it is the cheapest signal there is to detect. The randomisation is the
  *   point of the range, not the length of it.
- * · **the batch pause** (30 messages, then 10 minutes) — a human sending to a
+ * · **the batch pause** (20 messages, then 15 minutes) — a human sending to a
  *   class does it in bursts with breaks. It also caps the damage of a bad
  *   template: a wrong link stops after 30 people, not 200.
- * · **the daily cap** (200) — the one brake that actually decides whether a
+ * · **the daily cap** (100) — the one brake that actually decides whether a
  *   number gets banned. Everything above only shapes the traffic within a day.
  * · **the window** (10:00–22:00 Cairo) — a message at 3am gets blocked and
  *   reported, and a block is the signal that costs the number.
@@ -60,18 +60,30 @@ export interface Pacing {
 /**
  * The conservative defaults, and the ones the admin form starts from.
  *
- * ~70 messages an hour in practice (30 sends at a ~60s mean, then 10 idle
- * minutes), so the 200/day cap is reached in roughly three hours of an
- * eleven-hour window. That headroom is deliberate: a campaign that finishes
- * its day's quota by lunchtime leaves the number looking like a person who
- * used WhatsApp in the morning, not like one that transmitted for eleven hours.
+ * Tightened on 2026-10-27, when the platform moved to a brand-new number.
+ * A new number has no chat history, so EVERY message it sends is a new-chat
+ * initiation — the one kind of traffic WhatsApp meters separately and bans
+ * for in bursts. The old defaults (30–90s, 30 per batch, 200/day) were sized
+ * for an established personal number and were too fast for that:
+ *
+ *   · **45–120s** between messages — slower on average, and a wider range, so
+ *     the gaps look less like a timer;
+ *   · **20 per batch, then 15 minutes** — shorter bursts, longer breaks;
+ *   · **100 a day** per campaign. The NUMBER has its own ceiling on top of
+ *     this, shared by every sender and ramped up over the first two weeks
+ *     (`device-ceiling.ts`) — a campaign cannot spend what the number does
+ *     not have.
+ *
+ * ~40 messages an hour in practice, so a day's 100 takes about two and a half
+ * hours of an eleven-hour window. The headroom is the point: the number looks
+ * like a person who used WhatsApp for part of the day.
  */
 export const DEFAULT_PACING: Pacing = {
-  minDelaySeconds: 30,
-  maxDelaySeconds: 90,
-  batchSize: 30,
-  batchPauseMinutes: 10,
-  dailyCap: 200,
+  minDelaySeconds: 45,
+  maxDelaySeconds: 120,
+  batchSize: 20,
+  batchPauseMinutes: 15,
+  dailyCap: 100,
   windowStartHour: 10,
   windowEndHour: 22,
 };

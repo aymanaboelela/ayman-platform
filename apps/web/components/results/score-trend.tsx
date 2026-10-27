@@ -79,7 +79,15 @@ function stateOf(point: QuizHistoryPoint): PointState {
  * caption sentence («رسم بياني لـ٣ محاولة، من ٢٧٪ لحد ١٪») and a visually
  * hidden list with one line per attempt — its exam, score, verdict and date.
  */
-export function ScoreTrend({ series }: { series: readonly QuizHistoryPoint[] }) {
+export function ScoreTrend({
+  series,
+  title = c.trendTitle,
+}: {
+  series: readonly QuizHistoryPoint[];
+  /** The heading. The default speaks TO the student («درجاتك»); the guardian
+   *  page passes its own, since it speaks about them. */
+  title?: string;
+}) {
   const points = projectSeries(series, INSET);
   if (points.length === 0) return null;
 
@@ -97,7 +105,7 @@ export function ScoreTrend({ series }: { series: readonly QuizHistoryPoint[] }) 
         <span className="rs-card__icon" aria-hidden="true">
           <TrendingUp className="size-4" />
         </span>
-        <h2 className="rs-card__title">{c.trendTitle}</h2>
+        <h2 className="rs-card__title">{title}</h2>
       </div>
 
       <div className="rs-trend__plot" aria-hidden="true">

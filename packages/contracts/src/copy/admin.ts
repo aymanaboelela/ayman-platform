@@ -90,6 +90,8 @@ const admin = {
      *  queue of InstaPay / Vodafone Cash top-up requests. */
     wallet: 'شحن المحفظة',
     walletRequests: 'طلبات الشحن',
+    /** «لوحة التحكم على الموبايل» — the one-at-a-time review card. */
+    review: 'مراجعة سريعة',
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
     /**
@@ -3383,6 +3385,35 @@ const admin = {
     bulkDeleteReasonAuthored: 'مؤلف محتوى',
     bulkDeleteReasonOutranked: 'صلاحياته أعلى منك',
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
+  },
+  /**
+   * «مراجعة سريعة» — `/admin/review`, the payments queue one card at a time,
+   * for a phone. Behind `adminMobile`. Approve/reject reuse `payments.*`'s
+   * own words and errors; only what this screen adds is here. Never a verb
+   * aimed at the reader: a teacher may be a man or a woman.
+   */
+  review: {
+    eyebrow: 'مراجعة سريعة',
+    title: 'الاشتراكات المستنية',
+    /** `{n}` of `{total}` — where the reader is in the queue. */
+    position: '{n} من {total}',
+    allPayments: 'كل المدفوعات',
+    later: 'بعدين',
+    /** On the big screenshot, which opens full-screen on tap. */
+    zoomHint: 'اللمس بيكبّر الصورة',
+    noScreenshot: 'مفيش صورة تحويل مع الطلب ده',
+    doneTitle: 'خلصت كل الطلبات',
+    doneHint: 'أول ما طلب جديد يوصل هيظهر هنا لوحده.',
+    backToDashboard: 'لوحة التحكم',
+    approved: 'اتوافق — {name}',
+    rejected: 'اترفض — {name}',
+    /** One tap fills the reason box; it is still editable before sending. */
+    quickReasonsLabel: 'أسباب جاهزة',
+    quickReasons: [
+      'المبلغ في الصورة مش مطابق للباقة',
+      'الصورة مش واضحة، محتاجين صورة أوضح',
+      'التحويل ماوصلش لحد دلوقتي',
+    ],
   },
   payments: {
     /* ── الفرز والفلترة ──────────────────────────────────────────────── */
@@ -7201,7 +7232,7 @@ const marketing = {
 
   // ── device pairing ───────────────────────────────────────────────────────
   deviceTitle: 'رقم الواتساب',
-  deviceLead: 'الرقم اللي الحملات هتتبعت منه. رقمك الشخصي، من غير أي API رسمي — زي ما تفتح واتساب ويب.',
+  deviceLead: 'الرقم اللي الحملات وإشعارات الشحن بتتبعت منه — من غير أي API رسمي، زي ما تفتح واتساب ويب.',
   deviceDisabled: 'الخدمة لسه مش متظبطة على السيرفر.',
   deviceDisabledHint: 'المطوّر لازم يضيف WA_SERVICE_URL وWA_SERVICE_TOKEN الأول.',
   deviceUnreachable: 'مقدرناش نوصل لخدمة الواتساب',
@@ -7231,6 +7262,106 @@ const marketing = {
   deviceDetailLabel: 'آخر سبب:',
   /** Shown beside the link button once a first attempt produced no code. */
   linkNoCodeHint: 'لو دوست وما ظهرش كود خلال شوية ثواني، امسح البيانات وابدأ من الأول.',
+
+  // ── replacing the number ─────────────────────────────────────────────
+  // «اربط رقم تاني» — one button for "this number out, that number in". It
+  // used to take two (افصل، وبعدين اربط) with a page state in between that
+  // looked like nothing was linked and nothing would be.
+  replaceButton: 'اربط رقم تاني بدل ده',
+  replaceConfirm:
+    'هنفصل الرقم ده ونمسح بياناته خالص من السيرفر، وبعدين نطلع كود للرقم الجديد. أي حملة شغالة هتقف لحد ما الرقم الجديد يتربط.',
+
+  // ── pairing by code, not QR ──────────────────────────────────────────
+  // For the one case a QR cannot serve: this page open on the same phone
+  // that is being linked — it cannot scan its own screen.
+  pairByCodeHint: 'فاتح الصفحة دي من نفس الموبايل اللي هتربطه؟ اربط بكود بدل ما تمسح.',
+  pairPhoneLabel: 'رقم الواتساب اللي هيتربط (بالكود الدولي)',
+  pairPhoneButton: 'طلّع كود الربط',
+  pairingCodeTitle: 'كود الربط',
+  pairingCodeSteps:
+    'على الموبايل: واتساب ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز ← «الربط برقم التليفون بدلاً من ذلك»، واكتب الكود ده.',
+
+  /**
+   * Why the connection closed, keyed by WhatsApp's close code — the sidecar
+   * reports `closed: 401 (…)` and the page shows this sentence beside it.
+   */
+  closeReasons: {
+    '401': 'الموبايل شال الجهاز ده من «الأجهزة المرتبطة» — محتاج تربطه من جديد.',
+    '403': 'واتساب رافض الحساب ده — ممكن يكون اتحظر أو اتقفل. افتح واتساب على الموبايل وشوف فيه رسالة.',
+    '408': 'الكود خلص قبل ما يتمسح. دوس «اربط» تاني وامسحه على طول.',
+    '411': 'جلسة الربط القديمة مابقتش شغالة. امسح البيانات وابدأ من الأول.',
+    '440': 'نفس الجلسة اتفتحت من مكان تاني. اقفل أي نسخة تانية بتستخدم الرقم ده.',
+    '515': 'الربط نجح وبيعيد الاتصال…',
+  },
+
+  // ── is it actually delivering? ────────────────────────────────────────
+  healthTitle: 'الإرسال في آخر ٢٤ ساعة',
+  healthLead: 'كل رسالة طلعت من الرقم ده — حملات، إشعارات شحن، وتجارب — وإيه اللي حصل لها بعد ما اتبعتت.',
+  healthSent: 'اتبعت',
+  healthDelivered: 'وصلت',
+  healthRead: 'اتقرت',
+  healthRefused: 'واتساب رفضها',
+  healthWaiting: 'لسه مستنيين خبر',
+  /** `{rate}` — a whole percentage. Delivered (incl. read) over everything sent. */
+  healthRate: 'نسبة الوصول: {rate}٪',
+  healthRateNone: 'لسه مفيش رسايل كفاية نحسب منها نسبة.',
+  /** `{when}` — a Cairo date and time. */
+  healthLastDelivered: 'آخر رسالة وصلت: {when}',
+  healthNeverDelivered: 'لسه مفيش ولا رسالة وصلت من الرقم ده.',
+  healthConnectedSince: 'متوصّل من {when}',
+  healthEmpty: 'مفيش رسايل اتبعتت في آخر ٢٤ ساعة.',
+  /** `{used}`, `{limit}` — every sender together, today (Cairo). */
+  healthCeiling: 'النهارده: {used} من {limit} رسالة مسموح بيها للرقم.',
+  /** `{day}` — 1-based. */
+  healthWarmup:
+    'الرقم جديد (اليوم {day}) — الحد اليومي بيزيد بالتدريج على أسبوعين، عشان الرقم الجديد اللي يبعت لناس كتير مرة واحدة واتساب بيحظره.',
+  healthRestricted: '⛔ واتساب مانع الرقم ده يبدأ محادثات جديدة دلوقتي. الرسايل للناس اللي كلّموا الرقم قبل كده شغالة عادي.',
+  /** `{when}` */
+  healthRestrictedUntil: 'المنع بيخلص: {when}',
+  healthCapped: '⛔ الرقم وصل لحد المحادثات الجديدة بتاع واتساب للفترة دي.',
+  /** `{used}`, `{total}` */
+  healthQuota: 'حد المحادثات الجديدة من واتساب: {used} من {total}',
+  healthRefusalsTitle: 'ليه واتساب رفض',
+  /** `{n}` */
+  healthRefusalCount: '{n} رسالة',
+  healthRecentTitle: 'آخر رسايل اترفضت',
+  healthLoadFailed: 'مقدرناش نجيب أرقام الإرسال دلوقتي.',
+  sendSources: {
+    campaign: 'حملة',
+    shipping: 'إشعار شحن',
+    test: 'تجربة',
+    other: 'تانية',
+  },
+
+  /**
+   * What WhatsApp's refusal codes mean — the ONE place they are written.
+   *
+   * The sidecar relays the bare code; the API writes `waErrorFor(code)` onto
+   * the campaign row, and the device page and the test send render the same
+   * sentence. `{code}` in the fallback is the number itself: one nobody has a
+   * sentence for is still the thing to search for.
+   */
+  waErrors: {
+    '463':
+      'واتساب مانع الرقم ده يبدأ محادثات جديدة دلوقتي (463). بيحصل للأرقام الجديدة أو اللي بعتت لناس كتير مرة واحدة. الرسايل للي كلّموا الرقم قبل كده شغالة — قلّل الإرسال واستنى المنع يخلص.',
+    '479': 'واتساب رفض الرسالة (479) — غالبًا جلسة الربط قديمة. افصل الرقم واربطه تاني.',
+    '403': 'واتساب رافض الرقم ده (403) — ممكن يكون اتحظر أو اتقفل.',
+    '429': 'واتساب شايف إن الإرسال كتير وسريع (429). استنى شوية وقلّل السرعة.',
+    '404': 'واتساب ملقاش الرقم ده (404).',
+    '500': 'مشكلة عند واتساب نفسه (500). هتتجرب تاني.',
+  },
+  waErrorUnknown: 'واتساب رفض الرسالة (كود {code}).',
+  waErrorNoCode: 'واتساب رفض الرسالة من غير ما يقول السبب.',
+
+  /** Thrown back to a sender when the NUMBER has spent today's ceiling. */
+  waCeilingReached: 'الرقم وصل لحد النهارده ({limit} رسالة) — هيكمّل بكرة الصبح.',
+  /** Thrown back to a sender when WhatsApp is refusing new chats. */
+  waRestricted: 'واتساب مانع الرقم يبدأ محادثات جديدة دلوقتي — جرّب بعدين.',
+  /** `{until}` — «لحد …», or empty when WhatsApp gave no end time. */
+  waRestrictedPause:
+    'اتوقفت لوحدها: واتساب مانع الرقم يبدأ محادثات جديدة{until}. كمّل بعد ما المنع يخلص — الإرسال فيه بيطوّل المنع.',
+  /** `{when}` */
+  waRestrictedUntil: ' لحد {when}',
 
   // ── the audience picker ──────────────────────────────────────────────────
   /**
@@ -7455,6 +7586,8 @@ const marketing = {
    */
   testSendLid: 'الرقم ده عنده LID: {lid}',
   testSendNoLid: 'الرقم ده لسه على العنونة بالرقم (من غير LID).',
+  /** After linking a NEW number: the one check that proves it works. */
+  testSendAfterLink: 'ربطت رقم جديد؟ ابعت تجربة لموبايلك دلوقتي، ولازم تشوف علامتين (✓✓) قبل أي حملة.',
 
   // ── opt-outs ──────────────────────────────────────────────────────────
   optOutsTitle: 'طلبوا الإيقاف',

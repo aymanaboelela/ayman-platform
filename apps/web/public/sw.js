@@ -690,23 +690,53 @@ self.addEventListener('push', (event) => {
   const url = typeof data.url === 'string' && data.url ? data.url : '/admin';
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: typeof data.body === 'string' ? data.body : '',
-      // Spread rather than `icon: MARK ?? undefined`: the two keys are simply
-      // absent on a stack with no mark, so nothing downstream has to agree
-      // with us about how a browser reads an explicit `undefined` here.
-      ...(MARK ? { icon: MARK, badge: MARK } : {}),
-      // Collapses repeats in the OS tray — the same reason
-      // `notification-stream.tsx`'s own `tag` does for the toast twin of
-      // this, three questions in a minute replace one another instead of
-      // stacking three times.
-      tag: typeof data.tag === 'string' && data.tag ? data.tag : 'ayman-push',
-      lang: 'ar',
-      dir: 'rtl',
-      data: { url },
-    }),
+    Promise.all([
+      self.registration.showNotification(title, {
+        body: typeof data.body === 'string' ? data.body : '',
+        // Spread rather than `icon: MARK ?? undefined`: the two keys are simply
+        // absent on a stack with no mark, so nothing downstream has to agree
+        // with us about how a browser reads an explicit `undefined` here.
+        ...(MARK ? { icon: MARK, badge: MARK } : {}),
+        // Collapses repeats in the OS tray — the same reason
+        // `notification-stream.tsx`'s own `tag` does for the toast twin of
+        // this, three questions in a minute replace one another instead of
+        // stacking three times.
+        tag: typeof data.tag === 'string' && data.tag ? data.tag : 'ayman-push',
+        lang: 'ar',
+        dir: 'rtl',
+        data: { url },
+      }),
+      url.startsWith('/admin') ? refreshAdminBadge() : Promise.resolve(),
+    ]),
   );
 });
+
+/*
+ * The number on the home-screen icon, for an admin who installed the app.
+ *
+ * A push is the one moment the icon can be corrected with the app closed, so
+ * it is corrected from the server's own count rather than by adding one: the
+ * worker cannot know what the admin cleared from another device in between,
+ * and a guessed number that only ever grows is worse than none. The open app
+ * keeps it right the rest of the time (`app-badge.tsx`).
+ *
+ * Every failure is silent on purpose. A stack where `adminMobile` is off
+ * answers 404, a browser without the Badging API has no `setAppBadge`, and in
+ * both the notification above is the whole job.
+ */
+async function refreshAdminBadge() {
+  if (!('setAppBadge' in self.navigator)) return;
+  try {
+    const response = await fetch('/api/admin/mobile/pending', { credentials: 'same-origin' });
+    if (!response.ok) return;
+    const { total } = await response.json();
+    if (typeof total !== 'number') return;
+    if (total > 0) await self.navigator.setAppBadge(total);
+    else await self.navigator.clearAppBadge();
+  } catch {
+    // See above — the badge is a nicety, the notification already showed.
+  }
+}
 
 /*
  * Clicking the notification. Focuses an already-open tab on the right page

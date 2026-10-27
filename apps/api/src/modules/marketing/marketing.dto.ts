@@ -33,3 +33,14 @@ export const TestSendSchema = z.object({
   text: z.string().trim().min(1).max(1000).optional(),
 });
 export class TestSendDto extends createZodDto(TestSendSchema) {}
+
+/**
+ * «اربط». `phone` is optional: present, it asks for a pairing CODE instead of
+ * a QR (linking from the same phone the page is open on).
+ */
+export const LinkDeviceSchema = z
+  .object({
+    phone: z.string().trim().min(6).max(20).optional(),
+  })
+  .default({});
+export class LinkDeviceDto extends createZodDto(LinkDeviceSchema) {}

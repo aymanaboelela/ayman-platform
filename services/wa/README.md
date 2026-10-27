@@ -42,24 +42,46 @@ It sends one message when told to, and reports whether it worked.
 ## Pairing
 
 `POST /link` starts a pairing and `GET /status` then returns a QR as a data
-URL until the phone scans it. The credentials are written to `WA_AUTH_DIR`
-and survive restarts, so this is done once — not on every deploy.
+URL until the phone scans it. `POST /link { "phone": "+2010…" }` asks for an
+8-character **pairing code** instead (`status.pairingCode`, `XXXX-XXXX`) — the
+way to link from the same phone the admin page is open on, which cannot scan
+its own screen. The credentials are written to `WA_AUTH_DIR` and survive
+restarts, so this is done once — not on every deploy.
 
-`POST /unlink` wipes them and drops the session.
+`POST /unlink` logs the device out, cancels any pending reconnect, fences the
+old socket's late writes (`src/auth-fence.mjs`) and empties `WA_AUTH_DIR` by
+its children (it is a volume mount point — see `src/auth-store.mjs`).
+«اربط رقم تاني بدل ده» on the device page is `/unlink` then `/link`.
 
-## Endpoints
+An **unpaired** sidecar stays quiet: boot, reconnects and the watchdog only
+reconnect a device that WhatsApp actually paired (`creds.account` present).
+It used to open a throwaway QR session at boot and every 5s after each one
+expired — thousands of handshakes a day against the service whose trust the
+number depends on.
 
-All except `/health` require `x-wa-token`.
+Closes are classified in `src/reconnect-policy.mjs`: 401 wipes and waits, 403
+(banned) and 411 stop and say so, 515 (right after a scan) reconnects at once,
+everything else backs off exponentially from 5s to 5 minutes.
 
-- `GET /health` → `{ ok: true }`, or `{ ok: false, detail }` with `503` **only** if a connect attempt has been wedged for far longer than it should ever take to self-recover (see `WA_CONNECT_TIMEOUT_MS`). A device that simply isn't linked yet is still `{ ok: true }` — that has always been on purpose (see `Dockerfile`).
-- `GET /status` → `{ state, phone, qr, detail }`
-- `POST /link` → begins pairing
-- `POST /unlink` → forgets the device
-- `POST /send` `{ phone, text, imageUrl? }` → `{ messageId, onWhatsApp, jid, serverJid, lid }`
-  - `lid` is WhatsApp's Linked Identity for the recipient, non-null once their
-    account has migrated to LID addressing. It is reported, never addressed:
-    the 6.x line has no LID↔PN mapping, and this field is how you find out
-    whether that is why a message was accepted and never delivered.
+## Baileys 7 and new chats
+
+Pinned to `7.0.0-rc14`. On a brand-new number every message is a new-chat
+initiation, and that is what WhatsApp meters:
+
+- 7.x attaches the contact's privacy token (`tctoken`) when one is stored and,
+  after every 1:1 send, issues ours to the recipient — 6.x did neither.
+- 7.x can read WhatsApp's **reach-out timelock** and **new-chat cap**. The
+  sidecar asks on connect, after every `463`, and at most every 30 minutes
+  before a send (`src/new-chat-limits.mjs`), and `GET /status` reports them as
+  `limits`. While either says no, `POST /send` to a number with no trusted
+  chat answers **423** `{ code: 'timelock' | 'capped', until }` *without
+  sending* — every refused attempt deepens the restriction. The API pauses the
+  campaign with the end time.
+- Inbound «قف» from LID-addressed chats is mapped back to a phone number
+  (`src/inbound.mjs`); before, the relay dropped every reply from a migrated
+  account.
+- `libsignal` now comes from the registry with an integrity hash; 6.x pulled
+  it from a GitHub commit.
 
 ## Receipts
 
@@ -75,17 +97,18 @@ deduplicated highest-status-wins by `src/receipt-store.mjs` so a late receipt
 can never walk a row backwards. `3` is delivered, `4` read, `0` a refusal.
 
 A refusal carries WhatsApp's own error code, lifted from `messageStubParameters`
-and translated by `ERROR_CODES`. The one to know is **463**
-(`MessageAccountRestriction`): a 1:1 message with no privacy token, which means
-WhatsApp is blocking this account from STARTING new chats while leaving existing
-conversations alone. A marketing campaign is nothing BUT new chats, so it fails
-for every recipient identically — while a reply typed by hand into an open chat
-goes through instantly. The 6.x line here never attaches a `tctoken` to
-anything; `getPrivacyTokens` exists in the library and is called from nowhere
-inside it. Baileys 7.x is where that machinery lives.
+and relayed as `code`. Its Egyptian-Arabic explanation is applied by the API
+from `packages/contracts/src/copy/admin.ts` (`marketing.waErrors`), so the
+campaign screen, the device page and the test send say the same thing. The one
+to know is **463**: WhatsApp blocking this account from STARTING new chats
+(a reach-out timelock or the new-chat cap) while existing chats keep working.
+
+Every receipt also lands in the API's `whatsapp_sends` ledger, which covers
+every sender (campaigns, shipping notices, test sends). The device page's
+24-hour delivery rate, last delivery and refusal reasons are read from it.
 
 To read it off the running container directly:
 
 ```
-docker logs --since 336h <wa> 2>&1 | grep -E 'received error in ack|whatsapp refused' | tail -40
+docker logs --since 336h <wa> 2>&1 | grep -E 'received error in ack|error 463|whatsapp refused|new-chat limits' | tail -40
 ```

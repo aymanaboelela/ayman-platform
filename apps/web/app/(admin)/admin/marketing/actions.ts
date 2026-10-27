@@ -11,6 +11,7 @@ import {
   TestSendReceiptSchema,
   TestSendResultSchema,
   WhatsappDeviceSchema,
+  WhatsappHealthSchema,
   type Audience,
   type CampaignCreate,
   type CampaignPatch,
@@ -141,8 +142,13 @@ export async function deleteCampaignAction(id: string) {
   });
 }
 
-export async function linkDeviceAction() {
-  return attempt(() => adminSend('POST', '/api/admin/marketing/device/link', undefined, WhatsappDeviceSchema));
+/**
+ * Begin pairing. `phone` asks for an 8-character pairing CODE instead of a QR
+ * — for linking from the same phone this page is open on.
+ */
+export async function linkDeviceAction(phone?: string | null) {
+  const body = phone?.trim() ? { phone: phone.trim() } : undefined;
+  return attempt(() => adminSend('POST', '/api/admin/marketing/device/link', body, WhatsappDeviceSchema));
 }
 
 export async function unlinkDeviceAction() {
@@ -182,6 +188,11 @@ export async function testSendReceiptAction(messageId: string) {
  *  `ActionResult` — a poll that misses a beat should stay silent, not toast. */
 export async function deviceStatusAction() {
   return adminGetOrNull('/api/admin/marketing/device', WhatsappDeviceSchema).catch(() => null);
+}
+
+/** «الإرسال في آخر ٢٤ ساعة». Same silent-on-failure shape as the status poll. */
+export async function deviceHealthAction() {
+  return adminGetOrNull('/api/admin/marketing/device/health', WhatsappHealthSchema).catch(() => null);
 }
 
 /**
