@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FLAG_DECLARATIONS, type FlagDeclaration } from '@ayman/contracts/admin/flags';
 import {
   BADGE_FAMILIES,
+  BADGE_NEW_DAYS,
   BADGE_TIERS,
   badgeKey,
   bestStreak,
@@ -68,7 +69,7 @@ export class BadgesService {
     private readonly daily: DailyService,
   ) {}
 
-  async forUser(userId: string): Promise<BadgesPayload> {
+  async forUser(userId: string, now: Date = new Date()): Promise<BadgesPayload> {
     const [families, metrics] = await Promise.all([this.families(), this.metrics(userId)]);
 
     const reached = earnedKeys(metrics, families);
@@ -83,6 +84,8 @@ export class BadgesService {
       select: { key: true, earnedAt: true },
     });
     const earnedAt = new Map(stored.map((row) => [row.key, row.earnedAt.toISOString()]));
+    const freshSince = now.getTime() - BADGE_NEW_DAYS * 86_400_000;
+    const fresh = new Set(stored.filter((row) => row.earnedAt.getTime() >= freshSince).map((row) => row.key));
 
     const states: BadgeFamilyState[] = BADGE_FAMILIES.filter((family) => families.includes(family.key)).map(
       (family) => ({
@@ -92,6 +95,7 @@ export class BadgesService {
           const tier = BADGE_TIERS[index]!;
           return { tier, target, earnedAt: earnedAt.get(badgeKey(family.key, tier)) ?? null };
         }),
+        fresh: BADGE_TIERS.some((tier) => fresh.has(badgeKey(family.key, tier))),
       }),
     );
 

@@ -16,9 +16,15 @@ export interface LessonPlayerProps {
   payload: LessonPlayer;
   /** The viewer's name and phone, drawn over the lecture — ours or YouTube's. */
   watermark?: string | null;
+  /**
+   * `?t=` — a second to start from instead of the resume point, from a note in
+   * «ملاحظاتي». It wins over a finished lesson's 0 too: opening a note is
+   * asking for that moment, not for a rewatch from the top.
+   */
+  jumpTo?: number | null;
 }
 
-export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProps) {
+export function LessonPlayerView({ payload, watermark = null, jumpTo = null }: LessonPlayerProps) {
   const [progress, setProgress] = useState(payload.progress);
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -87,7 +93,7 @@ export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProp
             opposite of helpful. `<VideoLesson>` treats 0 as "no resume" and
             draws the plain poster it always drew.
           */
-          resumeAt={payload.progress.completedAt != null ? 0 : payload.progress.maxPositionSeconds}
+          resumeAt={jumpTo ?? (payload.progress.completedAt != null ? 0 : payload.progress.maxPositionSeconds)}
           onProgress={onProgress}
           onError={onError}
           watermark={watermark}

@@ -188,6 +188,9 @@ export type StudyPlanPayload = z.infer<typeof StudyPlanPayloadSchema>;
 
 // ─── «أوسمتي» ──────────────────────────────────────────────────────────────
 
+/** How long a newly earned rung carries «جديد». */
+export const BADGE_NEW_DAYS = 3;
+
 export const BADGE_TIERS = ['bronze', 'silver', 'gold'] as const;
 export const BadgeTierSchema = z.enum(BADGE_TIERS);
 export type BadgeTier = z.infer<typeof BadgeTierSchema>;
@@ -221,6 +224,8 @@ export const BadgeFamilyStateSchema = z.object({
   tiers: z
     .array(z.object({ tier: BadgeTierSchema, target: z.number().int().min(1), earnedAt: z.string().nullable() }))
     .length(3),
+  /** A rung of this family was first seen in the last `BADGE_NEW_DAYS` days — the «جديد» tag. */
+  fresh: z.boolean(),
 });
 export type BadgeFamilyState = z.infer<typeof BadgeFamilyStateSchema>;
 

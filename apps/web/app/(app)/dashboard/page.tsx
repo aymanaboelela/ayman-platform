@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
@@ -48,6 +49,7 @@ import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
 import { GuardianCodeCard } from '@/components/dashboard/guardian-code-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
+import { TodayStrip } from '@/components/engagement/today-strip';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
@@ -751,6 +753,17 @@ export default async function DashboardPage() {
             button leaves the product.
           */}
           <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
+
+          {/*
+            «النهارده» — «سؤال اليوم», the plan's share for today, and the
+            month's recap in its first week. Second in the aside: these are
+            the daily habits, and the aside is where a habit sits without
+            competing with the resume card's one amber action. Its own
+            Suspense boundary, so its reads stream in after the page.
+          */}
+          <Suspense fallback={null}>
+            <TodayStrip features={features} />
+          </Suspense>
 
           {/*
             «كود ولي الأمر» — الحاجة الوحيدة على الصفحة اللي الطالب بياخدها
