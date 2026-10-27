@@ -20,14 +20,13 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Redis from 'ioredis';
 
 const KEY_PREFIX = 'next:cache:';
 const TAGS_KEY = 'next:tags';
-/** Which build last owned the keys above. See `purgeOtherBuilds`. */
-const GENERATION_KEY = 'next:generation';
-/** Keys per SCAN page and per UNLINK — small enough to never stall Redis. */
-const PURGE_BATCH = 500;
+/** The build that last owned this Redis — see `purgeIfNewBuild`. */
+const BUILD_KEY = 'next:build';
 
 /** 50 MB, matching Next's own `cacheMaxMemorySize` default. */
 const DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
@@ -207,8 +206,8 @@ function areTagsStale(manifest, tags, timestamp) {
  * @param {number} [options.maxBytes]
  * @param {() => number} [options.now] injected clock, for tests
  * @param {(operation: string, error: unknown) => void} [options.onError]
- * @param {string | null} [options.generation] this build's id. When set, the
- *   first Redis operation wipes every entry a different build wrote.
+ * @param {string | null} [options.buildId] the running build; a different one
+ *   in Redis wipes every entry before the first read — see `purgeIfNewBuild`
  */
 export function createCacheHandler(options = {}) {
   const {
@@ -216,7 +215,7 @@ export function createCacheHandler(options = {}) {
     maxBytes = DEFAULT_MAX_BYTES,
     now = () => Date.now(),
     onError = defaultOnError(),
-    generation = null,
+    buildId = null,
   } = options;
 
   const memory = new ByteBoundedCache(maxBytes);
@@ -229,6 +228,48 @@ export function createCacheHandler(options = {}) {
 
   /** Set while the one-time lazy connect is in flight. @type {Promise<void> | null} */
   let connecting = null;
+  /** The once-per-process build check; every Redis call waits on it. @type {Promise<void> | null} */
+  let purging = null;
+
+  /**
+   * «أي رفع يمسح الكاش القديم» — a new build starts on an empty cache.
+   *
+   * Next already puts the build id inside every `'use cache'` key, so a new
+   * build never READS an old entry. But nothing ever deleted one: each deploy
+   * left the whole previous cache in Redis until its `expire` ran out (days,
+   * for `cacheLife('max')`), so Redis carried every recent build at once, and
+   * the tag manifest kept growing with tags no running code still issues.
+   *
+   * So the first process of a new build wipes `next:cache:*` and the tag
+   * manifest, then records itself in `next:build`. A plain restart of the SAME
+   * build finds its own id there and keeps the warm cache — that is the reason
+   * this handler is persistent at all (see `next.config.ts`).
+   *
+   * `GETSET`, so two instances booting together cannot both decide they are
+   * first. `SCAN` + `UNLINK` in pages rather than `KEYS` + `DEL`: one blocking
+   * call over the whole keyspace would stall the API's rate limiter, which
+   * shares this Redis. Only this handler's own two names are touched — the
+   * API's sessions and locks live in the same Redis under other keys.
+   *
+   * Fails open like everything else here: a wipe that errors leaves old
+   * entries nobody can read, which is where this started.
+   */
+  async function purgeIfNewBuild() {
+    if (!buildId) return;
+    try {
+      const previous = await client.getset(BUILD_KEY, buildId);
+      if (previous === buildId) return;
+      let cursor = '0';
+      do {
+        const [next, keys] = await client.scan(cursor, 'MATCH', `${KEY_PREFIX}*`, 'COUNT', 500);
+        cursor = next;
+        if (keys.length > 0) await client.unlink(...keys);
+      } while (cursor !== '0');
+      await client.del(TAGS_KEY);
+    } catch (error) {
+      onError('purge', error);
+    }
+  }
 
   /**
    * Whether a command may be sent right now.
@@ -261,44 +302,6 @@ export function createCacheHandler(options = {}) {
     return client.status === 'ready';
   }
 
-  /** The one-time purge, shared by every operation that races it. @type {Promise<void> | null} */
-  let purging = null;
-
-  /**
-   * A new build starts from an EMPTY cache — the owner's standing rule that
-   * every deploy is a clean one.
-   *
-   * Without this, entries outlive the image that wrote them: a restart
-   * repopulates the process from Redis, so what a previous build rendered
-   * (the empty settings fallbacks `next build` bakes in, old branding) kept
-   * being served after the deploy that should have replaced it, until someone
-   * wiped `next:cache:*` by hand over SSH.
-   *
-   * Keyed on the build id, not on boot, so a plain restart of the SAME build
-   * keeps its warm cache (the survives-a-restart case in `redis.test.ts`).
-   * SCAN + UNLINK in pages rather than `KEYS`: the keys are JSON arrays full of
-   * `[`, `"` and `,`, and `KEYS` blocks Redis for the whole walk.
-   *
-   * Fails open like everything else here: if the purge errors, the next
-   * operation tries again, and until then the site is served from memory.
-   */
-  async function purgeOtherBuilds() {
-    try {
-      if ((await client.get(GENERATION_KEY)) === generation) return;
-      let cursor = '0';
-      do {
-        const [next, keys] = await client.scan(cursor, 'MATCH', `${KEY_PREFIX}*`, 'COUNT', PURGE_BATCH);
-        if (keys.length > 0) await client.unlink(...keys);
-        cursor = next;
-      } while (cursor !== '0');
-      await client.unlink(TAGS_KEY);
-      await client.set(GENERATION_KEY, generation);
-    } catch (error) {
-      purging = null;
-      onError('purge', error);
-    }
-  }
-
   /**
    * Every Redis call goes through here. A cache that throws is a cache that
    * takes the site down with it.
@@ -312,10 +315,9 @@ export function createCacheHandler(options = {}) {
     if (!client) return undefined;
     try {
       if (!(await canSend())) return undefined;
-      if (generation) {
-        purging ??= purgeOtherBuilds();
-        await purging;
-      }
+      // Only once a socket is up: a purge skipped while Redis is down runs on
+      // the first call that reaches it, before that call reads anything.
+      await (purging ??= purgeIfNewBuild());
       return await run();
     } catch (error) {
       onError(operation, error);
@@ -569,24 +571,32 @@ function createClient() {
 let shared = null;
 
 /**
- * The id `next build` wrote for this image. Next's default is random per build
- * (`next.config.ts` sets no `generateBuildId`), so every deploy gets a new one
- * and a restart keeps the old one. The standalone `server.js` chdirs into the
- * app directory, so `.next/BUILD_ID` resolves from cwd in production and in
- * `next start` alike.
+ * The id `next build` wrote for this build. Read from beside this file first —
+ * in the standalone image the handler sits at `apps/web/cache-handler/` with
+ * `apps/web/.next/` next to it — and then from the working directory, which
+ * `server.js` sets to the same folder. Null when neither exists (a `next dev`
+ * that has never built), which simply skips the wipe.
  *
- * `null` (no purge) when the file cannot be read — never a reason to fail.
+ * @returns {string | null}
  */
-function buildGeneration() {
-  try {
-    return readFileSync(path.join(process.cwd(), '.next', 'BUILD_ID'), 'utf8').trim() || null;
-  } catch {
-    return null;
+function readBuildId() {
+  const candidates = [
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.next', 'BUILD_ID'),
+    path.join(process.cwd(), '.next', 'BUILD_ID'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const id = readFileSync(candidate, 'utf8').trim();
+      if (id) return id;
+    } catch {
+      // Not at this location; try the next.
+    }
   }
+  return null;
 }
 
 function handler() {
-  shared ??= createCacheHandler({ client: createClient(), generation: buildGeneration() });
+  shared ??= createCacheHandler({ client: createClient(), buildId: readBuildId() });
   return shared;
 }
 

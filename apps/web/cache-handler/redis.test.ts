@@ -50,34 +50,48 @@ class FakeRedis {
     return Object.keys(fields).length;
   }
 
-  // The three the new-build purge uses. `scan` pages two keys at a time so the
-  // cursor loop is actually exercised, not satisfied by one page — and, like
-  // real SCAN, its cursor survives the caller deleting what it was just given.
-  async get(key: string) {
+  // ── the build check: GETSET, a paged SCAN, UNLINK, DEL ──
+  plain = new Map<string, string>();
+
+  async getset(key: string, value: string) {
     this.guard();
-    const value = this.strings.get(key);
-    return value === undefined ? null : String(value);
+    const previous = this.plain.get(key) ?? null;
+    this.plain.set(key, value);
+    return previous;
   }
+
+  /**
+   * Pages of two, so the cursor loop is exercised and not just one call. The
+   * cursor is the last key returned, not an offset — real SCAN still reaches
+   * every key that survives the whole scan when earlier ones are deleted
+   * between pages, and an offset would skip them.
+   */
+  scanCursors = new Map<string, string>();
 
   async scan(cursor: string, _match: string, pattern: string) {
     this.guard();
     const prefix = pattern.replace(/\*$/, '');
-    const after = cursor === '0' ? '' : cursor.slice('after:'.length);
-    const keys = [...this.strings.keys()]
+    const after = cursor === '0' ? '' : (this.scanCursors.get(cursor) ?? '');
+    const rest = [...this.strings.keys()]
       .filter((key) => key.startsWith(prefix) && key > after)
       .sort();
-    const page = keys.slice(0, 2);
-    const next = keys.length > 2 ? `after:${page[page.length - 1]}` : '0';
-    return [next, page] as const;
+    const page = rest.slice(0, 2);
+    if (rest.length <= 2) return ['0', page] as [string, string[]];
+    const next = String(this.scanCursors.size + 1);
+    this.scanCursors.set(next, page[page.length - 1]!);
+    return [next, page] as [string, string[]];
   }
 
   async unlink(...keys: string[]) {
     this.guard();
-    let removed = 0;
-    for (const key of keys) {
-      if (this.strings.delete(key) || this.hashes.delete(key)) removed += 1;
-    }
-    return removed;
+    for (const key of keys) this.strings.delete(key);
+    return keys.length;
+  }
+
+  async del(key: string) {
+    this.guard();
+    this.strings.delete(key);
+    return Number(this.hashes.delete(key));
   }
 }
 
@@ -292,59 +306,6 @@ describe('tags', () => {
   });
 });
 
-describe('a new build', () => {
-  async function seed() {
-    const old = handler({ generation: 'build-a' });
-    for (const key of ['a', 'b', 'c', 'd', 'e']) await old.set(key, entry(`old ${key}`));
-    await old.updateTags(['branding']);
-  }
-
-  it('starts from an empty cache: nothing an older build wrote is served', async () => {
-    await seed();
-
-    const fresh = handler({ generation: 'build-b' });
-    for (const key of ['a', 'b', 'c', 'd', 'e']) expect(await fresh.get(key)).toBeUndefined();
-    expect([...client.strings.keys()].filter((key) => key.startsWith('next:cache:'))).toEqual([]);
-    expect(client.hashes.has('next:tags')).toBe(false);
-    expect(await client.get('next:generation')).toBe('build-b');
-  });
-
-  it('keeps the warm cache when the SAME build restarts', async () => {
-    await seed();
-
-    const restarted = handler({ generation: 'build-a' });
-    expect(await read(await restarted.get('a'))).toBe('old a');
-  });
-
-  it('purges once, not on every operation', async () => {
-    await seed();
-    const fresh = handler({ generation: 'build-b' });
-    await fresh.get('a');
-    await fresh.set('new', entry('written by build-b'));
-
-    expect(await read(await fresh.get('new'))).toBe('written by build-b');
-    // A second handler of the same build finds its own entry, not a wipe.
-    expect(await read(await handler({ generation: 'build-b' }).get('new'))).toBe('written by build-b');
-  });
-
-  it('serves from memory when the purge cannot reach Redis, then retries', async () => {
-    await seed();
-    const fresh = handler({ generation: 'build-b' });
-    client.failing = true;
-    await fresh.set('k', entry('memory only'));
-    expect(await read(await fresh.get('k'))).toBe('memory only');
-
-    client.failing = false;
-    expect(await fresh.get('a')).toBeUndefined();
-    expect(await client.get('next:generation')).toBe('build-b');
-  });
-
-  it('does nothing without a generation, which is every existing caller', async () => {
-    await seed();
-    expect(await read(await handler().get('a'))).toBe('old a');
-  });
-});
-
 describe('when Redis is unreachable', () => {
   it('still serves reads and writes from memory', async () => {
     const cache = handler();
@@ -496,5 +457,51 @@ describe('corrupt data in Redis', () => {
   it('is a miss, not an error', async () => {
     client.strings.set('next:cache:k', Buffer.from('not a frame'));
     await expect(handler().get('k')).resolves.toBeUndefined();
+  });
+});
+
+describe('a new build', () => {
+  it('starts on an empty cache: the previous build\'s entries and tags are wiped', async () => {
+    const old = handler({ buildId: 'build-a' });
+    for (const key of ['a', 'b', 'c', 'd', 'e']) await old.set(key, entry(key, { tags: ['catalog'] }));
+    await old.updateTags(['catalog']);
+    client.strings.set('ratelimit:someone', Buffer.from('1'));
+
+    const fresh = handler({ buildId: 'build-b' });
+    expect(await fresh.get('a')).toBeUndefined();
+
+    // Every page of the SCAN went, the manifest went, and nothing else did.
+    expect([...client.strings.keys()]).toEqual(['ratelimit:someone']);
+    expect(client.hashes.has('next:tags')).toBe(false);
+    expect(client.plain.get('next:build')).toBe('build-b');
+  });
+
+  it('a restart of the SAME build keeps its warm cache', async () => {
+    const first = handler({ buildId: 'build-a' });
+    await first.set('k', entry('warm'));
+
+    const restarted = handler({ buildId: 'build-a' });
+    const hit = await restarted.get('k');
+    expect(hit).toBeDefined();
+    expect(await read(hit)).toBe('warm');
+  });
+
+  it('wipes once per process, not on every call', async () => {
+    const cache = handler({ buildId: 'build-b' });
+    await cache.get('x');
+    await cache.set('k', entry('mine'));
+    const hit = await cache.get('k');
+    expect(await read(hit)).toBe('mine');
+  });
+
+  it('fails open when the wipe errors', async () => {
+    client.getset = async () => {
+      throw new Error('NOPERM');
+    };
+    const errors: string[] = [];
+    const cache = handler({ buildId: 'build-b', onError: (op: string) => errors.push(op) });
+    await cache.set('k', entry('still works'));
+    expect(await read(await cache.get('k'))).toBe('still works');
+    expect(errors).toContain('purge');
   });
 });
