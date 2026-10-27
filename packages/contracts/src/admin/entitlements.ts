@@ -136,6 +136,17 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * «لأيمن الأول». بتحتاج تخزين الفيديو نفسه (`video.upload`) مظبوط على
+     * الستاك، لأن الفيديوهات بتتخزّن في نفس الباكت — من غيره الراوتس بترد
+     * إن التخزين مش مفعّل بدل ما تفشل في النص.
+     */
+    key: 'montage',
+    nameAr: 'المونتاج',
+    descriptionAr: 'حساب للمونتير يرفع الفيديوهات الجاهزة، وتنزّلها أو تحطها في درس.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first": built at his request and off on every other stack until
      * the owner opens it from the signed document. It replies FROM a real
      * WhatsApp number, so it also needs `marketing.whatsapp` (the linked

@@ -6,6 +6,7 @@ import type { Readable } from 'node:stream';
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
+  CopyObjectCommand,
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -16,6 +17,7 @@ import {
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
+  UploadPartCopyCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { MirrorConfig } from './mirror-config';
@@ -63,6 +65,15 @@ const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 /** Attempts per object, and the step between them. Linear: the failure being
  *  ridden out is a dropped connection on a long upload, not a busy service. */
 const PUT_ATTEMPTS = 4;
+
+/**
+ * S3's ceiling for a single-request `CopyObject`; anything larger has to be
+ * copied in ranged parts. A two-hour 1080p export crosses it, so «حطه في
+ * درس» on a long hand-over takes the multipart road.
+ */
+const SINGLE_COPY_MAX_BYTES = 5 * 1024 * 1024 * 1024;
+/** One `UploadPartCopy` range — 16 parts for the largest hand-over allowed. */
+const COPY_PART_BYTES = 512 * 1024 * 1024;
 const PUT_BACKOFF_MS = 2_000;
 
 /**
@@ -583,6 +594,70 @@ export class MirrorStorage {
   async readText(key: string): Promise<string> {
     const object = await this.s3.send(new GetObjectCommand({ Bucket: this.config.bucket, Key: key }));
     return (await object.Body?.transformToString()) ?? '';
+  }
+
+  /**
+   * Copy an object inside the bucket — the bytes never leave the storage.
+   *
+   * «حطه في درس» uses this to give a lesson its own copy of a hand-over: the
+   * encode deletes its source when the ladder lands, and the hand-over must
+   * still be there to download afterwards. Both keys are built by the caller
+   * from validated ids, never taken from a request.
+   */
+  async copyObject(fromKey: string, toKey: string, sizeBytes: number): Promise<void> {
+    const source = `${this.config.bucket}/${fromKey}`;
+    if (sizeBytes <= SINGLE_COPY_MAX_BYTES) {
+      await this.s3.send(new CopyObjectCommand({ Bucket: this.config.bucket, Key: toKey, CopySource: source }));
+      return;
+    }
+
+    // Only the encoder reads a source, and ffprobe decides what it is.
+    const uploadId = await this.createMultipart(toKey, 'application/octet-stream');
+    try {
+      const parts: { partNumber: number; etag: string }[] = [];
+      for (let start = 0, partNumber = 1; start < sizeBytes; start += COPY_PART_BYTES, partNumber += 1) {
+        const end = Math.min(start + COPY_PART_BYTES, sizeBytes) - 1;
+        const copied = await this.s3.send(
+          new UploadPartCopyCommand({
+            Bucket: this.config.bucket,
+            Key: toKey,
+            UploadId: uploadId,
+            PartNumber: partNumber,
+            CopySource: source,
+            CopySourceRange: `bytes=${start}-${end}`,
+          }),
+        );
+        const etag = copied.CopyPartResult?.ETag;
+        if (etag === undefined) throw new Error('التخزين مرجّعش رقم للجزء المنسوخ');
+        parts.push({ partNumber, etag });
+      }
+      await this.completeMultipart(toKey, uploadId, parts);
+    } catch (error) {
+      await this.abortMultipart(toKey, uploadId);
+      throw error;
+    }
+  }
+
+  /**
+   * A short-lived GET straight to the bucket, saved under `fileName`.
+   *
+   * Through the bucket and not through us for the reason the upload is: a
+   * hand-over is gigabytes, and streaming it through the API would hold a
+   * Node socket for the length of the download. The link is a navigation,
+   * not a `fetch`, so the bucket's CORS rule and the site's `connect-src`
+   * never come into it.
+   */
+  async presignDownload(key: string, fileName: string, expiresInSeconds: number): Promise<string> {
+    const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+    return getSignedUrl(
+      this.s3,
+      new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        ResponseContentDisposition: `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      }),
+      { expiresIn: expiresInSeconds },
+    );
   }
 
   async deleteObject(key: string): Promise<void> {

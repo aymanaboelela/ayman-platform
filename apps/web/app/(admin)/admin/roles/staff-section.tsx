@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState, useTransition, type Change
 
 import { copy } from '@ayman/contracts/copy/admin';
 import { designsCopy } from '@ayman/contracts/copy/designs';
+import { montageCopy } from '@ayman/contracts/copy/montage';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -25,6 +26,9 @@ import { MemberPermissions } from './member-permissions';
 
 const c = copy.admin.roles.staff;
 const member = copy.admin.roles.member;
+
+/** ينضاف كـإيه: مساعد، مصمم جرافيك، أو مونتير. */
+type StaffRole = 'owner' | 'designer' | 'video_editor';
 
 export interface StaffMember {
   id: string;
@@ -67,6 +71,7 @@ export function StaffSection({
   reasonMin,
   founderId,
   loadFailed,
+  canAddEditor = false,
 }: {
   members: StaffMember[];
   currentUserId: string;
@@ -82,6 +87,8 @@ export function StaffSection({
    * «لسه مفيش حد في الفريق» — رسالة بتقول العكس بالظبط.
    */
   loadFailed?: boolean;
+  /** «مونتير» يتعرض كاختيار — الستاك ده عليه «المونتاج» (`page.tsx` بيسأل). */
+  canAddEditor?: boolean;
 }) {
   const [term, setTerm] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
@@ -101,7 +108,13 @@ export function StaffSection({
    * من غير لوحة التحكم ولا بيانات طلبة — مش مساعد مقفول عليه حاجات. على
    * ستاك أيمن بس، زي الاستوديو نفسه.
    */
-  const [addAs, setAddAs] = useState<'owner' | 'designer'>('owner');
+  const [addAs, setAddAs] = useState<StaffRole>('owner');
+  /* «مونتير» (`video_editor`) نفس الفكرة للمونتاج، وبيظهر على أي ستاك عليه الفيتشر. */
+  const addOptions: StaffRole[] = [
+    'owner',
+    ...(IS_AYMAN ? (['designer'] as const) : []),
+    ...(canAddEditor ? (['video_editor'] as const) : []),
+  ];
   /** نتيجة آخر تغيير دور — بس. */
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   /** المساعد اللي بيتأكّد شيله دلوقتي، وسببه. */
@@ -159,7 +172,7 @@ export function StaffSection({
     }, SEARCH_DEBOUNCE_MS);
   };
 
-  const apply = (userId: string, role: 'owner' | 'designer' | 'student', why: string, done: string) => {
+  const apply = (userId: string, role: StaffRole | 'student', why: string, done: string) => {
     startTransition(async () => {
       const res = await setStaffRoleAction(userId, role, why.trim());
       setMessage(res.ok ? { tone: 'ok', text: done } : { tone: 'error', text: res.message });
@@ -205,7 +218,9 @@ export function StaffSection({
                   ? member.adminHasEverything
                   : m.role === 'designer'
                     ? designsCopy.team.roleDesigner
-                    : c.roleOwner}
+                    : m.role === 'video_editor'
+                      ? montageCopy.team.roleEditor
+                      : c.roleOwner}
               </span>
               {m.id === currentUserId ? (
                 // `changeRole` بيرفض إنك تغيّر دورك إنت — فالزرار مايتعرضش
@@ -233,6 +248,10 @@ export function StaffSection({
                   {m.id === founderId ? (
                     <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
                       {member.adminHasEverything}
+                    </span>
+                  ) : m.role === 'video_editor' ? (
+                    <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                      {montageCopy.team.editorNoPermissions}
                     </span>
                   ) : m.role === 'designer' ? (
                     // القفل لكل حساب بيتظبط لـ`owner` بس (`replaceForUser`)،
@@ -316,7 +335,7 @@ export function StaffSection({
                 * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
                 * على واحد مفيد، والمودال بيخبّيهم.
                 */}
-              {openMember === m.id && m.role !== 'admin' && m.role !== 'designer' && m.id !== founderId ? (
+              {openMember === m.id && m.role !== 'admin' && m.role !== 'designer' && m.role !== 'video_editor' && m.id !== founderId ? (
                 <div className="w-full basis-full">
                   <MemberPermissions userId={m.id} name={m.name} />
                 </div>
@@ -397,13 +416,13 @@ export function StaffSection({
               onChange={setReason}
             />
             <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{reasonHint}</p>
-            {IS_AYMAN ? (
+            {addOptions.length > 1 ? (
               <fieldset className="mt-3">
                 <legend className="text-[length:var(--fs-text-sm)] font-medium text-fg">
                   {designsCopy.team.addAs}
                 </legend>
-                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                  {(['owner', 'designer'] as const).map((option) => (
+                <div className={`mt-1.5 grid gap-2 ${addOptions.length > 2 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                  {addOptions.map((option) => (
                     <label
                       key={option}
                       className="flex cursor-pointer items-start gap-2 rounded-md border border-line p-3 has-[:checked]:border-accent has-[:checked]:bg-surface-3"
@@ -418,10 +437,18 @@ export function StaffSection({
                       />
                       <span>
                         <span className="block font-medium text-fg">
-                          {option === 'owner' ? designsCopy.team.roleOwner : designsCopy.team.roleDesigner}
+                          {option === 'owner'
+                            ? designsCopy.team.roleOwner
+                            : option === 'designer'
+                              ? designsCopy.team.roleDesigner
+                              : montageCopy.team.roleEditor}
                         </span>
                         <span className="block text-[length:var(--fs-text-xs)] text-fg-muted">
-                          {option === 'owner' ? designsCopy.team.roleOwnerHint : designsCopy.team.roleDesignerHint}
+                          {option === 'owner'
+                            ? designsCopy.team.roleOwnerHint
+                            : option === 'designer'
+                              ? designsCopy.team.roleDesignerHint
+                              : montageCopy.team.roleEditorHint}
                         </span>
                       </span>
                     </label>
@@ -434,7 +461,7 @@ export function StaffSection({
             <Button
               className="mt-3"
               disabled={pending || reason.trim().length < reasonMin}
-              onClick={() => apply(picked.id, IS_AYMAN ? addAs : 'owner', reason, c.added)}
+              onClick={() => apply(picked.id, addOptions.includes(addAs) ? addAs : 'owner', reason, c.added)}
             >
               {pending ? c.adding : c.add}
             </Button>
