@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy/admin';
 import { copy as bot } from '@ayman/contracts/copy/wa-bot';
+import { adminReferralsCopy } from '@ayman/contracts/copy/admin-referrals';
 import { cn } from '@ayman/ui/lib/cn';
 import { useFeature } from '@/components/admin/entitlements-context';
 
@@ -13,6 +14,8 @@ const TABS = [
   { href: '/admin/marketing/campaigns', label: c.title },
   { href: '/admin/marketing/device', label: c.deviceTitle },
   { href: '/admin/marketing/opt-outs', label: c.optOutsTitle },
+  // «دعوة الصحاب» — behind its own entitlement, hidden below where it is off.
+  { href: '/admin/marketing/referrals', label: adminReferralsCopy.tab, feature: 'referrals' },
 ] as const;
 
 /**
@@ -26,8 +29,9 @@ const BOT_TABS = [
 ] as const;
 
 /**
- * The three screens behind «التسويق»: campaigns, the device that sends them,
- * and who has opted out of ever receiving one.
+ * The screens behind «التسويق»: campaigns, the device that sends them, who has
+ * opted out of ever receiving one, «دعوة الصحاب» where that is open, and the
+ * auto-reply bot's leads and settings where that is.
  *
  * A client component only for `usePathname` — the tab bar itself renders the
  * same three links on every page under this section, and each page decides
@@ -35,11 +39,15 @@ const BOT_TABS = [
  */
 export function MarketingTabs() {
   const pathname = usePathname();
+  const referrals = useFeature('referrals');
   const botOn = useFeature('whatsapp.bot');
-  const tabs = botOn ? [...TABS, ...BOT_TABS] : TABS;
+  const tabs = [
+    ...TABS.filter((tab) => !('feature' in tab) || referrals),
+    ...(botOn ? BOT_TABS : []),
+  ];
 
   return (
-    <nav className="mb-6 flex flex-wrap gap-1 border-b border-line-subtle">
+    <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line-subtle">
       {tabs.map((tab) => {
         const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
         return (

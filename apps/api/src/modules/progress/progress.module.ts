@@ -54,6 +54,8 @@ import { ViewSessionService } from './view-session.service';
   // `LessonProgressService` is exported so Plan 5's `QuizModule` can inject
   // it and call `recordQuizResult` — the only way a quiz result becomes
   // lesson progress. It carries no route of its own.
-  exports: [LessonAccessService, LessonGateService, CourseProgressService, LessonProgressService],
+  // `CohortRankService` for the guardian report: the parent reads the rank out
+  // of the SAME instance (and five-minute cohort cache) `/rank` does.
+  exports: [LessonAccessService, LessonGateService, CourseProgressService, LessonProgressService, CohortRankService],
 })
 export class ProgressModule {}

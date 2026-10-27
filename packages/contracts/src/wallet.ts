@@ -29,8 +29,9 @@ export const WalletTopupMethodSchema = z.enum(['instapay', 'vodafone_cash']);
 export type WalletTopupMethod = z.infer<typeof WalletTopupMethodSchema>;
 
 /**
- * What moved the money — the ledger's own vocabulary. The first four only
- * ever add, the last two only ever take (a database CHECK, not a convention).
+ * What moved the money — the ledger's own vocabulary. The first four and
+ * `referral_reward` only ever add; the rest only ever take (a database CHECK,
+ * not a convention).
  */
 export const WalletTransactionKindSchema = z.enum([
   'admin_credit',
@@ -39,6 +40,10 @@ export const WalletTransactionKindSchema = z.enum([
   'refund',
   'course_purchase',
   'admin_debit',
+  /** «ادعي صاحبك» — a friend's first payment rewarded (either side). Adds. */
+  'referral_reward',
+  /** The same reward taken back after a refund or an admin's void. Takes. */
+  'referral_reversal',
 ]);
 export type WalletTransactionKind = z.infer<typeof WalletTransactionKindSchema>;
 

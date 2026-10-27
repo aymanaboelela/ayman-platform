@@ -14,7 +14,7 @@ import { GuardianViewController } from './guardian-view.controller';
  * A guardian session is a 14-day signed cookie. It used to be checked for its
  * signature and nothing else, so it outlived both things that let it in: the
  * code it was opened with (replaced because it leaked) and the student not
- * being banned. Real rows; the dashboard and report behind the gate are stubs,
+ * being banned. Real rows; the report behind the gate is a stub,
  * because the gate is what is measured.
  */
 describe('GuardianViewController.me — the session is re-checked on every read', () => {
@@ -24,10 +24,11 @@ describe('GuardianViewController.me — the session is re-checked on every read'
   // No attempt counter is exercised here — a code that is right never counts.
   const redis = { pttl: async () => -2, incr: async () => 1, expire: async () => 1, set: async () => 'OK', del: async () => 1 };
   const sessions = new GuardianSessionService(prisma, redis as never, 'g'.repeat(32));
+  // The report echoes who it was asked about — the gate is what is measured,
+  // and the id it receives is the one thing the gate decides.
   const controller = new GuardianViewController(
     sessions,
-    { forUser: async () => ({}) } as never,
-    { forStudent: async () => ({}) } as never,
+    { forStudent: async (student: { fullName: string }) => ({ student: { name: student.fullName } }) } as never,
     prisma,
   );
 

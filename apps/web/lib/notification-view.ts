@@ -408,7 +408,9 @@ export function describeNotification(entry: StudentNotification): NotificationVi
             ? c.walletCreditedTopup
             : entry.source === 'refund'
               ? c.walletCreditedRefund
-              : c.walletCreditedAdmin,
+              : entry.source === 'referral'
+                ? c.walletCreditedReferral
+                : c.walletCreditedAdmin,
           { amount: pounds(entry.amountCents) },
         ),
         detail: null,

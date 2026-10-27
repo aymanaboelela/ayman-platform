@@ -3,10 +3,11 @@ import type { Prisma, WalletTransactionKind } from '../../generated/prisma/clien
 
 /**
  * The ONLY code that moves a wallet's money. Pure functions over a caller's
- * transaction, not a service: the four places that move money (the wallet
- * desk, a course purchase, a wallet code, a refund off `/admin/finance`) each
- * already hold a transaction that must commit or roll back WITH the money, and
- * a service would need four modules to import one another to share it.
+ * transaction, not a service: the places that move money (the wallet desk, a
+ * course purchase, a wallet code, a refund off `/admin/finance`, a referral
+ * reward) each already hold a transaction that must commit or roll back WITH
+ * the money, and a service would need them all to import one another to share
+ * it.
  *
  * ## The two statements that make it safe
  *
@@ -35,7 +36,7 @@ import type { Prisma, WalletTransactionKind } from '../../generated/prisma/clien
  * ## Idempotency lives in the caller's key
  *
  * `topupId`, `unlockCodeId` and `idempotencyKey` are each UNIQUE on the
- * ledger. A second credit for the same thing dies on the INSERT — after the
+ * ledger, and so is `(referralId, userId, kind)`. A second credit for the same thing dies on the INSERT — after the
  * wallet was already updated in the same transaction, so the whole
  * transaction rolls back and the balance with it. The caller recognises the
  * violation (`isUniqueViolation` + a lookup by its own key) and answers with
@@ -53,6 +54,8 @@ export interface LedgerEntry {
   unlockCodeId?: string | null;
   refundOfSubmissionId?: string | null;
   idempotencyKey?: string | null;
+  /** «دعوة الصحاب» — `referral_reward` / `referral_reversal` only (CHECK). */
+  referralId?: string | null;
   actorUserId?: string | null;
   note?: string | null;
 }
@@ -67,6 +70,7 @@ const CREDIT_KINDS: ReadonlySet<WalletTransactionKind> = new Set([
   'code_topup',
   'transfer_topup',
   'refund',
+  'referral_reward',
 ]);
 
 /**
@@ -112,6 +116,7 @@ async function writeRow(
       unlockCodeId: entry.unlockCodeId ?? null,
       refundOfSubmissionId: entry.refundOfSubmissionId ?? null,
       idempotencyKey: entry.idempotencyKey ?? null,
+      referralId: entry.referralId ?? null,
       actorUserId: entry.actorUserId ?? null,
       note: entry.note ?? null,
     },
