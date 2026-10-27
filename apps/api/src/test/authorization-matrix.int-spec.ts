@@ -66,6 +66,11 @@ import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
+import { CheckoutIntentsController } from '../modules/auto-outreach/checkout-intents.controller';
+import { AdminAutoOutreachController } from '../modules/auto-outreach/admin-auto-outreach.controller';
+import { CheckoutIntentsService } from '../modules/auto-outreach/checkout-intents.service';
+import { AutoOutreachCandidates } from '../modules/auto-outreach/auto-outreach-candidates.service';
+import { AutoOutreachOverviewService } from '../modules/auto-outreach/auto-outreach-overview.service';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
@@ -223,6 +228,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminErrorsController,
         MarketingController,
         WhatsappInboundController,
+        // «رسايل الواتساب التلقائية». The controllers and their services, not
+        // `AutoOutreachModule`: that module also provides the sweeper, which
+        // injects the global Redis connection — same reason the marketing
+        // services are listed one by one below.
+        CheckoutIntentsController,
+        AdminAutoOutreachController,
         // ⚠️ THIS FIXTURE IS AN EXPLICIT LIST, NOT `AppModule`.
         //
         // A controller that exists in production and is missing here is not
@@ -383,6 +394,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         CampaignService,
         AudienceService,
         WhatsappDeviceService,
+        CheckoutIntentsService,
+        AutoOutreachCandidates,
+        AutoOutreachOverviewService,
         AssistantService,
         // The file layer behind the two attachment routes. Listed beside
         // `AssistantService` rather than reached through `AssistantModule`,
@@ -1329,6 +1343,37 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'outreach preview: anonymous', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'anonymous', status: 401 },
     { label: 'outreach preview: student', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'student', status: 403 },
     { label: 'outreach preview: admin', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'admin', status: 200 },
+    // «رسايل الواتساب التلقائية» — the card. `outreach:read` like the log.
+    { label: 'auto outreach: anonymous', method: 'get', path: () => '/api/admin/outreach/auto', actor: 'anonymous', status: 401 },
+    { label: 'auto outreach: student', method: 'get', path: () => '/api/admin/outreach/auto', actor: 'student', status: 403 },
+    { label: 'auto outreach: admin', method: 'get', path: () => '/api/admin/outreach/auto', actor: 'admin', status: 200 },
+    // «فتحت خطوة الدفع» — `payment:submit`, the student's own row only. An
+    // unknown course is a 404 AFTER the gate: proof the permission check ran
+    // and that an id that is not on sale writes nothing.
+    {
+      label: 'checkout intent: anonymous',
+      method: 'post',
+      path: () => '/api/checkout-intents',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ target: 'course', targetId: randomUUID() }),
+    },
+    {
+      label: 'checkout intent: student, unknown course',
+      method: 'post',
+      path: () => '/api/checkout-intents',
+      actor: 'student',
+      status: 404,
+      body: () => ({ target: 'course', targetId: randomUUID() }),
+    },
+    {
+      label: 'checkout intent: student, someone else\'s order',
+      method: 'post',
+      path: () => '/api/checkout-intents',
+      actor: 'student',
+      status: 404,
+      body: () => ({ target: 'book_order', targetId: randomUUID() }),
+    },
 
     // ── التسويق: حملات واتساب. FOUR permissions across one controller
     // (`marketing:read` / `:write` / `:send` / `:device`), and the rows below

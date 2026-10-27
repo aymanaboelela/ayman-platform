@@ -97,6 +97,22 @@ export const AudienceSchema = z.object({
    */
   notSubscribedOnly: z.boolean().default(false),
   /**
+   * «لم يشترك في أي كورس» — keep only students who hold no live PAID access
+   * to any course at all, and have no transfer waiting for review.
+   *
+   * Independent of `courseIds`, unlike `notSubscribedOnly` above: that one
+   * asks "not subscribed to THIS", this one asks "not subscribed to anything",
+   * which is the backlog the automatic «الحساب جاهز» nudge deliberately never
+   * reaches (it only writes about sign-ups from the last week). Sending to
+   * that backlog is a decision, so it is a campaign — paced, previewed and
+   * pressed — rather than something a sweeper discovers on its first run.
+   *
+   * The platform-wide grant every first enrollment creates does NOT count as
+   * a subscription here: see `NEVER_SUBSCRIBED` in the API. `.default(false)`
+   * so stored campaigns still parse.
+   */
+  neverSubscribed: z.boolean().default(false),
+  /**
    * «الناس اللي اتشحن ليها، واللي ماتشحنتش ليها، واللي وصل ليها» — students
    * picked by the state of a book order they placed. Empty = no filter on this
    * axis, exactly like `years` and `courseIds` above; it never means "nobody".
@@ -167,6 +183,7 @@ export const EMPTY_AUDIENCE: Audience = {
   schoolStreams: [],
   courseIds: [],
   notSubscribedOnly: false,
+  neverSubscribed: false,
   bookOrderStatuses: [],
   extraPhones: [],
 };
