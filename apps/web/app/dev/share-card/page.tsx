@@ -7,6 +7,6 @@ import { SharePreview } from './preview';
  * buttons, with fixed sample data. For designing the canvas without sitting
  * an exam or finishing a course. 404 in production (`isDevOnlyRoute`).
  */
-export default function ShareCardDevPage() {
-  return <SharePreview brand={shareBrand()} />;
+export default async function ShareCardDevPage() {
+  return <SharePreview brand={await shareBrand()} />;
 }

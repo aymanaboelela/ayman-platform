@@ -897,6 +897,26 @@ html[data-player-fullscreen] .route-fade {
   );
 }
 
+/* The default course picture from «الهوية البصرية» (`courseCoverStyle`),
+   UNDER the subject's gradient and tinted by it: `luminosity` keeps the
+   photograph's light and shade and takes its colour from the hue below, so
+   ten coverless courses become ten different pictures of one photograph
+   rather than ten copies of it. `none` until an admin sets one. */
+:root {
+  --course-cover-default: none;
+}
+
+.course-art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--course-cover-default) center / cover no-repeat;
+  mix-blend-mode: luminosity;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .course-art {
     --art-l1: 0.60;

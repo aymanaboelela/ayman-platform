@@ -265,6 +265,24 @@ export const BrandingSchema = z
     honorHostDarkAssetId: assetId,
     practiceGuideAssetId: assetId,
     practiceGuideDarkAssetId: assetId,
+    /*
+     * The teacher's signature, drawn on both certificates in place of the
+     * name set in a script face. Light = dark ink for the ivory exam
+     * certificate; dark = light ink for the black unit certificate. Each
+     * falls back to the other, then to the typeset name.
+     */
+    signatureAssetId: assetId,
+    signatureDarkAssetId: assetId,
+    /*
+     * A photograph laid UNDER every coverless course's generated artwork,
+     * tinted by that course's subject hue — so courses without a cover gain
+     * a real picture and still do not all look the same. A course's own
+     * cover always wins.
+     */
+    courseCoverAssetId: assetId,
+    courseCoverDarkAssetId: assetId,
+    /** The home-screen icon (PWA manifest + apple-touch-icon). One file: a launcher has no theme. */
+    appIconAssetId: assetId,
   })
   .strict();
 
@@ -275,6 +293,19 @@ export const SeoSchema = z
     titleAr: z.string().max(70).default(''),
     descriptionAr: z.string().max(160).default(''),
     ogImageAssetId: assetId,
+    /*
+     * A share image per public section, over `ogImageAssetId` above. Which
+     * path each one covers lives in `OG_PAGES` (`seo-pages.ts`); a page that
+     * passes its own image (a course cover, a news photo) still wins.
+     */
+    ogCoursesAssetId: assetId,
+    ogBooksAssetId: assetId,
+    ogAboutAssetId: assetId,
+    ogHonorBoardAssetId: assetId,
+    ogPracticeAssetId: assetId,
+    ogNewsAssetId: assetId,
+    ogLinksAssetId: assetId,
+    ogSubscribeAssetId: assetId,
   })
   .strict();
 
@@ -333,12 +364,27 @@ export const BrandingReadSchema = BrandingSchema.extend({
   honorHostDarkKey: resolvedKey,
   practiceGuideKey: resolvedKey,
   practiceGuideDarkKey: resolvedKey,
+  signatureKey: resolvedKey,
+  signatureDarkKey: resolvedKey,
+  courseCoverKey: resolvedKey,
+  courseCoverDarkKey: resolvedKey,
+  appIconKey: resolvedKey,
 });
 
 export type BrandingRead = z.infer<typeof BrandingReadSchema>;
 
 /** Same resolution, for the OG image `buildMetadata()` renders. */
-export const SeoReadSchema = SeoSchema.extend({ ogImageKey: resolvedKey });
+export const SeoReadSchema = SeoSchema.extend({
+  ogImageKey: resolvedKey,
+  ogCoursesKey: resolvedKey,
+  ogBooksKey: resolvedKey,
+  ogAboutKey: resolvedKey,
+  ogHonorBoardKey: resolvedKey,
+  ogPracticeKey: resolvedKey,
+  ogNewsKey: resolvedKey,
+  ogLinksKey: resolvedKey,
+  ogSubscribeKey: resolvedKey,
+});
 
 export type SeoRead = z.infer<typeof SeoReadSchema>;
 

@@ -26,7 +26,7 @@ export async function ResultShareSlot({ attemptId }: { attemptId: string }) {
   if (!card?.studentName) return null;
   const tier = tierFor(card.score, card.total);
   if (!tier && !card.examCertificate) return null;
-  const brand = shareBrand();
+  const brand = await shareBrand();
 
   return (
     <div className="grid gap-3">
@@ -55,7 +55,7 @@ export async function CourseCertificatesSlot({ courseId }: { courseId: string })
   const units = payload.units.filter((unit) => unit.courseId === courseId && unit.earned);
   const exams = payload.exams.filter((exam) => exam.courseId === courseId);
   if (units.length === 0 && exams.length === 0) return null;
-  const brand = shareBrand();
+  const brand = await shareBrand();
 
   return (
     <div className="mt-4 grid gap-2 sm:grid-cols-2">

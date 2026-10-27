@@ -4,6 +4,7 @@ import {
   drawCover,
   drawEmbers,
   drawQr,
+  drawSignature,
   fireGradient,
   fitFontSize,
   seedOf,
@@ -36,6 +37,8 @@ export interface UnitCertificateInput {
   };
   qr: QrMatrix;
   hero?: HTMLImageElement;
+  /** The uploaded signature (light ink); the name in the script face without one. */
+  signature?: HTMLImageElement;
   fonts: CardFonts;
 }
 
@@ -144,10 +147,14 @@ export function drawUnitCertificate(canvas: HTMLCanvasElement, input: UnitCertif
 
   // RTL: the signature sits on the reader's starting side (right).
   const sigX = cx + 600;
-  ctx.fillStyle = FIRE.gold;
-  const sigSize = fitFontSize(ctx, text.teacher, (s) => `700 ${s}px ${fonts.script}`, 96, 560, 50);
-  ctx.font = `700 ${sigSize}px ${fonts.script}`;
-  centerText(ctx, text.teacher, sigX, rowY - 10);
+  if (input.signature) {
+    drawSignature(ctx, input.signature, sigX, rowY + 18, 500, 170);
+  } else {
+    ctx.fillStyle = FIRE.gold;
+    const sigSize = fitFontSize(ctx, text.teacher, (s) => `700 ${s}px ${fonts.script}`, 96, 560, 50);
+    ctx.font = `700 ${sigSize}px ${fonts.script}`;
+    centerText(ctx, text.teacher, sigX, rowY - 10);
+  }
   signatureLine(ctx, sigX, rowY + 26, 520);
   ctx.fillStyle = FIRE.ash;
   ctx.font = `500 36px ${fonts.body}`;

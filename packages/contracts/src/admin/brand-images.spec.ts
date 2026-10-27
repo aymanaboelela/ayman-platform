@@ -17,12 +17,13 @@ describe('BRAND_IMAGE_SLOTS', () => {
 
   it.each(BRAND_IMAGE_SLOTS)('$slot names fields that BrandingSchema stores', (def) => {
     expect(stored).toContain(def.light);
-    expect(stored).toContain(def.dark);
+    if (def.dark) expect(stored).toContain(def.dark);
+    expect(def.dark === null).toBe(def.darkKey === null);
   });
 
   it.each(BRAND_IMAGE_SLOTS)('$slot names keys that BrandingReadSchema returns', (def) => {
     expect(read).toContain(def.lightKey);
-    expect(read).toContain(def.darkKey);
+    if (def.darkKey) expect(read).toContain(def.darkKey);
   });
 
   it('covers every asset field on the branding section — none is left without a control', () => {

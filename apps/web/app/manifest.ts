@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { SITE_DESCRIPTION, SITE_SHORT_NAME, SITE_TITLE } from '@/lib/seo/metadata';
+import { mediaUrl } from '@ayman/ui/branding';
+import { getBranding } from '@/lib/settings';
 import { IS_AYMAN } from '@/lib/tenant';
 
 /**
@@ -33,7 +35,8 @@ import { IS_AYMAN } from '@/lib/tenant';
  * resolution portrait is the fix; nothing in the encoding recovers detail the
  * original never had.
  */
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const { appIconKey } = await getBranding();
   return {
     /*
      * Both imported from `lib/seo/metadata.ts` rather than read from `copy`
@@ -108,7 +111,23 @@ export default function manifest(): MetadataRoute.Manifest {
      * `<link rel="icon">` from `branding.faviconKey`. Until an admin sets one,
      * a non-Ayman stack still shows his face in the tab.
      */
-    ...(IS_AYMAN
+    /*
+     * The app icon from «الهوية البصرية» wins over everything below, on every
+     * stack — it is the one honest icon a non-Ayman stack can have. Served
+     * through Next's own optimiser at two of its default widths, so each
+     * declared `sizes` is the real size of the bytes (the upload is cropped
+     * square), with no image library in this app. No `type`: the optimiser
+     * picks WebP or AVIF from the request's `Accept`.
+     */
+    ...(appIconKey
+      ? {
+          icons: [256, 640].map((width) => ({
+            src: `/_next/image?url=${encodeURIComponent(mediaUrl(appIconKey))}&w=${width}&q=75`,
+            sizes: `${width}x${width}`,
+            purpose: 'any' as const,
+          })),
+        }
+      : IS_AYMAN
       ? {
           icons: [
             { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

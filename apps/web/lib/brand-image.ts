@@ -41,7 +41,7 @@ export function brandImage(
 ): ThemedBrandImage | undefined {
   const def = BRAND_IMAGE_SLOTS.find((row) => row.slot === kind);
   const lightKey = def ? branding[def.lightKey] : null;
-  const darkKey = def ? branding[def.darkKey] : null;
+  const darkKey = def?.darkKey ? branding[def.darkKey] : null;
 
   const light = lightKey ? uploadedAsset(lightKey, kind) : getBrandAsset(kind);
   const dark = darkKey ? uploadedAsset(darkKey, kind) : null;
@@ -66,4 +66,28 @@ export function keyPair(
     light: { src: mediaUrl(lightKey), width, height },
     dark: darkKey ? { src: mediaUrl(darkKey), width, height } : null,
   };
+}
+
+/** `<2 hex>/<uuid>.webp` — the only shape a storage key takes (`mediaUrl`). */
+const STORAGE_KEY = /^[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
+
+/**
+ * The default course picture as a CSS variable, for the root layout's inline
+ * `<style>`.
+ *
+ * A variable and not a prop because `<CourseArt>` renders on nineteen
+ * screens, server and client alike, and none of them has the branding in
+ * hand. `.course-art::before` paints it under the subject's own gradient, so
+ * coverless courses gain a photograph and still differ by hue and glyph.
+ *
+ * The key goes into a stylesheet, so it is checked against the one shape a
+ * storage key can have — the same reason the accent is a bounded number and
+ * never a colour string (`renderBrandingStyle`). Anything else emits nothing.
+ */
+export function courseCoverStyle(branding: BrandingRead): string {
+  const rule = (key: string | null) =>
+    key && STORAGE_KEY.test(key) ? `--course-cover-default:url("${mediaUrl(key)}");` : '';
+  const light = rule(branding.courseCoverKey);
+  const dark = rule(branding.courseCoverDarkKey);
+  return (light ? `:root{${light}}` : '') + (dark ? `:root[data-theme="dark"]{${dark}}` : '');
 }

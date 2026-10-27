@@ -21,16 +21,17 @@ import type { Branding, BrandingRead } from './settings';
 type AssetField = Extract<keyof Branding, `${string}AssetId`>;
 type KeyField = Extract<keyof BrandingRead, `${string}Key`>;
 
-export const BRAND_IMAGE_GROUPS = ['identity', 'landing', 'pages'] as const;
+export const BRAND_IMAGE_GROUPS = ['identity', 'landing', 'pages', 'documents'] as const;
 export type BrandImageGroup = (typeof BRAND_IMAGE_GROUPS)[number];
 
 export interface BrandImageSlotDef {
   slot: BrandImageSlot;
   group: BrandImageGroup;
   light: AssetField;
-  dark: AssetField;
+  /** `null` for a slot with one file — the app icon: a launcher has no theme. */
+  dark: AssetField | null;
   lightKey: KeyField;
-  darkKey: KeyField;
+  darkKey: KeyField | null;
 }
 
 export const BRAND_IMAGE_SLOT_IDS = [
@@ -45,6 +46,9 @@ export const BRAND_IMAGE_SLOT_IDS = [
   'login',
   'honorHost',
   'practiceGuide',
+  'courseCover',
+  'appIcon',
+  'signature',
 ] as const;
 export type BrandImageSlot = (typeof BRAND_IMAGE_SLOT_IDS)[number];
 
@@ -83,10 +87,19 @@ export const BRAND_IMAGE_SLOTS: readonly BrandImageSlotDef[] = [
   pair('login', 'pages'),
   pair('honorHost', 'pages'),
   pair('practiceGuide', 'pages'),
+  pair('courseCover', 'pages'),
+  {
+    slot: 'appIcon',
+    group: 'identity',
+    light: 'appIconAssetId',
+    dark: null,
+    lightKey: 'appIconKey',
+    darkKey: null,
+  },
+  pair('signature', 'documents'),
 ];
 
 /** Every asset-id field the branding section stores, light and dark. */
-export const BRAND_IMAGE_FIELDS: readonly AssetField[] = BRAND_IMAGE_SLOTS.flatMap((def) => [
-  def.light,
-  def.dark,
-]);
+export const BRAND_IMAGE_FIELDS: readonly AssetField[] = BRAND_IMAGE_SLOTS.flatMap((def) =>
+  def.dark ? [def.light, def.dark] : [def.light],
+);

@@ -60,6 +60,10 @@ const SLOT_ASPECT = {
   trackYear2: 3 / 2,
   honorHost: 4 / 5,
   practiceGuide: 16 / 9,
+  courseCover: 16 / 9,
+  appIcon: 1,
+  /** A signature is as wide as it was written; forcing a ratio pads or cuts it. */
+  signature: 'source',
 } as const;
 
 export type AssetSlot = keyof typeof SLOT_ASPECT;

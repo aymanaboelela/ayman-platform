@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { BRAND_IMAGE_FIELDS, BRAND_IMAGE_SLOTS } from '@ayman/contracts/admin/brand-images';
+import { OG_PAGES } from '@ayman/contracts/admin/seo-pages';
 import {
   BrandingReadSchema,
+  SeoReadSchema,
   SECTION_SCHEMAS,
   SiteSettingsSchema,
   type BrandingRead,
@@ -92,19 +94,29 @@ export class SettingsService {
     const resolved: Record<string, string | null> = {};
     for (const def of BRAND_IMAGE_SLOTS) {
       resolved[def.lightKey] = key(keys, branding[def.light]);
-      resolved[def.darkKey] = key(keys, branding[def.dark]);
+      if (def.dark && def.darkKey) resolved[def.darkKey] = key(keys, branding[def.dark]);
     }
 
     return BrandingReadSchema.parse({ ...branding, ...resolved });
   }
 
-  /** Same resolution for the OG image, on every page's `generateMetadata`. */
+  /**
+   * Same resolution for the OG images — the site-wide one and each section's
+   * (`OG_PAGES`) — on every page's `generateMetadata`. Still one query.
+   */
   async readPublicResolved(): Promise<PublicSettingsRead> {
     const settings = await this.read();
-    const keys = await this.resolveAssetKeys([settings.seo.ogImageAssetId]);
+    const { seo } = settings;
+    const keys = await this.resolveAssetKeys([
+      seo.ogImageAssetId,
+      ...OG_PAGES.map((def) => seo[def.field]),
+    ]);
+
+    const pageKeys: Record<string, string | null> = {};
+    for (const def of OG_PAGES) pageKeys[def.key] = key(keys, seo[def.field]);
 
     return {
-      seo: { ...settings.seo, ogImageKey: key(keys, settings.seo.ogImageAssetId) },
+      seo: SeoReadSchema.parse({ ...seo, ogImageKey: key(keys, seo.ogImageAssetId), ...pageKeys }),
       contact: settings.contact,
       about: settings.about,
     };

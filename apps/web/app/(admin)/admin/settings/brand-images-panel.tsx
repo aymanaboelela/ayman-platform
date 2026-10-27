@@ -32,12 +32,16 @@ const SLOT_COPY: Record<BrandImageSlot, { name: string; hint: string }> = {
   login: { name: s.loginImage, hint: s.loginImageHint },
   honorHost: { name: s.slotHonorHost, hint: s.slotHonorHostHint },
   practiceGuide: { name: s.slotPracticeGuide, hint: s.slotPracticeGuideHint },
+  courseCover: { name: s.slotCourseCover, hint: s.slotCourseCoverHint },
+  appIcon: { name: s.slotAppIcon, hint: s.slotAppIconHint },
+  signature: { name: s.slotSignature, hint: s.slotSignatureHint },
 };
 
 const GROUP_LABEL: Record<BrandImageGroup, string> = {
   identity: s.imagesGroupIdentity,
   landing: s.imagesGroupLanding,
   pages: s.imagesGroupPages,
+  documents: s.imagesGroupDocuments,
 };
 
 type Source = 'uploaded' | 'builtIn' | 'none';
@@ -124,7 +128,8 @@ export function BrandImagesPanel({
               {rows.map((def) => {
                 const source = sourceOf(def);
                 const lightId = values[def.light] ?? null;
-                const darkId = values[def.dark] ?? null;
+                const dark = def.dark;
+                const darkId = dark ? (values[dark] ?? null) : null;
                 const fallback = lightFallback(def);
                 const lightNow = srcOf(lightId) ?? fallback;
                 return (
@@ -150,6 +155,8 @@ export function BrandImagesPanel({
                       <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{SLOT_COPY[def.slot].hint}</p>
                     </header>
 
+                    {def.slot === 'appIcon' ? <AppIconCheck asset={assets.find((row) => row.id === lightId)} /> : null}
+
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="flex min-w-0 flex-col gap-1.5">
                         <span className="flex items-center gap-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">
@@ -168,26 +175,30 @@ export function BrandImagesPanel({
                           }
                         />
                       </div>
-                      <div className="flex min-w-0 flex-col gap-1.5">
-                        <span className="flex items-center gap-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">
-                          <Moon size={14} aria-hidden="true" />
-                          {s.modeDark}
-                        </span>
-                        <AssetPicker
-                          slot={def.slot}
-                          layout="tile"
-                          tone="dark"
-                          assets={assets}
-                          value={darkId}
-                          current={lightNow ? { src: lightNow, label: s.sourceSameAsLight } : null}
-                          onChange={(value) =>
-                            form.setValue(def.dark, value, { shouldValidate: true, shouldDirty: true })
-                          }
-                        />
-                        {darkId === null ? (
-                          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{s.darkOptional}</p>
-                        ) : null}
-                      </div>
+                      {/* One file only (the app icon): no dark column at all,
+                          rather than a control that changes nothing. */}
+                      {dark ? (
+                        <div className="flex min-w-0 flex-col gap-1.5">
+                          <span className="flex items-center gap-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">
+                            <Moon size={14} aria-hidden="true" />
+                            {s.modeDark}
+                          </span>
+                          <AssetPicker
+                            slot={def.slot}
+                            layout="tile"
+                            tone="dark"
+                            assets={assets}
+                            value={darkId}
+                            current={lightNow ? { src: lightNow, label: s.sourceSameAsLight } : null}
+                            onChange={(value) =>
+                              form.setValue(dark, value, { shouldValidate: true, shouldDirty: true })
+                            }
+                          />
+                          {darkId === null ? (
+                            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{s.darkOptional}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </article>
                 );
@@ -197,5 +208,21 @@ export function BrandImagesPanel({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The launcher icon is served through Next's optimiser, which never upscales:
+ * a 300px file declared as 640×640 in the manifest arrives at 300, and a
+ * non-square one arrives letterboxed. Said here, at the moment of choosing,
+ * because nothing on the site shows it until a student installs the app.
+ */
+function AppIconCheck({ asset }: { asset: MediaAsset | undefined }) {
+  if (!asset?.width || !asset.height) return null;
+  if (asset.width === asset.height && asset.width >= 512) return null;
+  return (
+    <p role="alert" className="text-[length:var(--fs-text-sm)] text-warn">
+      {formatCopy(s.appIconTooSmall, { w: String(asset.width), h: String(asset.height) })}
+    </p>
   );
 }

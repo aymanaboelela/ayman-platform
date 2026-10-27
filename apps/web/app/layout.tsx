@@ -6,6 +6,7 @@ import { plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
 import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
 import { BrandMarkProvider } from '@/components/brand-mark-provider';
+import { courseCoverStyle } from '@/lib/brand-image';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { RouteScrollReset } from '@/components/motion/route-scroll-reset';
@@ -167,6 +168,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           already requires for its own streaming style injection.
         */}
         <style dangerouslySetInnerHTML={{ __html: renderBrandingStyle(branding) }} />
+        {/* The default course picture from «الهوية البصرية» — see
+            `courseCoverStyle` for why a variable and why the key is checked. */}
+        {courseCoverStyle(branding) ? (
+          <style dangerouslySetInnerHTML={{ __html: courseCoverStyle(branding) }} />
+        ) : null}
         {/*
           `faviconKey`, NOT `faviconAssetId`.
 
@@ -193,6 +199,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           is the right switch here even though the page ignores it. Listed
           second because a browser takes the last matching icon.
         */}
+        {/* iOS reads only this for «Add to Home Screen» and ignores the
+            manifest. It scales the 256px file down to its own 180. */}
+        {branding.appIconKey ? (
+          <link
+            rel="apple-touch-icon"
+            href={`/_next/image?url=${encodeURIComponent(mediaUrl(branding.appIconKey))}&w=256&q=75`}
+          />
+        ) : null}
         {branding.faviconDarkKey ? (
           <link
             rel="icon"

@@ -30,6 +30,10 @@ export function builtInBrandImages(): Partial<Record<BrandImageSlot, string>> {
     login: aymanOnly('/brand/auth-library.webp'),
     honorHost: getBrandAsset('honorHost')?.src,
     practiceGuide: getBrandAsset('practiceGuide')?.src,
+    // The manifest's own icon on his stack (`app/manifest.ts`). No shipped
+    // default course picture or signature exists anywhere: those two start
+    // empty on every stack.
+    appIcon: aymanOnly('/icons/icon-512.png'),
   };
 }
 

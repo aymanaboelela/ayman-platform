@@ -5,6 +5,7 @@ import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { getEntitlements } from '@/lib/entitlements';
+import { aymanOnly } from '@/lib/tenant';
 import { BrandingForm } from '../branding-form';
 import { SeoForm } from '../seo-form';
 import { ContactForm } from '../contact-form';
@@ -78,15 +79,16 @@ export default async function SettingsPage() {
           offered={offeredBrandImages()}
         />
 
+        <Card id="seo" className="scroll-mt-24">
+          <CardHeader>
+            <CardTitle>{copy.admin.settings.sectionSeo}</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <SeoForm defaultValues={settings.seo} assets={media.rows} builtInShare={aymanOnly('/og.jpg')} />
+          </CardBody>
+        </Card>
+
         <div className="grid gap-6 xl:grid-cols-2">
-          <Card id="seo" className="scroll-mt-24">
-            <CardHeader>
-              <CardTitle>{copy.admin.settings.sectionSeo}</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <SeoForm defaultValues={settings.seo} assets={media.rows} />
-            </CardBody>
-          </Card>
 
           <Card id="contact" className="scroll-mt-24">
             <CardHeader>
