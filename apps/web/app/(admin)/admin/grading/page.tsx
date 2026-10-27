@@ -48,7 +48,9 @@ function foldName(text: string): string {
     .replace(/[أإآٱ]/g, 'ا')
     .replace(/ى/g, 'ي')
     .replace(/ة/g, 'ه')
-    .replace(/[ـًٌٍَُِّْ]/g, '');
+    // Tatweel and the harakat, as escapes: written literally they combine
+    // with the bracket and the class no longer means what it shows.
+    .replace(/[\u064B-\u0652\u0640]/g, '');
 }
 
 export const metadata = { title: c.title };
