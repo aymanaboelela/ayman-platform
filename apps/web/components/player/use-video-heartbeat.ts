@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_DELTA_SECONDS } from '@ayman/contracts/progress';
+import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_DELTA_SECONDS, MAX_PLAYBACK_RATE } from '@ayman/contracts/progress';
 import type { HeartbeatResponse } from '@ayman/contracts/progress';
 import { postHeartbeat } from '@/lib/progress-client';
 import { YT_STATE, type YouTubePlayer } from '@/lib/youtube';
@@ -13,8 +13,13 @@ const TICKS_PER_FLUSH = HEARTBEAT_INTERVAL_MS / TICK_MS;
  * A seek shows up as the current time jumping by more than one tick. Counting
  * it as watch time would be dishonest reporting; the server would clamp it
  * anyway, but the client should not be the one lying.
+ *
+ * One tick of playback at the fastest speed, plus timer jitter. It used to be
+ * exactly 2 — and on 2× a tick that the browser fired 5 ms late advanced
+ * 2.01 s and was thrown away as a "seek", so most of a 2× viewing reported
+ * nothing at all.
  */
-const MAX_HONEST_TICK_ADVANCE = 2;
+const MAX_HONEST_TICK_ADVANCE = MAX_PLAYBACK_RATE + 0.5;
 
 export interface UseVideoHeartbeatOptions {
   lessonId: string;

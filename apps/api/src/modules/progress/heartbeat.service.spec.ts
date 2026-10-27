@@ -186,17 +186,17 @@ describe('HeartbeatService', () => {
       where: { enrollmentId_lessonId: { enrollmentId, lessonId } },
     });
     expect(row.watchedSeconds).toBe(480); // 80% watched — over the 70% gate
-    expect(row.maxPositionSeconds).toBe(480); // 80% position — under the 95% gate
+    expect(row.maxPositionSeconds).toBe(480); // 80% position — under the 90% gate
     expect(row.completedAt).toBeNull();
   });
 
   it('completes a lesson that was genuinely watched to the end', async () => {
-    // 56 iterations leave position/watched at 560/560 — position is still
-    // one tick under the 570 (95% of 600) gate, so the lesson is NOT yet
-    // complete. The 57th, final heartbeat is what pushes maxPosition to 600
-    // and watchedSeconds to 570, crossing both gates on that exact call —
-    // which is the transition this test exists to observe.
-    for (let i = 0; i < 56; i += 1) {
+    // 53 iterations leave position/watched at 530/530 — position is still
+    // one tick under the 540 (90% of 600) gate, so the lesson is NOT yet
+    // complete. The 54th, final heartbeat is what pushes maxPosition to 600,
+    // crossing the gate on that exact call — which is the transition this
+    // test exists to observe.
+    for (let i = 0; i < 53; i += 1) {
       await rewindClock(10);
       await service.record(userId, lessonId, { position: 10 * (i + 1), delta: 10 });
     }
@@ -208,6 +208,21 @@ describe('HeartbeatService', () => {
     expect(final.progress.completion).toBe(1);
     expect(final.progress.completedVia).toBe('auto');
     expect(final.courseProgressPercent).toBe(100);
+  });
+
+  it('completes a lesson watched start to finish at 2×', async () => {
+    // What the player sends on 2×: twenty video seconds per ten-second flush,
+    // capped at 15 by the client, then granted 12 by the server's clock. That
+    // is 60% of the runtime by the end — the old 70% bar kept every lecture
+    // watched this way in «المتراكم» for good.
+    let last;
+    for (let i = 0; i < 30; i += 1) {
+      await rewindClock(10);
+      last = await service.record(userId, lessonId, { position: 20 * (i + 1), delta: 15 });
+    }
+
+    expect(last!.progress.watchedSeconds).toBe(360);
+    expect(last!.progress.state).toBe('completed');
   });
 
   it('reports justCompleted exactly once', async () => {
