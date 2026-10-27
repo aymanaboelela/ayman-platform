@@ -544,6 +544,15 @@ export const AUDIT_ACTIONS = [
   'design:update',
   'design:delete',
   'design:publish',
+  /*
+   * «استوديو البوستات». `social:publish` is the one that puts something on a
+   * public page under the teacher's name — through the Graph API, or marked
+   * by hand after a manual post (`mode` in metadata). `social:connection`
+   * records that the Page token changed, never the token itself.
+   */
+  'social:update',
+  'social:publish',
+  'social:connection',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

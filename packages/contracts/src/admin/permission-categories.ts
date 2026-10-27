@@ -154,13 +154,16 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
   {
     key: 'outreach',
     titleAr: 'التسويق والتواصل',
-    hintAr: 'حملات واتساب، الرسايل، والأجهزة المربوطة.',
+    hintAr: 'حملات واتساب، الرسايل، الأجهزة المربوطة، وبوستات السوشيال.',
     permissions: [
       'marketing:read',
       'marketing:write',
       'marketing:send',
       'marketing:device',
       'outreach:read',
+      'social:read',
+      'social:write',
+      'social:publish',
     ],
   },
   {

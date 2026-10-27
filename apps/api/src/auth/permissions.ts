@@ -290,6 +290,14 @@ export const PERMISSIONS = [
   'design:read',
   'design:write',
   'design:publish',
+  // «استوديو البوستات». Three for the same reason as marketing's split:
+  // reading the drafts and editing a caption are private and reversible;
+  // publishing puts a post on the teacher's own Facebook Page and Instagram
+  // under their name, and it cannot be recalled from here. `publish` also
+  // guards the Page token itself — whoever may set it may post as the Page.
+  'social:read',
+  'social:write',
+  'social:publish',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

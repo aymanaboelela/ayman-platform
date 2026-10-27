@@ -134,6 +134,16 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول»، زي `shareCards`. البوستات بتتنشر على صفحة المدرّس هو
+     * وبالتوكن بتاعه هو، فلما تتفتح لمدرّس مفيش حاجة من بتاعة أيمن بتعدّي.
+     */
+    key: 'socialPosts',
+    nameAr: 'بوستات السوشيال',
+    descriptionAr: 'بوستات جاهزة من لوحة الشرف والنتايج والشهادات والمحتوى الجديد، وتقويم ونشر على فيسبوك وإنستجرام.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];
