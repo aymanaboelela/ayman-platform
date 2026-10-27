@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Search } from 'lucide-react';
 // `/copy/admin`, never the root barrel: these screens only ever render inside
 // the admin layout, and `copy.admin.*` lives in that module.
 import { copy } from '@ayman/contracts/copy/admin';
@@ -38,6 +39,17 @@ const hrefFor = gradingListHref;
 const TABS = GRADING_TABS;
 
 const c = copy.admin.grading;
+
+/** The same hamza fold the API search applies (`common/arabic-fold.ts`), so
+ *  «احمد» finds «أحمد» on the queue exactly as it does on the other tabs. */
+function foldName(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[ـًٌٍَُِّْ]/g, '');
+}
 
 export const metadata = { title: c.title };
 
@@ -101,7 +113,7 @@ const SORT_LABEL: Record<GradingSort, string> = {
 export default async function AdminGradingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; sort?: string; exam?: string; day?: string }>;
+  searchParams: Promise<{ tab?: string; sort?: string; exam?: string; day?: string; q?: string }>;
 }) {
   const query = await searchParams;
 
@@ -120,8 +132,18 @@ export default async function AdminGradingPage({
   // parameter, and a value that is not a date is a 500 from Postgres rather
   // than the empty list a bad filter deserves.
   const day = query.day && /^\d{4}-\d{2}-\d{2}$/.test(query.day) ? query.day : undefined;
+  // The API caps it at 120 and 400s past that; trimmed and cut here so a
+  // pasted paragraph is a search for its start rather than an error page.
+  const q = query.q?.trim().slice(0, 120) || undefined;
 
   const { rows: queue } = await adminGet('/api/admin/grading-queue', AdminGradingQueueSchema);
+  /*
+   * The queue is searched HERE, not at the API: it is the whole set already
+   * (papers waiting on a human — a handful, never a page of a larger list), so
+   * narrowing it in place is exact. The tab's count stays the full backlog.
+   */
+  const needle = q ? foldName(q) : '';
+  const queueShown = needle ? queue.filter((row) => foldName(row.studentName).includes(needle)) : queue;
 
   /*
    * «اتصحّح خلاص» is a record of what HE did, so its natural order is the most
@@ -142,6 +164,7 @@ export default async function AdminGradingPage({
   });
   if (exam) params.set('lessonId', exam);
   if (day) params.set('day', day);
+  if (q) params.set('q', q);
 
   /*
    * Issued ONLY for the tab that renders it. It is the expensive half of this
@@ -200,18 +223,61 @@ export default async function AdminGradingPage({
         ))}
       </nav>
 
+      {/*
+        «عاوز أسرش على الطلاب» — its own form, on every tab, so the box sits in
+        the same place whichever list is open. Plain GET like the filters: the
+        hidden fields keep the tab, the order, the exam and the day it was
+        typed on, and an emptied box submits `q=`, which reads as no search.
+      */}
+      <form role="search" className="mt-4 flex gap-2">
+        {tab !== 'queue' ? <input type="hidden" name="tab" value={tab} /> : null}
+        {query.sort ? <input type="hidden" name="sort" value={activeSort} /> : null}
+        {exam ? <input type="hidden" name="exam" value={exam} /> : null}
+        {day ? <input type="hidden" name="day" value={day} /> : null}
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">{c.filterSearch}</span>
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
+          />
+          <input
+            type="search"
+            name="q"
+            defaultValue={q ?? ''}
+            placeholder={c.filterSearchPlaceholder}
+            maxLength={120}
+            autoComplete="off"
+            className="h-11 w-full rounded-lg border border-line bg-surface-2 ps-9 pe-3 text-[length:var(--fs-text-sm)] text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none"
+          />
+        </label>
+        <button
+          type="submit"
+          className="h-11 shrink-0 rounded-lg bg-accent px-5 text-[length:var(--fs-text-sm)] font-semibold text-[#1A1206] transition-colors duration-[160ms] ease-out hover:bg-accent/90"
+        >
+          {c.filterSearchSubmit}
+        </button>
+        {q ? (
+          <Link
+            href={hrefFor({ tab, sort: query.sort, exam, day })}
+            className="inline-flex h-11 shrink-0 items-center rounded-lg border border-line px-4 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+          >
+            {c.filterSearchClear}
+          </Link>
+        ) : null}
+      </form>
+
       {tab === 'queue' ? (
-        queue.length === 0 ? (
+        queueShown.length === 0 ? (
           /* An empty queue is the GOOD state here, not a missing-data state — no
              «اعمل واحد» prompt, because there is nothing for him to create. */
-          <AdminEmpty spot="homework" title={c.empty} />
+          <AdminEmpty spot="homework" title={q ? c.emptySearch : c.empty} />
         ) : (
           /* `<ol>` rather than `<ul>`: `ManualGradingService.queue` orders
              oldest-first and the position IS information — a paper waiting
              three days is more urgent than one that landed a minute ago. There
              is no sort control on this tab for the same reason. */
           <ol className="mt-5 flex flex-col gap-2.5">
-            {queue.map((row) => (
+            {queueShown.map((row) => (
               <li key={row.attemptId}>
                 <GradingQueueRow row={row} />
               </li>
@@ -232,6 +298,11 @@ export default async function AdminGradingPage({
           */}
           <form className="mt-4 flex flex-wrap items-end gap-3">
             <input type="hidden" name="tab" value={tab} />
+            {/* The day is a link and the search is its own form — both carried
+                so a re-sort keeps the view it was made on. */}
+            {day ? <input type="hidden" name="day" value={day} /> : null}
+
+            {q ? <input type="hidden" name="q" value={q} /> : null}
 
             <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
               <span className="text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
@@ -337,7 +408,7 @@ export default async function AdminGradingPage({
               <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
                 <li className="shrink-0">
                   <Link
-                    href={hrefFor({ tab, sort: query.sort, exam, day: undefined })}
+                    href={hrefFor({ tab, sort: query.sort, exam, day: undefined, q })}
                     aria-current={day === undefined ? 'true' : undefined}
                     className={cn(dayClass, day === undefined ? dayActive : dayIdle)}
                   >
@@ -347,7 +418,7 @@ export default async function AdminGradingPage({
                 {results?.days.map((option) => (
                   <li key={option.day} className="shrink-0">
                     <Link
-                      href={hrefFor({ tab, sort: query.sort, exam, day: option.day })}
+                      href={hrefFor({ tab, sort: query.sort, exam, day: option.day, q })}
                       aria-current={day === option.day ? 'true' : undefined}
                       className={cn(dayClass, day === option.day ? dayActive : dayIdle)}
                     >
@@ -379,7 +450,7 @@ export default async function AdminGradingPage({
                     canMark={tab === 'top' || tab === 'late'}
                     /* So the paper's «رجوع» lands back on THIS tab/sort/filter
                        combination — see `./nav` for the bug this closes. */
-                    listHref={hrefFor({ tab, sort: query.sort, exam, day })}
+                    listHref={hrefFor({ tab, sort: query.sort, exam, day, q })}
                   />
                 </li>
               ))}
@@ -387,7 +458,15 @@ export default async function AdminGradingPage({
           ) : (
             <AdminEmpty
               spot="homework"
-              title={tab === 'marked' ? c.emptyMarked : tab === 'late' ? c.emptyLate : c.emptyTop}
+              title={
+                q
+                  ? c.emptySearch
+                  : tab === 'marked'
+                    ? c.emptyMarked
+                    : tab === 'late'
+                      ? c.emptyLate
+                      : c.emptyTop
+              }
             />
           )}
             </div>
