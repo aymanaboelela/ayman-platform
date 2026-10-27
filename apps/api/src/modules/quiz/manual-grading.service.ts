@@ -17,6 +17,8 @@ import { AttemptService } from './attempt.service';
 import { ExamSignalsService } from './exam-signals.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '../../generated/prisma/client';
+import { escapeLike, foldArabic, FOLD_FROM, FOLD_TO } from '../../common/arabic-fold';
+import { phoneSearchDigits } from '../../common/phone-search';
 import { clamp, fractionToState, roundMark } from './grading/fraction';
 import { splitPendingMarks } from './grading/mark-split';
 import { checkChoiceOverride, describeChoice } from './grading/choice-override';
@@ -228,6 +230,7 @@ export class ManualGradingService {
     sort: GradingSort;
     lessonId?: string;
     day?: string;
+    q?: string;
     limit?: number;
   }): Promise<AdminGradingResults> {
     const limit = Math.min(Math.max(options.limit ?? 100, 1), 300);
@@ -304,6 +307,34 @@ export class ManualGradingService {
       ? Prisma.sql`AND (a."submitted_at" AT TIME ZONE 'Africa/Cairo')::date = ${options.day}::date`
       : Prisma.empty;
 
+    /*
+     * «عاوز أسرش عليهم» — one student out of eight hundred papers.
+     *
+     * Name or phone, the same two legs as the sittings screen's own search
+     * (`AttemptAdminService.studentMatch`): the name literal AND hamza-folded,
+     * because «احمد» is how most of Egypt types «أحمد»; the phone as a run of
+     * digits, because `010…` has to find the stored `+2010…`.
+     *
+     * An EXISTS rather than a join, so the same fragment drops into the day
+     * list and the totals below, neither of which joins the profile — the
+     * counts have to describe the student being searched, not the class.
+     */
+    const term = options.q?.trim();
+    const digits = term ? phoneSearchDigits(term) : null;
+    const searchFilter = term
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM "app"."users" su
+          LEFT JOIN "app"."student_profiles" ssp ON ssp."user_id" = su."id"
+          WHERE su."id" = a."user_id" AND (
+            ssp."full_name" ILIKE ${`%${escapeLike(term)}%`}
+            OR su."name" ILIKE ${`%${escapeLike(term)}%`}
+            OR lower(translate(coalesce(ssp."full_name", su."name"), ${FOLD_FROM}, ${FOLD_TO}))
+               LIKE ${`%${escapeLike(foldArabic(term))}%`}
+            ${digits ? Prisma.sql`OR su."phone_number" LIKE ${`%${digits}%`}` : Prisma.empty}
+          )
+        )`
+      : Prisma.empty;
+
     const rows = await this.prisma.$queryRaw<GradingResultRow[]>`
       SELECT
         a."id"            AS attempt_id,
@@ -353,6 +384,7 @@ export class ManualGradingService {
         ${scopeFilter}
         ${lessonFilter}
         ${dayFilter}
+        ${searchFilter}
       ORDER BY ${ORDER_BY[options.sort]}
       LIMIT ${limit}
     `;
@@ -387,6 +419,7 @@ export class ManualGradingService {
       WHERE a."state" = 'submitted'
         AND a."submitted_at" IS NOT NULL
         ${lessonFilter}
+        ${searchFilter}
       GROUP BY 1
       ORDER BY 1 DESC
       LIMIT 60
@@ -428,6 +461,7 @@ export class ManualGradingService {
         ${scopeFilter}
         ${lessonFilter}
         ${dayFilter}
+        ${searchFilter}
     `;
 
     return {
