@@ -15,9 +15,13 @@ import { renderCampaignBody } from '@ayman/contracts/marketing/render';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import {
+  DeviceCeilingError,
   NotOnWhatsAppError,
   WhatsappDeviceService,
+  WhatsappRestrictedError,
   type SendResult,
 } from './whatsapp-device.service';
 import { OutreachService } from '../outreach/outreach.service';
@@ -263,6 +267,20 @@ export class CampaignRunner {
     const wantsPlatform = campaign.channel === 'platform' || campaign.channel === 'both';
     const wantsWhatsapp = campaign.channel === 'whatsapp' || campaign.channel === 'both';
 
+    // The number's daily ceiling, asked BEFORE the platform leg: on `both`,
+    // learning it only at the WhatsApp leg would re-post the platform message
+    // every day the campaign is held back. `send()` checks again.
+    if (wantsWhatsapp) {
+      try {
+        await this.device.assertWithinCeiling(now);
+      } catch (error) {
+        // Anything else (a database blip) fails the tick, not the recipient.
+        if (!(error instanceof DeviceCeilingError)) throw error;
+        await this.failed(campaign, recipient.id, recipient.attempts, error, now, state);
+        return;
+      }
+    }
+
     if (wantsPlatform) {
       if (recipient.userId !== null) {
         await this.outreach.postAdminMessage(recipient.userId, text);
@@ -293,6 +311,7 @@ export class CampaignRunner {
           phone: recipient.phone,
           text,
           imageUrl: image ? this.mediaUrl.resolve(image.storageKey) : null,
+          source: 'campaign',
         });
       } catch (error) {
         await this.failed(campaign, recipient.id, recipient.attempts, error, now, state);
@@ -400,6 +419,49 @@ export class CampaignRunner {
   ): Promise<void> {
     const message = error instanceof Error ? error.message.slice(0, 300) : 'unknown error';
 
+    /*
+     * The NUMBER spent today's ceiling (every sender together — see
+     * `device-ceiling.ts`). Nothing was sent and nothing is wrong with the
+     * recipient, so no attempt is spent: the campaign simply waits for
+     * tomorrow's window. Not a pause — it resumes on its own.
+     */
+    if (error instanceof DeviceCeilingError) {
+      await this.prisma.marketingCampaign.update({
+        where: { id: campaign.id },
+        data: { nextSendAt: error.resumesAt, ...state },
+      });
+      this.logger.warn(
+        { campaign: campaign.id, limit: error.limit, resumesAt: error.resumesAt },
+        'campaign waiting — the number reached its daily ceiling',
+      );
+      return;
+    }
+
+    /*
+     * WhatsApp has said this number may not start new chats right now, and
+     * the sidecar refused to send into that (every attempt deepens it). A
+     * campaign is nothing but new chats on a new number, so it PAUSES, with
+     * the end time when WhatsApp gave one — and no recipient is consumed.
+     */
+    if (error instanceof WhatsappRestrictedError) {
+      const until = error.until
+        ? formatCopy(copy.marketing.waRestrictedUntil, { when: cairoWhen(error.until) })
+        : '';
+      await this.prisma.marketingCampaign.update({
+        where: { id: campaign.id },
+        data: {
+          status: 'paused',
+          nextSendAt: null,
+          pausedReason: formatCopy(copy.marketing.waRestrictedPause, { until }),
+        },
+      });
+      this.logger.error(
+        { campaign: campaign.id, reason: error.reason, until: error.until },
+        'campaign paused — WhatsApp is not allowing this number to start new chats',
+      );
+      return;
+    }
+
     if (error instanceof NotOnWhatsAppError) {
       await this.settle(recipientId, { status: 'skipped', error: 'الرقم مش على واتساب' });
       await this.reschedule(campaign, new Date(now.getTime() + SKIP_DELAY_MS), state);
@@ -456,6 +518,18 @@ export class CampaignRunner {
       data: { nextSendAt: withinWindow(at, pacingOf(campaign)), ...state },
     });
   }
+}
+
+/** «الأربعاء ٢٨ أكتوبر، ١٠:٠٠ ص» — Cairo wall time, for a paused reason. */
+function cairoWhen(at: Date): string {
+  return new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+    timeZone: 'Africa/Cairo',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(at);
 }
 
 function stateOf(campaign: MarketingCampaign): RunState {

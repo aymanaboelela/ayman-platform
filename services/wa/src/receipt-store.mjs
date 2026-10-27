@@ -52,6 +52,15 @@ export const STATUS = {
 export class ReceiptStore {
   #limit;
   #byId = new Map();
+  /**
+   * WhatsApp's refusal code per message. Kept apart from `#byId` because a
+   * refusal is not a rung on the status ladder (see the module note) — but it
+   * still has to be READABLE: `/receipt` answered only with the highest
+   * status, an ERROR never became one, so a test send that WhatsApp refused
+   * with 463 sat on «لسه ماوصلش خبر» forever — the one question the test
+   * send exists to answer.
+   */
+  #refusals = new Map();
 
   /**
    * @param {number} [limit] how many message ids to track before evicting the
@@ -68,17 +77,25 @@ export class ReceiptStore {
    *
    * @param {string | null | undefined} id  `key.id` of the sent message
    * @param {number | null | undefined} status  a `STATUS` value
+   * @param {string | null} [code]  WhatsApp's refusal code, on an ERROR
    * @returns {number | null} the status to relay, or `null` if this is a
    *   duplicate or a regression that must not be sent onward
    */
-  observe(id, status) {
+  observe(id, status, code = null) {
     if (!id) return null;
     if (typeof status !== 'number' || !Number.isFinite(status)) return null;
 
     // A refusal is always news, and never becomes the stored maximum — a
     // message that already reached a device did reach it, whatever arrives
     // afterwards.
-    if (status === STATUS.ERROR) return STATUS.ERROR;
+    if (status === STATUS.ERROR) {
+      this.#refusals.delete(id);
+      this.#refusals.set(id, code ? String(code) : null);
+      while (this.#refusals.size > this.#limit) {
+        this.#refusals.delete(this.#refusals.keys().next().value);
+      }
+      return STATUS.ERROR;
+    }
 
     // Below the first tick there is nothing to report: PENDING is this
     // process's own optimism before the server has answered, and the API
@@ -106,38 +123,45 @@ export class ReceiptStore {
     return this.#byId.get(id);
   }
 
+  /**
+   * What `/receipt` answers: the delivery status if a device ever got it,
+   * else the refusal if WhatsApp refused it, else whatever the server said.
+   *
+   * @returns {{ status: number | null, code: string | null }}
+   */
+  read(id) {
+    const status = this.#byId.get(id);
+    if (status !== undefined && status >= STATUS.DELIVERY_ACK) return { status, code: null };
+    if (this.#refusals.has(id)) return { status: STATUS.ERROR, code: this.#refusals.get(id) ?? null };
+    return { status: status ?? null, code: null };
+  }
+
+  /** Forget everything — the number is being replaced. */
+  clear() {
+    this.#byId.clear();
+    this.#refusals.clear();
+  }
+
   get size() {
     return this.#byId.size;
   }
 }
 
-/**
- * What WhatsApp's own refusal codes mean, for the ones worth naming.
+/*
+ * What WhatsApp's refusal codes MEAN is no longer written here.
  *
- * `handleBadAck` puts the literal code string into `messageStubParameters` on
- * the `messages.update` it emits, and it is the single most informative thing
- * this whole service can learn — an ERROR with no code says «واتساب رفضها» and
- * leaves everybody exactly as stuck as «اتبعت» did.
+ * `handleBadAck` puts the literal code into `messageStubParameters`, and the
+ * code is what this service relays — `463`, `479`, … The Egyptian-Arabic
+ * sentence for each lives in `packages/contracts/src/copy/admin.ts`
+ * (`marketing.waErrors`) and is applied by the API, because the same sentence
+ * is shown in three places (the campaign's failures list, the device page and
+ * the test send) and a second copy of it in this image would drift.
  *
- * `463` is the one that matters here. Baileys 7.x names it
- * `MessageAccountRestriction` and documents it as: a 1:1 message missing its
- * privacy token (`tctoken`), which usually means the account is restricted —
- * WhatsApp blocks it from STARTING new chats while leaving existing
- * conversations working, because an established chat already carries a token.
- *
- * That is the shape of a marketing campaign exactly: every message is a new
- * chat, so every one is refused identically, while a reply typed by hand into
- * a chat that already exists goes through instantly. And the 6.x line this
- * service runs on never attaches a `tctoken` to anything — `getPrivacyTokens`
- * is defined in the library and called from nowhere inside it.
- *
- * An unknown code is passed through verbatim rather than dropped. A number
- * nobody has a sentence for is still the thing to search for.
+ * The one to know is `463`: Baileys 7 names it `MessageAccountRestriction` — a
+ * 1:1 message without a privacy token, which in practice means WhatsApp is
+ * blocking this account from STARTING new chats (a reach-out timelock or a
+ * new-chat cap — see `new-chat-limits.mjs`) while existing chats keep working.
  */
-export const ERROR_CODES = {
-  '463': 'واتساب رافض يبدأ محادثات جديدة من الرقم ده (463). المحادثات المفتوحة شغالة عادي.',
-  '479': 'واتساب رفض الرسالة (479) — على الأغلب جلسة جهاز قديمة محتاجة ربط من جديد.',
-};
 
 /**
  * The status a `message-receipt.update` event implies.

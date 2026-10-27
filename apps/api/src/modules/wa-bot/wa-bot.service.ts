@@ -26,7 +26,12 @@ import type { ListResponse } from '@ayman/contracts/admin/list';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { isFeatureEnabled } from '../../common/entitlements';
-import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
+import {
+  DeviceCeilingError,
+  NotOnWhatsAppError,
+  WhatsappDeviceService,
+  WhatsappRestrictedError,
+} from '../marketing/whatsapp-device.service';
 import { Prisma, type WaChat } from '../../generated/prisma/client';
 import { BURST_LIMIT, BURST_WINDOW_MS, DEBOUNCE_MS, MUTE_MS } from './policy';
 import { WaBotFactsService } from './wa-bot-facts.service';
@@ -362,9 +367,15 @@ export class WaBotService {
 
     let messageId: string | null;
     try {
-      ({ messageId } = await this.device.send({ phone: chat.phone, text }));
+      ({ messageId } = await this.device.send({ phone: chat.phone, text, source: 'inbox' }));
     } catch (error) {
       if (error instanceof NotOnWhatsAppError) throw new BadRequestException(bot.admin.replyFailed);
+      // The number's own brakes — the daily ceiling, or WhatsApp refusing new
+      // chats. Their Arabic sentence says which, so the admin is not left
+      // guessing at a generic failure.
+      if (error instanceof DeviceCeilingError || error instanceof WhatsappRestrictedError) {
+        throw new ServiceUnavailableException(error.userMessage);
+      }
       this.logger.warn(`wa inbox reply failed: ${error instanceof Error ? error.message : 'unknown'}`);
       throw new ServiceUnavailableException(bot.admin.replyFailed);
     }

@@ -101,3 +101,52 @@ describe('statusFromReceipt', () => {
     assert.equal(statusFromReceipt({ receiptTimestamp: 0 }), null);
   });
 });
+
+describe('ReceiptStore.read — what `/receipt` answers', () => {
+  it('reports a refusal and its code, which `get` alone never could', () => {
+    const store = new ReceiptStore();
+    store.observe('A', STATUS.SERVER_ACK);
+    store.observe('A', STATUS.ERROR, '463');
+    // The highest STATUS is still the server ack — a refusal is not a rung.
+    assert.equal(store.get('A'), STATUS.SERVER_ACK);
+    assert.deepEqual(store.read('A'), { status: STATUS.ERROR, code: '463' });
+  });
+
+  it('a delivery outranks a refusal that arrived around it', () => {
+    const store = new ReceiptStore();
+    store.observe('A', STATUS.ERROR, '479');
+    store.observe('A', STATUS.DELIVERY_ACK);
+    assert.deepEqual(store.read('A'), { status: STATUS.DELIVERY_ACK, code: null });
+  });
+
+  it('nothing back yet is null, not a failure', () => {
+    const store = new ReceiptStore();
+    assert.deepEqual(store.read('nope'), { status: null, code: null });
+    store.observe('B', STATUS.SERVER_ACK);
+    assert.deepEqual(store.read('B'), { status: STATUS.SERVER_ACK, code: null });
+  });
+
+  it('a refusal with no code is still a refusal', () => {
+    const store = new ReceiptStore();
+    store.observe('A', STATUS.ERROR);
+    assert.deepEqual(store.read('A'), { status: STATUS.ERROR, code: null });
+  });
+
+  it('bounds the refusals it remembers', () => {
+    const store = new ReceiptStore(2);
+    store.observe('A', STATUS.ERROR, '463');
+    store.observe('B', STATUS.ERROR, '463');
+    store.observe('C', STATUS.ERROR, '463');
+    assert.deepEqual(store.read('A'), { status: null, code: null });
+    assert.equal(store.read('C').code, '463');
+  });
+
+  it('clear forgets statuses and refusals alike — a new number starts clean', () => {
+    const store = new ReceiptStore();
+    store.observe('A', STATUS.DELIVERY_ACK);
+    store.observe('B', STATUS.ERROR, '463');
+    store.clear();
+    assert.equal(store.size, 0);
+    assert.deepEqual(store.read('B'), { status: null, code: null });
+  });
+});

@@ -86,6 +86,12 @@ export class SentStore {
     return this.#byId.get(id);
   }
 
+  /** Forget everything — the number is being replaced, and a retry receipt
+   *  for the old number's messages can never arrive on the new one. */
+  clear() {
+    this.#byId.clear();
+  }
+
   get size() {
     return this.#byId.size;
   }
