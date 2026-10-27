@@ -4,6 +4,7 @@ import {
   BookMarked,
   BookOpen,
   Gamepad2,
+  Gift,
   Library,
   LayoutDashboard,
   ListTodo,
@@ -130,6 +131,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * phone it lives in «حاجات تانية».
    */
   { href: '/wallet', labelAr: copy.nav.wallet, icon: Wallet },
+  /*
+   * «دعوة صحابك» — right under «المحفظة», because that is where its reward
+   * lands: a student who just saw «مكافأة دعوة» on the statement finds the link
+   * that earned it one row down. Behind `referrals` (`feature`): on for Ayman,
+   * and it appears on a teacher's rail by itself once the owner opens it.
+   */
+  { href: '/invite', labelAr: copy.nav.invite, icon: Gift, feature: 'referrals' },
   /*
    * `/store`, NOT `/books`, and the difference is the whole point of the
    * route.

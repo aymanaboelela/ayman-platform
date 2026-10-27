@@ -186,6 +186,7 @@ describe('STUDENT_TABS', () => {
       '/mistakes',
       '/codes',
       '/wallet',
+      '/invite',
       '/store',
       '/external-books',
       '/playground',
@@ -256,5 +257,6 @@ describe('STUDENT_NAV entitlement rows', () => {
     const byHref = new Map(STUDENT_NAV.map((item) => [item.href, item.feature]));
     expect(byHref.get('/certificates')).toBe('shareCards');
     expect(byHref.get('/game')).toBe('quizGame');
+    expect(byHref.get('/invite')).toBe('referrals');
   });
 });

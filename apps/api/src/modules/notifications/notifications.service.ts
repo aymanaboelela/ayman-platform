@@ -151,7 +151,7 @@ export type EmitInput =
    * student's NAME on the admin kind is still resolved at read time.
    */
   | { userId: string; kind: 'wallet_topup_submitted'; topupId: string; amountCents: number }
-  | { userId: string; kind: 'wallet_credited'; amountCents: number; source: 'topup' | 'admin' | 'refund' }
+  | { userId: string; kind: 'wallet_credited'; amountCents: number; source: 'topup' | 'admin' | 'refund' | 'referral' }
   | { userId: string; kind: 'wallet_topup_rejected'; topupId: string; amountCents: number; reason: string }
   /** ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». Ids and the evidence's
    *  numbers only; the texts are resolved at read time. `quizId` is the

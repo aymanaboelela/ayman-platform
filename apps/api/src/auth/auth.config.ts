@@ -34,6 +34,7 @@ import { LoginSecurityService } from './login-security.service';
 import { loginThrottle } from './login-throttle.instance';
 import { createTurnstileCheck } from './human-check';
 import { OTP_PATHS_WITHOUT_DELIVERY } from './phone-identity';
+import { attributeSignup } from '../modules/referrals/referral-attribution';
 
 const env = loadEnv(process.env);
 const isProduction = env.NODE_ENV === 'production';
@@ -592,6 +593,29 @@ export const auth = betterAuth({
             return { data: { ...user, email: null } as unknown as typeof user };
           }
           return { data: user };
+        },
+        /**
+         * «دعوة الصحاب» — which share link, if any, brought this account in.
+         *
+         * `after`, on the user WRITE, so every way an account comes into
+         * existence is covered (email, phone, Google) with no per-path wiring
+         * — the same argument the session hooks below make. It reads the
+         * `/r/<code>` cookie off the sign-up request itself: the cookie is
+         * first-party and the API is on the same origin, so it arrives with
+         * the POST (or the OAuth callback) like any other.
+         *
+         * Never throws: attribution is not worth a failed registration, and
+         * nothing here moves money — see `referral-attribution.ts`.
+         */
+        after: async (user, context) => {
+          try {
+            const headers = (context as { headers?: Headers; request?: Request } | null) ?? null;
+            const cookieHeader = headers?.headers?.get('cookie') ?? headers?.request?.headers.get('cookie') ?? null;
+            if (!cookieHeader) return;
+            await attributeSignup(prisma, { userId: user.id, cookieHeader });
+          } catch (error) {
+            console.error('referrals: failed to attribute sign-up', error);
+          }
         },
       },
     },
