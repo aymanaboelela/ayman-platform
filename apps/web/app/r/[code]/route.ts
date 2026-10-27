@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import {
   REFERRAL_COOKIE,
   REFERRAL_COOKIE_DEV,
@@ -9,6 +9,13 @@ import {
 import { getEntitlements } from '@/lib/entitlements';
 
 const PRODUCTION = process.env.NODE_ENV === 'production';
+
+/** Same two names as `proxy.ts`: `__Host-` needs `Secure`, which localhost lacks. */
+const SESSION_COOKIE_NAMES = ['__Host-session_token', 'session_token'] as const;
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
+}
 
 /**
  * `/r/<code>` — «لينك الدعوة». Remembers who shared it, then sends the visitor
@@ -34,9 +41,18 @@ const PRODUCTION = process.env.NODE_ENV === 'production';
  * the top-level return from Google's sign-in, which a Strict cookie does not.
  * Relative `Location`, so the redirect never names the container's internal
  * host behind the proxy.
+ *
+ * ## A browser that is already signed in goes to `/invited`
+ *
+ * `proxy.ts` bounces a signed-in visitor off `/register` to the dashboard, so
+ * opening a link in a browser that holds ANY session looked like "the link
+ * opens the sharer's page". `/invited` says the link is for a new account and
+ * offers to sign out first — the cookie below is set either way, so that
+ * sign-up still counts. Presence of the cookie is only the cheap gate;
+ * `/invited` asks the API and sends a stale one on to `/register`.
  */
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ code: string }> },
 ): Promise<Response> {
   if (!(await getEntitlements()).referrals) return new Response(null, { status: 404 });
@@ -51,7 +67,11 @@ export async function GET(
 
   const response = new NextResponse(null, {
     status: 307,
-    headers: { location: '/register', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
+    headers: {
+      location: hasSessionCookie(request) ? '/invited' : '/register',
+      'cache-control': 'no-store',
+      'x-robots-tag': 'noindex',
+    },
   });
   if (code) {
     response.cookies.set({

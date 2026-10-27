@@ -64,4 +64,13 @@ export const referralsCopy = {
   inactiveTitle: 'البرنامج واقف دلوقتي',
   inactiveBody: 'اللينك محفوظ زي ما هو. أول ما البرنامج يرجع، أي تسجيل منه هيتحسب.',
   walletCta: 'فتح المحفظة',
+
+  /** `/invited` — a signed-in browser opened someone's `/r/<code>`. */
+  signedInTitle: 'اللينك ده لعمل حساب جديد',
+  /** `{name}` — the account this browser is signed into. */
+  signedInBody:
+    'المتصفح ده داخل دلوقتي بحساب «{name}». الدعوة بتتحسب لحساب جديد بس — يعني الخروج من الحساب ده الأول، وبعدها التسجيل من نفس المتصفح بيتحسب لصاحب اللينك.',
+  signedInSwitch: 'خروج وعمل حساب جديد',
+  signedInSwitching: 'جاري الخروج…',
+  signedInStay: 'رجوع لحسابي',
 } as const;
