@@ -1386,6 +1386,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing device: anonymous', method: 'get', path: () => '/api/admin/marketing/device', actor: 'anonymous', status: 401 },
     { label: 'marketing device: student', method: 'get', path: () => '/api/admin/marketing/device', actor: 'student', status: 403 },
     { label: 'marketing device: admin', method: 'get', path: () => '/api/admin/marketing/device', actor: 'admin', status: 200 },
+    // «الإرسال في آخر ٢٤ ساعة» — reads the `whatsapp_sends` ledger, sends
+    // nothing; `marketing:read` like the device status beside it. The admin
+    // row is meaningful: it answers 200 with a disabled device, from the DB.
+    { label: 'marketing device health: anonymous', method: 'get', path: () => '/api/admin/marketing/device/health', actor: 'anonymous', status: 401 },
+    { label: 'marketing device health: student', method: 'get', path: () => '/api/admin/marketing/device/health', actor: 'student', status: 403 },
+    { label: 'marketing device health: admin', method: 'get', path: () => '/api/admin/marketing/device/health', actor: 'admin', status: 200 },
     { label: 'marketing device link: anonymous', method: 'post', path: () => '/api/admin/marketing/device/link', actor: 'anonymous', status: 401 },
     { label: 'marketing device link: student', method: 'post', path: () => '/api/admin/marketing/device/link', actor: 'student', status: 403 },
     { label: 'marketing device unlink: anonymous', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'anonymous', status: 401 },

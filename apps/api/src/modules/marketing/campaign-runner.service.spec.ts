@@ -2,7 +2,11 @@ import type Redis from 'ioredis';
 import type { MediaUrlResolver } from '../../common/media/media-url';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { CampaignRunner } from './campaign-runner.service';
-import type { WhatsappDeviceService } from './whatsapp-device.service';
+import {
+  DeviceCeilingError,
+  WhatsappRestrictedError,
+  type WhatsappDeviceService,
+} from './whatsapp-device.service';
 
 /**
  * The dead-man's switch.
@@ -78,6 +82,7 @@ describe('CampaignRunner — the blind-send breaker', () => {
     const device = {
       enabled: true,
       send,
+      assertWithinCeiling: jest.fn().mockResolvedValue(undefined),
       status: jest.fn().mockResolvedValue({ state: 'connected' }),
     } as unknown as WhatsappDeviceService;
 
@@ -178,5 +183,127 @@ describe('CampaignRunner — the blind-send breaker', () => {
     expect(findFirstCampaign).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ channel: 'platform' }) }),
     );
+  });
+});
+
+/**
+ * The two ways the NUMBER says «not now», and why neither may spend a
+ * recipient: the daily ceiling (ours, every sender together) and WhatsApp's own
+ * new-chat restriction (463's cause, announced in advance by Baileys 7).
+ */
+describe('CampaignRunner — the number says not now', () => {
+  const campaign = {
+    id: 'campaign-2',
+    status: 'running' as const,
+    channel: 'whatsapp' as const,
+    nextSendAt: new Date(NOW.getTime() - HOUR),
+    minDelaySeconds: 45,
+    maxDelaySeconds: 120,
+    batchSize: 20,
+    batchPauseMinutes: 15,
+    dailyCap: 100,
+    windowStartHour: 0,
+    windowEndHour: 24,
+    sentInBatch: 3,
+    sentToday: 3,
+    dayKey: '2026-09-11',
+    body: 'أهلاً',
+    imageAssetId: null,
+    linkUrl: null,
+  };
+  const recipient = { id: 'r-1', campaignId: 'campaign-2', phone: '+201001234567', name: null, userId: null, attempts: 0 };
+
+  function harness(device: Partial<Record<'send' | 'assertWithinCeiling', jest.Mock>>) {
+    const updateCampaign = jest.fn().mockResolvedValue(campaign);
+    const updateRecipient = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      marketingCampaign: { findFirst: jest.fn().mockResolvedValue(campaign), update: updateCampaign },
+      marketingRecipient: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(recipient),
+        update: updateRecipient,
+      },
+      marketingOptOut: { findUnique: jest.fn().mockResolvedValue(null) },
+      mediaAsset: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const send = device.send ?? jest.fn().mockResolvedValue({ messageId: 'M1' });
+    const stub = {
+      enabled: true,
+      send,
+      assertWithinCeiling: device.assertWithinCeiling ?? jest.fn().mockResolvedValue(undefined),
+      status: jest.fn().mockResolvedValue({ state: 'connected' }),
+    } as unknown as WhatsappDeviceService;
+    const redis = {
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    } as unknown as Redis;
+    const runner = new CampaignRunner(prisma, stub, redis, { resolve: (key: string) => key } as MediaUrlResolver);
+    return { runner, updateCampaign, updateRecipient, send };
+  }
+
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(NOW);
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  it('a spent ceiling reschedules to tomorrow — no attempt spent, no pause, nothing sent', async () => {
+    const resumesAt = new Date('2026-09-12T07:00:00.000Z');
+    const { runner, updateCampaign, updateRecipient, send } = harness({
+      assertWithinCeiling: jest.fn().mockRejectedValue(new DeviceCeilingError(40, resumesAt)),
+    });
+
+    await runner.tick();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(updateRecipient).not.toHaveBeenCalled();
+    expect(updateCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'campaign-2' },
+        data: expect.objectContaining({ nextSendAt: resumesAt }),
+      }),
+    );
+    expect(updateCampaign).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'paused' }) }),
+    );
+  });
+
+  it('a WhatsApp new-chat restriction PAUSES, says until when, and spends nobody', async () => {
+    const until = new Date('2026-09-12T10:00:00.000Z');
+    const { runner, updateCampaign, updateRecipient } = harness({
+      send: jest.fn().mockRejectedValue(new WhatsappRestrictedError('timelock', until)),
+    });
+
+    await runner.tick();
+
+    expect(updateRecipient).not.toHaveBeenCalled();
+    expect(updateCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'paused',
+          nextSendAt: null,
+          pausedReason: expect.stringContaining('محادثات جديدة'),
+        }),
+      }),
+    );
+  });
+
+  it('a database blip in the ceiling check fails the tick, not the recipient', async () => {
+    const { runner, updateRecipient, send } = harness({
+      assertWithinCeiling: jest.fn().mockRejectedValue(new Error('connection reset')),
+    });
+
+    await runner.tick();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(updateRecipient).not.toHaveBeenCalled();
+  });
+
+  it('tells the device it is a campaign, so the ledger and the ceiling count it', async () => {
+    const { runner, send } = harness({});
+    await runner.tick();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ source: 'campaign', phone: '+201001234567' }));
   });
 });
