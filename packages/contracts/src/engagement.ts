@@ -11,6 +11,12 @@ import { BacklogItemSchema } from '@ayman/contracts/backlog';
  *   · «أوسمتي»         tiered badges over everything a student does here.
  *   · «ملخص الشهر»     the month in numbers, as a story-size image to share.
  *
+ * and three more that came after them:
+ *
+ *   · «بطاقات المراجعة» the course's questions as flash cards, in Leitner boxes.
+ *   · «أوضة المذاكرة»  a focus timer, and how many are studying right now.
+ *   · «دوري الأسبوع»   points for the week's work, ranked within the school year.
+ *
  * Each is its own entitlement (`admin/entitlements.ts`): on for Ayman, off for
  * every other teacher until the owner opens it from `/admin/platforms`.
  *
@@ -211,6 +217,8 @@ export const BADGE_FAMILIES = [
   { key: 'notes', targets: [5, 30, 100] },
   { key: 'arena', targets: [1, 10, 40] },
   { key: 'courses', targets: [1, 2, 4] },
+  { key: 'focus', targets: [5, 25, 100] },
+  { key: 'cards', targets: [10, 50, 150] },
 ] as const satisfies readonly { key: string; targets: readonly [number, number, number] }[];
 
 export type BadgeFamilyKey = (typeof BADGE_FAMILIES)[number]['key'];
@@ -269,6 +277,192 @@ export const RecapPayloadSchema = z.object({
   peakHour: z.number().int().min(0).max(23).nullable(),
 });
 export type RecapPayload = z.infer<typeof RecapPayloadSchema>;
+
+// ─── «بطاقات المراجعة» ─────────────────────────────────────────────────────
+
+/** Cards in one round. Small on purpose: a round is something to finish. */
+export const CARD_DECK_SIZE = 10;
+
+/** Leitner boxes. A card in the last one is «حافظاها». */
+export const CARD_BOXES = 5;
+
+/**
+ * Days until a card in box N (1-based) is due again. Box 1 is due the same
+ * day, so a card answered «لسه» comes back in the next round, not tomorrow.
+ */
+export const CARD_INTERVAL_DAYS = [0, 1, 3, 7, 16] as const;
+
+export const CardFaceSchema = z.object({
+  bankEntryId: z.uuid(),
+  questionVersionId: z.uuid(),
+  type: z.enum(['mcq_single', 'true_false']),
+  stemHtml: z.string(),
+  options: z.array(z.object({ id: z.uuid(), bodyHtml: z.string() })).min(2),
+  /**
+   * The back of the card. A flash card IS its answer, so it travels with the
+   * front — and the bank it is drawn from is the challenges' bank, with every
+   * question of a still-open exam already taken out.
+   */
+  keyOptionIds: z.array(z.uuid()).min(1),
+  explanationHtml: z.string().nullable(),
+  lessonTitle: z.string().nullable(),
+  /** 0 = never seen; otherwise the box it sits in now. */
+  box: z.number().int().min(0).max(CARD_BOXES),
+});
+export type CardFace = z.infer<typeof CardFaceSchema>;
+
+export const CardsCourseSchema = z.object({
+  courseId: z.uuid(),
+  title: z.string(),
+  /** Every card the course has for this student. */
+  total: z.number().int().min(0),
+  seen: z.number().int().min(0),
+  mastered: z.number().int().min(0),
+  /** Seen before and due today or earlier. */
+  due: z.number().int().min(0),
+});
+export type CardsCourse = z.infer<typeof CardsCourseSchema>;
+
+export const CardsPayloadSchema = z.object({
+  courses: z.array(CardsCourseSchema),
+  /** The course the deck is from; `null` when the student has none. */
+  courseId: z.uuid().nullable(),
+  /** Due cards first (lowest box first), then new ones from the lectures already opened. */
+  deck: z.array(CardFaceSchema).max(CARD_DECK_SIZE),
+  reviewedToday: z.number().int().min(0),
+});
+export type CardsPayload = z.infer<typeof CardsPayloadSchema>;
+
+export const CardsQuerySchema = z.object({ courseId: z.uuid().optional() });
+
+export const CardReviewSchema = z.object({ bankEntryId: z.uuid(), courseId: z.uuid(), knew: z.boolean() });
+export type CardReview = z.infer<typeof CardReviewSchema>;
+
+export const CardReviewResultSchema = z.object({ box: z.number().int().min(1).max(CARD_BOXES), dueOn: DayKeySchema });
+export type CardReviewResult = z.infer<typeof CardReviewResultSchema>;
+
+/** Where a card goes after one answer. `box` 0 is a card never seen. */
+export function nextCardBox(box: number, knew: boolean): number {
+  return knew ? Math.min(Math.max(box, 0) + 1, CARD_BOXES) : 1;
+}
+
+// ─── «أوضة المذاكرة» ───────────────────────────────────────────────────────
+
+/** The lengths on offer. 25 is the classic pomodoro, and the default. */
+export const FOCUS_MINUTES = [15, 25, 45, 60] as const;
+export const FOCUS_DEFAULT_MINUTES = 25;
+/** The break after a finished sitting — client only, nothing is stored. */
+export const FOCUS_BREAK_MINUTES = 5;
+/** A sitting stopped this close to its end still counts as finished. */
+export const FOCUS_GRACE_SECONDS = 15;
+
+export const FocusStartSchema = z.object({
+  minutes: z.number().int().refine((value) => (FOCUS_MINUTES as readonly number[]).includes(value)),
+});
+export type FocusStart = z.infer<typeof FocusStartSchema>;
+
+export const FocusSessionSchema = z.object({
+  id: z.uuid(),
+  startedAt: z.string(),
+  endsAt: z.string(),
+  minutes: z.number().int(),
+});
+export type FocusSession = z.infer<typeof FocusSessionSchema>;
+
+export const FocusPayloadSchema = z.object({
+  /** Other students with a sitting running right now. */
+  live: z.number().int().min(0),
+  /** This student's running sitting — a reload picks the timer up where it was. */
+  open: FocusSessionSchema.nullable(),
+  today: z.object({ sessions: z.number().int().min(0), minutes: z.number().int().min(0) }),
+  /** The last seven Cairo days, oldest first, today last. */
+  week: z.array(z.object({ day: DayKeySchema, minutes: z.number().int().min(0) })).length(7),
+  total: z.object({ sessions: z.number().int().min(0), minutes: z.number().int().min(0) }),
+});
+export type FocusPayload = z.infer<typeof FocusPayloadSchema>;
+
+export const FocusStopResultSchema = z.object({
+  completed: z.boolean(),
+  /** What the sitting counted for. */
+  minutes: z.number().int().min(0),
+  payload: FocusPayloadSchema,
+});
+export type FocusStopResult = z.infer<typeof FocusStopResultSchema>;
+
+// ─── «دوري الأسبوع» ────────────────────────────────────────────────────────
+
+/**
+ * What a week's work is worth. Only things the server saw happen — a flash
+ * card the student marks «عارفاها» is their own word, so cards earn nothing.
+ */
+export const LEAGUE_POINTS = {
+  lesson: 10,
+  quiz: 15,
+  homework: 10,
+  daily: 5,
+  dailyRight: 5,
+  focus: 5,
+} as const;
+export type LeagueSource = keyof typeof LEAGUE_POINTS;
+
+const count = z.number().int().min(0);
+export const LeagueCountsSchema = z.object({
+  lesson: count,
+  quiz: count,
+  homework: count,
+  daily: count,
+  dailyRight: count,
+  focus: count,
+});
+export type LeagueCounts = z.infer<typeof LeagueCountsSchema>;
+
+/** Rows on the table. The student's own row is added below it when they are further down. */
+export const LEAGUE_TABLE_SIZE = 20;
+
+export const LeagueRowSchema = z.object({
+  rank: z.number().int().min(1),
+  /** First name only; `null` for a student who hid it. */
+  name: z.string().nullable(),
+  image: z.string().nullable(),
+  points: z.number().int().min(0),
+  me: z.boolean(),
+});
+export type LeagueRow = z.infer<typeof LeagueRowSchema>;
+
+export const LeaguePayloadSchema = z.object({
+  /** Saturday … Friday, the Egyptian school week. */
+  week: z.object({ from: DayKeySchema, to: DayKeySchema }),
+  /** Days left in it, today included. */
+  daysLeft: z.number().int().min(1).max(7),
+  /** The school year the table is for; `null` for a student who never said. */
+  year: z.number().int().nullable(),
+  players: z.number().int().min(0),
+  rows: z.array(LeagueRowSchema),
+  me: z.object({
+    rank: z.number().int().min(1).nullable(),
+    points: z.number().int().min(0),
+    counts: LeagueCountsSchema,
+    hidden: z.boolean(),
+  }),
+  /** Last week's top three. */
+  lastWeek: z.array(LeagueRowSchema).max(3),
+});
+export type LeaguePayload = z.infer<typeof LeaguePayloadSchema>;
+
+export const LeagueSettingsSchema = z.object({ hidden: z.boolean() });
+export type LeagueSettings = z.infer<typeof LeagueSettingsSchema>;
+
+/** The Saturday that starts the week `day` is in. */
+export function leagueWeekStart(day: string): string {
+  return shiftDayKey(day, -((weekdayOf(day) + 1) % 7));
+}
+
+export function leaguePoints(counts: LeagueCounts): number {
+  return (Object.keys(LEAGUE_POINTS) as LeagueSource[]).reduce(
+    (sum, key) => sum + LEAGUE_POINTS[key] * counts[key],
+    0,
+  );
+}
 
 // ─── day arithmetic on `YYYY-MM-DD` keys ──────────────────────────────────
 

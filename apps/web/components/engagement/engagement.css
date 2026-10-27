@@ -6,8 +6,8 @@
    The same language as «المتراكم» (`components/backlog/backlog.css`): a hero in
    a gradient from the viz layer, containers with a coloured head, a button on
    every row. Each screen owns one hue, and `--h` is what every rule reads:
-   amber = the daily card, blue = the plan, violet = notes, rose = badges,
-   teal = the recap.
+   amber = the daily card and the league, blue = the plan, violet = notes and
+   the focus room, rose = badges, teal = the recap, green = the flash cards.
    ========================================================================== */
 
 /* Text and icons ON a hue — white in both themes, as on «المتراكم». */
@@ -837,3 +837,348 @@
   font-weight: var(--fw-bold);
 }
 .eg-strip__cta:hover { background: color-mix(in oklab, var(--h) 14%, var(--color-surface-1)); }
+
+/* ── «بطاقات المراجعة» ───────────────────────────────────────────────────── */
+.eg-count-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  margin-inline-start: 0.4rem;
+  padding-inline: 0.3rem;
+  border-radius: var(--r-full);
+  background: var(--viz-6);
+  color: var(--eg-on-hue);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+}
+.eg-month[data-hue='green'][aria-current='page'] { border-color: var(--viz-6); background: var(--viz-6); }
+.eg-month[data-hue='green'][aria-current='page'] .eg-count-dot { background: rgb(255 255 255 / 0.25); }
+
+.eg-pips { display: inline-flex; gap: 0.2rem; }
+.eg-pips__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-line);
+}
+.eg-pips__dot[data-on='true'] { background: var(--viz-6); border-color: var(--viz-6); }
+
+.eg-flash__progress {
+  display: flex;
+  gap: 0.3rem;
+  margin-block-end: 0.75rem;
+}
+.eg-flash__step {
+  flex: 1;
+  height: 0.4rem;
+  border-radius: var(--r-full);
+  background: var(--color-surface-3);
+}
+.eg-flash__step[data-state='done'] { background: var(--viz-6); }
+.eg-flash__step[data-state='now'] { background: color-mix(in oklab, var(--viz-6) 45%, var(--color-surface-3)); }
+.eg-flash__card {
+  border-width: 1.5px;
+  border-color: color-mix(in oklab, var(--viz-6) 30%, var(--color-line));
+  animation: eg-card-in 320ms var(--ease-out);
+}
+.eg-flash[data-flipped='true'] .eg-flash__card { animation: eg-card-flip 420ms var(--ease-out); }
+@keyframes eg-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes eg-card-flip {
+  0% { transform: perspective(900px) rotateY(0); }
+  50% { transform: perspective(900px) rotateY(8deg) scale(0.99); }
+  100% { transform: perspective(900px) rotateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eg-flash__card,
+  .eg-flash[data-flipped='true'] .eg-flash__card { animation: none; }
+}
+.eg-option[data-tone='dim'] { opacity: 0.55; }
+.eg-flash__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.eg-btn--knew { border-color: transparent; background: var(--viz-6); color: var(--eg-on-hue); }
+.eg-btn--knew:hover:not(:disabled) { border-color: transparent; background: color-mix(in oklab, var(--viz-6) 85%, var(--n-12)); }
+.eg-btn--again { border-color: var(--viz-1); color: color-mix(in oklab, var(--viz-1) 75%, var(--color-fg)); }
+
+.eg-done { display: grid; justify-items: center; gap: 0.85rem; text-align: center; padding-block: 2rem; }
+.eg-done__icon {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: var(--viz-6);
+  color: var(--eg-on-hue);
+}
+.eg-done__tally { display: flex; gap: 0.75rem; }
+.eg-done__tally > div {
+  --k: var(--viz-6);
+  min-width: 7.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--k) 10%, var(--color-surface-1));
+  border: 1px solid color-mix(in oklab, var(--k) 30%, var(--color-line));
+}
+.eg-done__tally > div[data-tone='amber'] { --k: var(--viz-1); }
+.eg-done__tally dt { font-size: var(--fs-text-sm); font-weight: var(--fw-semibold); color: var(--color-fg-muted); }
+.eg-done__tally dd { font-family: var(--font-mono); font-size: 2rem; font-weight: var(--fw-bold); color: var(--k); }
+
+/* ── «أوضة المذاكرة» ─────────────────────────────────────────────────────── */
+.eg-live {
+  position: relative;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.4);
+}
+.eg-live[data-on='true'] { background: var(--viz-6); box-shadow: 0 0 0 4px rgb(255 255 255 / 0.25); }
+.eg-live[data-on='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--viz-6);
+  animation: eg-pulse 1.8s var(--ease-out) infinite;
+}
+@keyframes eg-pulse {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eg-live[data-on='true']::after { animation: none; }
+}
+
+.eg-focus { display: grid; justify-items: center; gap: 1rem; padding-block: 1.5rem; text-align: center; }
+.eg-focus__tip { max-width: 30rem; }
+.eg-focus__actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.6rem; }
+.eg-focus__ask { flex-basis: 100%; font-weight: var(--fw-semibold); }
+.eg-focus__done { display: grid; gap: 0.25rem; }
+.eg-focus__lengths {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  max-width: 28rem;
+}
+.eg-focus__lengths .eg-weekday { padding-inline: 0.4rem; white-space: nowrap; }
+.eg-focus__lengths .eg-weekday[aria-pressed='true'] { border-color: var(--viz-3); background: var(--viz-3); }
+
+.eg-ring {
+  --k: var(--viz-3);
+  position: relative;
+  width: min(16rem, 70vw);
+  aspect-ratio: 1;
+}
+.eg-ring[data-tone='break'] { --k: var(--viz-6); }
+.eg-ring[data-tone='idle'] { --k: color-mix(in oklab, var(--viz-3) 55%, var(--color-line)); }
+.eg-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.eg-ring__track { fill: none; stroke: var(--color-surface-3); stroke-width: 12; }
+.eg-ring__fill {
+  fill: none;
+  stroke: var(--k);
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+.eg-ring__text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.25rem;
+}
+.eg-ring__time {
+  font-family: var(--font-mono);
+  font-size: clamp(2.5rem, 12vw, 3.75rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+.eg-ring__sub { color: var(--color-fg-muted); font-size: var(--fs-text-sm); font-weight: var(--fw-semibold); }
+
+.eg-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-block-end: 0.75rem;
+}
+.eg-bars__day { display: grid; justify-items: center; gap: 0.3rem; }
+.eg-bars__value { min-height: 1.1rem; font-size: var(--fs-text-xs); font-weight: var(--fw-bold); color: var(--viz-3); }
+.eg-bars__track {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  max-width: 2.25rem;
+  height: 6.5rem;
+  border-radius: var(--r-md);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+.eg-bars__fill {
+  display: block;
+  width: 100%;
+  min-block-size: 0;
+  border-radius: var(--r-md);
+  background: linear-gradient(to top, var(--viz-3), var(--viz-4));
+}
+.eg-bars__name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+@media (max-width: 480px) {
+  .eg-bars { gap: 0.25rem; }
+  .eg-bars__name { font-size: 0.62rem; letter-spacing: -0.02em; }
+}
+
+/* ── «دوري الأسبوع» ──────────────────────────────────────────────────────── */
+.eg-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.5rem;
+  margin-block: 0.5rem 1.25rem;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+/* Second, first, third — the first place in the middle, as on any podium. */
+.eg-podium__step[data-place='1'] { order: 2; --k: var(--print-gold); --tall: 6.5rem; }
+.eg-podium__step[data-place='2'] { order: 1; --k: color-mix(in oklab, var(--n-9) 70%, var(--viz-5)); --tall: 4.75rem; }
+.eg-podium__step[data-place='3'] { order: 3; --k: color-mix(in oklab, var(--viz-1) 62%, var(--viz-4)); --tall: 3.5rem; }
+.eg-podium__step { display: grid; justify-items: center; gap: 0.3rem; min-width: 0; text-align: center; }
+.eg-podium__avatar { box-shadow: 0 0 0 3px var(--k); }
+.eg-podium__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-bold);
+}
+.eg-podium__step[data-me='true'] .eg-podium__name { color: color-mix(in oklab, var(--viz-1) 75%, var(--color-fg)); }
+.eg-podium__points { color: var(--color-fg-muted); font-size: var(--fs-text-xs); font-weight: var(--fw-semibold); }
+.eg-podium__block {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: var(--tall);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: linear-gradient(to bottom, var(--k), color-mix(in oklab, var(--k) 55%, var(--n-12)));
+  color: var(--eg-on-hue);
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: var(--fw-bold);
+}
+
+.eg-ranks { display: grid; gap: 0.4rem; }
+.eg-rank {
+  --k: var(--color-line);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+}
+.eg-rank[data-top='1'] { --k: var(--print-gold); }
+.eg-rank[data-top='2'] { --k: color-mix(in oklab, var(--n-9) 70%, var(--viz-5)); }
+.eg-rank[data-top='3'] { --k: color-mix(in oklab, var(--viz-1) 62%, var(--viz-4)); }
+.eg-rank[data-me='true'] {
+  border-color: var(--viz-1);
+  background: color-mix(in oklab, var(--viz-1) 10%, var(--color-surface-1));
+}
+.eg-rank__place {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--k) 30%, var(--color-surface-2));
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+}
+.eg-rank__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-semibold);
+}
+.eg-rank__me {
+  margin-inline-start: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--viz-1);
+  color: var(--eg-on-hue);
+  font-size: var(--fs-text-xs);
+}
+.eg-rank__points { flex-shrink: 0; font-weight: var(--fw-bold); }
+
+.eg-sources { display: grid; gap: 0.45rem; }
+@media (min-width: 768px) {
+  .eg-sources { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.eg-source {
+  --k: var(--viz-1);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--k) 6%, var(--color-surface-1));
+  border: 1px solid color-mix(in oklab, var(--k) 18%, var(--color-line));
+}
+.eg-source .eg-row__icon { --k: var(--viz-1); }
+.eg-source__name { flex: 1; min-width: 0; font-weight: var(--fw-semibold); }
+.eg-source__each {
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--viz-1);
+  color: var(--eg-on-hue);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+}
+.eg-source__mine { color: var(--color-fg-muted); font-size: var(--fs-text-xs); font-weight: var(--fw-semibold); }
+
+.eg-privacy__row { display: flex; align-items: center; gap: 0.85rem; cursor: pointer; }
+.eg-privacy__text { display: grid; gap: 0.15rem; flex: 1; min-width: 0; }
+.eg-switch {
+  appearance: none;
+  position: relative;
+  width: 3rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: var(--r-full);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-line-strong);
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+.eg-switch::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0.15rem;
+  inset-inline-start: 0.15rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--color-surface-1);
+  box-shadow: var(--shadow-sm);
+  transition: inset-inline-start var(--d-hover) var(--ease-out);
+}
+.eg-switch:checked { background: var(--viz-1); border-color: var(--viz-1); }
+.eg-switch:checked::after { inset-inline-start: 1.5rem; }
+.eg-switch:focus-visible { outline: 2px solid var(--viz-1); outline-offset: 2px; }
+

@@ -223,8 +223,11 @@ export class DailyService {
     return true;
   }
 
-  /** The courses the student can open right now, minus the foundation course. */
-  private async courseIds(userId: string): Promise<string[]> {
+  /**
+   * The courses the student can open right now, minus the foundation course.
+   * Public for «بطاقات المراجعة», which deals from the same courses.
+   */
+  async courseIds(userId: string): Promise<string[]> {
     const enrollments = await this.enrollments.listOwn(userId);
     const ids = enrollments.filter((enrollment) => enrollment.accessActive).map((enrollment) => enrollment.courseId);
     if (ids.length === 0) return [];

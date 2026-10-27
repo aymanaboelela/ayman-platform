@@ -125,13 +125,16 @@ export const PROTECTED_PREFIXES = [
   '/backlog',
   // «شهاداتي» — `apiGetAuthed` على المسار والتسجيلات من غير شرط.
   '/certificates',
-  // The five engagement screens — each page reads its own `/api/me/*` row
-  // with `apiGetAuthed`, unconditionally.
+  // The engagement screens — each page reads its own `/api/me/*` row with
+  // `apiGetAuthed`, unconditionally.
   '/daily',
   '/plan',
   '/notes',
   '/badges',
   '/recap',
+  '/cards',
+  '/focus',
+  '/league',
   '/foundations',
   '/playground',
   /*

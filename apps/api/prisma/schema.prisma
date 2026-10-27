@@ -263,6 +263,9 @@ model User {
   lessonNotes                LessonNote[]
   studyPlan                  StudyPlan?
   studentBadges              StudentBadge[]
+  flashCards                 FlashCard[]
+  focusSessions              FocusSession[]
+  leagueSetting              LeagueSetting?
 
   @@unique([email])
   @@map("users")
@@ -6294,5 +6297,59 @@ model StudentBadge {
 
   @@id([userId, key])
   @@map("student_badges")
+  @@schema("app")
+}
+
+/// A question of the bank as a flash card, in one student's Leitner box.
+/// Only a card the student has been shown has a row; the rest of the bank is
+/// «جديد» by absence. `bank_entry_id` and not a version: an edited question is
+/// the same card, and the box it earned stays with it.
+model FlashCard {
+  userId      String   @map("user_id")
+  bankEntryId String   @map("bank_entry_id") @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
+  /// 1 … 5. Five is «حافظاها».
+  box         Int      @db.SmallInt
+  /// The Cairo day it is due again.
+  dueOn       DateTime @map("due_on") @db.Date
+  reviews     Int      @default(0)
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, bankEntryId])
+  @@index([userId, courseId, dueOn])
+  @@map("flash_cards")
+  @@schema("app")
+}
+
+/// One sitting of «أوضة المذاكرة». Open while `endedAt` is null.
+model FocusSession {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id")
+  startedAt DateTime  @default(now()) @map("started_at")
+  minutes   Int       @db.SmallInt
+  endedAt   DateTime? @map("ended_at")
+  /// The timer ran to the end. A sitting stopped early is kept — its minutes
+  /// count — but it is not a finished sitting.
+  completed Boolean   @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([startedAt])
+  @@map("focus_sessions")
+  @@schema("app")
+}
+
+/// «دوري الأسبوع» — a student who asked not to be named on the table.
+model LeagueSetting {
+  userId    String   @id @map("user_id")
+  hidden    Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("league_settings")
   @@schema("app")
 }

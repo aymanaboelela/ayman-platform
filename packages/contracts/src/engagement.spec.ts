@@ -5,6 +5,9 @@ import {
   currentStreak,
   daysBetween,
   daysInMonthKey,
+  leaguePoints,
+  leagueWeekStart,
+  nextCardBox,
   shiftDayKey,
   weekdayOf,
 } from './engagement';
@@ -61,3 +64,32 @@ describe('badge catalog', () => {
     }
   });
 });
+
+describe('flash card boxes', () => {
+  it('moves a known card up one box, to the top and no further', () => {
+    expect(nextCardBox(0, true)).toBe(1);
+    expect(nextCardBox(3, true)).toBe(4);
+    expect(nextCardBox(5, true)).toBe(5);
+  });
+
+  it('sends a card that was not known back to the first box', () => {
+    expect(nextCardBox(4, false)).toBe(1);
+    expect(nextCardBox(0, false)).toBe(1);
+  });
+});
+
+describe('the league week', () => {
+  it('starts on the Saturday on or before the day', () => {
+    expect(leagueWeekStart('2026-10-24')).toBe('2026-10-24');
+    expect(leagueWeekStart('2026-10-27')).toBe('2026-10-24');
+    expect(leagueWeekStart('2026-10-30')).toBe('2026-10-24');
+    expect(leagueWeekStart('2026-10-31')).toBe('2026-10-31');
+  });
+
+  it('weighs every source by its points', () => {
+    expect(leaguePoints({ lesson: 2, quiz: 1, homework: 1, daily: 3, dailyRight: 2, focus: 4 })).toBe(
+      20 + 15 + 10 + 15 + 10 + 20,
+    );
+  });
+});
+

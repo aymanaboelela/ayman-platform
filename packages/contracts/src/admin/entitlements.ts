@@ -135,7 +135,7 @@ export const FEATURE_DECLARATIONS = [
     defaultForTenant: false,
   },
   /*
-   * The five engagement features (`contracts/engagement.ts`). Ayman first, like
+   * The engagement features (`contracts/engagement.ts`). Ayman first, like
    * everything new: on for him, off on any other stack until the owner opens
    * them one by one. None carries his identity, so an opened stack works at
    * once with its own name on it.
@@ -168,6 +168,24 @@ export const FEATURE_DECLARATIONS = [
     key: 'monthlyRecap',
     nameAr: 'ملخص الشهر',
     descriptionAr: 'الشهر بالأرقام — ساعات المذاكرة والدرجات والأيام — وصورة ستوري يشيّرها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'flashCards',
+    nameAr: 'بطاقات المراجعة',
+    descriptionAr: 'أسئلة الكورس كبطاقات يقلبها الطالب، واللي مش حافظه بيرجعله لحد ما يحفظه.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'focusRoom',
+    nameAr: 'أوضة المذاكرة',
+    descriptionAr: 'تايمر مذاكرة ٢٥ دقيقة وبريك، وعدد الطلاب اللي بيذاكروا معاه في نفس اللحظة.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'weeklyLeague',
+    nameAr: 'دوري الأسبوع',
+    descriptionAr: 'نقط على شغل الأسبوع وترتيب مع طلاب نفس السنة، بيبدأ من جديد كل سبت.',
     defaultForTenant: false,
   },
 ] as const satisfies readonly FeatureDeclaration[];

@@ -26,7 +26,7 @@ function lines(value: unknown, path: string): Array<[string, string]> {
 
 const SCREENS = [
   ...lines(engagementCopy, 'engagement'),
-  ...(['daily', 'plan', 'notes', 'badges', 'recap'] as const).map(
+  ...(['daily', 'plan', 'notes', 'badges', 'recap', 'cards', 'focus', 'league'] as const).map(
     (key) => [`nav.${key}`, copy.nav[key]] as [string, string],
   ),
 ];

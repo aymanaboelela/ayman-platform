@@ -4,9 +4,11 @@ import {
   BookMarked,
   BookOpen,
   CalendarCheck,
+  Crown,
   Flame,
   Gamepad2,
   Library,
+  Layers,
   LayoutDashboard,
   ListTodo,
   Medal,
@@ -18,6 +20,7 @@ import {
   Swords,
   Terminal,
   Ticket,
+  Timer,
   Trophy,
   UserRound,
   Wallet,
@@ -97,6 +100,8 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    */
   { href: '/plan', labelAr: copy.nav.plan, icon: CalendarCheck, feature: 'studyPlan' },
   { href: '/daily', labelAr: copy.nav.daily, icon: Flame, feature: 'dailyQuestion' },
+  /* «أوضة المذاكرة» — the third habit: the timer to study by. */
+  { href: '/focus', labelAr: copy.nav.focus, icon: Timer, feature: 'focusRoom' },
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true },
   /*
    * «ترتيبي» — جنب «نتائجي» لأنه نفس السؤال من زاوية تانية: «درجاتي كام» ثم
@@ -104,6 +109,8 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
    */
   { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
+  /* «دوري الأسبوع» — the same «where am I», over this week's work instead of grades. */
+  { href: '/league', labelAr: copy.nav.league, icon: Crown, feature: 'weeklyLeague' },
   /*
    * «شهاداتي» — بعد «نتائجي» و«ترتيبي» لأنها آخر محطة في نفس السؤال: الدرجات،
    * المكان وسط الدفعة، وبعدين الكورس اللي اكتمل. ورا `shareCards` (`feature`
@@ -133,6 +140,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   ...(aymanOnly(true) ? [{ href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen }] : []),
   /* «ملاحظاتي» — the other study notebook, beside «غلطاتي». */
   { href: '/notes', labelAr: copy.nav.notes, icon: StickyNote, feature: 'lessonNotes' },
+  { href: '/cards', labelAr: copy.nav.cards, icon: Layers, feature: 'flashCards' },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student

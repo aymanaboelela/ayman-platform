@@ -4,6 +4,7 @@ import {
   CircleCheckBig,
   ClipboardPen,
   Flame,
+  Layers,
   GraduationCap,
   Lock,
   Medal,
@@ -12,6 +13,7 @@ import {
   StickyNote,
   Swords,
   Target,
+  Timer,
   type LucideProps,
 } from 'lucide-react';
 import type { BadgeFamilyKey, BadgeFamilyState, BadgesPayload, BadgeTier } from '@ayman/contracts/engagement';
@@ -32,6 +34,8 @@ const ICON: Record<BadgeFamilyKey, ComponentType<LucideProps>> = {
   notes: StickyNote,
   arena: Swords,
   courses: GraduationCap,
+  focus: Timer,
+  cards: Layers,
 };
 
 /** Formatted on the server only, so no device zone can mismatch hydration. */

@@ -15,7 +15,9 @@ import { Prisma } from '../../generated/prisma/client';
 import { isFeatureEnabled } from '../../common/entitlements';
 import { flagStartsEnabled } from '../../common/flag-default';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CardsService } from './cards.service';
 import { DailyService } from './daily.service';
+import { FocusService } from './focus.service';
 
 type Metrics = Record<BadgeFamilyKey, number>;
 
@@ -43,7 +45,7 @@ export function earnedKeys(metrics: Metrics, families: readonly BadgeFamilyKey[]
 }
 
 /**
- * «أوسمتي» — ten ladders of bronze, silver and gold over what a student did.
+ * «أوسمتي» — ladders of bronze, silver and gold over what a student did.
  *
  * ## Computed live, remembered once
  *
@@ -67,6 +69,8 @@ export class BadgesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly daily: DailyService,
+    private readonly focus: FocusService,
+    private readonly cards: CardsService,
   ) {}
 
   async forUser(userId: string, now: Date = new Date()): Promise<BadgesPayload> {
@@ -132,6 +136,8 @@ export class BadgesService {
       daily: isFeatureEnabled('dailyQuestion'),
       homework: isFeatureEnabled('homework'),
       notes: isFeatureEnabled('lessonNotes'),
+      focus: isFeatureEnabled('focusRoom'),
+      cards: isFeatureEnabled('flashCards'),
       mistakes,
       arena,
     };
@@ -146,7 +152,8 @@ export class BadgesService {
   }
 
   /**
-   * The ten numbers, in one round trip plus the daily card's days.
+   * The numbers, in one round trip plus the daily card's days, the focus
+   * sittings and the cards.
    *
    *   lessons   — lectures finished (a quiz LESSON is a sitting, counted next).
    *   quizzes   — distinct quizzes with a passing final mark.
@@ -156,9 +163,11 @@ export class BadgesService {
    *   notes     — notes written.
    *   arena     — arena matches won.
    *   courses   — enrolments finished.
+   *   focus     — focus sittings run to the end.
+   *   cards     — flash cards in the top box.
    */
   private async metrics(userId: string): Promise<Metrics> {
-    const [rows, days] = await Promise.all([
+    const [rows, days, focus, cards] = await Promise.all([
       this.prisma.$queryRaw<MetricRow[]>(Prisma.sql`
         SELECT
           (SELECT count(*) FROM "app"."lesson_progress" lp
@@ -180,6 +189,8 @@ export class BadgesService {
             WHERE e."user_id" = ${userId} AND (e."completed_at" IS NOT NULL OR e."progress_percent" >= 100))::int AS courses
       `),
       this.daily.answeredDays(userId),
+      this.focus.completedCount(userId),
+      this.cards.mastered(userId),
     ]);
     const row = rows[0];
     return {
@@ -193,6 +204,8 @@ export class BadgesService {
       courses: row?.courses ?? 0,
       daily: days.length,
       streak: bestStreak(new Set(days.map((day) => day.day))),
+      focus,
+      cards,
     };
   }
 }
