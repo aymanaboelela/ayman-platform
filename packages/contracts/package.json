@@ -151,6 +151,7 @@
     "./admin/media": "./src/admin/media.ts",
     "./admin/flags": "./src/admin/flags.ts",
     "./admin/entitlements": "./src/admin/entitlements.ts",
+    "./admin/owner-sign-in": "./src/admin/owner-sign-in.ts",
     "./admin/navigation": "./src/admin/navigation.ts",
     "./admin/home-blocks": "./src/admin/home-blocks.ts",
     "./admin/honor-board": "./src/admin/honor-board.ts",

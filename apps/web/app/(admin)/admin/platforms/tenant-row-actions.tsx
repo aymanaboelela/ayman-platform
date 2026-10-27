@@ -15,6 +15,8 @@ import { finalizeTenantAction, redeployTenantAction, updateTenantIdentityAction 
 const c = copy.admin.tenants;
 
 export interface TenantRowActionsProps {
+  /** `TENANT_KEY` — what «لوحته» signs its one-minute key for. */
+  tenantKey: string;
   composeId: string | null;
   name: string;
   /** `TENANT_SUBJECT` as set, or null for the default (programming). */
@@ -29,7 +31,7 @@ export interface TenantRowActionsProps {
  * the two that act on the stack — each disabled while its own request is in
  * flight, so a second press is not a second deploy queued behind the first.
  */
-export function TenantRowActions({ composeId, name, subject, appUrl, pendingHandover, webhookUrl }: TenantRowActionsProps) {
+export function TenantRowActions({ tenantKey, composeId, name, subject, appUrl, pendingHandover, webhookUrl }: TenantRowActionsProps) {
   const [redeploying, startRedeploy] = useTransition();
   const [finalizing, startFinalize] = useTransition();
   const [handedOver, setHandedOver] = useState(!pendingHandover);
@@ -90,8 +92,9 @@ export function TenantRowActions({ composeId, name, subject, appUrl, pendingHand
               <ExternalLink aria-hidden="true" className="size-4" />
               {c.open}
             </a>
+            {/* Signs the owner straight in — see `sign-in/[key]/route.ts`. */}
             <a
-              href={`${appUrl}/admin`}
+              href={`/admin/platforms/sign-in/${encodeURIComponent(tenantKey)}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface-3 px-3 text-[length:var(--fs-text-sm)] text-fg hover:bg-surface-4"

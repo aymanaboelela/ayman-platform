@@ -581,6 +581,12 @@ export const AUDIT_ACTIONS = [
   'montage:update',
   'montage:delete',
   'montage:publish',
+  /*
+   * «لوحته» — the platform owner opened this stack's admin from his control
+   * plane, with no password (`admin/owner-sign-in.ts`). The instructor's own
+   * log is where they can see that it happened and when.
+   */
+  'platform:owner-sign-in',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);
