@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { montageCopy } from '@ayman/contracts/copy/montage';
 import { actionErrorMessage } from '@/lib/stale-tab';
 
 /*
@@ -94,6 +95,10 @@ export interface UploadEntry {
   courseId: string;
   /** Set for a material's upload once its row exists; null for the lecture. */
   resourceId: string | null;
+  /** «المونتاج»: the hand-over's row, once the session open has made it. */
+  montageId?: string;
+  /** Where the corner card's «افتح» goes — the course editor when unset. */
+  href?: string;
   fileName: string;
   phase: UploadPhase;
   sent: number;
@@ -336,6 +341,7 @@ type Opened =
         parts: { partNumber: number; url: string }[];
         done?: { partNumber: number; etag: string }[];
         resourceId?: string;
+        montageId?: string;
       };
     }
   | { ok: false; message: string };
@@ -359,6 +365,13 @@ interface UploadTarget {
   ) => Promise<{ ok: true } | { ok: false; message: string }>;
   /** Told once, when the session is open (or could not be). */
   onOpened?: (opened: Opened) => void;
+  href?: string;
+  /**
+   * Told once the bucket has sealed the file. A hand-over has no encode to
+   * wait for, so its entry leaves the store here instead of sitting at
+   * «بيتجهز» — the screen that started it shows the finished row.
+   */
+  onFinished?: () => void;
 }
 
 async function run(target: UploadTarget, file: File): Promise<void> {
@@ -368,6 +381,7 @@ async function run(target: UploadTarget, file: File): Promise<void> {
     lessonId: target.lessonId,
     courseId,
     resourceId: target.resourceId,
+    ...(target.href === undefined ? {} : { href: target.href }),
     fileName: file.name,
     phase: 'uploading',
     sent: 0,
@@ -402,6 +416,7 @@ async function run(target: UploadTarget, file: File): Promise<void> {
 
   const { session } = opened;
   if (session.resourceId !== undefined) patch(key, { resourceId: session.resourceId });
+  if (session.montageId !== undefined) patch(key, { montageId: session.montageId });
   const savedKey = target.savedKey(session);
   sessions.set(key, { videoId: session.videoId, uploadId: session.uploadId });
   save(savedKey, {
@@ -424,6 +439,12 @@ async function run(target: UploadTarget, file: File): Promise<void> {
     }
     forgetSaved(savedKey);
     sessions.delete(key);
+    if (target.onFinished !== undefined) {
+      entries.delete(key);
+      emit();
+      target.onFinished();
+      return;
+    }
     patch(key, { phase: 'processing', sent: file.size, secondsLeft: 0 });
   } catch (error) {
     if (controller.signal.aborted) return;
@@ -643,4 +664,150 @@ export async function cancelResourceUpload(courseId: string, resourceId: string)
     const { abortResourceVideoUploadAction } = await actions();
     await abortResourceVideoUploadAction(courseId, resourceId, { videoId: session.videoId, uploadId: session.uploadId });
   }
+}
+
+/* ── «المونتاج» — the editor's hand-over ───────────────────────────────────
+ *
+ * The same transfer once more, for a file that belongs to no lesson yet. Its
+ * session open creates the row (like a material's), and it talks to the API
+ * from the browser rather than through a dashboard Server Action: the editor's
+ * account has no dashboard.
+ */
+
+const montageKey = (montageId: string): string => `montage:${montageId}`;
+
+/** Every hand-over this tab is sending. */
+export function useMontageUploads(): readonly UploadEntry[] {
+  return useUploads().filter((entry) => entry.key.startsWith('montage'));
+}
+
+export function savedMontageUpload(montageId: string): SavedUpload | null {
+  return savedUpload(montageKey(montageId));
+}
+
+/** The API's words when it sent any, never «montage request failed with 422». */
+function montageMessage(error: unknown): string {
+  if (error instanceof Error && 'detail' in error && typeof error.detail === 'string') return error.detail;
+  return montageCopy.uploadFailed;
+}
+
+function montageTarget(
+  key: string,
+  montageId: string | null,
+  open: () => Promise<Opened>,
+  options: { href: string; onOpened?: (opened: Opened) => void; onFinished: () => void },
+): UploadTarget {
+  return {
+    key,
+    courseId: '',
+    lessonId: '',
+    resourceId: null,
+    open,
+    href: options.href,
+    onOpened: options.onOpened,
+    onFinished: options.onFinished,
+    savedKey: (session) => montageKey(session.montageId ?? montageId ?? ''),
+    complete: async (session, parts) => {
+      const { montageApi } = await import('@/lib/montage-client');
+      try {
+        await montageApi.complete(session.montageId ?? montageId ?? '', { uploadId: session.uploadId, parts });
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, message: montageMessage(error) };
+      }
+    },
+  };
+}
+
+/**
+ * A fresh hand-over. Resolves once the row exists (or could not be made) —
+ * the screen adds it to the list then, and the parts keep flowing.
+ */
+export function startMontageUpload(
+  file: File,
+  contentType: string,
+  input: { title: string; note?: string },
+  options: { href: string; onFinished: (montageId: string) => void },
+): Promise<{ ok: true; montageId: string } | { ok: false; message: string }> {
+  fresh += 1;
+  const key = `montage-new:${Date.now()}:${fresh}`;
+  let montageId = '';
+  return new Promise((resolve) => {
+    void run(
+      montageTarget(
+        key,
+        null,
+        async () => {
+          const { montageApi } = await import('@/lib/montage-client');
+          try {
+            const session = await montageApi.start({
+              title: input.title,
+              ...(input.note === undefined ? {} : { note: input.note }),
+              fileName: file.name,
+              sizeBytes: file.size,
+              contentType: contentType as Parameters<typeof montageApi.start>[0]['contentType'],
+            });
+            montageId = session.videoId;
+            return { ok: true, session: { ...session, montageId: session.videoId } };
+          } catch (error) {
+            return { ok: false, message: montageMessage(error) };
+          }
+        },
+        {
+          href: options.href,
+          onFinished: () => options.onFinished(montageId),
+          onOpened: (opened) => {
+            if (opened.ok && opened.session.montageId !== undefined) {
+              resolve({ ok: true, montageId: opened.session.montageId });
+            } else {
+              entries.delete(key);
+              emit();
+              resolve({ ok: false, message: opened.ok ? montageCopy.failed : opened.message || montageCopy.failed });
+            }
+          },
+        },
+      ),
+      file,
+    );
+  });
+}
+
+/** «كمّل الرفع» for a hand-over — the same file, after the tab lost it. */
+export function resumeMontageUpload(
+  montageId: string,
+  file: File,
+  options: { href: string; onFinished: (montageId: string) => void },
+): Promise<void> {
+  return run(
+    montageTarget(
+      montageKey(montageId),
+      montageId,
+      async () => {
+        const { montageApi } = await import('@/lib/montage-client');
+        try {
+          const session = await montageApi.resume(montageId, { sizeBytes: file.size });
+          return { ok: true, session: { ...session, montageId } };
+        } catch (error) {
+          return { ok: false, message: montageMessage(error) };
+        }
+      },
+      { href: options.href, onFinished: () => options.onFinished(montageId) },
+    ),
+    file,
+  );
+}
+
+/**
+ * Stop sending in this tab and forget the session. The row and its parts are
+ * the API's to delete (`DELETE /api/montage/:id`) — the caller does that.
+ */
+export function stopMontageUpload(montageId: string): void {
+  const entry = [...entries.values()].find((candidate) => candidate.montageId === montageId);
+  const key = entry?.key ?? montageKey(montageId);
+  controllers.get(key)?.abort();
+  controllers.delete(key);
+  sessions.delete(key);
+  forgetSaved(montageKey(montageId));
+  entries.delete(key);
+  emit();
 }
