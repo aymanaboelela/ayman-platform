@@ -43,8 +43,15 @@ describe('landingForStaff', () => {
     expect(landingForStaff(designer)).toBe('/studio');
   });
 
+  it('sends a video editor to «المونتاج», not to an /admin that 404s for them', () => {
+    const editor = session('video_editor', ['montage:read', 'montage:write']);
+    expect(canOpenDashboard(editor)).toBe(false);
+    expect(landingForStaff(editor)).toBe('/montage');
+  });
+
   it('sends every other staff account to /admin, studio access or not', () => {
     expect(landingForStaff(session('owner', ['admin:access', 'design:read']))).toBe('/admin');
     expect(landingForStaff(session('owner', ['admin:access']))).toBe('/admin');
+    expect(landingForStaff(session('owner', ['admin:access', 'montage:read']))).toBe('/admin');
   });
 });
