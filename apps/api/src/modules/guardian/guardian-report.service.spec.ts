@@ -84,6 +84,8 @@ describe('GuardianReportService — the whole page over real rows', () => {
   const ids = {
     courses: [] as string[],
     attempts: [] as string[],
+    bankEntries: [] as string[],
+    categoryId: '',
     centerId: '',
   };
   const lesson: Record<string, string> = {};
@@ -294,6 +296,7 @@ describe('GuardianReportService — the whole page over real rows', () => {
     // notebook), and one essay on M1 still on the teacher's desk.
     const bank = new QuestionBankService(prisma, new AuditService(prisma));
     const category = await prisma.questionCategory.create({ data: { name: `gr-${stamp}` } });
+    ids.categoryId = category.id;
     const mcq = await bank.create(
       {
         type: 'mcq_single',
@@ -309,11 +312,13 @@ describe('GuardianReportService — the whole page over real rows', () => {
       adminId,
     );
     await bank.publish(mcq.versionId);
+    ids.bankEntries.push(mcq.bankEntryId);
     const essay = await bank.create(
       { type: 'essay', categoryId: category.id, stemHtml: '<p>اشرح</p>', defaultMark: 1, settings: {}, options: [] } as QuestionInput,
       adminId,
     );
     await bank.publish(essay.versionId);
+    ids.bankEntries.push(essay.bankEntryId);
     await prisma.attemptQuestion.createMany({
       data: [
         {
@@ -427,6 +432,12 @@ describe('GuardianReportService — the whole page over real rows', () => {
     await prisma.course.updateMany({ where: { id: { in: ids.courses } }, data: { examLessonId: null } });
     await prisma.course.deleteMany({ where: { id: { in: ids.courses } } });
     await prisma.studentProfile.deleteMany({ where: { userId: { in: [studentId, otherId] } } });
+    // The bank before the users — a question version's author is `Restrict`.
+    await prisma.questionBankEntry.deleteMany({ where: { id: { in: ids.bankEntries } } });
+    if (ids.categoryId) await prisma.questionCategory.deleteMany({ where: { id: ids.categoryId } });
+    // Every user this file made, the admin included — a left-behind admin
+    // fans every later spec's notifications out once more (fixture-admins).
+    await prisma.user.deleteMany({ where: { id: { in: [studentId, otherId, adminId] } } });
     await prisma.$disconnect();
   });
 
