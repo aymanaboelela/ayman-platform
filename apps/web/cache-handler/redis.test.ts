@@ -49,6 +49,36 @@ class FakeRedis {
     this.hashes.set(key, { ...(this.hashes.get(key) ?? {}), ...fields });
     return Object.keys(fields).length;
   }
+
+  // The three the new-build purge uses. `scan` pages two keys at a time so the
+  // cursor loop is actually exercised, not satisfied by one page — and, like
+  // real SCAN, its cursor survives the caller deleting what it was just given.
+  async get(key: string) {
+    this.guard();
+    const value = this.strings.get(key);
+    return value === undefined ? null : String(value);
+  }
+
+  async scan(cursor: string, _match: string, pattern: string) {
+    this.guard();
+    const prefix = pattern.replace(/\*$/, '');
+    const after = cursor === '0' ? '' : cursor.slice('after:'.length);
+    const keys = [...this.strings.keys()]
+      .filter((key) => key.startsWith(prefix) && key > after)
+      .sort();
+    const page = keys.slice(0, 2);
+    const next = keys.length > 2 ? `after:${page[page.length - 1]}` : '0';
+    return [next, page] as const;
+  }
+
+  async unlink(...keys: string[]) {
+    this.guard();
+    let removed = 0;
+    for (const key of keys) {
+      if (this.strings.delete(key) || this.hashes.delete(key)) removed += 1;
+    }
+    return removed;
+  }
 }
 
 /** The shape Next hands to `set` — a stream plus the four timing fields. */
@@ -259,6 +289,59 @@ describe('tags', () => {
     const cache = handler();
     await Promise.all([cache.refreshTags(), cache.refreshTags(), cache.refreshTags()]);
     expect(client.calls.hgetall).toBe(1);
+  });
+});
+
+describe('a new build', () => {
+  async function seed() {
+    const old = handler({ generation: 'build-a' });
+    for (const key of ['a', 'b', 'c', 'd', 'e']) await old.set(key, entry(`old ${key}`));
+    await old.updateTags(['branding']);
+  }
+
+  it('starts from an empty cache: nothing an older build wrote is served', async () => {
+    await seed();
+
+    const fresh = handler({ generation: 'build-b' });
+    for (const key of ['a', 'b', 'c', 'd', 'e']) expect(await fresh.get(key)).toBeUndefined();
+    expect([...client.strings.keys()].filter((key) => key.startsWith('next:cache:'))).toEqual([]);
+    expect(client.hashes.has('next:tags')).toBe(false);
+    expect(await client.get('next:generation')).toBe('build-b');
+  });
+
+  it('keeps the warm cache when the SAME build restarts', async () => {
+    await seed();
+
+    const restarted = handler({ generation: 'build-a' });
+    expect(await read(await restarted.get('a'))).toBe('old a');
+  });
+
+  it('purges once, not on every operation', async () => {
+    await seed();
+    const fresh = handler({ generation: 'build-b' });
+    await fresh.get('a');
+    await fresh.set('new', entry('written by build-b'));
+
+    expect(await read(await fresh.get('new'))).toBe('written by build-b');
+    // A second handler of the same build finds its own entry, not a wipe.
+    expect(await read(await handler({ generation: 'build-b' }).get('new'))).toBe('written by build-b');
+  });
+
+  it('serves from memory when the purge cannot reach Redis, then retries', async () => {
+    await seed();
+    const fresh = handler({ generation: 'build-b' });
+    client.failing = true;
+    await fresh.set('k', entry('memory only'));
+    expect(await read(await fresh.get('k'))).toBe('memory only');
+
+    client.failing = false;
+    expect(await fresh.get('a')).toBeUndefined();
+    expect(await client.get('next:generation')).toBe('build-b');
+  });
+
+  it('does nothing without a generation, which is every existing caller', async () => {
+    await seed();
+    expect(await read(await handler().get('a'))).toBe('old a');
   });
 });
 

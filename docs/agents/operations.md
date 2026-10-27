@@ -110,8 +110,17 @@ What the deploy job does:
 1. Fingerprints the currently served build.
 2. POSTs a Dokploy webhook for Ayman's stack and for each tenant URL in
    `DOKPLOY_TENANT_DEPLOY_URLS`.
-3. Polls for up to about 15 minutes until production serves the new build.
+3. Polls for up to about 25 minutes until production serves the new build.
 4. Smoke-tests the result.
+
+**Every build is clean.** `docker-compose.yml` sets `build.no_cache: true` on
+`api`, `web` and `wa`, so no layer from an earlier image is ever reused — on
+every stack, whichever trigger fired. On boot, a new web build wipes the
+`'use cache'` entries the previous build left in Redis (`next:cache:*`,
+`next:tags`; see `apps/web/cache-handler/redis.js`), while a plain restart of
+the same build keeps them. Nobody needs to clear a cache by hand after a
+deploy. The price is a cold build every time (~12 minutes; longer while
+another stack builds on the same server).
 
 **Dokploy also autodeploys on push by itself**, independently of the job. It always
 builds **`main` HEAD**, not the SHA that fired it.

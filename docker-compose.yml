@@ -90,6 +90,14 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      # Every deploy is a clean build: no layer from an earlier image is reused,
+      # on every stack, whichever trigger started it (the CI webhook or
+      # Dokploy's own push hook). The owner's standing rule after cached layers
+      # shipped a stale build more than once — a new tenant serving another
+      # teacher's page from a cached `next build` layer was the worst of them.
+      # Costs a full `pnpm install` per build; the deploy job's wait is sized
+      # for it.
+      no_cache: true
     restart: unless-stopped
     # ⚠️ عملية حقيقية (2026-10-04): 256 عملية zombie على سيرفر صبري وقت
     # انهيار الـCPU — `ffmpeg` اللي بيحوّل الفيديو بيتولد من هنا، وكل
@@ -326,6 +334,8 @@ services:
   wa:
     build:
       context: ./services/wa
+      # Clean build every deploy — see `api`.
+      no_cache: true
     restart: unless-stopped
     # نفس سبب `api` — الـhealthcheck بينفّذ عملية جوّه الكونتينر ده كل كام
     # ثانية برضو، وبدون `init` بتتراكم zombie مع الوقت.
@@ -368,6 +378,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      # Clean build every deploy — see `api`. The Redis `'use cache'` entries
+      # the previous build wrote are wiped by the new one at boot
+      # (`cache-handler/redis.js`, `purgeOtherBuilds`).
+      no_cache: true
       args:
         # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.
         NEXT_PUBLIC_APP_URL: ${APP_URL}

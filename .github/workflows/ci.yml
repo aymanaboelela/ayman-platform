@@ -863,9 +863,10 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # Its own poll loop is 90 x 10s = 15 minutes by design, so this has
-    # to sit above that or it would kill a deploy that was working.
-    timeout-minutes: 25
+    # Its own poll loop is 150 x 10s = 25 minutes (30 at most, once a restart
+    # extends it), so this has to sit above that or it would kill a deploy
+    # that was working.
+    timeout-minutes: 45
     # One deploy at a time, and never cancel one midway: a compose stack
     # interrupted between `down` and `up` is a site that is simply off. This
     # is its own concurrency group for that reason — the workflow-level group
@@ -1419,9 +1420,12 @@ jobs:
 
           # ## Why the deadline moves
           #
-          # 90 polls at 10s is 15 minutes, and it is sized for the fingerprint
-          # to change: a normal rebuild lands in ~6-7 minutes and a genuinely
-          # cold one — a Dockerfile edit invalidates every layer — in ~12.
+          # 150 polls at 10s is 25 minutes, and it is sized for the fingerprint
+          # to change. Every build is cold now — `docker-compose.yml` sets
+          # `no_cache: true`, so each deploy pays what only a Dockerfile edit
+          # used to: ~12 minutes measured, more while another stack builds on
+          # the same 4 cores. The old 15-minute window would fail deploys that
+          # land.
           #
           # But the OTHER exit needs five unbroken minutes AFTER the restart is
           # first seen, and a fixed deadline cannot give it that. Measured on
@@ -1435,11 +1439,11 @@ jobs:
           #
           # It cannot run away: a restart can only be OBSERVED inside the
           # window, so the latest one that can extend anything is poll 90, and
-          # the deadline is therefore bounded at 120 polls — 20 minutes — by
+          # the deadline is therefore bounded at 180 polls — 30 minutes — by
           # the arithmetic itself. An explicit cap here would be a branch that
           # can never be taken, which is worse than no cap at all: it reads as
           # a protection someone has thought about.
-          limit=90
+          limit=150
           restart_at=0
           stable=0
           i=0
