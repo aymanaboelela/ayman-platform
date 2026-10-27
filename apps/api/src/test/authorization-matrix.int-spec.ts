@@ -122,6 +122,7 @@ import { BooksService } from '../modules/books/books.service';
 import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
 import { ShareCardsModule } from '../modules/share-cards/share-cards.module';
+import { EngagementModule } from '../modules/engagement/engagement.module';
 import { ReferralsController } from '../modules/referrals/referrals.controller';
 import { AdminReferralsController } from '../modules/referrals/admin-referrals.controller';
 import { ReferralsService } from '../modules/referrals/referrals.service';
@@ -395,6 +396,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // already here. Its crons are inert without `ScheduleModule`, and the
         // Graph client is never called by a 401/403 row.
         SocialPostsModule,
+        // «سؤال اليوم» / «ملاحظاتي» / «خطة المذاكرة» / «أوسمتي» / «ملخص الشهر» —
+        // all five entitlements open here (no TENANT_KEY = Ayman's stack).
+        EngagementModule,
         AdminProfileModule,
       ],
       providers: [
@@ -1000,6 +1004,48 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'share cards certificates: student', method: 'get', path: () => '/api/me/share-cards/certificates', actor: 'student', status: 200 },
     { label: 'share cards result: anonymous', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'share cards result: student, an attempt that is not theirs', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'student', status: 404 },
+    // Student engagement (`modules/engagement`). Every route is the session's
+    // own: no student id in any path, so the rows are 401 for anonymous and the
+    // student's own answer — a note or a lesson that is not theirs is 404.
+    { label: 'daily question: anonymous', method: 'get', path: () => '/api/me/daily', actor: 'anonymous', status: 401 },
+    { label: 'daily question: student', method: 'get', path: () => '/api/me/daily', actor: 'student', status: 200 },
+    { label: 'daily answer: anonymous', method: 'post', path: () => '/api/me/daily/answer', actor: 'anonymous', status: 401, body: () => ({ optionId: randomUUID() }) },
+    { label: 'daily answer: student, no card dealt today', method: 'post', path: () => '/api/me/daily/answer', actor: 'student', status: 404, body: () => ({ optionId: randomUUID() }) },
+    { label: 'notes notebook: anonymous', method: 'get', path: () => '/api/me/notes', actor: 'anonymous', status: 401 },
+    { label: 'notes notebook: student', method: 'get', path: () => '/api/me/notes', actor: 'student', status: 200 },
+    { label: 'lesson notes: anonymous', method: 'get', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'anonymous', status: 401 },
+    { label: 'lesson notes: student, a lesson that is not theirs', method: 'get', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'student', status: 404 },
+    { label: 'lesson note create: anonymous', method: 'post', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'anonymous', status: 401, body: () => ({ body: 'x' }) },
+    { label: 'lesson note create: student, a lesson that is not theirs', method: 'post', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'student', status: 404, body: () => ({ body: 'x' }) },
+    { label: 'note edit: anonymous', method: 'patch', path: () => `/api/me/notes/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ body: 'x' }) },
+    { label: 'note edit: student, a note that is not theirs', method: 'patch', path: () => `/api/me/notes/${randomUUID()}`, actor: 'student', status: 404, body: () => ({ body: 'x' }) },
+    { label: 'note delete: anonymous', method: 'delete', path: () => `/api/me/notes/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'note delete: student, a note that is not theirs', method: 'delete', path: () => `/api/me/notes/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'study plan: anonymous', method: 'get', path: () => '/api/me/plan', actor: 'anonymous', status: 401 },
+    { label: 'study plan: student', method: 'get', path: () => '/api/me/plan', actor: 'student', status: 200 },
+    { label: 'study plan save: anonymous', method: 'put', path: () => '/api/me/plan', actor: 'anonymous', status: 401, body: () => ({ examDate: '2027-06-01', daysOff: [] }) },
+    { label: 'study plan clear: anonymous', method: 'delete', path: () => '/api/me/plan', actor: 'anonymous', status: 401 },
+    { label: 'badges: anonymous', method: 'get', path: () => '/api/me/badges', actor: 'anonymous', status: 401 },
+    { label: 'badges: student', method: 'get', path: () => '/api/me/badges', actor: 'student', status: 200 },
+    { label: 'monthly recap: anonymous', method: 'get', path: () => '/api/me/recap', actor: 'anonymous', status: 401 },
+    { label: 'monthly recap: student', method: 'get', path: () => '/api/me/recap', actor: 'student', status: 200 },
+    { label: 'flash cards: anonymous', method: 'get', path: () => '/api/me/cards', actor: 'anonymous', status: 401 },
+    { label: 'flash cards: student', method: 'get', path: () => '/api/me/cards', actor: 'student', status: 200 },
+    { label: 'flash cards summary: anonymous', method: 'get', path: () => '/api/me/cards/summary', actor: 'anonymous', status: 401 },
+    { label: 'flash cards summary: student', method: 'get', path: () => '/api/me/cards/summary', actor: 'student', status: 200 },
+    { label: 'flash card review: anonymous', method: 'post', path: () => '/api/me/cards/review', actor: 'anonymous', status: 401, body: () => ({ bankEntryId: randomUUID(), courseId: randomUUID(), knew: true }) },
+    { label: 'flash card review: student, not their course', method: 'post', path: () => '/api/me/cards/review', actor: 'student', status: 404, body: () => ({ bankEntryId: randomUUID(), courseId: randomUUID(), knew: true }) },
+    { label: 'focus room: anonymous', method: 'get', path: () => '/api/me/focus', actor: 'anonymous', status: 401 },
+    { label: 'focus room: student', method: 'get', path: () => '/api/me/focus', actor: 'student', status: 200 },
+    { label: 'focus start: anonymous', method: 'post', path: () => '/api/me/focus/start', actor: 'anonymous', status: 401, body: () => ({ minutes: 25 }) },
+    { label: 'focus stop: anonymous', method: 'post', path: () => '/api/me/focus/stop', actor: 'anonymous', status: 401 },
+    { label: 'focus stop: student, nothing running', method: 'post', path: () => '/api/me/focus/stop', actor: 'student', status: 201 },
+    { label: 'weekly league: anonymous', method: 'get', path: () => '/api/me/league', actor: 'anonymous', status: 401 },
+    { label: 'weekly league: student', method: 'get', path: () => '/api/me/league', actor: 'student', status: 200 },
+    { label: 'league summary: anonymous', method: 'get', path: () => '/api/me/league/summary', actor: 'anonymous', status: 401 },
+    { label: 'league summary: student', method: 'get', path: () => '/api/me/league/summary', actor: 'student', status: 200 },
+    { label: 'league settings: anonymous', method: 'put', path: () => '/api/me/league/settings', actor: 'anonymous', status: 401, body: () => ({ hidden: false }) },
+    { label: 'league settings: student', method: 'put', path: () => '/api/me/league/settings', actor: 'student', status: 204, body: () => ({ hidden: false }) },
     // «دعوة صحابك» — `payment:submit` (self-scoped) + فيتشر `referrals`، مفتوحة هنا
     // لأن التستات بتجري كستاك أيمن. الأدمن: `marketing:read`/`marketing:write`،
     // والإلغاء `payment:review` لأنه بيرجّع فلوس من محفظتين.

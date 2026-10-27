@@ -448,6 +448,15 @@ export const copy = {
     /** «دفتر غلطاتي». الكوبي كلها في `copy/mistakes.ts`. */
     mistakes: 'غلطاتي',
     certificates: 'شهاداتي',
+    /** The engagement screens — every other word on them is `copy/engagement.ts`. */
+    daily: 'سؤال اليوم',
+    plan: 'خطة المذاكرة',
+    notes: 'ملاحظاتي',
+    badges: 'أوسمتي',
+    recap: 'ملخص الشهر',
+    cards: 'بطاقات المراجعة',
+    focus: 'أوضة المذاكرة',
+    league: 'دوري الأسبوع',
     /** «دعوة صحابك» — the share link. Nominal, not «ادعي»: one label for every reader. */
     invite: 'دعوة صحابك',
     profile: 'بروفايلي',

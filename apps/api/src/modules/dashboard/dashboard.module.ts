@@ -25,6 +25,10 @@ import { SCORE_FEED } from './score-feed';
    * exact set of facts a student asks the assistant about. Exporting
    * `PathService` or the score feed would widen what the assistant can reach
    * for no question it needs to answer.
+   *
+   * `BacklogService` is the second export, for «خطة المذاكرة»: the plan is the
+   * backlog spread over days, and it must be the SAME backlog — the same gate,
+   * the same months — or the plan would list doors the backlog says are shut.
    */
   // `PathService` and `BacklogService` too, for the guardian report — which
   // must count «المتراكم» with the same gate the student's own screen uses,

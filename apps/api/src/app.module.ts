@@ -65,6 +65,7 @@ import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { SocialPostsModule } from './modules/social-posts/social-posts.module';
+import { EngagementModule } from './modules/engagement/engagement.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
 
 @Module({
@@ -207,6 +208,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     ReferralsModule,
     AdminMobileModule,
     SocialPostsModule,
+    EngagementModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,
   ],

@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, PlayerVideo } from '@ayman/contracts/progress';
 import { posterBesidePlaylist } from '@ayman/contracts/video';
 import { cn } from '@ayman/ui/lib/cn';
+import { publishPlayer } from '@/lib/engagement/player-bridge';
 import { formatDuration } from '@/lib/format';
 import {
   FRAME_ALLOW,
@@ -816,6 +817,47 @@ export function VideoLesson({
     setPlainFrame(false);
     void startYouTube(startedAt);
   }, [startYouTube, startedAt]);
+
+  /*
+   * «ملاحظاتي» beside the player reads the second and seeks through
+   * `player-bridge` rather than through props — see there. Published only
+   * while this player can actually answer: the plain embed (no API) and a
+   * lecture still processing publish nothing, and the panel offers no «on
+   * this minute» for them.
+   *
+   * Seeking a poster STARTS it at that second — the tap on the note is the
+   * gesture `activate` needs. Seeking a running player moves it and plays.
+   */
+  useEffect(() => {
+    if (plainFrame || stillProcessing) {
+      publishPlayer(null);
+      return;
+    }
+    publishPlayer({
+      now: () => {
+        if (!activated || !player) return null;
+        const at = player.getCurrentTime();
+        return Number.isFinite(at) ? Math.floor(at) : null;
+      },
+      seek: (seconds) => {
+        if (!activated) {
+          void activate(seconds);
+          return;
+        }
+        if (youtube) {
+          youtube.seekTo(seconds, true);
+          youtube.playVideo();
+          return;
+        }
+        const element = shellRef.current?.querySelector('video');
+        if (element) {
+          element.currentTime = seconds;
+          void Promise.resolve(element.play()).catch(() => undefined);
+        }
+      },
+    });
+    return () => publishPlayer(null);
+  }, [activate, activated, plainFrame, player, stillProcessing, youtube]);
 
   // The frame replaced the node React rendered, so React's className update
   // lands nowhere — it is written onto the frame itself.

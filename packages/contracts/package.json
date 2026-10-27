@@ -168,6 +168,8 @@
     "./copy/mistakes": "./src/copy/mistakes.ts",
     "./backlog": "./src/backlog.ts",
     "./copy/backlog": "./src/copy/backlog.ts",
+    "./engagement": "./src/engagement.ts",
+    "./copy/engagement": "./src/copy/engagement.ts",
     "./copy/social-posts": "./src/copy/social-posts.ts",
     "./social/posts": "./src/social/posts.ts",
     "./social/caption": "./src/social/caption.ts",

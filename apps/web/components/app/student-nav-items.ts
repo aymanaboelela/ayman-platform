@@ -3,17 +3,25 @@ import {
   BarChart3,
   BookMarked,
   BookOpen,
+  CalendarCheck,
+  Crown,
+  Flame,
   Gamepad2,
   Gift,
   Library,
+  Layers,
   LayoutDashboard,
   ListTodo,
+  Medal,
   MonitorSmartphone,
   NotebookPen,
   Route,
+  Sparkles,
+  StickyNote,
   Swords,
   Terminal,
   Ticket,
+  Timer,
   Trophy,
   UserRound,
   Wallet,
@@ -85,6 +93,16 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * Ayman's stack only (asked for that way); the API answers 404 elsewhere.
    */
   ...(aymanOnly(true) ? [{ href: '/backlog', labelAr: copy.nav.backlog, icon: ListTodo }] : []),
+  /*
+   * «خطة المذاكرة» and «سؤال اليوم» — the two daily habits, right under the
+   * backlog the plan is built from. Behind their entitlements (`feature`):
+   * on for Ayman, and they appear by themselves on any stack the owner opens
+   * them for.
+   */
+  { href: '/plan', labelAr: copy.nav.plan, icon: CalendarCheck, feature: 'studyPlan' },
+  { href: '/daily', labelAr: copy.nav.daily, icon: Flame, feature: 'dailyQuestion' },
+  /* «أوضة المذاكرة» — the third habit: the timer to study by. */
+  { href: '/focus', labelAr: copy.nav.focus, icon: Timer, feature: 'focusRoom' },
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true },
   /*
    * «ترتيبي» — جنب «نتائجي» لأنه نفس السؤال من زاوية تانية: «درجاتي كام» ثم
@@ -92,12 +110,17 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
    */
   { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
+  /* «دوري الأسبوع» — the same «where am I», over this week's work instead of grades. */
+  { href: '/league', labelAr: copy.nav.league, icon: Crown, feature: 'weeklyLeague' },
   /*
    * «شهاداتي» — بعد «نتائجي» و«ترتيبي» لأنها آخر محطة في نفس السؤال: الدرجات،
    * المكان وسط الدفعة، وبعدين الكورس اللي اكتمل. ورا `shareCards` (`feature`
    * فوق): مفتوحة عند أيمن، وبتظهر عند أي مدرّس صاحب المنصة يفتحهاله.
    */
+  /* «أوسمتي» before «شهاداتي»: the ladder first, the paper at the top of it. */
+  { href: '/badges', labelAr: copy.nav.badges, icon: Medal, feature: 'badges' },
   { href: '/certificates', labelAr: copy.nav.certificates, icon: Award, feature: 'shareCards' },
+  { href: '/recap', labelAr: copy.nav.recap, icon: Sparkles, feature: 'monthlyRecap' },
   /*
    * «تحدّي الأسئلة» — ورا فيتشر `quizGame`: مفتوحة عند أيمن (اتطلبت له)،
    * ومقفولة على أي ستاك تاني لحد ما صاحب المنصة يفتحها؛ الصف بيظهر لوحده
@@ -116,6 +139,9 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * `mistakes.enabled` مفتوح عنده افتراضيًا ومقفول عند الباقي.
    */
   ...(aymanOnly(true) ? [{ href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen }] : []),
+  /* «ملاحظاتي» — the other study notebook, beside «غلطاتي». */
+  { href: '/notes', labelAr: copy.nav.notes, icon: StickyNote, feature: 'lessonNotes' },
+  { href: '/cards', labelAr: copy.nav.cards, icon: Layers, feature: 'flashCards' },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student
