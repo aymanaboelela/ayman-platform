@@ -93,6 +93,7 @@ export function ReviewDeck({ initial }: { initial: AdminPaymentList }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [zoomed, setZoomed] = useState(false);
+  const [lastDecision, setLastDecision] = useState<string | null>(null);
 
   const deck = useMemo(() => {
     const open = data.rows.filter((row) => !decided.has(row.id));
@@ -118,7 +119,9 @@ export function ReviewDeck({ initial }: { initial: AdminPaymentList }) {
     setDecided((previous) => new Set([...previous, row.id]));
     setLater((previous) => previous.filter((id) => id !== row.id));
     setZoomed(false);
-    toast.success(formatCopy(sentence, { name: row.studentName }));
+    // Inline, not a toast: on a phone the toast lands exactly on the two
+    // buttons the next decision needs, and sits there for four seconds.
+    setLastDecision(formatCopy(sentence, { name: row.studentName }));
     refreshPendingCount();
   }
 
@@ -174,6 +177,15 @@ export function ReviewDeck({ initial }: { initial: AdminPaymentList }) {
       {current ? (
         <>
           <ProgressBar done={done} total={total} />
+          {lastDecision ? (
+            <p
+              role="status"
+              className="mt-2 flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-ok"
+            >
+              <Check className="size-4" aria-hidden="true" />
+              {lastDecision}
+            </p>
+          ) : null}
 
           <article key={current.id} className="mt-4 rounded-xl border border-line bg-surface-2 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -307,7 +319,7 @@ export function ReviewDeck({ initial }: { initial: AdminPaymentList }) {
               <DialogHeader>
                 <DialogTitle>{cp.rejectPromptTitle}</DialogTitle>
               </DialogHeader>
-              <div>
+              <div className="mb-2">
                 <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.quickReasonsLabel}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {c.quickReasons.map((quick) => (

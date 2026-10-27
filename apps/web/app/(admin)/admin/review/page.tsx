@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy/admin';
 import { AdminPaymentListSchema } from '@ayman/contracts/admin/payments';
@@ -20,11 +21,25 @@ export const metadata = { title: c.eyebrow };
  * five columns, a thumbnail the size of a thumb. Here the screenshot is the
  * whole screen and the two buttons are where the thumb already is.
  *
+ * The read sits in its own `<Suspense>`: with `cacheComponents` an uncached
+ * fetch at the page's top level is reported as a prerender error in dev
+ * («encountered uncached data during prerendering»), and the skeleton is
+ * what a phone shows for the half second the queue takes anyway.
+ */
+export default function AdminReviewPage() {
+  return (
+    <Suspense fallback={<ReviewSkeleton />}>
+      <ReviewBody />
+    </Suspense>
+  );
+}
+
+/**
  * `notFound()` rather than a 403 on both gates, like every feature-gated
  * admin page: the API is the real lock (`payment:read` on the list route),
  * this only decides whether the page exists.
  */
-export default async function AdminReviewPage() {
+async function ReviewBody() {
   const [session, features] = await Promise.all([getSession(), getEntitlements()]);
   if (!features.adminMobile || !can(session, 'payment:read')) notFound();
 
@@ -34,4 +49,14 @@ export default async function AdminReviewPage() {
   );
 
   return <ReviewDeck initial={initial} />;
+}
+
+function ReviewSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-lg" aria-hidden="true">
+      <div className="h-4 w-24 rounded bg-surface-3" />
+      <div className="mt-3 h-8 w-56 rounded bg-surface-3" />
+      <div className="mt-8 h-[60dvh] rounded-xl border border-line bg-surface-2" />
+    </div>
+  );
 }
