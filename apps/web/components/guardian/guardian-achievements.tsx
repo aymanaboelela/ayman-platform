@@ -17,7 +17,11 @@ import { SectionHead } from './section-head';
  * sends the podium the student's own `/rank` page draws.
  */
 export function GuardianAchievements({ view }: { view: GuardianView }) {
-  const { rank, honorBoard, certificates, weakTopics } = view;
+  const { honorBoard, certificates, weakTopics } = view;
+  // A place in the cohort is news only once there is something behind it:
+  // a brand-new student is «#40 — أحسن من 0%», which reads as a verdict.
+  const rank =
+    view.rank && view.rank.rank !== null && view.rank.points > 0 ? { ...view.rank, rank: view.rank.rank } : null;
   if (!rank && !honorBoard && !certificates && !weakTopics) return null;
   const certCount = certificates ? certificates.units.length + certificates.exams.length : 0;
 
@@ -25,7 +29,7 @@ export function GuardianAchievements({ view }: { view: GuardianView }) {
     <section className="gd-section" data-tone="exams" aria-labelledby="gd-achievements">
       <SectionHead id="gd-achievements" title={c.achievements.title} />
       <div className="gd-achieve">
-        {rank && rank.rank !== null ? (
+        {rank ? (
           <article className="gd-badge" data-tone="rank">
             <span className="gd-badge__icon" aria-hidden="true">
               <Crown className="size-6" />

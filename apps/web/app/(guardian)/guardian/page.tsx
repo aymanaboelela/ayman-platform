@@ -53,7 +53,9 @@ export default async function GuardianPage() {
     <main className="gd">
       <GuardianHero view={view} now={now} />
       <GuardianStats view={view} />
-      <GuardianAttention items={attentionItems(view, now)} />
+      {/* No course yet means nothing to follow up — a green «كله تمام» there
+          would be a reassurance about nothing. */}
+      {view.courses.length > 0 ? <GuardianAttention items={attentionItems(view, now)} /> : null}
       <GuardianCourses courses={view.courses} now={now} />
       <GuardianMarks quizzes={view.quizzes} />
       {view.homework ? <GuardianHomework homework={view.homework} now={now} /> : null}
