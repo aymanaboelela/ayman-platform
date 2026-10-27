@@ -12,6 +12,22 @@ import {
   type RunState,
 } from '@ayman/contracts/marketing/pacing';
 
+/**
+ * The mechanics below are exercised on a fixed, round configuration — the
+ * pre-2026-10 defaults — so the arithmetic in each assertion stays readable
+ * and does not shift every time the shipped defaults are tuned. What the
+ * shipped defaults ARE is pinned separately, at the bottom.
+ */
+const CLASSIC: Pacing = {
+  minDelaySeconds: 30,
+  maxDelaySeconds: 90,
+  batchSize: 30,
+  batchPauseMinutes: 10,
+  dailyCap: 200,
+  windowStartHour: 10,
+  windowEndHour: 22,
+};
+
 /** A fresh campaign that has sent nothing. */
 const FRESH: RunState = { sentInBatch: 0, sentToday: 0, dayKey: null };
 
@@ -45,29 +61,29 @@ describe('cairo wall clock', () => {
 describe('withinWindow', () => {
   it('leaves an instant inside the window alone', () => {
     const at = cairo(2026, 8, 23, 15);
-    expect(withinWindow(at, DEFAULT_PACING).getTime()).toBe(at.getTime());
+    expect(withinWindow(at, CLASSIC).getTime()).toBe(at.getTime());
   });
 
   it('pushes an early-morning instant to this morning’s opening', () => {
-    expect(withinWindow(cairo(2026, 8, 23, 6), DEFAULT_PACING).toISOString()).toBe(
+    expect(withinWindow(cairo(2026, 8, 23, 6), CLASSIC).toISOString()).toBe(
       cairo(2026, 8, 23, 10).toISOString(),
     );
   });
 
   it('pushes a night instant to tomorrow’s opening', () => {
-    expect(withinWindow(cairo(2026, 8, 23, 23, 40), DEFAULT_PACING).toISOString()).toBe(
+    expect(withinWindow(cairo(2026, 8, 23, 23, 40), CLASSIC).toISOString()).toBe(
       cairo(2026, 8, 24, 10).toISOString(),
     );
   });
 
   it('treats the end hour as exclusive — 22:00 is already closed', () => {
-    expect(withinWindow(cairo(2026, 8, 23, 22), DEFAULT_PACING).toISOString()).toBe(
+    expect(withinWindow(cairo(2026, 8, 23, 22), CLASSIC).toISOString()).toBe(
       cairo(2026, 8, 24, 10).toISOString(),
     );
   });
 
   it('rolls the month over', () => {
-    expect(withinWindow(cairo(2026, 8, 31, 23), DEFAULT_PACING).toISOString()).toBe(
+    expect(withinWindow(cairo(2026, 8, 31, 23), CLASSIC).toISOString()).toBe(
       cairo(2026, 9, 1, 10).toISOString(),
     );
   });
@@ -75,17 +91,17 @@ describe('withinWindow', () => {
 
 describe('maySendAt', () => {
   it('refuses outside the window', () => {
-    expect(maySendAt(cairo(2026, 8, 23, 3), DEFAULT_PACING, FRESH)).toBe(false);
+    expect(maySendAt(cairo(2026, 8, 23, 3), CLASSIC, FRESH)).toBe(false);
   });
 
   it('refuses once the day’s cap is spent', () => {
     const spent: RunState = { sentInBatch: 0, sentToday: 200, dayKey: '2026-08-23' };
-    expect(maySendAt(cairo(2026, 8, 23, 15), DEFAULT_PACING, spent)).toBe(false);
+    expect(maySendAt(cairo(2026, 8, 23, 15), CLASSIC, spent)).toBe(false);
   });
 
   it('allows the same counters on the NEXT day — the cap is per day', () => {
     const spent: RunState = { sentInBatch: 0, sentToday: 200, dayKey: '2026-08-23' };
-    expect(maySendAt(cairo(2026, 8, 24, 15), DEFAULT_PACING, spent)).toBe(true);
+    expect(maySendAt(cairo(2026, 8, 24, 15), CLASSIC, spent)).toBe(true);
   });
 });
 
@@ -109,18 +125,18 @@ describe('nextSend', () => {
   const now = cairo(2026, 8, 23, 12);
 
   it('uses the low end of the range at jitter 0', () => {
-    const next = nextSend(now, DEFAULT_PACING, FRESH, 0);
+    const next = nextSend(now, CLASSIC, FRESH, 0);
     expect(next.reason).toBe('gap');
     expect((next.at.getTime() - now.getTime()) / 1000).toBe(30);
   });
 
   it('uses the high end at jitter just under 1 — the range is inclusive', () => {
-    const next = nextSend(now, DEFAULT_PACING, FRESH, 0.999);
+    const next = nextSend(now, CLASSIC, FRESH, 0.999);
     expect((next.at.getTime() - now.getTime()) / 1000).toBe(90);
   });
 
   it('counts the message that was just sent', () => {
-    expect(nextSend(now, DEFAULT_PACING, FRESH, 0).state).toEqual({
+    expect(nextSend(now, CLASSIC, FRESH, 0).state).toEqual({
       sentInBatch: 1,
       sentToday: 1,
       dayKey: '2026-08-23',
@@ -129,7 +145,7 @@ describe('nextSend', () => {
 
   it('pauses after a full batch and starts the next one at zero', () => {
     const state: RunState = { sentInBatch: 29, sentToday: 29, dayKey: '2026-08-23' };
-    const next = nextSend(now, DEFAULT_PACING, state, 0.5);
+    const next = nextSend(now, CLASSIC, state, 0.5);
     expect(next.reason).toBe('batch-pause');
     expect((next.at.getTime() - now.getTime()) / 60000).toBe(10);
     expect(next.state.sentInBatch).toBe(0);
@@ -138,7 +154,7 @@ describe('nextSend', () => {
 
   it('waits for tomorrow’s window once the cap is reached, not ten minutes', () => {
     const state: RunState = { sentInBatch: 29, sentToday: 199, dayKey: '2026-08-23' };
-    const next = nextSend(now, DEFAULT_PACING, state, 0.5);
+    const next = nextSend(now, CLASSIC, state, 0.5);
     expect(next.reason).toBe('daily-cap');
     expect(next.at.toISOString()).toBe(cairo(2026, 8, 24, 10).toISOString());
     // The cap outranks the batch pause: a burst boundary at the same moment
@@ -148,50 +164,50 @@ describe('nextSend', () => {
 
   it('clamps a gap that would land after closing time', () => {
     const late = cairo(2026, 8, 23, 21, 59);
-    const next = nextSend(late, DEFAULT_PACING, FRESH, 0.999);
+    const next = nextSend(late, CLASSIC, FRESH, 0.999);
     expect(next.reason).toBe('outside-window');
     expect(next.at.toISOString()).toBe(cairo(2026, 8, 24, 10).toISOString());
   });
 
   it('rolls the daily counter itself when resumed on a later day', () => {
     const stale: RunState = { sentInBatch: 0, sentToday: 200, dayKey: '2026-08-20' };
-    const next = nextSend(now, DEFAULT_PACING, stale, 0);
+    const next = nextSend(now, CLASSIC, stale, 0);
     expect(next.reason).toBe('gap');
     expect(next.state).toEqual({ sentInBatch: 1, sentToday: 1, dayKey: '2026-08-23' });
   });
 
   it('never schedules a gap shorter than the minimum, at any jitter', () => {
     for (let i = 0; i < 100; i += 1) {
-      const next = nextSend(now, DEFAULT_PACING, FRESH, i / 100);
+      const next = nextSend(now, CLASSIC, FRESH, i / 100);
       const seconds = (next.at.getTime() - now.getTime()) / 1000;
-      expect(seconds).toBeGreaterThanOrEqual(DEFAULT_PACING.minDelaySeconds);
-      expect(seconds).toBeLessThanOrEqual(DEFAULT_PACING.maxDelaySeconds);
+      expect(seconds).toBeGreaterThanOrEqual(CLASSIC.minDelaySeconds);
+      expect(seconds).toBeLessThanOrEqual(CLASSIC.maxDelaySeconds);
     }
   });
 });
 
 describe('estimateMinutes', () => {
   it('is zero for an empty audience', () => {
-    expect(estimateMinutes(0, DEFAULT_PACING)).toBe(0);
+    expect(estimateMinutes(0, CLASSIC)).toBe(0);
   });
 
   it('counts the batch pauses inside a single burst run', () => {
     // 60 messages at a 60s mean = 60 minutes, plus one pause between the two
     // bursts (the pause after the last message is not waited on).
-    expect(estimateMinutes(60, DEFAULT_PACING)).toBe(70);
+    expect(estimateMinutes(60, CLASSIC)).toBe(70);
   });
 
   it('spreads a cohort over days once the cap bites', () => {
     // 4500 students at 200/day is 23 days — the number that should make
     // somebody pick a smaller audience.
-    const days = estimateMinutes(4500, DEFAULT_PACING) / 60 / 24;
+    const days = estimateMinutes(4500, CLASSIC) / 60 / 24;
     expect(days).toBeGreaterThan(21);
     expect(days).toBeLessThan(25);
   });
 
   it('scales with the cap rather than ignoring it', () => {
-    const slow = estimateMinutes(1000, DEFAULT_PACING);
-    const fast = estimateMinutes(1000, { ...DEFAULT_PACING, dailyCap: 1000 });
+    const slow = estimateMinutes(1000, CLASSIC);
+    const fast = estimateMinutes(1000, { ...CLASSIC, dailyCap: 1000 });
     expect(fast).toBeLessThan(slow);
   });
 });
@@ -217,5 +233,20 @@ describe('a custom pacing', () => {
   it('never clamps when the window is the whole day', () => {
     const at = cairo(2026, 8, 23, 23, 59);
     expect(withinWindow(at, aggressive).getTime()).toBe(at.getTime());
+  });
+});
+
+describe('DEFAULT_PACING — sized for a brand-new number', () => {
+  it('is slower than the old defaults on every brake', () => {
+    expect(DEFAULT_PACING.minDelaySeconds).toBeGreaterThan(CLASSIC.minDelaySeconds);
+    expect(DEFAULT_PACING.maxDelaySeconds).toBeGreaterThan(CLASSIC.maxDelaySeconds);
+    expect(DEFAULT_PACING.batchSize).toBeLessThan(CLASSIC.batchSize);
+    expect(DEFAULT_PACING.batchPauseMinutes).toBeGreaterThan(CLASSIC.batchPauseMinutes);
+    expect(DEFAULT_PACING.dailyCap).toBeLessThanOrEqual(100);
+  });
+
+  it('stays inside the daytime window', () => {
+    expect(DEFAULT_PACING.windowStartHour).toBeGreaterThanOrEqual(9);
+    expect(DEFAULT_PACING.windowEndHour).toBeLessThanOrEqual(22);
   });
 });

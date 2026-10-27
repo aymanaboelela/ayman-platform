@@ -48,12 +48,15 @@ export function TestSend() {
   const [text, setText] = useState('');
   const [sent, setSent] = useState<TestSendResult | null>(null);
   const [status, setStatus] = useState<number | null>(null);
+  /** WhatsApp's own reason when it refused — the sentence, from the API. */
+  const [explanation, setExplanation] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function send() {
     startTransition(async () => {
       setSent(null);
       setStatus(null);
+      setExplanation(null);
       const result = await testSendAction(phone.trim(), text.trim() || null);
       if (!result.ok) {
         toast.error(result.message);
@@ -67,7 +70,10 @@ export function TestSend() {
         const first = result.data.messageId;
         setTimeout(() => {
           void testSendReceiptAction(first).then((r) => {
-            if (r) setStatus(r.status);
+            if (r) {
+              setStatus(r.status);
+              setExplanation(r.explanation);
+            }
           });
         }, 5000);
       }
@@ -80,6 +86,7 @@ export function TestSend() {
     startTransition(async () => {
       const receipt = await testSendReceiptAction(id);
       setStatus(receipt?.status ?? null);
+      setExplanation(receipt?.explanation ?? null);
     });
   }
 
@@ -90,6 +97,7 @@ export function TestSend() {
       </CardHeader>
       <CardBody className="flex flex-col gap-4">
         <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{c.testSendLead}</p>
+        <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] font-medium text-fg">{c.testSendAfterLink}</p>
 
         <Field name="phone">
           <FieldLabel>{c.testSendPhone}</FieldLabel>
@@ -145,11 +153,15 @@ export function TestSend() {
                       : c.testSendPending}
             </p>
 
+            {/* WHY it was refused, in Arabic — `463` on a new number, usually. */}
+            {status === REFUSED && explanation ? (
+              <p className="text-[length:var(--fs-text-sm)] text-err">{explanation}</p>
+            ) : null}
+
             {/*
-              The diagnosis line. A recipient with a LID whose message never
-              gets past one tick is the shape of the addressing failure the
-              6.x sender cannot handle — and that pair of facts is exactly
-              what was impossible to observe before this screen.
+              Informational since Baileys 7, which keeps the LID↔PN mapping
+              itself: kept because "did that recipient have a LID" is a fact
+              that cannot be recovered later.
             */}
             <p className="mono text-[length:var(--fs-text-xs)] text-fg-muted" dir="ltr">
               {sent.lid ? formatCopy(c.testSendLid, { lid: sent.lid }) : c.testSendNoLid}

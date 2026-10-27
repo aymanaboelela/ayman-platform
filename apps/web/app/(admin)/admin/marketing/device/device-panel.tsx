@@ -6,10 +6,14 @@ import { toast } from 'sonner';
 import type { WhatsappDevice } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { closeReasonFor } from '@ayman/contracts/marketing/wa-errors';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
 import { Card, CardBody } from '@ayman/ui/components/card';
+import { Field, FieldLabel } from '@ayman/ui/components/field';
+import { Input } from '@ayman/ui/components/input';
 import { deviceStatusAction, linkDeviceAction, unlinkDeviceAction } from '../actions';
+import { cairoWhen } from './when';
 
 const c = copy.marketing;
 
@@ -37,6 +41,8 @@ const TONE = {
 export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
   const [device, setDevice] = useState(initial);
   const [pending, startTransition] = useTransition();
+  /** The number to pair by CODE, for linking from this same phone. */
+  const [pairPhone, setPairPhone] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Lets `link()` collapse whatever wait is already scheduled — see there. */
   const pollSoon = useRef<(delay: number) => void>(() => {});
@@ -60,9 +66,9 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.state === 'linking']);
 
-  function link() {
+  function link(byPhone?: string) {
     startTransition(async () => {
-      const result = await linkDeviceAction();
+      const result = await linkDeviceAction(byPhone ?? null);
       if (result.ok) {
         setDevice(result.data);
         // The sidecar's transition to `linking` happens asynchronously, off
@@ -100,8 +106,8 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
    * sight is a QR rather than a screen that looks identical to the one they
    * just pressed a button on.
    */
-  function reset() {
-    if (!confirm(c.resetConfirm)) return;
+  function reset(question: string = c.resetConfirm) {
+    if (!confirm(question)) return;
     startTransition(async () => {
       const cleared = await unlinkDeviceAction();
       if (!cleared.ok) {
@@ -115,6 +121,21 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
     });
   }
 
+  /**
+   * «اربط رقم تاني بدل ده» — the old number out and a QR for the new one, in
+   * ONE action. The same wipe-then-link as `reset`, offered while connected:
+   * before it, replacing the number meant «افصل الرقم», then a screen saying
+   * nothing was linked, then «اربط رقم جديد» — two confirms and a moment where
+   * it looked like the click had broken something.
+   */
+  function replace() {
+    reset(c.replaceConfirm);
+  }
+
+  const closeReason = closeReasonFor(device.detail);
+  const limits = device.limits;
+  const canLink = device.state === 'disconnected' || device.state === 'unreachable' || device.state === 'linking';
+
   return (
     <Card>
       <CardBody className="flex flex-col items-center gap-4 py-8 text-center">
@@ -124,7 +145,17 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
           <p className="max-w-[var(--w-prose)] text-fg-muted">{c.deviceDisabledHint}</p>
         ) : null}
 
-        {device.state === 'linking' && device.qr ? (
+        {device.state === 'linking' && device.pairingCode ? (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.pairingCodeTitle}</p>
+            <p className="mono text-[length:var(--fs-title-2)] font-semibold tracking-widest text-fg" dir="ltr">
+              {device.pairingCode}
+            </p>
+            <p className="max-w-[var(--w-prose)] text-fg-muted">{c.pairingCodeSteps}</p>
+          </div>
+        ) : null}
+
+        {device.state === 'linking' && device.qr && !device.pairingCode ? (
           <div className="flex flex-col items-center gap-2">
             <Image src={device.qr} alt="" width={280} height={280} className="rounded-[var(--r-lg)] border border-line" />
             <p className="text-fg-muted">{c.deviceLinkingSteps}</p>
@@ -132,7 +163,36 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
         ) : null}
 
         {device.state === 'connected' && device.phone ? (
-          <p className="mono text-[length:var(--fs-title-3)] text-fg">{device.phone}</p>
+          <p className="mono text-[length:var(--fs-title-3)] text-fg" dir="ltr">
+            {device.phone}
+          </p>
+        ) : null}
+
+        {device.state === 'connected' && device.connectedAt ? (
+          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+            {formatCopy(c.healthConnectedSince, { when: cairoWhen(device.connectedAt) ?? '' })}
+          </p>
+        ) : null}
+
+        {/*
+          WhatsApp's own word on whether this number may start new chats —
+          the cause of nack 463, read BEFORE it happens. On a brand-new number
+          every message is a new chat, so this line is the whole answer to
+          «ليه الرسايل مش بتوصل» when it is showing.
+        */}
+        {device.state === 'connected' && limits?.restricted ? (
+          <div className="max-w-[var(--w-prose)] rounded-[var(--r-md)] border border-[color:var(--err)] p-3 text-[length:var(--fs-text-sm)] text-err">
+            <p className="font-medium">{limits.reason === 'capped' ? c.healthCapped : c.healthRestricted}</p>
+            {limits.until ? (
+              <p className="mt-1">{formatCopy(c.healthRestrictedUntil, { when: cairoWhen(limits.until) ?? '' })}</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {device.state === 'connected' && limits?.quotaTotal ? (
+          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+            {formatCopy(c.healthQuota, { used: limits.quotaUsed ?? 0, total: limits.quotaTotal })}
+          </p>
         ) : null}
 
         {/*
@@ -146,16 +206,26 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
           is the exact report this line exists to answer.
         */}
         {device.detail ? (
-          <p className="mono text-[length:var(--fs-text-xs)] text-fg-muted">
-            <span className="me-1 font-sans">{c.deviceDetailLabel}</span>
-            {device.detail}
-          </p>
+          <div className="flex max-w-[var(--w-prose)] flex-col items-center gap-1">
+            {closeReason ? <p className="text-[length:var(--fs-text-sm)] text-fg">{closeReason}</p> : null}
+            <p className="mono text-[length:var(--fs-text-xs)] text-fg-muted">
+              <span className="me-1 font-sans">{c.deviceDetailLabel}</span>
+              <span dir="ltr" className="[unicode-bidi:isolate]">
+                {device.detail}
+              </span>
+            </p>
+          </div>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-center gap-2">
           {device.state === 'disconnected' || device.state === 'unreachable' ? (
-            <Button disabled={pending} onClick={link}>
+            <Button disabled={pending} onClick={() => link()}>
               {pending ? c.linkPending : c.linkButton}
+            </Button>
+          ) : null}
+          {device.state === 'connected' ? (
+            <Button variant="secondary" disabled={pending} onClick={replace}>
+              {c.replaceButton}
             </Button>
           ) : null}
           {device.state === 'connected' ? (
@@ -179,7 +249,7 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
             i.e. the one state where nobody needs it.
           */}
           {device.state === 'disconnected' || device.state === 'unreachable' || device.state === 'linking' ? (
-            <Button variant="ghost" disabled={pending} onClick={reset}>
+            <Button variant="ghost" disabled={pending} onClick={() => reset()}>
               {c.resetButton}
             </Button>
           ) : null}
@@ -189,6 +259,34 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
           <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-xs)] text-fg-muted">
             {c.linkNoCodeHint}
           </p>
+        ) : null}
+
+        {/*
+          Pairing by CODE. A QR cannot be scanned by the phone that is
+          displaying it, and the likeliest way this page gets opened on the
+          day a new number is linked is on that very phone.
+        */}
+        {canLink && !device.pairingCode ? (
+          <div className="flex w-full max-w-sm flex-col items-stretch gap-2 border-t border-line-subtle pt-4 text-start">
+            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.pairByCodeHint}</p>
+            <Field name="pair-phone">
+              <FieldLabel>{c.pairPhoneLabel}</FieldLabel>
+              <Input
+                value={pairPhone}
+                onChange={(event) => setPairPhone(event.target.value)}
+                dir="ltr"
+                inputMode="tel"
+                placeholder="+2010xxxxxxxx"
+              />
+            </Field>
+            <Button
+              variant="secondary"
+              disabled={pending || pairPhone.trim().length < 10}
+              onClick={() => link(pairPhone)}
+            >
+              {pending ? c.linkPending : c.pairPhoneButton}
+            </Button>
+          </div>
         ) : null}
       </CardBody>
     </Card>

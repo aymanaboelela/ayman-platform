@@ -52,7 +52,12 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { BooksService } from '../books/books.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
-import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
+import {
+  DeviceCeilingError,
+  NotOnWhatsAppError,
+  WhatsappDeviceService,
+  WhatsappRestrictedError,
+} from '../marketing/whatsapp-device.service';
 import { OutreachService } from '../outreach/outreach.service';
 import { SettingsService } from '../admin/settings/settings.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
@@ -2952,14 +2957,18 @@ export class BookOrdersService {
 
       if (alsoWhatsapp || studentId === null) {
         try {
-          await this.whatsapp.send({ phone: order.phone, text, imageUrl: null });
+          await this.whatsapp.send({ phone: order.phone, text, imageUrl: null, source: 'shipping' });
         } catch (error) {
           // A number that is not on WhatsApp is a FACT about the number, not a
-          // fault to retry — worded so the admin phones instead.
+          // fault to retry — worded so the admin phones instead. The ceiling
+          // and a WhatsApp new-chat restriction each say what they are, so
+          // «مش متوصّل» is no longer the answer to a device that is fine.
           noticeError =
             error instanceof NotOnWhatsAppError
               ? 'الرقم ده مش على واتساب'
-              : 'الواتساب مش متوصّل — جرّب تبعت تاني';
+              : error instanceof DeviceCeilingError || error instanceof WhatsappRestrictedError
+                ? error.userMessage
+                : 'الواتساب مش متوصّل — جرّب تبعت تاني';
         }
       }
 

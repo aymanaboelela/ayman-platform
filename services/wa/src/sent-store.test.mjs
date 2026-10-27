@@ -67,3 +67,11 @@ test('holds a full campaign at the default size', () => {
   assert.deepEqual(store.get({ id: 'id-0' }), { conversation: 'm0' });
   assert.equal(store.size, 200);
 });
+
+test('clear forgets everything — the next number must never answer a retry for the old one', () => {
+  const store = new SentStore();
+  store.remember('ABC', { conversation: 'أهلاً' });
+  store.clear();
+  assert.equal(store.size, 0);
+  assert.equal(store.get({ id: 'ABC' }), undefined);
+});

@@ -364,16 +364,95 @@ export const WHATSAPP_DEVICE_STATES = [
 ] as const;
 export type WhatsappDeviceState = (typeof WHATSAPP_DEVICE_STATES)[number];
 
+/**
+ * What WhatsApp currently allows the number to do about NEW chats — read by
+ * the sidecar from WhatsApp itself (Baileys 7's reach-out timelock and
+ * new-chat cap queries). On a new number this is the line that explains a
+ * 463 before it happens.
+ */
+export const WhatsappLimitsSchema = z.object({
+  /** WhatsApp is refusing new chats right now. */
+  restricted: z.boolean(),
+  reason: z.enum(['timelock', 'capped']).nullable(),
+  /** When the restriction ends, if WhatsApp said. */
+  until: z.iso.datetime().nullable(),
+  quotaTotal: z.number().nullable(),
+  quotaUsed: z.number().nullable(),
+  capStatus: z.string().nullable(),
+  checkedAt: z.iso.datetime().nullable(),
+});
+export type WhatsappLimits = z.infer<typeof WhatsappLimitsSchema>;
+
 export const WhatsappDeviceSchema = z.object({
   state: z.enum(WHATSAPP_DEVICE_STATES),
   /** E.164 of the linked number, once there is one. */
   phone: z.string().nullable(),
   /** A `data:image/png;base64,…` QR, present only while `state` is linking. */
   qr: z.string().nullable(),
-  /** Free text for the operator when `state` is `unreachable`. */
+  /**
+   * `XXXX-XXXX`, while pairing by phone number instead of QR — for linking
+   * from the same phone the admin page is open on.
+   */
+  pairingCode: z.string().nullable().default(null),
+  /** Why the last connection closed, or why the service is unreachable. */
   detail: z.string().nullable(),
+  connectedAt: z.iso.datetime().nullable().default(null),
+  limits: WhatsappLimitsSchema.nullable().default(null),
 });
 export type WhatsappDevice = z.infer<typeof WhatsappDeviceSchema>;
+
+/** Who asked the device to send — the ledger's `source`. */
+export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'test', 'other'] as const;
+export type WhatsappSendSource = (typeof WHATSAPP_SEND_SOURCES)[number];
+
+/**
+ * «الإرسال في آخر ٢٤ ساعة» — the device page's answer to "is it actually
+ * delivering", from the `whatsapp_sends` ledger: every message the number sent
+ * through the platform, whichever feature sent it.
+ */
+export const WhatsappHealthSchema = z.object({
+  window: z.object({
+    sent: z.number().int(),
+    /** Reached a device (read included). */
+    delivered: z.number().int(),
+    read: z.number().int(),
+    refused: z.number().int(),
+    /** Neither delivered nor refused yet. */
+    waiting: z.number().int(),
+    /** `delivered / sent`, 0–1; null below a handful of sends. */
+    deliveryRate: z.number().nullable(),
+  }),
+  lastDeliveredAt: z.iso.datetime().nullable(),
+  lastSentAt: z.iso.datetime().nullable(),
+  /** Refusals in the window, grouped by WhatsApp's code, most frequent first. */
+  refusals: z.array(
+    z.object({
+      code: z.string(),
+      count: z.number().int(),
+      /** The Arabic explanation (`waErrorFor`). */
+      explanation: z.string(),
+    }),
+  ),
+  /** The latest refusals, newest first. The phone is masked. */
+  recent: z.array(
+    z.object({
+      at: z.iso.datetime(),
+      phone: z.string(),
+      source: z.enum(WHATSAPP_SEND_SOURCES),
+      code: z.string().nullable(),
+      explanation: z.string().nullable(),
+    }),
+  ),
+  /** The number's own daily ceiling — see `device-ceiling.ts`. */
+  ceiling: z.object({
+    usedToday: z.number().int(),
+    limit: z.number().int(),
+    /** 0-based day of the warm-up ramp. */
+    day: z.number().int(),
+    warmingUp: z.boolean(),
+  }),
+});
+export type WhatsappHealth = z.infer<typeof WhatsappHealthSchema>;
 
 /**
  * «رسالة تجربة» — one message to one number, to find out what is actually
@@ -389,12 +468,11 @@ export type WhatsappDevice = z.infer<typeof WhatsappDeviceSchema>;
  *
  * ## What it reports, and why each field is here
  *
- * `lid` is the diagnostic. WhatsApp has been migrating accounts from
- * phone-number addressing to a Linked Identity, and the 6.x Baileys line the
- * sender runs on has no LID↔PN mapping at all — it addresses the phone number
- * and nothing else. If a recipient has a `lid` AND this message stays on one
- * tick, that is the shape of the failure. If they have no `lid`, that whole
- * explanation is dead and the fault is elsewhere. One call either way.
+ * `lid` is informational. WhatsApp has been migrating accounts from
+ * phone-number addressing to a Linked Identity; the sender now runs Baileys 7,
+ * which keeps the LID↔PN mapping itself and encrypts to the right identity.
+ * The field is kept because it is impossible to obtain retroactively when a
+ * delivery question comes up later.
  */
 export const TestSendResultSchema = z.object({
   /** NULL means WhatsApp says this number has no account — nothing was sent. */
@@ -420,6 +498,10 @@ export const TestSendReceiptSchema = z.object({
   messageId: z.string(),
   /** `proto.WebMessageInfo.Status`: 2 server, 3 delivered, 4 read, 0 refused. */
   status: z.number().int().nullable(),
+  /** WhatsApp's refusal code when `status` is 0 — `463` and friends. */
+  code: z.string().nullable().default(null),
+  /** Its Arabic explanation. */
+  explanation: z.string().nullable().default(null),
 });
 export type TestSendReceipt = z.infer<typeof TestSendReceiptSchema>;
 
