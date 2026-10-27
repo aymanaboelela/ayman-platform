@@ -478,6 +478,8 @@ describe('the Prisma enum and the contract agree', () => {
       'whatsapp_invite',
       'follow_up',
       'subscribe_nudge',
+      'checkout_recovery',
+      'signup_nudge',
     ];
     expect([...prismaKinds].sort()).toEqual([...OUTREACH_KINDS].sort());
   });

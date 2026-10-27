@@ -48,6 +48,7 @@ import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { FollowUpModule } from './modules/follow-up/follow-up.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
+import { AutoOutreachModule } from './modules/auto-outreach/auto-outreach.module';
 import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookOrdersModule } from './modules/book-orders/book-orders.module';
@@ -177,6 +178,8 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     AuditReadModule,
     AssistantModule,
     OutreachModule,
+    // «كمّل الدفع» + «الحساب جاهز» over WhatsApp — behind `outreach.whatsapp`.
+    AutoOutreachModule,
     FollowUpModule,
     DiagnosticsModule,
     CohortAnalyticsModule,

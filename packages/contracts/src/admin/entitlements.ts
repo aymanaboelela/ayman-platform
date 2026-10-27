@@ -169,6 +169,17 @@ export const FEATURE_DECLARATIONS = [
       'رقم الطلبات المستنية على أيقونة التطبيق، ومراجعة الاشتراكات واحد واحد، وملخص آخر اليوم، وتنبيه لو الواتساب فصل أو رفع فيديو فشل.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول». بيبعت من الرقم المربوط من غير ما حد يدوس — فلازم يبقى
+     * مقفول على أي ستاك تاني لحد ما يتفتح بقصد، وبيحتاج `marketing.whatsapp`
+     * وجهاز مربوط كمان عشان يبعت أي حاجة.
+     */
+    key: 'outreach.whatsapp',
+    nameAr: 'رسايل الواتساب التلقائية',
+    descriptionAr: 'تذكير «كمّل الدفع» للي فتح الدفع وماكمّلش، ورسالة للي سجّل ومااشتركش في أي كورس.',
+    defaultForTenant: false,
+  },
   /*
    * The engagement features (`contracts/engagement.ts`). Ayman first, like
    * everything new: on for him, off on any other stack until the owner opens

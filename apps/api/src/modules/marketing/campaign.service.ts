@@ -159,6 +159,16 @@ export class CampaignService {
       where: { messageId, deliveredAt: null },
       data: { deliveredAt: at },
     });
+    /*
+     * The automatic reminders («كمّل الدفع»، «الحساب جاهز») leave from the
+     * same number through the same sidecar, so their receipts arrive on this
+     * same route. A WhatsApp message id belongs to exactly one of the two
+     * tables; whichever does not hold it matches nothing.
+     */
+    await this.prisma.outreachMessage.updateMany({
+      where: { whatsappMessageId: messageId, whatsappDeliveredAt: null },
+      data: { whatsappDeliveredAt: at },
+    });
   }
 
   /**
