@@ -41,7 +41,7 @@ function message(
   createdAt: string,
   body: string,
 ): ConversationThread['messages'][number] {
-  return { id, author, body, createdAt, adminReaction: null, attachment: null, editedAt: null };
+  return { id, author, body, createdAt, adminReaction: null, attachment: null, editedAt: null, replyTo: null };
 }
 
 const THREAD: ConversationThread = {

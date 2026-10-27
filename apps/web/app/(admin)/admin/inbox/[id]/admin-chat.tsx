@@ -1,24 +1,51 @@
 'use client';
 
-import { useOptimistic, type ReactNode } from 'react';
+import { createContext, useContext, useOptimistic, useState, type ReactNode } from 'react';
 import { Paperclip } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type {
   ConversationStatus,
   MessageAttachmentInput,
   MessageAuthor,
+  MessageReplyRef,
 } from '@ayman/contracts/assistant/conversation';
 import { ChatMeta } from '@/components/assistant/chat-meta';
 import { ChatViewport } from '@/components/assistant/chat-viewport';
 import { MessageBody } from '@/components/assistant/message-body';
+import { ReplyQuote } from '@/components/assistant/reply-quote';
 import { ThreadActions } from './thread-actions';
 
 const cc = copy.assistant.chat;
+
+/**
+ * The message he is answering, shared between the bubbles that set it (a swipe,
+ * or «رد» in the menu) and the composer that sends it.
+ *
+ * Context rather than props because the bubbles are rendered by the SERVER
+ * page and reach `AdminChat` as `children` — there is no client parent that
+ * maps over them to hand a setter down.
+ */
+interface ReplyTarget {
+  quote: MessageReplyRef;
+  /** Who the quote names — the student's name, or «رسالتك». */
+  name: string;
+}
+
+const ReplyTargetContext = createContext<{
+  target: ReplyTarget | null;
+  setTarget: (target: ReplyTarget | null) => void;
+}>({ target: null, setTarget: () => undefined });
+
+export function useReplyTarget() {
+  return useContext(ReplyTargetContext);
+}
 
 /** A reply on its way — drawn at the bottom of the thread before the server has it. */
 export interface PendingReply {
   body: string;
   attachment: MessageAttachmentInput | null;
+  /** The quote it carries, drawn on the placeholder too. */
+  reply: ReplyTarget | null;
   /** When he pressed send, by his own clock. Only ever drawn as «now». */
   at: string;
 }
@@ -56,6 +83,7 @@ export function AdminChat({
   children: ReactNode;
 }) {
   const [pending, setPending] = useOptimistic<PendingReply | null>(null);
+  const [target, setTarget] = useState<ReplyTarget | null>(null);
 
   const followed = pending
     ? { key: `pending:${pending.at}`, at: pending.at, fromSelf: true }
@@ -64,40 +92,49 @@ export function AdminChat({
       : null;
 
   return (
-    <section className="chat chat--admin">
-      <ChatViewport latest={followed} label={cc.regionLabel}>
-        {children}
-        {pending ? (
-          <ol className="chat-list" aria-live="polite">
-            <li className="chat-row chat-row--own chat-row--start chat-row--end chat-row--pending">
-              <div className="chat-row__stack">
-                <div className="chat-row__line">
-                  <div className="chat-bubble">
-                    {pending.attachment ? (
-                      <span className="chat-pending-file">
-                        <Paperclip className="size-4 shrink-0" aria-hidden="true" />
-                        <span className="truncate">{pending.attachment.filename}</span>
-                      </span>
-                    ) : null}
-                    {pending.body.trim().length > 0 ? (
-                      <div className="chat-text">
-                        <MessageBody body={pending.body} trusted />
-                        <ChatMeta createdAt={pending.at} delivery="sending" variant="ghost" />
-                      </div>
-                    ) : null}
-                    <ChatMeta
-                      createdAt={pending.at}
-                      delivery="sending"
-                      variant={pending.body.trim().length > 0 ? 'corner' : 'line'}
-                    />
+    <ReplyTargetContext value={{ target, setTarget }}>
+      <section className="chat chat--admin">
+        <ChatViewport latest={followed} label={cc.regionLabel}>
+          {children}
+          {pending ? (
+            <ol className="chat-list" aria-live="polite">
+              <li className="chat-row chat-row--own chat-row--start chat-row--end chat-row--pending">
+                <div className="chat-row__stack">
+                  <div className="chat-row__line">
+                    <div className="chat-bubble">
+                      {pending.reply ? (
+                        <ReplyQuote
+                          reply={pending.reply.quote}
+                          name={pending.reply.name}
+                          own={pending.reply.quote.author === 'admin'}
+                        />
+                      ) : null}
+                      {pending.attachment ? (
+                        <span className="chat-pending-file">
+                          <Paperclip className="size-4 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{pending.attachment.filename}</span>
+                        </span>
+                      ) : null}
+                      {pending.body.trim().length > 0 ? (
+                        <div className="chat-text">
+                          <MessageBody body={pending.body} trusted />
+                          <ChatMeta createdAt={pending.at} delivery="sending" variant="ghost" />
+                        </div>
+                      ) : null}
+                      <ChatMeta
+                        createdAt={pending.at}
+                        delivery="sending"
+                        variant={pending.body.trim().length > 0 ? 'corner' : 'line'}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </li>
-          </ol>
-        ) : null}
-      </ChatViewport>
-      <ThreadActions id={id} status={status} onPending={setPending} />
-    </section>
+              </li>
+            </ol>
+          ) : null}
+        </ChatViewport>
+        <ThreadActions id={id} status={status} onPending={setPending} />
+      </section>
+    </ReplyTargetContext>
   );
 }

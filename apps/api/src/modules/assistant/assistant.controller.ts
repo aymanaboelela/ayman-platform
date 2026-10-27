@@ -242,6 +242,7 @@ export class AssistantController {
       // Present only when المساعد handed over a second time into a thread that
       // already existed. See `PostMessageSchema.transcript`.
       body.transcript ?? null,
+      body.replyToId ?? null,
     );
     this.notifyAdmins(id, body.message);
     return thread;

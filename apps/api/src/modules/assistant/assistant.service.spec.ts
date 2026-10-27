@@ -735,6 +735,61 @@ describe('AssistantService', () => {
     });
   });
 
+  describe('quoting — «اسحبها وأرد عليها»', () => {
+    it('carries the quote to both sides, either way round', async () => {
+      const { thread, guestToken } = await openGuest('+201000000021', 'الحصة التالتة مش فاتحة');
+      const question = thread.messages[0]!.id;
+
+      await service.reply(thread.id, 'افتحها تاني دلوقتي', null, question);
+      const answer = (await service.detail(thread.id)).messages.at(-1)!;
+      expect(answer.replyTo).toEqual({
+        id: question,
+        author: 'visitor',
+        body: 'الحصة التالتة مش فاتحة',
+        attachmentKind: null,
+      });
+
+      const after = await service.postMessage(thread.id, null, guestToken, 'فتحت، شكرًا', null, answer.id);
+      expect(after.messages.at(-1)!.replyTo).toMatchObject({ id: answer.id, author: 'admin' });
+    });
+
+    it('refuses a quote of a message from another thread', async () => {
+      /*
+       * The FK alone would accept it — the row exists — and the read-time join
+       * would then show this student another student's words inside a bubble.
+       */
+      const mine = await openGuest('+201000000022', 'بتاعي');
+      const theirs = await openGuest('+201000000023', 'سري جدًا');
+
+      await expect(
+        service.reply(mine.thread.id, 'ردّ', null, theirs.thread.messages[0]!.id),
+      ).rejects.toThrow('reply target is not in this conversation');
+      await expect(
+        service.postMessage(
+          mine.thread.id,
+          null,
+          mine.guestToken,
+          'سؤال',
+          null,
+          theirs.thread.messages[0]!.id,
+        ),
+      ).rejects.toThrow('reply target is not in this conversation');
+    });
+
+    it('drops the quote, and keeps the reply, when the original is deleted', async () => {
+      const { thread } = await openGuest('+201000000024', 'سؤال');
+      await service.reply(thread.id, 'كلام هيتمسح');
+      const wrong = (await service.detail(thread.id)).messages.at(-1)!.id;
+      await service.reply(thread.id, 'تصحيح', null, wrong);
+
+      await service.deleteMessage(thread.id, wrong);
+
+      const messages = (await service.detail(thread.id)).messages;
+      expect(messages.map((m) => m.body)).toEqual(['سؤال', 'تصحيح']);
+      expect(messages.at(-1)!.replyTo).toBeNull();
+    });
+  });
+
   describe('inbox', () => {
     it('counts what he has not looked at, and clears when he looks', async () => {
       /*

@@ -1299,3 +1299,128 @@
     transform: scale(0.92);
   }
 }
+
+/* ── «اسحبها وأرد عليها» — swipe to quote ───────────────────────────────── */
+
+/* `pan-y`: the browser keeps the vertical scroll and hands sideways movement
+   to `SwipeToReply`. */
+.chat-swipe {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  touch-action: pan-y;
+}
+
+/* Positioned so it paints over the icon, which waits underneath it at the
+   inline start and is uncovered as the bubble slides toward the inline end. */
+.chat-swipe__track {
+  position: relative;
+  transition: transform var(--d-popover) var(--ease-out);
+}
+
+.chat-swipe__icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.5rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-block-start: -0.875rem;
+  border-radius: var(--r-full);
+  background: var(--chat-surface);
+  box-shadow: 0 1px 3px var(--chat-shadow);
+  color: var(--n-11);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The quote inside a bubble, and the one above the composer. `currentColor`
+   so the same rule reads on the paper bubble and on the brand one. */
+.chat-quote {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  margin-block-end: 0.25rem;
+  padding: 0.3125rem 0.625rem;
+  border-inline-start: 3px solid color-mix(in oklab, currentColor 45%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, currentColor 9%, transparent);
+  text-align: start;
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+}
+
+button.chat-quote {
+  cursor: pointer;
+}
+
+.chat-row--other .chat-quote--own,
+.chat-quote--staged.chat-quote--own {
+  border-inline-start-color: var(--a-9);
+}
+
+.chat-bubble--has-attachment .chat-quote {
+  width: auto;
+  margin: 0 0 0.25rem;
+}
+
+.chat-quote__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-quote__name {
+  font-weight: var(--fw-semibold);
+}
+
+.chat-row--other .chat-quote--own .chat-quote__name,
+.chat-quote--staged.chat-quote--own .chat-quote__name {
+  color: var(--a-11);
+}
+
+.chat-quote__text {
+  display: -webkit-box;
+  overflow: hidden;
+  opacity: 0.8;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.chat-quote:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.chat-quote--staged {
+  margin-block-end: 0.5rem;
+  padding-inline-end: 0.25rem;
+  border-block: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--n-1);
+  color: var(--n-12);
+}
+
+/* Where a tapped quote lands. */
+.chat-row--flash .chat-bubble {
+  animation: chat-flash 1.4s var(--ease);
+}
+
+@keyframes chat-flash {
+  15%,
+  60% {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--a-9) 55%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-swipe__track {
+    transition: none;
+  }
+}

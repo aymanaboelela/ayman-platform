@@ -185,7 +185,7 @@ export class AdminInboxController {
      * permanent bubble on a student's screen that 404s when they tap it.
      */
     if (body.attachment) await this.attachments.assertStored(body.attachment);
-    await this.assistant.reply(id, body.message, body.attachment);
+    await this.assistant.reply(id, body.message, body.attachment, body.replyToId);
   }
 
   /**

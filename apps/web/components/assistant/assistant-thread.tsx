@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { SendHorizontal } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Reply, SendHorizontal } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import {
   ConversationThreadSchema,
   MESSAGE_MAX,
+  replyPreviewOf,
+  type ConversationMessageEntry,
   type ConversationThread,
+  type MessageReplyRef,
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
 import { apiPost, apiPostVoid } from '@/lib/api';
@@ -18,6 +21,8 @@ import { groupChatTimelineByDay } from './chat-day-groups';
 import { ChatViewport } from './chat-viewport';
 import { MessageBody } from './message-body';
 import { MessageAttachmentView } from './message-attachment';
+import { ReplyQuote, chatMessageDomId } from './reply-quote';
+import { SwipeToReply } from './swipe-to-reply';
 import { useAutoGrow } from './use-auto-grow';
 
 const c = copy.assistant.thread;
@@ -60,10 +65,38 @@ export function AssistantThread({
    * Cleared in the same batch as `onUpdated`, so the placeholder and the real
    * bubble never both show, and never neither.
    */
-  const [pending, setPending] = useState<{ body: string; at: string } | null>(null);
+  const [pending, setPending] = useState<{
+    body: string;
+    at: string;
+    reply: MessageReplyRef | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** «اسحبها وأرد عليها» — the message the next send quotes, or `null`. */
+  const [replyTo, setReplyTo] = useState<MessageReplyRef | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(field, draft, COMPOSER_MAX_PX);
+
+  /** Who a quote names, from THIS side: the reader's own, or his. */
+  const quoteName = (reply: MessageReplyRef) =>
+    reply.author === 'visitor' ? cc.replyOwn : tenantName(c.ayman);
+
+  function startReply(message: ConversationMessageEntry) {
+    setReplyTo({
+      id: message.id,
+      author: message.author,
+      body: replyPreviewOf(message.body),
+      attachmentKind: message.attachment?.kind ?? null,
+    });
+    // The next thing typed is the answer — WhatsApp puts the cursor there.
+    field.current?.focus();
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Escape' && replyTo) {
+      event.preventDefault();
+      setReplyTo(null);
+    }
+  }
 
   /*
    * Landing on the newest message is `ChatViewport`'s job now, and it is done
@@ -107,21 +140,24 @@ export function AssistantThread({
     event.preventDefault();
     if (pending || draft.trim().length === 0) return;
     const body = draft;
-    setPending({ body, at: new Date().toISOString() });
+    const quoting = replyTo;
+    setPending({ body, at: new Date().toISOString(), reply: quoting });
     setDraft('');
+    setReplyTo(null);
     setError(null);
 
     try {
       const updated = await apiPost(
         `/api/assistant/conversations/${thread.id}/messages`,
         ConversationThreadSchema,
-        { message: body },
+        { message: body, replyToId: quoting?.id ?? null },
       );
       onUpdated(updated);
     } catch {
       // The words go back where they were typed: a failed send that also
-      // lost them would be worse than the failure.
+      // lost them would be worse than the failure. The quote with them.
       setDraft(body);
+      setReplyTo(quoting);
       setError(copy.assistant.escalate.failed);
     } finally {
       setPending(null);
@@ -169,6 +205,7 @@ export function AssistantThread({
               return (
                 <li
                   key={message.id}
+                  id={chatMessageDomId(message.id)}
                   className={cn(
                     'chat-row',
                     // The READER's words are their own side: `own` here is the
@@ -208,67 +245,90 @@ export function AssistantThread({
                     {!fromVisitor && startsGroup ? (
                       <span className="chat-byline">{tenantName(c.ayman)}</span>
                     ) : null}
-                    <div className="chat-row__line">
-                      <div
-                        className={cn(
-                          'chat-bubble',
-                          message.attachment ? 'chat-bubble--has-attachment' : '',
-                          imageOnly ? 'chat-bubble--media-only' : '',
-                        )}
-                      >
-                        {message.attachment ? (
-                          <MessageAttachmentView
-                            attachment={message.attachment}
-                            tone={fromVisitor ? 'own' : 'other'}
-                            labels={{
-                              imageAlt: c.attachmentImageAlt,
-                              download: c.attachmentDownload,
-                            }}
-                          />
-                        ) : null}
-
-                        {/*
-                          TEXT NODES and `<a>` elements — never markup. There is
-                          no HTML sink anywhere on this path, and that absence,
-                          not a sanitiser, is the control; `MessageBody` splits
-                          the string on a URL pattern and builds React elements.
-
-                          `trusted` only for a message his side wrote — it is
-                          what lets «الكورس بتاعك» draw as a card. A visitor's own
-                          pasted link never gets one; see `MessageBody`.
-
-                          An empty body is legal — a message may be only a file —
-                          and then the time gets a line of its own (or a pill on
-                          the photo) instead of the corner of a text line.
-                        */}
-                        {hasText ? (
-                          <div className="chat-text">
-                            <MessageBody body={message.body} trusted={!fromVisitor} />
-                            <ChatMeta
-                              createdAt={message.createdAt}
-                              edited={message.editedAt !== null}
-                              variant="ghost"
+                    {/* A closed thread takes no replies, so nothing to quote into. */}
+                    <SwipeToReply onReply={() => startReply(message)} disabled={isClosed}>
+                      <div className="chat-row__line">
+                        <div
+                          className={cn(
+                            'chat-bubble',
+                            message.attachment ? 'chat-bubble--has-attachment' : '',
+                            imageOnly ? 'chat-bubble--media-only' : '',
+                          )}
+                        >
+                          {message.replyTo ? (
+                            <ReplyQuote
+                              reply={message.replyTo}
+                              name={quoteName(message.replyTo)}
+                              own={message.replyTo.author === 'visitor'}
                             />
-                          </div>
-                        ) : null}
-                        <ChatMeta
-                          createdAt={message.createdAt}
-                          edited={message.editedAt !== null}
-                          variant={hasText ? 'corner' : imageOnly ? 'overlay' : 'line'}
-                        />
+                          ) : null}
+                          {message.attachment ? (
+                            <MessageAttachmentView
+                              attachment={message.attachment}
+                              tone={fromVisitor ? 'own' : 'other'}
+                              labels={{
+                                imageAlt: c.attachmentImageAlt,
+                                download: c.attachmentDownload,
+                              }}
+                            />
+                          ) : null}
 
-                        {/*
-                          «ردّ بإيموجي» — READ ONLY on this side. The student sees
-                          what the instructor put on their message and cannot set
-                          one: he was the one who asked for the gesture, and a
-                          picker here would be a feature nobody requested on the
-                          surface where it is hardest to get right.
-                        */}
-                        {message.adminReaction ? (
-                          <span className="chat-reaction">{message.adminReaction}</span>
-                        ) : null}
+                          {/*
+                            TEXT NODES and `<a>` elements — never markup. There is
+                            no HTML sink anywhere on this path, and that absence,
+                            not a sanitiser, is the control; `MessageBody` splits
+                            the string on a URL pattern and builds React elements.
+
+                            `trusted` only for a message his side wrote — it is
+                            what lets «الكورس بتاعك» draw as a card. A visitor's own
+                            pasted link never gets one; see `MessageBody`.
+
+                            An empty body is legal — a message may be only a file —
+                            and then the time gets a line of its own (or a pill on
+                            the photo) instead of the corner of a text line.
+                          */}
+                          {hasText ? (
+                            <div className="chat-text">
+                              <MessageBody body={message.body} trusted={!fromVisitor} />
+                              <ChatMeta
+                                createdAt={message.createdAt}
+                                edited={message.editedAt !== null}
+                                variant="ghost"
+                              />
+                            </div>
+                          ) : null}
+                          <ChatMeta
+                            createdAt={message.createdAt}
+                            edited={message.editedAt !== null}
+                            variant={hasText ? 'corner' : imageOnly ? 'overlay' : 'line'}
+                          />
+
+                          {/*
+                            «ردّ بإيموجي» — READ ONLY on this side. The student sees
+                            what the instructor put on their message and cannot set
+                            one: he was the one who asked for the gesture, and a
+                            picker here would be a feature nobody requested on the
+                            surface where it is hardest to get right.
+                          */}
+                          {message.adminReaction ? (
+                            <span className="chat-reaction">{message.adminReaction}</span>
+                          ) : null}
+                        </div>
+                        {/* The swipe's way in without a touch screen — same
+                            hover button the admin side has for its emoji. */}
+                        {isClosed ? null : (
+                          <button
+                            type="button"
+                            onClick={() => startReply(message)}
+                            aria-label={cc.reply}
+                            title={cc.reply}
+                            className="chat-react-trigger"
+                          >
+                            <Reply className="size-4" aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
-                    </div>
+                    </SwipeToReply>
                   </div>
                 </li>
               );
@@ -282,6 +342,13 @@ export function AssistantThread({
               <div className="chat-row__stack">
                 <div className="chat-row__line">
                   <div className="chat-bubble">
+                    {pending.reply ? (
+                      <ReplyQuote
+                        reply={pending.reply}
+                        name={quoteName(pending.reply)}
+                        own={pending.reply.author === 'visitor'}
+                      />
+                    ) : null}
                     <div className="chat-text">
                       <MessageBody body={pending.body} />
                       <ChatMeta createdAt={pending.at} delivery="sending" variant="ghost" />
@@ -311,12 +378,21 @@ export function AssistantThread({
                 {error}
               </p>
             ) : null}
+            {replyTo ? (
+              <ReplyQuote
+                reply={replyTo}
+                name={quoteName(replyTo)}
+                own={replyTo.author === 'visitor'}
+                onCancel={() => setReplyTo(null)}
+              />
+            ) : null}
             <div className="chat-composer__row">
               <div className="chat-composer__field">
                 <textarea
                   ref={field}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={onKeyDown}
                   placeholder={c.replyPlaceholder}
                   rows={1}
                   maxLength={MESSAGE_MAX}

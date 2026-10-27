@@ -5770,6 +5770,19 @@ export const copy = {
       /** Under the composer on a keyboard, each after its keycap. */
       enterToSend: 'للإرسال',
       shiftEnterNewline: 'لسطر جديد',
+      /* «اسحبها وأرد عليها» — the quote on a reply, WhatsApp style. A swipe on
+         a phone; on a keyboard, the button these name. */
+      reply: 'رد على الرسالة',
+      replyCancel: 'إلغاء الرد',
+      /** Over a quote of the reader's own message — names the message, not the reader. */
+      replyOwn: 'رسالتك',
+      /** Its accessible name: tapping a quote goes to what it quotes. */
+      replyJump: 'الذهاب للرسالة الأصلية',
+      /* A quoted message with no words in it says what it was. */
+      replyImage: '📷 صورة',
+      replyDocument: '📄 ملف',
+      replyVoice: '🎤 رسالة صوتية',
+      replyRecord: 'سجل محادثة المساعد',
     },
 
     // ── the visitor's side of an open conversation ─────────────────────
