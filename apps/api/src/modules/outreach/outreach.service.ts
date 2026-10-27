@@ -94,6 +94,25 @@ export interface DeliveryContext {
 
 export type DeliveryOutcome = 'sent' | 'duplicate' | 'capped' | 'no-recipient';
 
+/**
+ * What became of the WhatsApp copy of an automatic message. See
+ * `OutreachMessage.whatsappStatus` — `sent` is one grey tick, not delivery.
+ */
+export type WhatsappLeg =
+  | { status: 'sent'; messageId: string | null }
+  | { status: 'opted_out' | 'not_on_whatsapp' | 'no_phone' };
+
+/**
+ * The second channel, handed in by `AutoOutreachSweeper` and by nobody else.
+ *
+ * Called with the composed body AFTER every guard has passed and BEFORE
+ * anything is written. Throwing aborts the delivery with nothing written — no
+ * chat message, no ledger row — which is the property the sweeper relies on
+ * for «while the device is down, nothing is used up»: a send that could not
+ * reach the sidecar is found again on the next pass.
+ */
+export type WhatsappRelay = (body: string) => Promise<WhatsappLeg>;
+
 @Injectable()
 export class OutreachService {
   private readonly logger = new Logger(OutreachService.name);
@@ -133,7 +152,11 @@ export class OutreachService {
     return { settings: site.outreach, whatsappUrl: site.contact.whatsappChannel };
   }
 
-  async deliver(input: DeliverInput, context: DeliveryContext): Promise<DeliveryOutcome> {
+  async deliver(
+    input: DeliverInput,
+    context: DeliveryContext,
+    relay?: WhatsappRelay,
+  ): Promise<DeliveryOutcome> {
     const user = await this.prisma.user.findUnique({
       where: { id: input.userId },
       select: { name: true, bannedAt: true },
@@ -167,6 +190,30 @@ export class OutreachService {
       // identical body rather than a second, differently-worded one.
       seed: `${input.userId}:${input.kind}:${input.dedupeKey}`,
     });
+
+    /*
+     * The WhatsApp leg goes FIRST when there is one, and only after a cheap
+     * look at the ledger.
+     *
+     * Everywhere else the unique index is the only idempotency this method
+     * needs, because a duplicate insert rolls the chat message back with it.
+     * A WhatsApp message cannot be rolled back — once the sidecar has taken
+     * it, the student has it. So the "already sent?" SELECT that the header
+     * calls racy is added here as well, and the race it leaves (two replicas
+     * between this read and the insert) is closed by the sweeper's advisory
+     * lock, not by this method.
+     */
+    let leg: WhatsappLeg | null = null;
+    if (relay) {
+      const already = await this.prisma.outreachMessage.findUnique({
+        where: {
+          userId_kind_dedupeKey: { userId: input.userId, kind: input.kind, dedupeKey: input.dedupeKey },
+        },
+        select: { id: true },
+      });
+      if (already) return 'duplicate';
+      leg = await relay(composed.body);
+    }
 
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -224,6 +271,12 @@ export class OutreachService {
             facts: input.facts as unknown as Prisma.InputJsonValue,
             conversationId,
             messageId: message.id,
+            ...(leg
+              ? {
+                  whatsappStatus: leg.status,
+                  whatsappMessageId: leg.status === 'sent' ? leg.messageId : null,
+                }
+              : {}),
           },
         });
 

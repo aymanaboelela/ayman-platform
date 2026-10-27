@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
-import type { OutreachSettings } from '@ayman/contracts/admin/settings';
+import { OutreachSettingsSchema, type OutreachSettings } from '@ayman/contracts/admin/settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { NotificationsRealtimeService } from '../notifications/notifications-realtime.service';
@@ -29,6 +29,8 @@ import { OutreachSweeper } from './outreach-sweeper.service';
  */
 
 const SETTINGS: OutreachSettings = {
+  // Every key this spec does not care about, at its schema default.
+  ...OutreachSettingsSchema.parse({}),
   quizResult: true,
   quizNudge: true,
   lessonPraise: true,
