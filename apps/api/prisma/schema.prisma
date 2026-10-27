@@ -259,6 +259,10 @@ model User {
   /// phone, and (on a student) the admins whose phones hold them.
   contactExportsMade         ContactExport[]         @relation("ContactExportAdmin")
   contactExportsOf           ContactExport[]         @relation("ContactExportStudent")
+  dailyAnswers               DailyAnswer[]
+  lessonNotes                LessonNote[]
+  studyPlan                  StudyPlan?
+  studentBadges              StudentBadge[]
 
   @@unique([email])
   @@map("users")
@@ -1449,6 +1453,7 @@ model Lesson {
   /// and its homework (both hang off this same `lessonId`).
   accessGrants        AccessGrant[]
   unlockCodeItems     UnlockCodeItem[]
+  notes               LessonNote[]
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -6205,5 +6210,89 @@ model DesignAsset {
 
   @@index([folderId, createdAt])
   @@map("design_assets")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Student engagement — «سؤال اليوم», «ملاحظاتي», «خطة المذاكرة», «أوسمتي».
+// («ملخص الشهر» stores nothing: it is a read over the rows that already exist.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// One row per student per Cairo day: the question dealt that day, and the
+/// answer once given. Written on the first read of the day, so the question
+/// cannot change under a student who reloads, and the answer is one shot.
+/// `question_version_id` carries no foreign key on purpose: the bank may drop
+/// an old version, and losing a day's row would break a streak that happened.
+model DailyAnswer {
+  userId            String    @map("user_id")
+  /// The Cairo calendar day, never a UTC one.
+  day               DateTime  @db.Date
+  questionVersionId String    @map("question_version_id") @db.Uuid
+  /// Where the question was drawn from, frozen at the deal — the label and
+  /// the «راجع المحاضرة» link stay what they were that morning.
+  courseId          String    @map("course_id") @db.Uuid
+  lessonId          String?   @map("lesson_id") @db.Uuid
+  optionId          String?   @map("option_id") @db.Uuid
+  /// `null` until answered.
+  wasRight          Boolean?  @map("was_right")
+  dealtAt           DateTime  @default(now()) @map("dealt_at")
+  answeredAt        DateTime? @map("answered_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@map("daily_answers")
+  @@schema("app")
+}
+
+/// A student's own note on a lesson, optionally pinned to a second of its video.
+model LessonNote {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  userId          String   @map("user_id")
+  lessonId        String   @map("lesson_id") @db.Uuid
+  positionSeconds Int?     @map("position_seconds")
+  body            String
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lessonId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([lessonId])
+  @@map("lesson_notes")
+  @@schema("app")
+}
+
+/// The exam date a student plans toward. The days themselves are never
+/// stored: they are re-flowed from the live backlog on every read, so a
+/// finished lecture leaves the plan the moment it is finished.
+model StudyPlan {
+  userId    String   @id @map("user_id")
+  examDate  DateTime @map("exam_date") @db.Date
+  /// Weekdays off, 0 = Sunday … 6 = Saturday.
+  daysOff   Int[]    @default([]) @map("days_off")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_plans")
+  @@schema("app")
+}
+
+/// The first moment a badge tier was seen earned. Written by the read that
+/// first finds it true; only ever inserted, so a date never moves.
+model StudentBadge {
+  userId   String   @map("user_id")
+  /// `<family>:<tier>`, e.g. `streak:gold` — see `contracts/engagement.ts`.
+  key      String
+  earnedAt DateTime @default(now()) @map("earned_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@map("student_badges")
   @@schema("app")
 }

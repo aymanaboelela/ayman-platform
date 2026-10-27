@@ -134,6 +134,42 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
     defaultForTenant: false,
   },
+  /*
+   * The five engagement features (`contracts/engagement.ts`). Ayman first, like
+   * everything new: on for him, off on any other stack until the owner opens
+   * them one by one. None carries his identity, so an opened stack works at
+   * once with its own name on it.
+   */
+  {
+    key: 'dailyQuestion',
+    nameAr: 'سؤال اليوم',
+    descriptionAr: 'سؤال واحد كل يوم من كورسات الطالب، وسلسلة الأيام اللي جاوب فيها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'lessonNotes',
+    nameAr: 'ملاحظاتي',
+    descriptionAr: 'ملاحظات الطالب على المحاضرة، متعلّمة على دقيقة في الفيديو، وصفحة بيها كلها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'studyPlan',
+    nameAr: 'خطة المذاكرة',
+    descriptionAr: 'الطالب يختار ميعاد امتحانه، والمنصة توزّع اللي عليه على الأيام الباقية.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'badges',
+    nameAr: 'أوسمتي',
+    descriptionAr: 'أوسمة برونز وفضة ودهب على المحاضرات والكويزات والسلسلة وغيرها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'monthlyRecap',
+    nameAr: 'ملخص الشهر',
+    descriptionAr: 'الشهر بالأرقام — ساعات المذاكرة والدرجات والأيام — وصورة ستوري يشيّرها.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

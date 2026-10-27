@@ -147,7 +147,9 @@
     "./share-cards": "./src/share-cards.ts",
     "./copy/mistakes": "./src/copy/mistakes.ts",
     "./backlog": "./src/backlog.ts",
-    "./copy/backlog": "./src/copy/backlog.ts"
+    "./copy/backlog": "./src/copy/backlog.ts",
+    "./engagement": "./src/engagement.ts",
+    "./copy/engagement": "./src/copy/engagement.ts"
   },
   "scripts": {
     "lint": "eslint src",
