@@ -2,6 +2,7 @@ import { z } from '@ayman/contracts/zod';
 import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
 import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
 import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
+import { LeadStatusSchema } from '@ayman/contracts/wa-bot/schemas';
 
 /**
  * «حملة واتساب» — the shapes the admin screen, the API and the sender all
@@ -173,6 +174,27 @@ export const AudienceSchema = z.object({
    * cannot be pasted in wholesale.
    */
   extraPhones: z.array(z.string()).max(500),
+  /**
+   * «المهتمين» — numbers that wrote to the WhatsApp number first and match no
+   * account (`wa_chats` with `who = lead`). Behind the `whatsapp.bot`
+   * entitlement on the API side, so a stack without the bot resolves it to
+   * nobody rather than to an error.
+   *
+   * The SAFEST audience on this list for a WhatsApp number, not the riskiest:
+   * every one of these people opened the chat themselves, which is exactly
+   * the condition under which WhatsApp lets a message through (see
+   * `whatsapp-sent-is-not-delivered`'s nack 463).
+   *
+   * `.default(false)` so every campaign row written before it still parses.
+   */
+  leads: z.boolean().default(false),
+  /**
+   * Which leads. Empty = every lead that is still `new` or `contacted` — a
+   * lead marked «مفيش اهتمام» asked to be left alone in all but words, and one
+   * that subscribed is a student now, reached through «الطلبة». Ticking those
+   * two explicitly is the only way to include them.
+   */
+  leadStatuses: z.array(LeadStatusSchema).default([]),
 });
 export type Audience = z.infer<typeof AudienceSchema>;
 
@@ -186,6 +208,8 @@ export const EMPTY_AUDIENCE: Audience = {
   neverSubscribed: false,
   bookOrderStatuses: [],
   extraPhones: [],
+  leads: false,
+  leadStatuses: [],
 };
 
 /**
@@ -422,9 +446,11 @@ export type WhatsappDevice = z.infer<typeof WhatsappDeviceSchema>;
 /**
  * `outreach` is «رسايل الواتساب التلقائية» — the abandoned-checkout reminder
  * and the signup nudge (`AutoOutreachSweeper`). Its own source so the device
- * page can tell an automatic message from a campaign one.
+ * page can tell an automatic message from a campaign one. `bot` is the
+ * auto-reply bot's answer and `inbox` a reply typed in the WhatsApp inbox —
+ * both into a chat the other side opened (`wa_chats`).
  */
-export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'outreach', 'test', 'other'] as const;
+export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'outreach', 'test', 'other', 'bot', 'inbox'] as const;
 export type WhatsappSendSource = (typeof WHATSAPP_SEND_SOURCES)[number];
 
 /**

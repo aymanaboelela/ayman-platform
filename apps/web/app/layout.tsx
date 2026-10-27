@@ -6,6 +6,7 @@ import { plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
 import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
 import { BrandMarkProvider } from '@/components/brand-mark-provider';
+import { courseCoverStyle } from '@/lib/brand-image';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { RouteScrollReset } from '@/components/motion/route-scroll-reset';
@@ -167,6 +168,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           already requires for its own streaming style injection.
         */}
         <style dangerouslySetInnerHTML={{ __html: renderBrandingStyle(branding) }} />
+        {/* The default course picture from «الهوية البصرية» — see
+            `courseCoverStyle` for why a variable and why the key is checked. */}
+        {courseCoverStyle(branding) ? (
+          <style dangerouslySetInnerHTML={{ __html: courseCoverStyle(branding) }} />
+        ) : null}
         {/*
           `faviconKey`, NOT `faviconAssetId`.
 
@@ -186,6 +192,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         */}
         {branding.faviconKey ? (
           <link rel="icon" href={mediaUrl(branding.faviconKey)} type="image/webp" />
+        ) : null}
+        {/*
+          The dark-mode icon follows the BROWSER's theme, not the site's: the
+          tab strip it sits on is drawn by the browser, so `prefers-color-scheme`
+          is the right switch here even though the page ignores it. Listed
+          second because a browser takes the last matching icon.
+        */}
+        {/* iOS reads only this for «Add to Home Screen» and ignores the
+            manifest. It scales the 256px file down to its own 180. */}
+        {branding.appIconKey ? (
+          <link
+            rel="apple-touch-icon"
+            href={`/_next/image?url=${encodeURIComponent(mediaUrl(branding.appIconKey))}&w=256&q=75`}
+          />
+        ) : null}
+        {branding.faviconDarkKey ? (
+          <link
+            rel="icon"
+            href={mediaUrl(branding.faviconDarkKey)}
+            type="image/webp"
+            media="(prefers-color-scheme: dark)"
+          />
         ) : null}
       </head>
       <body>
@@ -235,8 +263,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               presets: the two slots are theme variants of one mark, and the
               surfaces that render it — a 38px circle on a dark rail, on a dark
               admin sidebar, on the dark auth panel — want the dark-ground one.
+
+              `markKey` before both: the circle's own slot («الصورة اللي فوق»
+              on «الهوية البصرية»), cropped square for this box, with its own
+              dark-mode file.
             */}
-            <BrandMarkProvider markKey={branding.logoDarkKey ?? branding.logoLightKey}>
+            <BrandMarkProvider
+              markKey={branding.markKey ?? branding.logoDarkKey ?? branding.logoLightKey}
+              markDarkKey={branding.markDarkKey}
+            >
               <RouteProgress>{children}</RouteProgress>
             </BrandMarkProvider>
           </MotionProvider>

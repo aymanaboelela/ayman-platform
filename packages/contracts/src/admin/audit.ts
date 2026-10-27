@@ -271,6 +271,15 @@ export const AUDIT_ACTIONS = [
   // any campaign, and because the `lid` it records is the one fact anybody
   // will want back when asking why a campaign delivered to nobody.
   'whatsapp:test-send',
+  // «الرد الآلي». The settings and the answers are what the bot SAYS from
+  // the instructor's number, so a change to either is worth a row; a reply
+  // typed in the WhatsApp inbox is a message to a real person, audited for the
+  // same reason as a test send.
+  'wa-bot:settings',
+  'wa-bot:answer-update',
+  'wa-bot:answer-create',
+  'wa-bot:answer-reset',
+  'wa-bot:reply',
   // Vodafone Cash course subscriptions. `payment:submit` is written by the
   // STUDENT — the one auditable action in this list an admin never takes —
   // because a rejected claim's whole value is a durable record of exactly

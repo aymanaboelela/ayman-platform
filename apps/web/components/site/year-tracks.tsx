@@ -7,7 +7,7 @@ import { useGsap } from '@/components/motion/use-gsap';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { MediaSlot } from '@/components/site/media-slot';
 import { ElectricCard } from '@/components/site/electric-card';
-import { TrackCardView, type TrackCard } from '@/components/site/track-card';
+import { TrackCardView, type TrackCard, type TrackPosters } from '@/components/site/track-card';
 import { TracksDragon, type DragonStage } from '@/components/site/tracks-dragon';
 import { DRAGON_IGNITES_AT, DRAGON_RIDE } from '@/lib/brand-assets';
 import { useRampHex } from '@/lib/ramp-color';
@@ -161,8 +161,8 @@ const GLYPHS: readonly [number, number, number, number, number, string][] = [
  * A programming stack renders `<CodeYearTracks>` exactly as `YearTracks` was
  * rendered before this wrapper existed: same element, same props, same DOM.
  */
-export function YearTracks() {
-  return TEACHES_CODE ? <CodeYearTracks /> : <YearCards />;
+export function YearTracks({ posters }: { posters?: TrackPosters }) {
+  return TEACHES_CODE ? <CodeYearTracks posters={posters} /> : <YearCards />;
 }
 
 /**
@@ -174,7 +174,7 @@ export function YearTracks() {
  * scaled down, because a 3:4 cut-out behind a stacked column has nothing to
  * stand behind.
  */
-function CodeYearTracks() {
+function CodeYearTracks({ posters }: { posters?: TrackPosters }) {
   const ref = useRef<HTMLElement>(null);
   const stageRef = useRef<DragonStage | null>(null);
   // A real dependency for the `useGsap` call below, not decoration: TracksDragon
@@ -967,17 +967,17 @@ function CodeYearTracks() {
               three cards competing at the same intensity. */}
           <div className="tracks__card tracks__card--start" data-track-card>
             <ElectricCard color={flankBorder} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
-              <TrackCardView card={ESSENTIALS} />
+              <TrackCardView card={ESSENTIALS} poster={posters?.trackEssentials} />
             </ElectricCard>
           </div>
           <div className="tracks__card tracks__card--end" data-track-card>
             <ElectricCard color={flankBorder} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
-              <TrackCardView card={YEAR_1} />
+              <TrackCardView card={YEAR_1} poster={posters?.trackYear1} />
             </ElectricCard>
           </div>
           <div className="tracks__card tracks__card--active" data-track-card>
             <ElectricCard color={activeBorder} radius={TRACK_RADIUS} speed={0.7} chaos={0.16}>
-              <TrackCardView card={YEAR_2} />
+              <TrackCardView card={YEAR_2} poster={posters?.trackYear2} />
             </ElectricCard>
           </div>
         </div>

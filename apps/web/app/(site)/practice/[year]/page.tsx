@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Languages } from 'lucide-react';
@@ -8,7 +7,9 @@ import { PRACTICE_TRACKS } from '@ayman/contracts/practice';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { IS_AYMAN } from '@/lib/tenant';
-import { getBrandAsset } from '@/lib/brand-assets';
+import { brandImage } from '@/lib/brand-image';
+import { getBranding } from '@/lib/settings';
+import { ThemedImage } from '@/components/themed-image';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import { getPracticeListOrEmpty, parsePracticeYear, practicePath, practiceTotals } from '@/lib/practice/catalog';
@@ -34,8 +35,8 @@ export default async function PracticeYearPage({ params }: { params: Params }) {
   if (!IS_AYMAN) notFound();
   const year = parsePracticeYear((await params).year);
   if (!year) notFound();
-  const { sets } = await getPracticeListOrEmpty();
-  const poster = getBrandAsset(year === 1 ? 'trackYear1' : 'trackYear2');
+  const [{ sets }, branding] = await Promise.all([getPracticeListOrEmpty(), getBranding()]);
+  const poster = brandImage(branding, year === 1 ? 'trackYear1' : 'trackYear2');
 
   return (
     <main className="practice-page">
@@ -58,11 +59,9 @@ export default async function PracticeYearPage({ params }: { params: Params }) {
             <p className="site-lead">{p.index.chooseLead}</p>
           </div>
           {poster ? (
-            <Image
+            <ThemedImage
               className="practice-hero__poster"
-              src={poster.src}
-              width={poster.width}
-              height={poster.height}
+              image={poster}
               alt=""
               sizes="(max-width: 48rem) 100vw, 32rem"
               priority

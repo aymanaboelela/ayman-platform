@@ -25,9 +25,13 @@ export class QuizScoreFeed implements ScoreFeed {
         id: true,
         submittedAt: true,
         scaledScore: true,
+        // The attempt's OWN snapshot, not `quiz.gradeOutOf`: a teacher who
+        // lowers a quiz's grade after students sat it (40 → 20) turned every
+        // old mark into 200%, and `RecentScoreSchema.max(100)` then failed
+        // the whole dashboard response — not just the one row.
+        gradeOutOf: true,
         quiz: {
           select: {
-            gradeOutOf: true,
             lesson: { select: { title: true, course: { select: { slug: true } } } },
           },
         },
@@ -35,13 +39,16 @@ export class QuizScoreFeed implements ScoreFeed {
     });
 
     return attempts.map((attempt) => {
-      const gradeOutOf = Number(attempt.quiz.gradeOutOf);
+      const gradeOutOf = Number(attempt.gradeOutOf);
       const scaledScore = Number(attempt.scaledScore ?? 0);
+      const percent = gradeOutOf > 0 ? Math.round((scaledScore / gradeOutOf) * 100) : 0;
       return {
         attemptId: attempt.id,
         quizTitle: attempt.quiz.lesson.title,
         courseSlug: attempt.quiz.lesson.course.slug,
-        scorePercent: gradeOutOf > 0 ? Math.round((scaledScore / gradeOutOf) * 100) : 0,
+        // Clamped as well: a bonus or a hand-regrade can still push a mark past
+        // its own ceiling, and one row must never take the page down with it.
+        scorePercent: Math.min(Math.max(percent, 0), 100),
         submittedAt: attempt.submittedAt!.toISOString(),
       };
     });

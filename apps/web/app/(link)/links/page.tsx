@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   BadgeCheck,
@@ -29,10 +28,11 @@ import {
   type SocialKey,
 } from '@/components/site/social-icons';
 import { JsonLd } from '@/components/seo/json-ld';
-import { getBrandAsset } from '@/lib/brand-assets';
+import { brandImage } from '@/lib/brand-image';
+import { ThemedImage } from '@/components/themed-image';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBranding, getPublicSettingsOrDefaults } from '@/lib/settings';
 
 const c = copy.linkhub;
 
@@ -99,9 +99,10 @@ export async function generateMetadata(): Promise<Metadata> {
  * homepage, which is the specific bug `site-profiles.ts` was created to end.
  */
 export default async function LinksPage() {
-  const [{ contact }, features] = await Promise.all([
+  const [{ contact }, features, branding] = await Promise.all([
     getPublicSettingsOrDefaults(),
     getEntitlements(),
+    getBranding(),
   ]);
 
   /*
@@ -141,7 +142,8 @@ export default async function LinksPage() {
     ] satisfies { key: SocialRow['key']; href: string | null; label: string }[]
   ).flatMap(({ key, href, label }) => (href ? [{ key, href, label }] : []));
 
-  const avatar = getBrandAsset('mark');
+  // An upload from «الهوية البصرية» first, his file second — `brandImage()`.
+  const avatar = brandImage(branding, 'mark');
 
   return (
     <main className="linkhub__page">
@@ -184,10 +186,8 @@ export default async function LinksPage() {
               branch stops being dead, and an `alt` is the one piece of a
               picture a screen-reader user hears in full.
             */}
-            <Image
-              src={avatar.src}
-              width={avatar.width}
-              height={avatar.height}
+            <ThemedImage
+              image={avatar}
               alt={tenantName(copy.site.instructor)}
               priority
               fetchPriority="high"

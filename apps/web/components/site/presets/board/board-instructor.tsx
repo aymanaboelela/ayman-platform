@@ -1,5 +1,5 @@
-import Image from 'next/image';
-import { mediaUrl } from '@ayman/ui/branding';
+import { ThemedImage } from '@/components/themed-image';
+import { keyPair } from '@/lib/brand-image';
 import { copy } from '@ayman/contracts/copy';
 import { tenantName } from '@/lib/tenant';
 import { getCatalogOrEmpty } from '@/lib/catalog';
@@ -119,11 +119,9 @@ export async function BoardInstructor({ level }: { level: 1 | 2 }) {
               `alt=""`: الاسم مكتوب تحتيها مباشرة في `.board-id__name`.
             */
             <span className="board-id__portrait">
-              <Image
-                src={mediaUrl(branding.portraitKey)}
+              <ThemedImage
+                image={keyPair(branding.portraitKey, branding.portraitDarkKey, 192, 256)}
                 alt=""
-                width={192}
-                height={256}
                 sizes="192px"
               />
             </span>

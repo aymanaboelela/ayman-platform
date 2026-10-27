@@ -27,7 +27,12 @@ export function UnitCertificateShare({ data, brand }: { data: UnitCertificateDat
   const [open, setOpen] = useState(false);
 
   const draw = useCallback(
-    (canvas: HTMLCanvasElement, fonts: CardFonts, hero: HTMLImageElement | undefined) =>
+    (
+      canvas: HTMLCanvasElement,
+      fonts: CardFonts,
+      hero: HTMLImageElement | undefined,
+      signature: HTMLImageElement | undefined,
+    ) =>
       drawUnitCertificate(canvas, {
         studentName: data.studentName,
         unitTitle: data.unitTitle,
@@ -35,6 +40,7 @@ export function UnitCertificateShare({ data, brand }: { data: UnitCertificateDat
         earnedAt: data.earnedAt,
         fonts,
         hero,
+        signature,
         qr: brand.qr,
         text: {
           platform: brand.platform,
@@ -65,6 +71,8 @@ export function UnitCertificateShare({ data, brand }: { data: UnitCertificateDat
         title={c.dialogCertificateTitle}
         fileName="unit-certificate"
         heroSrc={brand.heroSrc}
+        // Black paper: the light-ink file, else the dark-paper one.
+        signatureSrc={brand.signatureDarkSrc ?? brand.signatureSrc}
         pdf
         draw={draw}
       />
@@ -86,10 +94,16 @@ export function ExamCertificateShare({ data, brand }: { data: ExamCertificateDat
   const [open, setOpen] = useState(false);
 
   const draw = useCallback(
-    (canvas: HTMLCanvasElement, fonts: CardFonts) =>
+    (
+      canvas: HTMLCanvasElement,
+      fonts: CardFonts,
+      _hero: HTMLImageElement | undefined,
+      signature: HTMLImageElement | undefined,
+    ) =>
       drawExamCertificate(canvas, {
         ...data,
         fonts,
+        signature,
         qr: brand.qr,
         text: {
           platform: brand.platform,
@@ -121,6 +135,8 @@ export function ExamCertificateShare({ data, brand }: { data: ExamCertificateDat
         onOpenChange={setOpen}
         title={c.dialogCertificateTitle}
         fileName="exam-certificate"
+        // Ivory paper: the dark-ink file, else the other one.
+        signatureSrc={brand.signatureSrc ?? brand.signatureDarkSrc}
         pdf
         draw={draw}
       />

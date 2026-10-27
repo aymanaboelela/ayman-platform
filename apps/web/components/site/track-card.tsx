@@ -1,7 +1,8 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
+import type { ThemedBrandImage } from '@/lib/brand-image';
+import { ThemedImage } from '@/components/themed-image';
 
 export type CodeToken = ['k' | 'v' | 's' | 'n' | 'c' | 'f' | 'a' | 'p', string];
 
@@ -54,8 +55,19 @@ const TICKS = 8;
  * highlighter's WASM payload on the landing's critical path to colour them
  * would cost more than the whole section is worth.
  */
-export function TrackCardView({ card }: { card: TrackCard }) {
-  const poster = card.image ? getBrandAsset(card.image) : undefined;
+/**
+ * The three posters as the page resolved them — an upload from «الهوية
+ * البصرية» first, the file in `public/brand/` second (`brandImage()`).
+ * Resolved by the server page and handed down, because this section is a
+ * client component and `getBranding()` is not.
+ */
+export type TrackPosters = Partial<
+  Record<'trackEssentials' | 'trackYear1' | 'trackYear2', ThemedBrandImage | undefined>
+>;
+
+export function TrackCardView({ card, poster: resolved }: { card: TrackCard; poster?: ThemedBrandImage }) {
+  const registered = card.image ? getBrandAsset(card.image) : undefined;
+  const poster = resolved ?? (registered ? { light: registered, dark: null } : undefined);
 
   return (
     <Link href={card.href} className={`track ${card.active ? 'track--active' : ''}`}>
@@ -71,10 +83,8 @@ export function TrackCardView({ card }: { card: TrackCard }) {
             above it is the page's LCP element — see `<MediaSlot>` on why a
             second claim on the queue is worth less than none.
           */}
-          <Image
-            src={poster.src}
-            width={poster.width}
-            height={poster.height}
+          <ThemedImage
+            image={poster}
             alt=""
             sizes="(max-width: 64rem) 92vw, 31vw"
             className="track__cover-img"

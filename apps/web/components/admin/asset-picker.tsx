@@ -52,6 +52,18 @@ const SLOT_ASPECT = {
   hero: 'source',
   portrait: 3 / 4,
   login: 'source',
+  /** The top-bar circle: square, because `object-fit: cover` crops it round. */
+  mark: 1,
+  /** The year posters are 3:2 — see `BRAND_ASSET_RATIO` on why not 16:9. */
+  trackEssentials: 3 / 2,
+  trackYear1: 3 / 2,
+  trackYear2: 3 / 2,
+  honorHost: 4 / 5,
+  practiceGuide: 16 / 9,
+  courseCover: 16 / 9,
+  appIcon: 1,
+  /** A signature is as wide as it was written; forcing a ratio pads or cuts it. */
+  signature: 'source',
 } as const;
 
 export type AssetSlot = keyof typeof SLOT_ASPECT;
@@ -72,6 +84,17 @@ export interface AssetPickerProps {
   onChange: (value: string | null) => void;
   assets: readonly MediaAsset[];
   slot: AssetSlot;
+  /**
+   * What the site shows in this slot while nothing is chosen — the
+   * platform's own file, or the light-mode picture under a dark slot — so the
+   * empty state says «this is what is live» instead of «no image», and nobody
+   * uploads a picture that is already there.
+   */
+  current?: { src: string; label: string } | null;
+  /** Previews on the ground the picture will actually sit on. */
+  tone?: 'light' | 'dark';
+  /** `tile` stacks a wide preview over the buttons, for a two-column card. */
+  layout?: 'row' | 'tile';
   'aria-invalid'?: boolean;
   'aria-describedby'?: string;
 }
@@ -111,6 +134,9 @@ export function AssetPicker({
   onChange,
   assets,
   slot,
+  current = null,
+  tone,
+  layout = 'row',
   ...aria
 }: AssetPickerProps) {
   const router = useRouter();
@@ -191,7 +217,7 @@ export function AssetPicker({
         }}
       />
 
-      <div className="flex items-start gap-3">
+      <div className={layout === 'tile' ? 'flex flex-col gap-2' : 'flex items-start gap-3'}>
         {/*
           A raw <img>, like every other media-origin render in this app:
           uploads are not in `next.config`'s `remotePatterns`, so the optimiser
@@ -204,8 +230,10 @@ export function AssetPicker({
         <div
           className={cn(
             'relative grid shrink-0 place-items-center overflow-hidden rounded-[var(--r-md)] border border-line',
-            'bg-[repeating-conic-gradient(var(--color-surface-3)_0_25%,transparent_0_50%)] bg-[length:14px_14px]',
-            slot === 'favicon' ? 'size-16' : 'h-16 w-28',
+            tone === 'dark'
+              ? 'bg-[var(--ink)]'
+              : 'bg-[repeating-conic-gradient(var(--color-surface-3)_0_25%,transparent_0_50%)] bg-[length:14px_14px]',
+            layout === 'tile' ? 'h-32 w-full' : slot === 'favicon' ? 'size-16' : 'h-16 w-28',
           )}
         >
           {selected ? (
@@ -214,11 +242,20 @@ export function AssetPicker({
               alt={s.assetPreviewAlt}
               className="max-h-full max-w-full object-contain"
             />
+          ) : current ? (
+            /* What is live now, dimmed a touch so it never reads as a choice
+               made in this slot. The label under it says where it came from. */
+            <img src={current.src} alt={s.assetPreviewAlt} className="max-h-full max-w-full object-contain opacity-80" />
           ) : (
             <span className="px-1 text-center text-[length:var(--fs-text-sm)] text-fg-muted">
               {c.noImage}
             </span>
           )}
+          {!selected && current ? (
+            <span className="absolute bottom-1.5 start-1.5 rounded-full bg-surface-1 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-fg shadow-[var(--shadow-sm)]">
+              {current.label}
+            </span>
+          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col gap-2">

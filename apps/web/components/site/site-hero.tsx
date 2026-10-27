@@ -25,6 +25,8 @@ const DEFAULT_STATS: HeroStat[] = [
 export interface SiteHeroProps {
   /** صورة المدرّس للمقدمة، لو رفع واحدة — شوف `MediaSlot`. */
   heroKey?: string | null;
+  /** The dark-mode hero, when one was uploaded. */
+  heroDarkKey?: string | null;
   eyebrow?: string;
   headline?: string;
   /** The static second line, and the reduced-motion fallback for `rotating`. */
@@ -64,6 +66,7 @@ export function SiteHero({
   secondaryCtaHref = '/courses',
   stats = DEFAULT_STATS,
   heroKey,
+  heroDarkKey,
 }: SiteHeroProps = {}) {
   const ref = useRef<HTMLElement>(null);
 
@@ -148,6 +151,7 @@ export function SiteHero({
         <MediaSlot
           kind="hero"
           tenantKey={heroKey}
+          tenantDarkKey={heroDarkKey}
           alt=""
           priority
           fetchPriority="high"

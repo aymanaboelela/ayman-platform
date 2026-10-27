@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { ThemedImage } from '@/components/themed-image';
+import { keyPair } from '@/lib/brand-image';
 import { mediaUrl } from '@ayman/ui/branding';
 import { copy } from '@ayman/contracts/copy';
 import { getBranding } from '@/lib/settings';
@@ -102,11 +104,9 @@ export async function NeonInstructor({ level }: { level: 1 | 2 }) {
                   ولوجو الهيرو هو اللي على مسار الـLCP.
                 */
                 <span className="neon-who__portrait">
-                  <Image
-                    src={mediaUrl(portraitKey)}
+                  <ThemedImage
+                    image={keyPair(portraitKey, branding.portraitDarkKey, 160, 213)}
                     alt=""
-                    width={160}
-                    height={213}
                     sizes="160px"
                   />
                 </span>

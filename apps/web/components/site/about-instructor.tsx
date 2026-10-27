@@ -169,6 +169,7 @@ export async function AboutInstructor({
           <MediaSlot
             kind="portrait"
             tenantKey={branding.portraitKey}
+            tenantDarkKey={branding.portraitDarkKey}
             alt={tenantName(copy.site.instructor)}
             sizes="(max-width: 1024px) 26rem, 32rem"
           />

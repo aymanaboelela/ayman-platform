@@ -19,7 +19,8 @@ import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getBrandAsset } from '@/lib/brand-assets';
-import { useBrandMark } from '@/components/brand-mark-provider';
+import { useBrandMark, useBrandMarkDark } from '@/components/brand-mark-provider';
+import { THEME_IMG_DARK, THEME_IMG_LIGHT } from '@/components/themed-image';
 import { tenantName } from '@/lib/tenant';
 // `STACK_MONOGRAM` — `</>` on a stack that teaches code, the stack's own
 // initial on any other; see its note.
@@ -105,6 +106,8 @@ export function BrandLockup({
    */
   const ambientMark = useBrandMark();
   const uploaded = markKey === undefined ? ambientMark : markKey;
+  const ambientDark = useBrandMarkDark();
+  const uploadedDark = markKey === undefined ? ambientDark : null;
   const mark = getBrandAsset('mark');
   const hasImage = Boolean(uploaded) || Boolean(mark);
 
@@ -129,7 +132,28 @@ export function BrandLockup({
             around), and `object-fit: cover` behind `overflow: hidden` performs
             the circular crop on whatever shape arrives.
           */
-          <Image src={mediaUrl(uploaded)} width={38} height={38} alt="" sizes="38px" />
+          uploadedDark ? (
+            <>
+              <Image
+                src={mediaUrl(uploaded)}
+                width={38}
+                height={38}
+                alt=""
+                sizes="38px"
+                className={THEME_IMG_LIGHT}
+              />
+              <Image
+                src={mediaUrl(uploadedDark)}
+                width={38}
+                height={38}
+                alt=""
+                sizes="38px"
+                className={THEME_IMG_DARK}
+              />
+            </>
+          ) : (
+            <Image src={mediaUrl(uploaded)} width={38} height={38} alt="" sizes="38px" />
+          )
         ) : mark ? (
           <Image src={mark.src} width={mark.width} height={mark.height} alt="" sizes="38px" />
         ) : (

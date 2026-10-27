@@ -2120,6 +2120,77 @@ const admin = {
     portraitImageHint: 'بتظهر في قسم «المدرّس» في الصفحة الرئيسية — صورة واقفة، الوش في التلت الأعلى.',
     loginImage: 'صورة صفحة الدخول',
     loginImageHint: 'اللوحة اللي جنب فورم تسجيل الدخول وإنشاء الحساب.',
+    /**
+     * «الهوية البصرية» as two cards: the look (colour, which landing page,
+     * its shape) and every picture on the platform. Each picture is a card
+     * with a light-mode and a dark-mode file, and what it shows is what the
+     * site is serving NOW — an upload, the platform's own file, or nothing —
+     * so nobody uploads a picture that is already there.
+     */
+    lookSection: 'الألوان والصفحة الرئيسية',
+    lookLead: 'لون المنصة، وأنهي صفحة رئيسية تتعرض، وشكلها.',
+    imagesSection: 'صور المنصة',
+    imagesLead:
+      'كل صورة بتظهر في المنصة ليها خانة هنا بنسختين: للوضع الفاتح وللوضع الغامق. اللي معروض في كل خانة هو اللي شغال على الموقع دلوقتي.',
+    /** `{uploaded}` / `{builtIn}` / `{empty}` — counts of light-mode slots. */
+    imagesSummary: '{uploaded} مرفوعة · {builtIn} من المنصة · {empty} من غير صورة',
+    imagesGroupIdentity: 'الشعار والأيقونات',
+    imagesGroupLanding: 'الصفحة الرئيسية',
+    imagesGroupPages: 'صفحات تانية',
+    modeLight: 'الوضع الفاتح',
+    modeDark: 'الوضع الغامق',
+    sourceUploaded: 'مرفوعة',
+    sourceBuiltIn: 'صورة المنصة',
+    sourceSameAsLight: 'نفس صورة الفاتح',
+    sourceNone: 'من غير صورة',
+    darkOptional: 'اختياري. لو فاضية بتتعرض صورة الفاتح.',
+    unsaved: 'فيه تغييرات لسه ما اتحفظتش',
+    allSaved: 'كل حاجة محفوظة',
+    jumpTo: 'روح لـ',
+    slotLogo: 'الشعار',
+    slotLogoHint: 'اللوجو المكتوب. نسخة الغامق بتتحط على الأرضيات الغامقة.',
+    slotMark: 'الصورة اللي فوق',
+    slotMarkHint:
+      'الدايرة جنب الاسم في أعلى كل صفحة، وفي لوحة الأدمن، وصورة المساعد في الشات. مربعة والوش في النص.',
+    slotFavicon: 'أيقونة الموقع',
+    slotFaviconHint: 'في تبويب المتصفح. نسخة الغامق بتظهر لو المتصفح نفسه على الوضع الغامق.',
+    slotTrackEssentials: 'بوستر التأسيس',
+    slotTrackEssentialsHint: 'أول كارت في قسم السنين في الصفحة الرئيسية.',
+    slotTrackYear1: 'بوستر أولى ثانوي',
+    slotTrackYear1Hint: 'كارت أولى ثانوي في الصفحة الرئيسية وفي صفحة التدريب.',
+    slotTrackYear2: 'بوستر تانية ثانوي',
+    slotTrackYear2Hint: 'كارت تانية ثانوي في الصفحة الرئيسية وفي صفحة التدريب.',
+    slotHonorHost: 'صورة لوحة الشرف',
+    slotHonorHostHint: 'جنب «ألف مبروك للأوائل» في صفحة لوحة الشرف. صورة واقفة ٤:٥.',
+    slotPracticeGuide: 'صورة التدريب',
+    slotPracticeGuideHint: 'الصورة الكبيرة في صفحة التدريب وفي دعوة التدريب على الصفحة الرئيسية. عريضة ١٦:٩.',
+    slotCourseCover: 'صورة الكورسات الافتراضية',
+    slotCourseCoverHint:
+      'بتظهر ورا رسمة المادة في أي كورس ملوش غلاف، متلوّنة بلون المادة — فالكورسات تفضل شبه بعض في الروح ومختلفة في اللون.',
+    slotAppIcon: 'أيقونة الأبلكيشن',
+    slotAppIconHint: 'اللي بتظهر على شاشة الموبايل لما الطالب يضيف المنصة للشاشة الرئيسية. مربعة، ٥١٢ بكسل على الأقل.',
+    slotSignature: 'توقيعك',
+    slotSignatureHint:
+      'بيتحط على الشهادات مكان الاسم المكتوب. الفاتح (حبر غامق) لشهادة الامتحان، والغامق (حبر فاتح) لشهادة الوحدة. ارفعه PNG من غير خلفية.',
+    imagesGroupDocuments: 'الشهادات',
+    /** `{w}`×`{h}` — the chosen file's real size. */
+    appIconTooSmall: 'الصورة دي {w}×{h} — الموبايل محتاجها مربعة و٥١٢ بكسل على الأقل، وإلا هتطلع مشوّشة أو مقصوصة.',
+    seoPagesTitle: 'صورة المشاركة لكل صفحة',
+    seoPagesHint:
+      'لما حد يبعت لينك الصفحة دي على واتساب أو فيسبوك، دي الصورة اللي بتطلع. لو فاضية بتطلع «صورة المشاركة» العامة اللي فوق.',
+    seoPageCourses: 'الكورسات',
+    seoPageBooks: 'الكتب',
+    seoPageAbout: 'عن المدرّس',
+    seoPageHonorBoard: 'لوحة الشرف',
+    seoPagePractice: 'التدريب',
+    seoPageNews: 'الأخبار',
+    seoPageLinks: 'كل اللينكات',
+    seoPageSubscribe: 'الاشتراك',
+    navLook: 'الألوان',
+    navImages: 'الصور',
+    navSeo: 'جوجل والمشاركة',
+    navContact: 'التواصل',
+    navShipping: 'الشحن',
     ogImage: 'صورة المشاركة',
     assetNone: 'بدون',
     seoTitleHint: 'حتى 70 حرف — بيظهر في تبويب المتصفح ونتائج البحث',
@@ -7363,6 +7434,8 @@ const marketing = {
     outreach: 'رسالة تلقائية',
     test: 'تجربة',
     other: 'تانية',
+    bot: 'الرد الآلي',
+    inbox: 'رد من صندوق الواتساب',
   },
 
   /**

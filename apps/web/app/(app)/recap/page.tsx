@@ -23,9 +23,10 @@ export default async function RecapPage({
   if (!features.monthlyRecap) notFound();
   const raw = (await searchParams).month;
   const month = typeof raw === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : null;
-  const [recap, session] = await Promise.all([
+  const [recap, session, brand] = await Promise.all([
     readOr404(month ? `/api/me/recap?month=${month}` : '/api/me/recap', RecapPayloadSchema),
     getSession().catch(() => null),
+    shareBrand(),
   ]);
   return (
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-6 md:px-6 md:py-10">
@@ -33,7 +34,7 @@ export default async function RecapPage({
       <RecapView
         recap={recap}
         studentName={session?.name ?? ''}
-        brand={shareBrand()}
+        brand={brand}
         show={{ daily: features.dailyQuestion, notes: features.lessonNotes, badges: features.badges }}
       />
     </main>
