@@ -3415,6 +3415,35 @@ const admin = {
       'التحويل ماوصلش لحد دلوقتي',
     ],
   },
+  /**
+   * «النهارده» — the band at the top of `/admin` behind `adminMobile`: the
+   * night push's figures and the two ops alerts, on screen for as long as
+   * they are true. Worded about the thing, never to the reader.
+   */
+  today: {
+    title: 'النهارده',
+    review: 'مراجعة الاشتراكات',
+    subs: 'اشتراك النهارده',
+    /** Under the count: first-timers and renewals. */
+    subsSplit: '{fresh} جديد · {renewal} تجديد',
+    net: 'الصافي النهارده',
+    /** `{amount}` in whole pounds. */
+    netValue: '{amount} ج',
+    netHint: 'بعد المرتجعات',
+    whatsapp: 'الواتساب',
+    whatsappUp: 'شغال',
+    whatsappDown: 'فاصل',
+    whatsappUnreachable: 'مش بيرد',
+    whatsappUpHint: 'الرقم مترابط والرسايل بتتبعت',
+    whatsappDownHint: 'الرسايل واقفة لحد ما الرقم يترابط',
+    videos: 'رفع الفيديوهات',
+    videosOk: 'تمام',
+    videosOkHint: 'مفيش فيديو فشل',
+    /** `{n}` lectures whose upload gave up for good. */
+    videosFailed: '{n} فشل',
+    /** `{lesson}` — the newest one, named so it can be found. */
+    videosFailedHint: 'آخرهم: {lesson}',
+  },
   payments: {
     /* ── الفرز والفلترة ──────────────────────────────────────────────── */
     filterStatusLabel: 'الحالة',

@@ -512,6 +512,39 @@ div.unit[data-open] > .unit__head:hover {
   color: var(--a-11);
 }
 
+/* The «النهارده» band's two health tiles (`today-band.tsx`) — a state, not a
+   figure, so green or red rather than a group hue. Unlike `--waiting` the
+   green one IS drawn: «شغال» beside «فاصل» is what makes the red read as news. */
+.stat-tile--ok,
+.stat-tile--err {
+  --tone: var(--ok);
+  border-color: color-mix(in oklch, var(--tone), transparent 62%);
+  background: color-mix(in oklch, var(--tone), transparent 92%);
+}
+
+.stat-tile--err {
+  --tone: var(--err);
+}
+
+.stat-tile--ok .stat-tile__well,
+.stat-tile--err .stat-tile__well {
+  border-color: color-mix(in oklch, var(--tone), transparent 58%);
+  background: color-mix(in oklch, var(--tone), transparent 80%);
+  color: var(--tone);
+}
+
+.stat-tile--ok .stat-tile__value,
+.stat-tile--err .stat-tile__value {
+  color: var(--tone);
+}
+
+/* One line under the label: the split, the cause, the newest failure. */
+.stat-tile__hint {
+  margin-block-start: var(--s-2);
+  font-size: var(--fs-text-xs);
+  color: var(--n-10);
+}
+
 /* ---------------------------------------------------------------------------
    .course-count — one course on the overview's headcount strip.
 

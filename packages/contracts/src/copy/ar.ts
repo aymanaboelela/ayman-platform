@@ -5116,13 +5116,15 @@ export const copy = {
      * never to the reader — a teacher may be a man or a woman.
      *
      * The night summary is one line built from three parts, joined with « · »
-     * by `daily-summary.ts`. Whole pounds, Western digits.
+     * by `daily-summary.ts`. Whole pounds, Western digits. It lands at
+     * midnight, about the day that just closed — hence «اليوم», not
+     * «النهارده», which at 00:00 already means the new one.
      */
-    dailySummaryTitle: 'ملخص النهارده',
+    dailySummaryTitle: 'ملخص اليوم',
     /** `{n}` paid subscriptions, split into first-timers and renewals. */
     dailySummarySubs: '{n} اشتراك ({fresh} جديد، {renewal} تجديد)',
-    dailySummaryNoSubs: 'مفيش اشتراكات النهارده',
-    /** `{amount}` — the finance screen's own «الصافي» for today. */
+    dailySummaryNoSubs: 'مفيش اشتراكات اليوم ده',
+    /** `{amount}` — the finance screen's own «الصافي» for that day. */
     dailySummaryNet: 'الصافي {amount} جنيه',
     dailySummaryPending: '{n} طلب مستني مراجعة',
     dailySummaryNothingPending: 'مفيش طلبات مستنية',
