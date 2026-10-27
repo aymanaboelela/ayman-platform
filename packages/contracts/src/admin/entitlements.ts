@@ -180,6 +180,16 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'تذكير «كمّل الدفع» للي فتح الدفع وماكمّلش، ورسالة للي سجّل ومااشتركش في أي كورس.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول»، زي `shareCards`. البوستات بتتنشر على صفحة المدرّس هو
+     * وبالتوكن بتاعه هو، فلما تتفتح لمدرّس مفيش حاجة من بتاعة أيمن بتعدّي.
+     */
+    key: 'socialPosts',
+    nameAr: 'بوستات السوشيال',
+    descriptionAr: 'بوستات جاهزة من لوحة الشرف والنتايج والشهادات والمحتوى الجديد، وتقويم ونشر على فيسبوك وإنستجرام.',
+    defaultForTenant: false,
+  },
   /*
    * The engagement features (`contracts/engagement.ts`). Ayman first, like
    * everything new: on for him, off on any other stack until the owner opens

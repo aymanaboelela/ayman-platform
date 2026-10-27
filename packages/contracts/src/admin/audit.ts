@@ -555,6 +555,15 @@ export const AUDIT_ACTIONS = [
   'design:delete',
   'design:publish',
   /*
+   * «استوديو البوستات». `social:publish` is the one that puts something on a
+   * public page under the teacher's name — through the Graph API, or marked
+   * by hand after a manual post (`mode` in metadata). `social:connection`
+   * records that the Page token changed, never the token itself.
+   */
+  'social:update',
+  'social:publish',
+  'social:connection',
+  /*
    * «المونتاج». Audited for the studio's reason — the editor's account belongs
    * to someone outside the team. `montage:publish` is the one that reaches
    * students: a hand-over put on a lesson, with the lesson's id.

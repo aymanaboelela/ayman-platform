@@ -6621,6 +6621,74 @@ model LeagueSetting {
   @@schema("app")
 }
 
+/// «استوديو البوستات» — one draft social post per platform event.
+///
+/// `source_key` is the dedupe: `honor:2026-10-20`, `results:<quizId>`,
+/// `news:<id>` … UNIQUE, so however many scans see the same event it yields
+/// one row, and a SKIPPED row keeps its key so the event is never re-drafted.
+///
+/// `facts` holds what the picture and the caption were made from, already
+/// safe to publish: short student names, and only honor-board photos. See
+/// `@ayman/contracts/social/posts`.
+model SocialPost {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  sourceKey          String    @unique @map("source_key")
+  /// honor | results | certificates | course | lecture | news — CHECKed in SQL.
+  kind               String
+  /// draft | scheduled | published | skipped — CHECKed in SQL.
+  status             String    @default("draft")
+  facts              Json
+  caption            String
+  link               String
+  /// square | story
+  format             String    @default("square")
+  /// `sp/<uuid>.jpg` — public, because Instagram downloads it by URL.
+  imageKey           String?   @unique @map("image_key")
+  imageFormat        String?   @map("image_format")
+  /// An instant, like `lessons.publish_at`: what the admin picked in Cairo.
+  scheduledAt        DateTime? @map("scheduled_at") @db.Timestamptz(3)
+  publishedAt        DateTime? @map("published_at") @db.Timestamptz(3)
+  /// api | manual
+  publishMode        String?   @map("publish_mode")
+  facebookPostId     String?   @map("facebook_post_id")
+  facebookPermalink  String?   @map("facebook_permalink")
+  instagramMediaId   String?   @map("instagram_media_id")
+  instagramPermalink String?   @map("instagram_permalink")
+  lastError          String?   @map("last_error")
+  /// Failed API publishes. The cron stops retrying a post at three.
+  attempts           Int       @default(0)
+  /// A publish in flight. A lease, not a flag: a crashed publish frees itself.
+  lockedAt           DateTime? @map("locked_at") @db.Timestamptz(3)
+  updatedBy          String?   @map("updated_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([status, scheduledAt])
+  @@map("social_posts")
+  @@schema("app")
+}
+
+/// The Facebook Page / Instagram account the studio publishes to. A singleton
+/// (`id = 1`, CHECKed). The Page token is stored ENCRYPTED (AES-256-GCM, key
+/// derived from `BETTER_AUTH_SECRET`) and is never returned by any route —
+/// deliberately not in `site_settings`, whose whole blob goes to the admin
+/// form and into the audit log on every save.
+model SocialSettings {
+  id              Int       @id @default(1)
+  pageId          String?   @map("page_id")
+  instagramUserId String?   @map("instagram_user_id")
+  tokenCiphertext String?   @map("token_ciphertext")
+  tokenHint       String?   @map("token_hint")
+  hashtags        String    @default("")
+  lastScanAt      DateTime? @map("last_scan_at") @db.Timestamptz(3)
+  updatedBy       String?   @map("updated_by")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("social_settings")
+  @@schema("app")
+}
+
 /// «المونتاج» — a finished video the editor handed over, kept as it arrived.
 /// See `@ayman/contracts/montage` for why it is not a `lesson_videos` row.
 model MontageVideo {
