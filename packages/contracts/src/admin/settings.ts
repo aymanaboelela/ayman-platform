@@ -231,6 +231,58 @@ export const BrandingSchema = z
     heroAssetId: assetId,
     portraitAssetId: assetId,
     loginAssetId: assetId,
+
+    /*
+     * Every other picture on the platform, and a dark-mode file for each.
+     *
+     * Until these existed, the round avatar in the top bar, the three year
+     * posters, the honour-board host and the practice guide were files in
+     * `apps/web/public/brand/`, reachable on Ayman's stack only and changeable
+     * only by a deploy. Each is now a slot here, and an upload WINS over the
+     * file — the same order `<MediaSlot>` already used for the hero.
+     *
+     * The `…Dark…` fields are optional overrides: null means «same picture in
+     * both modes», which is what every stored row means today. The list of
+     * slots, which pair goes with which, and what each one is called on the
+     * admin form all live in `brand-images.ts` so the form, the API resolver
+     * and the renderers cannot drift apart.
+     *
+     * `logoLight/DarkAssetId` above are already a pair and stay as they are.
+     */
+    markAssetId: assetId,
+    markDarkAssetId: assetId,
+    faviconDarkAssetId: assetId,
+    heroDarkAssetId: assetId,
+    portraitDarkAssetId: assetId,
+    loginDarkAssetId: assetId,
+    trackEssentialsAssetId: assetId,
+    trackEssentialsDarkAssetId: assetId,
+    trackYear1AssetId: assetId,
+    trackYear1DarkAssetId: assetId,
+    trackYear2AssetId: assetId,
+    trackYear2DarkAssetId: assetId,
+    honorHostAssetId: assetId,
+    honorHostDarkAssetId: assetId,
+    practiceGuideAssetId: assetId,
+    practiceGuideDarkAssetId: assetId,
+    /*
+     * The teacher's signature, drawn on both certificates in place of the
+     * name set in a script face. Light = dark ink for the ivory exam
+     * certificate; dark = light ink for the black unit certificate. Each
+     * falls back to the other, then to the typeset name.
+     */
+    signatureAssetId: assetId,
+    signatureDarkAssetId: assetId,
+    /*
+     * A photograph laid UNDER every coverless course's generated artwork,
+     * tinted by that course's subject hue — so courses without a cover gain
+     * a real picture and still do not all look the same. A course's own
+     * cover always wins.
+     */
+    courseCoverAssetId: assetId,
+    courseCoverDarkAssetId: assetId,
+    /** The home-screen icon (PWA manifest + apple-touch-icon). One file: a launcher has no theme. */
+    appIconAssetId: assetId,
   })
   .strict();
 
@@ -241,6 +293,19 @@ export const SeoSchema = z
     titleAr: z.string().max(70).default(''),
     descriptionAr: z.string().max(160).default(''),
     ogImageAssetId: assetId,
+    /*
+     * A share image per public section, over `ogImageAssetId` above. Which
+     * path each one covers lives in `OG_PAGES` (`seo-pages.ts`); a page that
+     * passes its own image (a course cover, a news photo) still wins.
+     */
+    ogCoursesAssetId: assetId,
+    ogBooksAssetId: assetId,
+    ogAboutAssetId: assetId,
+    ogHonorBoardAssetId: assetId,
+    ogPracticeAssetId: assetId,
+    ogNewsAssetId: assetId,
+    ogLinksAssetId: assetId,
+    ogSubscribeAssetId: assetId,
   })
   .strict();
 
@@ -283,12 +348,43 @@ export const BrandingReadSchema = BrandingSchema.extend({
   heroKey: resolvedKey,
   portraitKey: resolvedKey,
   loginKey: resolvedKey,
+  markKey: resolvedKey,
+  markDarkKey: resolvedKey,
+  faviconDarkKey: resolvedKey,
+  heroDarkKey: resolvedKey,
+  portraitDarkKey: resolvedKey,
+  loginDarkKey: resolvedKey,
+  trackEssentialsKey: resolvedKey,
+  trackEssentialsDarkKey: resolvedKey,
+  trackYear1Key: resolvedKey,
+  trackYear1DarkKey: resolvedKey,
+  trackYear2Key: resolvedKey,
+  trackYear2DarkKey: resolvedKey,
+  honorHostKey: resolvedKey,
+  honorHostDarkKey: resolvedKey,
+  practiceGuideKey: resolvedKey,
+  practiceGuideDarkKey: resolvedKey,
+  signatureKey: resolvedKey,
+  signatureDarkKey: resolvedKey,
+  courseCoverKey: resolvedKey,
+  courseCoverDarkKey: resolvedKey,
+  appIconKey: resolvedKey,
 });
 
 export type BrandingRead = z.infer<typeof BrandingReadSchema>;
 
 /** Same resolution, for the OG image `buildMetadata()` renders. */
-export const SeoReadSchema = SeoSchema.extend({ ogImageKey: resolvedKey });
+export const SeoReadSchema = SeoSchema.extend({
+  ogImageKey: resolvedKey,
+  ogCoursesKey: resolvedKey,
+  ogBooksKey: resolvedKey,
+  ogAboutKey: resolvedKey,
+  ogHonorBoardKey: resolvedKey,
+  ogPracticeKey: resolvedKey,
+  ogNewsKey: resolvedKey,
+  ogLinksKey: resolvedKey,
+  ogSubscribeKey: resolvedKey,
+});
 
 export type SeoRead = z.infer<typeof SeoReadSchema>;
 
@@ -461,6 +557,46 @@ export const OutreachSettingsSchema = z
      * it is enforced in the delivery path, not in each sweep.
      */
     maxPerStudentPerDay: z.number().int().min(1).max(10).default(2),
+    /*
+     * ── The two AUTOMATIC WhatsApp kinds ─────────────────────────────────
+     *
+     * Read only where the `outreach.whatsapp` entitlement is on — which is
+     * what keeps a default of `true` here from switching anything on for a
+     * teacher who never asked: on their stack the sweeper never runs and the
+     * screen never draws these rows. On Ayman's it means the messages start
+     * by themselves the moment a device is linked, which is what he asked for.
+     *
+     * Every one is a NEW key with a `.default()`, so a stored row written
+     * before this existed parses with them filled in (see the note on
+     * `maxInvitesPerStudent` for why adding is safe and renaming is not).
+     */
+    /** «كمّل الدفع» — one reminder after a payment step was left open. */
+    checkoutRecovery: z.boolean().default(true),
+    /**
+     * How long an opened payment step may sit before the reminder. Floor of
+     * one hour: anything shorter reaches a student still on the page, or one
+     * whose transfer is simply taking a while to send.
+     */
+    checkoutRecoveryAfterHours: z.number().int().min(1).max(47).default(3),
+    /** Days before the SAME course or order may be reminded about again. */
+    checkoutRecoveryEveryDays: z.number().int().min(1).max(60).default(7),
+    /** «الحساب جاهز» — to an account that has bought nothing. */
+    signupNudge: z.boolean().default(true),
+    /** Hours after sign-up before the first nudge. */
+    signupNudgeAfterHours: z.number().int().min(1).max(144).default(24),
+    /**
+     * Days after the FIRST nudge before the second. `0` turns the second one
+     * off — one number rather than a switch and a number, because a second
+     * nudge with no delay is not a thing anybody would want.
+     */
+    signupNudgeSecondAfterDays: z.number().int().min(0).max(30).default(4),
+    /**
+     * The ceiling on these automatic WhatsApp messages per Cairo day, across
+     * both kinds. Deliberately far under a campaign's 200: they go out from
+     * the same number with nobody watching, and a freshly linked number is
+     * exactly the one WhatsApp is quickest to restrict.
+     */
+    autoWhatsappDailyCap: z.number().int().min(1).max(200).default(30),
   })
   .strict();
 

@@ -18,9 +18,16 @@ export interface ShareCardDialogProps {
   /** Without extension — `.png` / `.pdf` is added per button. */
   fileName: string;
   heroSrc?: string;
+  /** The teacher's signature for this design, if one was uploaded. */
+  signatureSrc?: string;
   /** Also offer the image wrapped as a one-page PDF (the certificate). */
   pdf?: boolean;
-  draw: (canvas: HTMLCanvasElement, fonts: CardFonts, hero: HTMLImageElement | undefined) => void;
+  draw: (
+    canvas: HTMLCanvasElement,
+    fonts: CardFonts,
+    hero: HTMLImageElement | undefined,
+    signature: HTMLImageElement | undefined,
+  ) => void;
 }
 
 /** `null` while drawing; set once, asynchronously, when the image is ready or failed. */
@@ -35,7 +42,16 @@ type Outcome = { kind: 'ready'; url: string; blob: Blob } | { kind: 'failed' };
  * hundred KB the result page has no other use for, and most students never
  * press the button.
  */
-export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, pdf, draw }: ShareCardDialogProps) {
+export function ShareCardDialog({
+  open,
+  onOpenChange,
+  title,
+  fileName,
+  heroSrc,
+  signatureSrc,
+  pdf,
+  draw,
+}: ShareCardDialogProps) {
   const fontsRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -50,9 +66,14 @@ export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, 
       if (!host) throw new Error('font host not mounted');
       const fonts = resolveFonts(host);
       // A failed hero is not a failed card: the card has its own fire for that.
-      const [, hero] = await Promise.all([loadFonts(fonts), heroSrc ? loadImage(heroSrc).catch(() => undefined) : undefined]);
+      // Same for the signature: without it the name is set in the script face.
+      const [, hero, signature] = await Promise.all([
+        loadFonts(fonts),
+        heroSrc ? loadImage(heroSrc).catch(() => undefined) : undefined,
+        signatureSrc ? loadImage(signatureSrc).catch(() => undefined) : undefined,
+      ]);
       const canvas = document.createElement('canvas');
-      draw(canvas, fonts, hero);
+      draw(canvas, fonts, hero, signature);
       const blob = await canvasToBlob(canvas, 'image/png');
       if (cancelled) return;
       canvasRef.current = canvas;
@@ -65,7 +86,7 @@ export function ShareCardDialog({ open, onOpenChange, title, fileName, heroSrc, 
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [open, heroSrc, draw]);
+  }, [open, heroSrc, signatureSrc, draw]);
 
   const file = useMemo(
     () => (outcome?.kind === 'ready' ? new File([outcome.blob], `${fileName}.png`, { type: 'image/png' }) : null),

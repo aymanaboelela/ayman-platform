@@ -91,5 +91,8 @@ import { AdminAssistantQuestionsController } from './ai/admin-questions.controll
     AssistantQuestionService,
     AssistantFactsService,
   ],
+  // The model, for «الرد الآلي»'s fallback on WhatsApp (`WaBotBrainService`) —
+  // the same grounded prompt the site's chat uses, so the two cannot drift.
+  exports: [AssistantAiService],
 })
 export class AssistantModule {}

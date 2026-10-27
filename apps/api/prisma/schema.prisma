@@ -176,6 +176,8 @@ model User {
   // "which wording has this person already had", and that question dies with
   // the person. The MESSAGE itself lives on the conversation, which survives.
   outreachMessages           OutreachMessage[]
+  /// «فتح خطوة الدفع» — see `CheckoutIntent`.
+  checkoutIntents            CheckoutIntent[]
   // المساعد's open chat — what this student typed into it. `SetNull` on the far
   // side, like `conversations`: deleting the account must not erase the
   // QUESTION, because the question is what the corpus gets written from and it
@@ -259,6 +261,13 @@ model User {
   /// phone, and (on a student) the admins whose phones hold them.
   contactExportsMade         ContactExport[]         @relation("ContactExportAdmin")
   contactExportsOf           ContactExport[]         @relation("ContactExportStudent")
+  dailyAnswers               DailyAnswer[]
+  lessonNotes                LessonNote[]
+  studyPlan                  StudyPlan?
+  studentBadges              StudentBadge[]
+  flashCards                 FlashCard[]
+  focusSessions              FocusSession[]
+  leagueSetting              LeagueSetting?
   /// «ادعي صاحبك» — this student's own share code, the friends who joined
   /// through it, the referral that brought THIS account in (at most one — the
   /// UNIQUE on `referred_user_id`), and (for an admin) the ones voided.
@@ -1456,6 +1465,7 @@ model Lesson {
   /// and its homework (both hang off this same `lessonId`).
   accessGrants        AccessGrant[]
   unlockCodeItems     UnlockCodeItem[]
+  notes               LessonNote[]
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -5640,6 +5650,19 @@ model OutreachMessage {
   /// claim two ledger rows for one thing the student read.
   messageId      String @unique @map("message_id") @db.Uuid
 
+  /// The WhatsApp leg of an AUTOMATIC kind (`checkout_recovery`,
+  /// `signup_nudge`) — `null` for every other kind, which only ever lands in
+  /// the platform's own chat.
+  ///
+  /// `sent` means WhatsApp TOOK the message (one grey tick), not that it
+  /// arrived — `whatsappDeliveredAt` is the arrival, written by the receipt
+  /// relay. `opted_out` / `not_on_whatsapp` / `no_phone` are the three reasons
+  /// a reminder went into the chat only. CHECK-constrained in the migration.
+  whatsappStatus      String?   @map("whatsapp_status")
+  /// WhatsApp's id for the message, so a receipt can find this row.
+  whatsappMessageId   String?   @map("whatsapp_message_id")
+  whatsappDeliveredAt DateTime? @map("whatsapp_delivered_at")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -5655,7 +5678,61 @@ model OutreachMessage {
   /// The `/admin/outreach` log, and the per-day cap the delivery path enforces.
   @@index([createdAt(sort: Desc)])
   @@index([kind, createdAt(sort: Desc)])
+  /// The receipt relay's lookup. Partial in SQL (`WHERE … IS NOT NULL`).
+  @@index([whatsappMessageId])
   @@map("outreach_messages")
+  @@schema("app")
+}
+
+/// «فتح خطوة الدفع» — a logged-in student opened a payment step.
+///
+/// ## Why this table exists at all
+///
+/// Nothing else records the OPENING. A `payment_submissions` row exists only
+/// once a transfer was claimed, and an abandoned checkout is by definition one
+/// that never got that far — so without this the platform cannot tell a
+/// student who opened the checkout and walked away from one who never looked.
+///
+/// ## One row per (student, target), upserted
+///
+/// Reopening the same checkout moves `openedAt` forward rather than adding a
+/// row: the reminder is about "this checkout is still open", and its clock
+/// should start from the last time the student was actually on it. That also
+/// makes the write idempotent — a panel that mounts twice writes once.
+///
+/// `targetId` is a course id or a book order id, deliberately without a
+/// foreign key: the two kinds point at two tables, and a deleted course or
+/// order simply stops matching (`AutoOutreachSweeper` re-reads the target
+/// before writing). `path` is BUILT by the API from the target, never taken
+/// from the browser — see `@ayman/contracts/outreach/auto`.
+model CheckoutIntent {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  userId     String         @map("user_id")
+  target     CheckoutTarget
+  targetId   String         @map("target_id") @db.Uuid
+  /// Relative, starts with `/`. The deep link the reminder carries.
+  path       String
+  openedAt   DateTime       @default(now()) @map("opened_at")
+  /// The last reminder written about this row. Compared against `openedAt` so
+  /// a reopened checkout can be reminded about again — after the configured
+  /// number of days, never sooner.
+  remindedAt DateTime?      @map("reminded_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, target, targetId])
+  /// The sweeper's scan: opened inside the window, oldest first.
+  @@index([openedAt])
+  @@map("checkout_intents")
+  @@schema("app")
+}
+
+enum CheckoutTarget {
+  course
+  book_order
+
+  @@map("checkout_target")
   @@schema("app")
 }
 
@@ -5675,6 +5752,10 @@ enum OutreachKind {
   follow_up
   /// An account with no seat in the course its own year and stream point at.
   subscribe_nudge
+  /// A payment step opened and left — swept, and sent over WhatsApp too.
+  checkout_recovery
+  /// An account that bought nothing — swept, and sent over WhatsApp too.
+  signup_nudge
 
   @@map("outreach_kind")
   @@schema("app")
@@ -6009,6 +6090,192 @@ model MarketingOptOut {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("marketing_opt_outs")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// «الرد الآلي» — the WhatsApp auto-reply bot, its leads and its inbox
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Who is on the other end of a WhatsApp chat, as matched by phone number.
+enum WaChatWho {
+  student
+  parent
+  lead
+
+  @@map("wa_chat_who")
+  @@schema("app")
+}
+
+/// «المهتمين»'s four states. `subscribed` is also written by the conversion
+/// sweep the moment the number signs up and pays.
+enum WaLeadStatus {
+  new
+  contacted
+  subscribed
+  not_interested
+
+  @@map("wa_lead_status")
+  @@schema("app")
+}
+
+/// `contact` wrote it; `bot` and `admin` sent it through the API; `phone` is a
+/// reply somebody typed on the linked handset itself, relayed by the sidecar.
+enum WaChatAuthor {
+  contact
+  bot
+  admin
+  phone
+
+  @@map("wa_chat_author")
+  @@schema("app")
+}
+
+enum WaMessageStatus {
+  sent
+  failed
+
+  @@map("wa_message_status")
+  @@schema("app")
+}
+
+/// One WhatsApp chat — one row per phone number that ever wrote to the linked
+/// device. A LEAD is a row whose number matched no account when it first wrote
+/// (`isLead`), and «المهتمين» is this table filtered on that.
+///
+/// ## Why not `conversations`
+///
+/// المساعد's inbox is a thread between a browser and the instructor: its CHECK
+/// requires exactly one of `user_id` / `guest_token_hash`, its replies render
+/// in a chat panel on the site, and its unread logic is built on that. A
+/// WhatsApp number has neither owner and is answered on WhatsApp. Folding it in
+/// would mean loosening a CHECK every other reader relies on, so the inbox
+/// SCREEN hosts it (a tab under «صندوق الوارد») and the data stays here.
+///
+/// ## No foreign key to `users`, on purpose
+///
+/// `userId` is the account the number matched — for a parent, the child's.
+/// It is a lookup cache rewritten on every inbound message, never an owner: a
+/// deleted account leaves a chat that simply stops matching, and the history
+/// of what was said to that number must not disappear with it.
+model WaChat {
+  id       String    @id @default(uuid(7)) @db.Uuid
+  /// E.164 for an Egyptian number; `+<digits>` for any other.
+  phone    String    @unique @db.VarChar(20)
+  /// What WhatsApp says this person calls themselves. Untrusted display text.
+  pushName String?   @map("push_name") @db.VarChar(120)
+  userId   String?   @map("user_id")
+  who      WaChatWho @default(lead)
+
+  isLead     Boolean      @default(false) @map("is_lead")
+  leadStatus WaLeadStatus @default(new) @map("lead_status")
+  /// The year they said they are in, as the bot's numbered options name it.
+  yearSystem String?      @map("year_system") @db.VarChar(40)
+  year       Int?
+  yearLabel  String?      @map("year_label") @db.VarChar(80)
+  /// Every built-in intent this number has asked about, de-duplicated.
+  intents    String[]     @default([])
+  notes      String?
+  /// When the conversion sweep saw this number sign up and pay.
+  convertedAt DateTime?   @map("converted_at")
+
+  firstMessage      String       @map("first_message") @db.VarChar(300)
+  lastMessage       String       @map("last_message") @db.VarChar(300)
+  firstMessageAt    DateTime     @default(now()) @map("first_message_at")
+  lastInboundAt     DateTime     @default(now()) @map("last_inbound_at")
+  lastMessageAt     DateTime     @default(now()) @map("last_message_at")
+  lastMessageAuthor WaChatAuthor @default(contact) @map("last_message_author")
+  /// Inbound messages only.
+  messageCount      Int          @default(0) @map("message_count")
+
+  /// When the replier should look at this chat — set a few seconds after each
+  /// inbound message so a burst of three is answered once. The replier claims
+  /// a chat by clearing it, which is what makes the queue survive a restart.
+  replyDueAt          DateTime? @map("reply_due_at")
+  awaitingYear        Boolean   @default(false) @map("awaiting_year")
+  /// What they asked before the bot asked for their year.
+  pendingIntents      String[]  @default([]) @map("pending_intents")
+  yearAsks            Int       @default(0) @map("year_asks")
+  lastBotReplyAt      DateTime? @map("last_bot_reply_at")
+  /// The Cairo day `botRepliesToday` counts. A new day resets the count.
+  botRepliesDay       String?   @map("bot_replies_day") @db.VarChar(10)
+  botRepliesToday     Int       @default(0) @map("bot_replies_today")
+  lastHandoffNoticeAt DateTime? @map("last_handoff_notice_at")
+  /// The last time a PERSON answered — from the inbox or on the handset.
+  humanRepliedAt      DateTime? @map("human_replied_at")
+  needsHuman          Boolean   @default(false) @map("needs_human")
+  handoffAt           DateTime? @map("handoff_at")
+  botPaused           Boolean   @default(false) @map("bot_paused")
+  /// Set when the other side looks like a bot — see `looksAutomated`.
+  mutedUntil          DateTime? @map("muted_until")
+  optedOutAt          DateTime? @map("opted_out_at")
+  adminReadAt         DateTime? @map("admin_read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages WaChatMessage[]
+
+  @@index([needsHuman, lastMessageAt(sort: Desc)])
+  @@index([isLead, lastMessageAt(sort: Desc)])
+  @@index([lastMessageAt(sort: Desc)])
+  @@index([replyDueAt])
+  @@index([userId])
+  @@map("wa_chats")
+  @@schema("app")
+}
+
+model WaChatMessage {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  chatId      String           @map("chat_id") @db.Uuid
+  chat        WaChat           @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  author      WaChatAuthor
+  body        String
+  intents     String[]         @default([])
+  status      WaMessageStatus?
+  /// WhatsApp's own id. UNIQUE, so the sidecar relaying the same message twice
+  /// (a reconnect replays recent history) records it once.
+  waMessageId String?          @unique @map("wa_message_id") @db.VarChar(128)
+  /// Inbound only: false until the replier has considered it.
+  handled     Boolean          @default(true)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([chatId, createdAt])
+  /// The day's global reply count — `author = bot AND created_at >= today`.
+  @@index([author, createdAt])
+  @@map("wa_chat_messages")
+  @@schema("app")
+}
+
+/// The admin's version of one answer. A built-in intent with no row says the
+/// copy-table default; a `custom:<uuid>` key is an answer the admin wrote.
+///
+/// Nothing seeds this table — see `copy/wa-bot.ts`'s header for why that is
+/// the whole defence against the seed-overwrites-the-admin trap.
+model WaBotAnswer {
+  key         String   @id @db.VarChar(80)
+  /// Custom answers only; a built-in's label is the copy table's.
+  label       String?  @db.VarChar(80)
+  answer      String
+  /// Extra keywords, ADDED to a built-in's own list.
+  keywords    String[] @default([])
+  enabled     Boolean  @default(true)
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("wa_bot_answers")
+  @@schema("app")
+}
+
+/// One row, `id = 1`. `data` is `BotSettingsSchema`, parsed on read over the
+/// defaults so a field added later needs no migration.
+model WaBotSettings {
+  id        Int      @id @default(1)
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("wa_bot_settings")
   @@schema("app")
 }
 
@@ -6399,6 +6666,212 @@ model DesignAsset {
 
   @@index([folderId, createdAt])
   @@map("design_assets")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Student engagement — «سؤال اليوم», «ملاحظاتي», «خطة المذاكرة», «أوسمتي».
+// («ملخص الشهر» stores nothing: it is a read over the rows that already exist.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// One row per student per Cairo day: the question dealt that day, and the
+/// answer once given. Written on the first read of the day, so the question
+/// cannot change under a student who reloads, and the answer is one shot.
+/// `question_version_id` carries no foreign key on purpose: the bank may drop
+/// an old version, and losing a day's row would break a streak that happened.
+model DailyAnswer {
+  userId            String    @map("user_id")
+  /// The Cairo calendar day, never a UTC one.
+  day               DateTime  @db.Date
+  questionVersionId String    @map("question_version_id") @db.Uuid
+  /// Where the question was drawn from, frozen at the deal — the label and
+  /// the «راجع المحاضرة» link stay what they were that morning.
+  courseId          String    @map("course_id") @db.Uuid
+  lessonId          String?   @map("lesson_id") @db.Uuid
+  optionId          String?   @map("option_id") @db.Uuid
+  /// `null` until answered.
+  wasRight          Boolean?  @map("was_right")
+  dealtAt           DateTime  @default(now()) @map("dealt_at")
+  answeredAt        DateTime? @map("answered_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@map("daily_answers")
+  @@schema("app")
+}
+
+/// A student's own note on a lesson, optionally pinned to a second of its video.
+model LessonNote {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  userId          String   @map("user_id")
+  lessonId        String   @map("lesson_id") @db.Uuid
+  positionSeconds Int?     @map("position_seconds")
+  body            String
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lessonId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([lessonId])
+  @@map("lesson_notes")
+  @@schema("app")
+}
+
+/// The exam date a student plans toward. The days themselves are never
+/// stored: they are re-flowed from the live backlog on every read, so a
+/// finished lecture leaves the plan the moment it is finished.
+model StudyPlan {
+  userId    String   @id @map("user_id")
+  examDate  DateTime @map("exam_date") @db.Date
+  /// Weekdays off, 0 = Sunday … 6 = Saturday.
+  daysOff   Int[]    @default([]) @map("days_off")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_plans")
+  @@schema("app")
+}
+
+/// The first moment a badge tier was seen earned. Written by the read that
+/// first finds it true; only ever inserted, so a date never moves.
+model StudentBadge {
+  userId   String   @map("user_id")
+  /// `<family>:<tier>`, e.g. `streak:gold` — see `contracts/engagement.ts`.
+  key      String
+  earnedAt DateTime @default(now()) @map("earned_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@map("student_badges")
+  @@schema("app")
+}
+
+/// A question of the bank as a flash card, in one student's Leitner box.
+/// Only a card the student has been shown has a row; the rest of the bank is
+/// «جديد» by absence. `bank_entry_id` and not a version: an edited question is
+/// the same card, and the box it earned stays with it.
+model FlashCard {
+  userId      String   @map("user_id")
+  bankEntryId String   @map("bank_entry_id") @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
+  /// 1 … 5. Five is «حافظاها».
+  box         Int      @db.SmallInt
+  /// The Cairo day it is due again.
+  dueOn       DateTime @map("due_on") @db.Date
+  reviews     Int      @default(0)
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, bankEntryId])
+  @@index([userId, courseId, dueOn])
+  @@map("flash_cards")
+  @@schema("app")
+}
+
+/// One sitting of «أوضة المذاكرة». Open while `endedAt` is null.
+model FocusSession {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id")
+  startedAt DateTime  @default(now()) @map("started_at")
+  minutes   Int       @db.SmallInt
+  endedAt   DateTime? @map("ended_at")
+  /// The timer ran to the end. A sitting stopped early is kept — its minutes
+  /// count — but it is not a finished sitting.
+  completed Boolean   @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([startedAt])
+  @@map("focus_sessions")
+  @@schema("app")
+}
+
+/// «دوري الأسبوع» — a student who asked not to be named on the table.
+model LeagueSetting {
+  userId    String   @id @map("user_id")
+  hidden    Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("league_settings")
+  @@schema("app")
+}
+
+/// «استوديو البوستات» — one draft social post per platform event.
+///
+/// `source_key` is the dedupe: `honor:2026-10-20`, `results:<quizId>`,
+/// `news:<id>` … UNIQUE, so however many scans see the same event it yields
+/// one row, and a SKIPPED row keeps its key so the event is never re-drafted.
+///
+/// `facts` holds what the picture and the caption were made from, already
+/// safe to publish: short student names, and only honor-board photos. See
+/// `@ayman/contracts/social/posts`.
+model SocialPost {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  sourceKey          String    @unique @map("source_key")
+  /// honor | results | certificates | course | lecture | news — CHECKed in SQL.
+  kind               String
+  /// draft | scheduled | published | skipped — CHECKed in SQL.
+  status             String    @default("draft")
+  facts              Json
+  caption            String
+  link               String
+  /// square | story
+  format             String    @default("square")
+  /// `sp/<uuid>.jpg` — public, because Instagram downloads it by URL.
+  imageKey           String?   @unique @map("image_key")
+  imageFormat        String?   @map("image_format")
+  /// An instant, like `lessons.publish_at`: what the admin picked in Cairo.
+  scheduledAt        DateTime? @map("scheduled_at") @db.Timestamptz(3)
+  publishedAt        DateTime? @map("published_at") @db.Timestamptz(3)
+  /// api | manual
+  publishMode        String?   @map("publish_mode")
+  facebookPostId     String?   @map("facebook_post_id")
+  facebookPermalink  String?   @map("facebook_permalink")
+  instagramMediaId   String?   @map("instagram_media_id")
+  instagramPermalink String?   @map("instagram_permalink")
+  lastError          String?   @map("last_error")
+  /// Failed API publishes. The cron stops retrying a post at three.
+  attempts           Int       @default(0)
+  /// A publish in flight. A lease, not a flag: a crashed publish frees itself.
+  lockedAt           DateTime? @map("locked_at") @db.Timestamptz(3)
+  updatedBy          String?   @map("updated_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([status, scheduledAt])
+  @@map("social_posts")
+  @@schema("app")
+}
+
+/// The Facebook Page / Instagram account the studio publishes to. A singleton
+/// (`id = 1`, CHECKed). The Page token is stored ENCRYPTED (AES-256-GCM, key
+/// derived from `BETTER_AUTH_SECRET`) and is never returned by any route —
+/// deliberately not in `site_settings`, whose whole blob goes to the admin
+/// form and into the audit log on every save.
+model SocialSettings {
+  id              Int       @id @default(1)
+  pageId          String?   @map("page_id")
+  instagramUserId String?   @map("instagram_user_id")
+  tokenCiphertext String?   @map("token_ciphertext")
+  tokenHint       String?   @map("token_hint")
+  hashtags        String    @default("")
+  lastScanAt      DateTime? @map("last_scan_at") @db.Timestamptz(3)
+  updatedBy       String?   @map("updated_by")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("social_settings")
   @@schema("app")
 }
 

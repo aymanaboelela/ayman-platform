@@ -40,7 +40,10 @@ const PRESETS_CSS = readFileSync(join(WEB, 'app', '(site)', 'styles', 'presets.c
  * those are "harmless refactors" that alter the HTML his students are served.
  */
 /*
- * ⚠️ الوسيط التالت (`branding.heroKey`) إضافة مقصودة، والـHTML ما اتغيّرش.
+ * ⚠️ الوسيط التالت (`branding` كله، كان `branding.heroKey`) إضافة مقصودة،
+ * والـHTML ما اتغيّرش: بقى بيحمل كمان صورة الوضع الغامق للهيرو وبوسترات
+ * السنين اللي بتترفع من «الهوية البصرية». على ستاك أيمن كلهم `null` لحد ما
+ * يرفع، فالصفحة بتسقط على نفس ملفاته بالظبط.
  *
  * `MediaSlot` بقى بيعرض صورة المدرّس المرفوعة مكان الرسمة البديلة. على ستاك
  * أيمن `heroKey` بيفضل `null` — مفيش صف في `site_settings` بيحطه — فالمكوّن
@@ -51,7 +54,7 @@ const PRESETS_CSS = readFileSync(join(WEB, 'app', '(site)', 'styles', 'presets.c
  */
 const CLASSIC_RETURN = `  return (
     <main data-layout={branding.landingLayout}>
-      {blocks.map((block) => renderBlock(block, honorBoard, branding.heroKey))}
+      {blocks.map((block) => renderBlock(block, honorBoard, branding))}
     </main>
   );`;
 

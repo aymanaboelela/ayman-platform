@@ -14,6 +14,9 @@ import { LessonHomework } from '@/components/player/lesson-homework';
 import { LessonDescription } from '@/components/player/lesson-description';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
+import { LessonNotesPanel } from '@/components/engagement/lesson-notes';
+import { LessonNotesSchema, type LessonNote } from '@ayman/contracts/engagement';
+import { featureEnabled } from '@/lib/entitlements';
 
 /**
  * A 404 becomes `null`; everything else keeps throwing.
@@ -95,18 +98,43 @@ function ownsPartOfCourse(outline: CourseOutline, lessonId: string): boolean {
   );
 }
 
+/** `?t=120` from a note — a whole second inside a day, or nothing. */
+function jumpSecond(raw: string | string[] | undefined): number | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !/^\d{1,5}$/.test(value)) return null;
+  const seconds = Number(value);
+  return seconds <= 86_400 ? seconds : null;
+}
+
+/**
+ * The student's notes on this lesson, or `null` for no panel at all: the
+ * feature is off here, or the read failed. A notes panel is never worth a
+ * broken lesson page, so every failure is swallowed into «no panel».
+ */
+async function lessonNotesOrNull(lessonId: string): Promise<LessonNote[] | null> {
+  if (!(await featureEnabled('lessonNotes'))) return null;
+  try {
+    return (await apiGetAuthed(`/api/me/lessons/${lessonId}/notes`, LessonNotesSchema)).notes;
+  } catch {
+    return null;
+  }
+}
+
 export default async function LessonPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; lessonId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug, lessonId } = await params;
+  const jumpTo = jumpSecond((await searchParams).t);
 
   // Two parallel fetches, not one endpoint: the outline is stable across
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, result, settings, shippingRates, viewer, studentExams] = await Promise.all([
+  const [outline, result, settings, shippingRates, viewer, studentExams, notes] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(forbiddenOn403),
     // The Vodafone Cash number `CourseOutlineSidebar`'s own «اطلب الكتاب»
@@ -124,6 +152,9 @@ export default async function LessonPage({
        has let go of it. Never fatal: a miss is `{ exams: [] }` and the card
        renders nothing, and a stack without exams skips the request. */
     getStudentExamsOrEmpty(),
+    /* «ملاحظاتي» — `null` (no panel) when the feature is off or the read
+       failed; see `lessonNotesOrNull`. */
+    lessonNotesOrNull(lessonId),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -219,6 +250,7 @@ export default async function LessonPage({
           */}
           <LessonPlayerView
             payload={lesson}
+            jumpTo={jumpTo}
             /* Each part only where the teacher switched it on for this
                course: the name («اظهر اسم الطالب», on by default) and the
                phone («اظهر رقم الطالب», off). Both off is no watermark at all
@@ -261,6 +293,19 @@ export default async function LessonPage({
             of them.
           */}
           <LessonDescription description={payload.lesson.description} />
+
+          {/*
+            «ملاحظاتي» — under the summary and above the homework: notes are
+            taken WHILE watching, so they sit nearest the video after its own
+            caption. Not on a quiz lesson, which has nothing to take notes on.
+          */}
+          {notes !== null && payload.lesson.kind !== 'quiz' ? (
+            <LessonNotesPanel
+              lessonId={payload.lesson.id}
+              initial={notes}
+              hasVideo={payload.lesson.kind === 'video' && payload.video !== null}
+            />
+          ) : null}
 
           {payload.homework ? (
             <LessonHomework lessonId={payload.lesson.id} homework={payload.homework} />

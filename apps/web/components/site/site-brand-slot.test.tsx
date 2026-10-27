@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BrandingRead } from '@ayman/contracts/admin/settings';
+import { BrandingReadSchema, type BrandingRead } from '@ayman/contracts/admin/settings';
 
 /**
  * The marketing header's mark — the 36px circle beside the wordmark.
@@ -41,6 +41,8 @@ afterEach(cleanup);
 
 function branding(overrides: Partial<BrandingRead> = {}): BrandingRead {
   return {
+    // Every picture slot null, so a slot added later needs no edit here.
+    ...BrandingReadSchema.parse({}),
     accent: 'blue',
     accentHue: null,
     landingPreset: 'neon',

@@ -1,6 +1,7 @@
-import Image from 'next/image';
+import { brandImage } from '@/lib/brand-image';
+import { getBranding } from '@/lib/settings';
+import { ThemedImage } from '@/components/themed-image';
 import { Brain, Check, Flame, Lightbulb, Sparkles, Trophy } from 'lucide-react';
-import { getBrandAsset } from '@/lib/brand-assets';
 
 /** Rising embers — positions and timings vary per child in `practice.css`. */
 const EMBERS = 14;
@@ -20,19 +21,18 @@ const EMBERS = 14;
  * `prefers-reduced-motion`. Without the photo (a stack that is not Ayman's)
  * the frame holds a designed gradient instead.
  */
-export function PracticeShowcase({ priority = false }: { priority?: boolean }) {
-  const photo = getBrandAsset('practiceGuide');
+export async function PracticeShowcase({ priority = false }: { priority?: boolean }) {
+  // An upload from «الهوية البصرية» first, his file second — `brandImage()`.
+  const photo = brandImage(await getBranding(), 'practiceGuide');
   return (
     <div className="practice-show" aria-hidden="true">
       <span className="practice-show__glow" />
       <div className="practice-show__frame">
         <div className="practice-show__window">
           {photo ? (
-            <Image
+            <ThemedImage
               className="practice-show__photo"
-              src={photo.src}
-              width={photo.width}
-              height={photo.height}
+              image={photo}
               alt=""
               sizes="(max-width: 48rem) 92vw, 36rem"
               priority={priority}

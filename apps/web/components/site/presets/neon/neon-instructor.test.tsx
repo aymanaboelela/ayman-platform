@@ -1,6 +1,6 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BrandingRead } from '@ayman/contracts/admin/settings';
+import { BrandingReadSchema, type BrandingRead } from '@ayman/contracts/admin/settings';
 import type { CatalogList } from '@ayman/contracts/catalog';
 
 /**
@@ -39,6 +39,8 @@ afterEach(cleanup);
 
 function branding(overrides: Partial<BrandingRead> = {}): BrandingRead {
   return {
+    // Every picture slot null, so a slot added later needs no edit here.
+    ...BrandingReadSchema.parse({}),
     accent: 'blue',
     accentHue: null,
     landingPreset: 'neon',

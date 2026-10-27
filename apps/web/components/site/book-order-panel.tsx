@@ -34,6 +34,7 @@ import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
+import { useCheckoutIntent } from '@/lib/checkout-intent';
 import { duplicateOrderFrom, whereIs, type DuplicateTwin } from '@/lib/duplicate-order';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
@@ -448,6 +449,17 @@ export function BookOrderPanel({
 
   // ⚠️ EITHER rail sells a book. Keeping this on InstaPay alone would close the
   // shop on a platform that takes Vodafone Cash and nothing else.
+  /*
+   * «كمّل الدفع» — the payment step is on screen with a real order behind it.
+   * Only from here, never on the address step: before the order exists there
+   * is nothing to link back to, and the order row is what the reminder's
+   * «/store/orders/<id>/pay» opens. A guest checkout gets a 401 the hook
+   * swallows — there is no account to remind.
+   *
+   * Above the early return below, as every hook here must be.
+   */
+  useCheckoutIntent('book_order', (step === 'payment' || step === 'submitting') && order ? order.id : null);
+
   if (!instapay && !vodafoneCash) {
     return (
       <p className="bco-unavailable" role="status">

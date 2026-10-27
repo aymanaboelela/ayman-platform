@@ -46,6 +46,7 @@ import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
 import { DesignsModule } from '../modules/designs/designs.module';
+import { SocialPostsModule } from '../modules/social-posts/social-posts.module';
 import { MontageModule } from '../modules/montage/montage.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
@@ -67,6 +68,17 @@ import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
+import { CheckoutIntentsController } from '../modules/auto-outreach/checkout-intents.controller';
+import { AdminAutoOutreachController } from '../modules/auto-outreach/admin-auto-outreach.controller';
+import { CheckoutIntentsService } from '../modules/auto-outreach/checkout-intents.service';
+import { AutoOutreachCandidates } from '../modules/auto-outreach/auto-outreach-candidates.service';
+import { AutoOutreachOverviewService } from '../modules/auto-outreach/auto-outreach-overview.service';
+import { WaBotController } from '../modules/wa-bot/wa-bot.controller';
+import { WaBotService } from '../modules/wa-bot/wa-bot.service';
+import { WaBotBrainService } from '../modules/wa-bot/wa-bot-brain.service';
+import { WaBotFactsService } from '../modules/wa-bot/wa-bot-facts.service';
+import { WaBotIdentityService } from '../modules/wa-bot/wa-bot-identity.service';
+import { WaBotSettingsService } from '../modules/wa-bot/wa-bot-settings.service';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
@@ -110,6 +122,7 @@ import { BooksService } from '../modules/books/books.service';
 import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
 import { ShareCardsModule } from '../modules/share-cards/share-cards.module';
+import { EngagementModule } from '../modules/engagement/engagement.module';
 import { ReferralsController } from '../modules/referrals/referrals.controller';
 import { AdminReferralsController } from '../modules/referrals/admin-referrals.controller';
 import { ReferralsService } from '../modules/referrals/referrals.service';
@@ -230,6 +243,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminErrorsController,
         MarketingController,
         WhatsappInboundController,
+        // «رسايل الواتساب التلقائية». The controllers and their services, not
+        // `AutoOutreachModule`: that module also provides the sweeper, which
+        // injects the global Redis connection — same reason the marketing
+        // services are listed one by one below.
+        CheckoutIntentsController,
+        AdminAutoOutreachController,
         // ⚠️ THIS FIXTURE IS AN EXPLICIT LIST, NOT `AppModule`.
         //
         // A controller that exists in production and is missing here is not
@@ -239,6 +258,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // to be checking. Both of these were added to the product without
         // being added here.
         WhatsappReceiptController,
+        // «الرد الآلي» — the bot's admin routes. Its services are listed in
+        // `providers` below, and `WhatsappInboundController` above now needs
+        // `WaBotService` too: every inbound message is the bot's to record.
+        WaBotController,
         AdminBroadcastController,
         // «متابعة الطلبة». Registered by class like every entry here rather
         // than through `FollowUpModule`, and it resolves for the usual reason:
@@ -369,6 +392,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «دفتر غلطاتي» — بيقرا كويزات الطالب بس، مفيش Redis ولا تايمرز.
         MistakesModule,
         ShareCardsModule,
+        // «استوديو البوستات» — Prisma, `AuditService` and `MediaModule`, all
+        // already here. Its crons are inert without `ScheduleModule`, and the
+        // Graph client is never called by a 401/403 row.
+        SocialPostsModule,
+        // «سؤال اليوم» / «ملاحظاتي» / «خطة المذاكرة» / «أوسمتي» / «ملخص الشهر» —
+        // all five entitlements open here (no TENANT_KEY = Ayman's stack).
+        EngagementModule,
         AdminProfileModule,
       ],
       providers: [
@@ -400,6 +430,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         CampaignService,
         AudienceService,
         WhatsappDeviceService,
+        CheckoutIntentsService,
+        AutoOutreachCandidates,
+        AutoOutreachOverviewService,
+        /*
+         * «الرد الآلي». `WaBotReplier` (the five-second loop) is deliberately
+         * NOT here: no route injects it, and a cron in an authorization table
+         * would only ever answer chats nobody wrote. Everything else is what
+         * the two controllers transitively need; `AssistantAiService` is
+         * listed further down for المساعد and is shared.
+         */
+        WaBotService,
+        WaBotBrainService,
+        WaBotFactsService,
+        WaBotIdentityService,
+        WaBotSettingsService,
         AssistantService,
         // The file layer behind the two attachment routes. Listed beside
         // `AssistantService` rather than reached through `AssistantModule`,
@@ -959,6 +1004,48 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'share cards certificates: student', method: 'get', path: () => '/api/me/share-cards/certificates', actor: 'student', status: 200 },
     { label: 'share cards result: anonymous', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'share cards result: student, an attempt that is not theirs', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'student', status: 404 },
+    // Student engagement (`modules/engagement`). Every route is the session's
+    // own: no student id in any path, so the rows are 401 for anonymous and the
+    // student's own answer — a note or a lesson that is not theirs is 404.
+    { label: 'daily question: anonymous', method: 'get', path: () => '/api/me/daily', actor: 'anonymous', status: 401 },
+    { label: 'daily question: student', method: 'get', path: () => '/api/me/daily', actor: 'student', status: 200 },
+    { label: 'daily answer: anonymous', method: 'post', path: () => '/api/me/daily/answer', actor: 'anonymous', status: 401, body: () => ({ optionId: randomUUID() }) },
+    { label: 'daily answer: student, no card dealt today', method: 'post', path: () => '/api/me/daily/answer', actor: 'student', status: 404, body: () => ({ optionId: randomUUID() }) },
+    { label: 'notes notebook: anonymous', method: 'get', path: () => '/api/me/notes', actor: 'anonymous', status: 401 },
+    { label: 'notes notebook: student', method: 'get', path: () => '/api/me/notes', actor: 'student', status: 200 },
+    { label: 'lesson notes: anonymous', method: 'get', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'anonymous', status: 401 },
+    { label: 'lesson notes: student, a lesson that is not theirs', method: 'get', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'student', status: 404 },
+    { label: 'lesson note create: anonymous', method: 'post', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'anonymous', status: 401, body: () => ({ body: 'x' }) },
+    { label: 'lesson note create: student, a lesson that is not theirs', method: 'post', path: () => `/api/me/lessons/${randomUUID()}/notes`, actor: 'student', status: 404, body: () => ({ body: 'x' }) },
+    { label: 'note edit: anonymous', method: 'patch', path: () => `/api/me/notes/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ body: 'x' }) },
+    { label: 'note edit: student, a note that is not theirs', method: 'patch', path: () => `/api/me/notes/${randomUUID()}`, actor: 'student', status: 404, body: () => ({ body: 'x' }) },
+    { label: 'note delete: anonymous', method: 'delete', path: () => `/api/me/notes/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'note delete: student, a note that is not theirs', method: 'delete', path: () => `/api/me/notes/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'study plan: anonymous', method: 'get', path: () => '/api/me/plan', actor: 'anonymous', status: 401 },
+    { label: 'study plan: student', method: 'get', path: () => '/api/me/plan', actor: 'student', status: 200 },
+    { label: 'study plan save: anonymous', method: 'put', path: () => '/api/me/plan', actor: 'anonymous', status: 401, body: () => ({ examDate: '2027-06-01', daysOff: [] }) },
+    { label: 'study plan clear: anonymous', method: 'delete', path: () => '/api/me/plan', actor: 'anonymous', status: 401 },
+    { label: 'badges: anonymous', method: 'get', path: () => '/api/me/badges', actor: 'anonymous', status: 401 },
+    { label: 'badges: student', method: 'get', path: () => '/api/me/badges', actor: 'student', status: 200 },
+    { label: 'monthly recap: anonymous', method: 'get', path: () => '/api/me/recap', actor: 'anonymous', status: 401 },
+    { label: 'monthly recap: student', method: 'get', path: () => '/api/me/recap', actor: 'student', status: 200 },
+    { label: 'flash cards: anonymous', method: 'get', path: () => '/api/me/cards', actor: 'anonymous', status: 401 },
+    { label: 'flash cards: student', method: 'get', path: () => '/api/me/cards', actor: 'student', status: 200 },
+    { label: 'flash cards summary: anonymous', method: 'get', path: () => '/api/me/cards/summary', actor: 'anonymous', status: 401 },
+    { label: 'flash cards summary: student', method: 'get', path: () => '/api/me/cards/summary', actor: 'student', status: 200 },
+    { label: 'flash card review: anonymous', method: 'post', path: () => '/api/me/cards/review', actor: 'anonymous', status: 401, body: () => ({ bankEntryId: randomUUID(), courseId: randomUUID(), knew: true }) },
+    { label: 'flash card review: student, not their course', method: 'post', path: () => '/api/me/cards/review', actor: 'student', status: 404, body: () => ({ bankEntryId: randomUUID(), courseId: randomUUID(), knew: true }) },
+    { label: 'focus room: anonymous', method: 'get', path: () => '/api/me/focus', actor: 'anonymous', status: 401 },
+    { label: 'focus room: student', method: 'get', path: () => '/api/me/focus', actor: 'student', status: 200 },
+    { label: 'focus start: anonymous', method: 'post', path: () => '/api/me/focus/start', actor: 'anonymous', status: 401, body: () => ({ minutes: 25 }) },
+    { label: 'focus stop: anonymous', method: 'post', path: () => '/api/me/focus/stop', actor: 'anonymous', status: 401 },
+    { label: 'focus stop: student, nothing running', method: 'post', path: () => '/api/me/focus/stop', actor: 'student', status: 201 },
+    { label: 'weekly league: anonymous', method: 'get', path: () => '/api/me/league', actor: 'anonymous', status: 401 },
+    { label: 'weekly league: student', method: 'get', path: () => '/api/me/league', actor: 'student', status: 200 },
+    { label: 'league summary: anonymous', method: 'get', path: () => '/api/me/league/summary', actor: 'anonymous', status: 401 },
+    { label: 'league summary: student', method: 'get', path: () => '/api/me/league/summary', actor: 'student', status: 200 },
+    { label: 'league settings: anonymous', method: 'put', path: () => '/api/me/league/settings', actor: 'anonymous', status: 401, body: () => ({ hidden: false }) },
+    { label: 'league settings: student', method: 'put', path: () => '/api/me/league/settings', actor: 'student', status: 204, body: () => ({ hidden: false }) },
     // «دعوة صحابك» — `payment:submit` (self-scoped) + فيتشر `referrals`، مفتوحة هنا
     // لأن التستات بتجري كستاك أيمن. الأدمن: `marketing:read`/`marketing:write`،
     // والإلغاء `payment:review` لأنه بيرجّع فلوس من محفظتين.
@@ -1367,6 +1454,37 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'outreach preview: anonymous', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'anonymous', status: 401 },
     { label: 'outreach preview: student', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'student', status: 403 },
     { label: 'outreach preview: admin', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'admin', status: 200 },
+    // «رسايل الواتساب التلقائية» — the card. `outreach:read` like the log.
+    { label: 'auto outreach: anonymous', method: 'get', path: () => '/api/admin/outreach/auto', actor: 'anonymous', status: 401 },
+    { label: 'auto outreach: student', method: 'get', path: () => '/api/admin/outreach/auto', actor: 'student', status: 403 },
+    { label: 'auto outreach: admin', method: 'get', path: () => '/api/admin/outreach/auto', actor: 'admin', status: 200 },
+    // «فتحت خطوة الدفع» — `payment:submit`, the student's own row only. An
+    // unknown course is a 404 AFTER the gate: proof the permission check ran
+    // and that an id that is not on sale writes nothing.
+    {
+      label: 'checkout intent: anonymous',
+      method: 'post',
+      path: () => '/api/checkout-intents',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ target: 'course', targetId: randomUUID() }),
+    },
+    {
+      label: 'checkout intent: student, unknown course',
+      method: 'post',
+      path: () => '/api/checkout-intents',
+      actor: 'student',
+      status: 404,
+      body: () => ({ target: 'course', targetId: randomUUID() }),
+    },
+    {
+      label: 'checkout intent: student, someone else\'s order',
+      method: 'post',
+      path: () => '/api/checkout-intents',
+      actor: 'student',
+      status: 404,
+      body: () => ({ target: 'book_order', targetId: randomUUID() }),
+    },
 
     // ── التسويق: حملات واتساب. FOUR permissions across one controller
     // (`marketing:read` / `:write` / `:send` / `:device`), and the rows below
@@ -1425,6 +1543,46 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/cancel`, actor: 'student', status: 403 },
     { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
     { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
+
+    // ── «الرد الآلي»: the WhatsApp bot, «المهتمين» and the WhatsApp inbox.
+    // The campaigns' own permission split — read / write / send (a typed
+    // reply leaves the instructor's number, like starting a campaign) — and
+    // the `whatsapp.bot` entitlement, which is on here because the matrix
+    // runs as Ayman's stack (see the `FeatureGuard` note in the fixture).
+    { label: 'wa-bot settings: anonymous', method: 'get', path: () => '/api/admin/wa-bot/settings', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot settings: student', method: 'get', path: () => '/api/admin/wa-bot/settings', actor: 'student', status: 403 },
+    { label: 'wa-bot settings: admin', method: 'get', path: () => '/api/admin/wa-bot/settings', actor: 'admin', status: 200 },
+    { label: 'wa-bot settings save: anonymous', method: 'put', path: () => '/api/admin/wa-bot/settings', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot settings save: student', method: 'put', path: () => '/api/admin/wa-bot/settings', actor: 'student', status: 403 },
+    { label: 'wa-bot answers: anonymous', method: 'get', path: () => '/api/admin/wa-bot/answers', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answers: student', method: 'get', path: () => '/api/admin/wa-bot/answers', actor: 'student', status: 403 },
+    { label: 'wa-bot answers: admin', method: 'get', path: () => '/api/admin/wa-bot/answers', actor: 'admin', status: 200 },
+    { label: 'wa-bot answer create: anonymous', method: 'post', path: () => '/api/admin/wa-bot/answers', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answer create: student', method: 'post', path: () => '/api/admin/wa-bot/answers', actor: 'student', status: 403 },
+    { label: 'wa-bot answer update: anonymous', method: 'put', path: () => '/api/admin/wa-bot/answers/price', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answer update: student', method: 'put', path: () => '/api/admin/wa-bot/answers/price', actor: 'student', status: 403 },
+    { label: 'wa-bot answer reset: anonymous', method: 'delete', path: () => '/api/admin/wa-bot/answers/price', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answer reset: student', method: 'delete', path: () => '/api/admin/wa-bot/answers/price', actor: 'student', status: 403 },
+    { label: 'wa-bot preview: anonymous', method: 'post', path: () => '/api/admin/wa-bot/preview', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot preview: student', method: 'post', path: () => '/api/admin/wa-bot/preview', actor: 'student', status: 403 },
+    { label: 'wa-bot leads: anonymous', method: 'get', path: () => '/api/admin/wa-bot/leads', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot leads: student', method: 'get', path: () => '/api/admin/wa-bot/leads', actor: 'student', status: 403 },
+    { label: 'wa-bot leads: admin', method: 'get', path: () => '/api/admin/wa-bot/leads', actor: 'admin', status: 200 },
+    { label: 'wa-bot leads csv: anonymous', method: 'get', path: () => '/api/admin/wa-bot/leads.csv', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot leads csv: student', method: 'get', path: () => '/api/admin/wa-bot/leads.csv', actor: 'student', status: 403 },
+    { label: 'wa-bot leads csv: admin', method: 'get', path: () => '/api/admin/wa-bot/leads.csv', actor: 'admin', status: 200 },
+    { label: 'wa-bot lead patch: anonymous', method: 'patch', path: () => `/api/admin/wa-bot/leads/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot lead patch: student', method: 'patch', path: () => `/api/admin/wa-bot/leads/${MISSING_UUID}`, actor: 'student', status: 403 },
+    { label: 'wa-bot chats: anonymous', method: 'get', path: () => '/api/admin/wa-bot/chats', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chats: student', method: 'get', path: () => '/api/admin/wa-bot/chats', actor: 'student', status: 403 },
+    { label: 'wa-bot chats: admin', method: 'get', path: () => '/api/admin/wa-bot/chats', actor: 'admin', status: 200 },
+    { label: 'wa-bot chat: anonymous', method: 'get', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chat: student', method: 'get', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'student', status: 403 },
+    { label: 'wa-bot chat: admin', method: 'get', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'admin', status: 404 },
+    { label: 'wa-bot chat reply: anonymous', method: 'post', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}/reply`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chat reply: student', method: 'post', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}/reply`, actor: 'student', status: 403 },
+    { label: 'wa-bot chat patch: anonymous', method: 'patch', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chat patch: student', method: 'patch', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'student', status: 403 },
 
     // ── «/admin/broadcast»: the instructor's own words, sent on purpose —
     // deliberately `conversation:reply`, not `outreach:read` (see the
@@ -2051,6 +2209,31 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'designs publish: anonymous', method: 'post', path: () => `/api/admin/designs/assets/${randomUUID()}/publish`, actor: 'anonymous', status: 401 },
     { label: 'designs publish: student', method: 'post', path: () => `/api/admin/designs/assets/${randomUUID()}/publish`, actor: 'student', status: 403 },
     { label: 'designs studio: admin', method: 'get', path: () => '/api/designs', actor: 'admin', status: 200 },
+    // «استوديو البوستات» — `socialPosts` is open here (no TENANT_KEY = Ayman's stack).
+    { label: 'social posts list: anonymous', method: 'get', path: () => '/api/admin/social/posts', actor: 'anonymous', status: 401 },
+    { label: 'social posts list: student', method: 'get', path: () => '/api/admin/social/posts', actor: 'student', status: 403 },
+    { label: 'social post detail: anonymous', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'social post detail: student', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'social scan: anonymous', method: 'post', path: () => '/api/admin/social/scan', actor: 'anonymous', status: 401 },
+    { label: 'social scan: student', method: 'post', path: () => '/api/admin/social/scan', actor: 'student', status: 403 },
+    { label: 'social post patch: anonymous', method: 'patch', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'social post patch: student', method: 'patch', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'social post image: anonymous', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/image`, actor: 'anonymous', status: 401 },
+    { label: 'social post image: student', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/image`, actor: 'student', status: 403 },
+    { label: 'social post publish: anonymous', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/publish`, actor: 'anonymous', status: 401 },
+    { label: 'social post publish: student', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/publish`, actor: 'student', status: 403 },
+    { label: 'social post mark published: anonymous', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/mark-published`, actor: 'anonymous', status: 401 },
+    { label: 'social post mark published: student', method: 'post', path: () => `/api/admin/social/posts/${randomUUID()}/mark-published`, actor: 'student', status: 403 },
+    { label: 'social connection read: anonymous', method: 'get', path: () => '/api/admin/social/connection', actor: 'anonymous', status: 401 },
+    { label: 'social connection read: student', method: 'get', path: () => '/api/admin/social/connection', actor: 'student', status: 403 },
+    { label: 'social connection write: anonymous', method: 'put', path: () => '/api/admin/social/connection', actor: 'anonymous', status: 401 },
+    { label: 'social connection write: student', method: 'put', path: () => '/api/admin/social/connection', actor: 'student', status: 403 },
+    { label: 'social connection test: anonymous', method: 'post', path: () => '/api/admin/social/connection/test', actor: 'anonymous', status: 401 },
+    { label: 'social connection test: student', method: 'post', path: () => '/api/admin/social/connection/test', actor: 'student', status: 403 },
+    // The token is write-only: the admin read answers tokenSet, never the value.
+    { label: 'social connection read: admin', method: 'get', path: () => '/api/admin/social/connection', actor: 'admin', status: 200 },
+    { label: 'social post detail: admin, unknown', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'social post detail: admin, not a uuid', method: 'get', path: () => '/api/admin/social/posts/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, unknown', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, not a uuid', method: 'get', path: () => '/api/designs/folders/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs download: admin, unknown', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'admin', status: 404 },
@@ -2852,6 +3035,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin mobile pending: anonymous', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'anonymous', status: 401 },
     { label: 'admin mobile pending: student', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'student', status: 403 },
     { label: 'admin mobile pending: admin', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'admin', status: 200 },
+    { label: 'admin mobile today: anonymous', method: 'get', path: () => '/api/admin/mobile/today', actor: 'anonymous', status: 401 },
+    { label: 'admin mobile today: student', method: 'get', path: () => '/api/admin/mobile/today', actor: 'student', status: 403 },
+    { label: 'admin mobile today: admin', method: 'get', path: () => '/api/admin/mobile/today', actor: 'admin', status: 200 },
     { label: 'admin homework lessons: anonymous', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'anonymous', status: 401 },
     { label: 'admin homework lessons: student', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'student', status: 403 },
     { label: 'admin homework lessons: admin', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'admin', status: 200 },

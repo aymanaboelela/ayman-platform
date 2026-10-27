@@ -1,5 +1,5 @@
 /**
- * The six reasons the platform speaks first.
+ * The eight reasons the platform speaks first.
  *
  * A leaf module of its own, imported by the composer, the wire schemas and the
  * API alike — the Prisma enum `outreach_kind` mirrors it value for value, and
@@ -39,7 +39,32 @@ export const OUTREACH_KINDS = [
    * stream point at. Carries the link to that course and nothing else.
    */
   'subscribe_nudge',
+  /**
+   * A logged-in student opened a payment step and never finished it. One
+   * reminder, hours later, with a link straight back to that step. Swept by
+   * `AutoOutreachSweeper`, and sent over WhatsApp as well as in the chat.
+   */
+  'checkout_recovery',
+  /**
+   * An account that has bought nothing at all, a day after it was made (and
+   * optionally once more, days later). Same sweeper, same two channels.
+   */
+  'signup_nudge',
 ] as const;
+
+/**
+ * The two kinds that also go out over WhatsApp, from the linked number, with
+ * nobody pressing anything — `AutoOutreachSweeper`'s, behind the
+ * `outreach.whatsapp` entitlement. Everything that makes a WhatsApp message
+ * safe (the device, the opt-outs, the window, the daily ceiling) applies to
+ * these and to nothing else in this list.
+ */
+export const AUTO_WHATSAPP_KINDS = ['checkout_recovery', 'signup_nudge'] as const;
+export type AutoWhatsappKind = (typeof AUTO_WHATSAPP_KINDS)[number];
+
+export function isAutoWhatsappKind(kind: string): kind is AutoWhatsappKind {
+  return (AUTO_WHATSAPP_KINDS as readonly string[]).includes(kind);
+}
 
 export type OutreachKind = (typeof OUTREACH_KINDS)[number];
 

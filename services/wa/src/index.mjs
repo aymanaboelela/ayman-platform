@@ -294,6 +294,14 @@ const receipts = new ReceiptStore();
  */
 let queue = Promise.resolve();
 
+/**
+ * The number a send is in flight to (E.164), from just before `sendMessage` until its
+ * id is in `sent`. Closes the one window where our own message could be
+ * relayed back as somebody typing on the handset. Sends are serialised, so
+ * one value is enough.
+ */
+let sending = null;
+
 function digitsOf(value) {
   return String(value).replace(/\D/gu, '');
 }
@@ -583,13 +591,23 @@ function requestCode(socket, myGeneration) {
 }
 
 /**
- * Forwards what people reply, so «قف» can actually stop a campaign.
+ * Forwards what people reply, so «قف» can stop a campaign and the API's
+ * auto-reply bot can answer.
  *
- * Only inbound personal messages — never groups, never our own echoes — and
- * under LID addressing too (see `inbound.mjs`, which is the reason this is no
- * longer a plain `endsWith('@s.whatsapp.net')`). A failure to relay is logged
- * and dropped rather than retried: the next message carries the same intent,
- * and a retry storm against the API is worse than a missed one.
+ * Only personal chats — never groups, never status broadcasts — and under
+ * LID addressing too (see `inbound.mjs`, which is the reason this is no
+ * longer a plain `endsWith('@s.whatsapp.net')`). The API decides what a
+ * message means; this just relays it, and a failure to relay is logged and
+ * dropped rather than retried: the next message carries the same intent, and
+ * a retry storm against the API is worse than a missed one.
+ *
+ * ## Our own messages: only the ones a PERSON typed
+ *
+ * A reply somebody types on the linked handset itself is relayed with
+ * `fromMe: true` — it is what tells the bot a human has taken the chat over.
+ * Everything THIS process sent is not: those arrive as `append` (Baileys'
+ * own-event echo) rather than `notify`, and the `sent` store and `sending`
+ * below catch the rest, so the bot never mistakes its own reply for a person.
  */
 async function onIncoming({ messages, type }, socket) {
   if (type !== 'notify') return;
@@ -597,23 +615,35 @@ async function onIncoming({ messages, type }, socket) {
   const pnForLid = lidMapping?.getPNForLID ? (lid) => lidMapping.getPNForLID(lid) : undefined;
 
   for (const message of messages ?? []) {
-    if (message.key?.fromMe) continue;
+    const fromMe = Boolean(message.key?.fromMe);
+    if (fromMe && sent.get(message.key)) continue;
     const text = inboundText(message.message);
     if (!text) continue;
 
-    const from = await inboundPhone(message.key, pnForLid);
+    // `inboundPhone` answers null for our own messages by design; a reply typed
+    // on the handset is asked about as the chat it was typed INTO.
+    const from = await inboundPhone(fromMe ? { ...message.key, fromMe: false } : message.key, pnForLid);
     if (!from) {
       if (String(message.key?.remoteJid ?? '').endsWith('@lid')) {
         logger.warn({ jid: message.key?.remoteJid }, 'inbound from a LID with no known phone number — not relayed');
       }
       continue;
     }
+    if (fromMe && sending === from) continue;
 
     try {
       await fetch(INBOUND_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-wa-token': TOKEN },
-        body: JSON.stringify({ phone: from, text: text.slice(0, 300) }),
+        body: JSON.stringify({
+          phone: from,
+          text: text.slice(0, 1000),
+          // What they call themselves — display text for the leads list only.
+          name: fromMe ? null : (message.pushName ?? null),
+          // For the API to record a message relayed twice only once.
+          messageId: message.key?.id ?? null,
+          fromMe,
+        }),
         signal: AbortSignal.timeout(8000),
       });
     } catch (error) {
@@ -732,7 +762,14 @@ async function send({ phone: to, text, imageUrl }) {
 
   const payload = imageUrl ? { image: { url: imageUrl }, caption: text } : { text };
 
-  const message = await socket.sendMessage(jid, payload);
+  sending = `+${digitsOf(jid.split('@')[0])}`;
+  let message;
+  try {
+    message = await socket.sendMessage(jid, payload);
+  } catch (error) {
+    sending = null;
+    throw error;
+  }
   lastSentAt = new Date();
 
   // The recipient's LID, once 7.x has learned it. Reported, never addressed:
@@ -743,6 +780,7 @@ async function send({ phone: to, text, imageUrl }) {
   // Recorded before returning: a retry receipt can land while the caller is
   // still logging the send.
   sent.remember(message?.key?.id, message?.message);
+  sending = null;
   return {
     messageId: message?.key?.id ?? null,
     onWhatsApp: true,

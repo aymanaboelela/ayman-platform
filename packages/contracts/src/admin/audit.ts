@@ -271,6 +271,15 @@ export const AUDIT_ACTIONS = [
   // any campaign, and because the `lid` it records is the one fact anybody
   // will want back when asking why a campaign delivered to nobody.
   'whatsapp:test-send',
+  // «الرد الآلي». The settings and the answers are what the bot SAYS from
+  // the instructor's number, so a change to either is worth a row; a reply
+  // typed in the WhatsApp inbox is a message to a real person, audited for the
+  // same reason as a test send.
+  'wa-bot:settings',
+  'wa-bot:answer-update',
+  'wa-bot:answer-create',
+  'wa-bot:answer-reset',
+  'wa-bot:reply',
   // Vodafone Cash course subscriptions. `payment:submit` is written by the
   // STUDENT — the one auditable action in this list an admin never takes —
   // because a rejected claim's whole value is a durable record of exactly
@@ -555,6 +564,15 @@ export const AUDIT_ACTIONS = [
   'design:delete',
   'design:publish',
   /*
+   * «استوديو البوستات». `social:publish` is the one that puts something on a
+   * public page under the teacher's name — through the Graph API, or marked
+   * by hand after a manual post (`mode` in metadata). `social:connection`
+   * records that the Page token changed, never the token itself.
+   */
+  'social:update',
+  'social:publish',
+  'social:connection',
+  /*
    * «المونتاج». Audited for the studio's reason — the editor's account belongs
    * to someone outside the team. `montage:publish` is the one that reaches
    * students: a hand-over put on a lesson, with the lesson's id.
@@ -568,6 +586,12 @@ export const AUDIT_ACTIONS = [
   'montage:editor-password',
   'montage:editor-disable',
   'montage:editor-enable',
+  /*
+   * «لوحته» — the platform owner opened this stack's admin from his control
+   * plane, with no password (`admin/owner-sign-in.ts`). The instructor's own
+   * log is where they can see that it happened and when.
+   */
+  'platform:owner-sign-in',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

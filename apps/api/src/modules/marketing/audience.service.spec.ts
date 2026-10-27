@@ -431,4 +431,80 @@ describe('AudienceService', () => {
       expect(everyone.recipients.map((r) => r.phone)).not.toContain(guestPhone);
     });
   });
+
+  /**
+   * «المهتمين» — numbers that wrote to the WhatsApp number first. Real rows,
+   * for the same reason as the rest of this file: which states count as
+   * "still worth a message" is the behaviour under test.
+   */
+  describe('WhatsApp leads', () => {
+    const base = Number(String(Date.now()).slice(-7));
+    const phone = (offset: number) => `+20122${String(base + offset).padStart(7, '0').slice(-7)}`;
+    const fresh = phone(1);
+    const contacted = phone(2);
+    const uninterested = phone(3);
+    const subscribed = phone(4);
+    const optedOut = phone(5);
+    const muted = phone(6);
+    const notLead = phone(7);
+
+    beforeAll(async () => {
+      const row = (p: string, extra: Record<string, unknown> = {}) => ({
+        phone: p,
+        isLead: true,
+        firstMessage: 'الكورس بكام',
+        lastMessage: 'الكورس بكام',
+        ...extra,
+      });
+      await prisma.waChat.createMany({
+        data: [
+          row(fresh),
+          row(contacted, { leadStatus: 'contacted' }),
+          row(uninterested, { leadStatus: 'not_interested' }),
+          row(subscribed, { leadStatus: 'subscribed' }),
+          row(optedOut, { optedOutAt: new Date() }),
+          row(muted, { mutedUntil: new Date(Date.now() + 3_600_000) }),
+          row(notLead, { isLead: false, who: 'student' }),
+        ],
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.waChat.deleteMany({
+        where: { phone: { in: [fresh, contacted, uninterested, subscribed, optedOut, muted, notLead] } },
+      });
+    });
+
+    it('is off unless asked for — an old campaign row resolves to the same people it always did', async () => {
+      const resolved = await service.resolve(audienceFor({ students: false }));
+      expect(resolved.recipients.map((r) => r.phone)).not.toContain(fresh);
+    });
+
+    it('by default reaches the leads still worth a message: new and contacted', async () => {
+      const phones = (await service.resolve(audienceFor({ students: false, leads: true }))).recipients.map(
+        (r) => r.phone,
+      );
+      expect(phones).toEqual(expect.arrayContaining([fresh, contacted]));
+      expect(phones).not.toContain(uninterested);
+      expect(phones).not.toContain(subscribed);
+    });
+
+    it('never reaches a lead that asked to stop, or one muted as a bot', async () => {
+      const phones = (
+        await service.resolve(
+          audienceFor({ students: false, leads: true, leadStatuses: ['new', 'contacted', 'not_interested', 'subscribed'] }),
+        )
+      ).recipients.map((r) => r.phone);
+      expect(phones).toEqual(expect.arrayContaining([fresh, contacted, uninterested, subscribed]));
+      expect(phones).not.toContain(optedOut);
+      expect(phones).not.toContain(muted);
+      expect(phones).not.toContain(notLead);
+    });
+
+    it('carries no name — a WhatsApp push name is not a name to address anyone by', async () => {
+      const resolved = await service.resolve(audienceFor({ students: false, leads: true }));
+      const lead = resolved.recipients.find((r) => r.phone === fresh);
+      expect(lead).toEqual({ phone: fresh, name: null, userId: null });
+    });
+  });
 });

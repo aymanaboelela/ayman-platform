@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Crown, Medal, Trophy } from 'lucide-react';
@@ -7,7 +6,9 @@ import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { HonorFace } from '@/components/site/honor-face';
-import { getBrandAsset } from '@/lib/brand-assets';
+import { brandImage } from '@/lib/brand-image';
+import { getBranding } from '@/lib/settings';
+import { ThemedImage } from '@/components/themed-image';
 import { tenantName } from '@/lib/tenant';
 import { getHonorBoardRounds } from '@/lib/home-blocks';
 import { getEntitlements } from '@/lib/entitlements';
@@ -78,10 +79,11 @@ export default async function HonorBoardArchivePage({
   const active = round ? board.periods.find((period) => period.key === round) : board.periods[0];
   if (!active) notFound();
 
-  /* The instructor's portrait beside «ألف مبروك للأوائل». `getBrandAsset`
-     answers undefined on every stack but his, and the band then closes up
-     to the words alone — nothing else branches. */
-  const host = getBrandAsset('honorHost');
+  /* The instructor's portrait beside «ألف مبروك للأوائل» — an upload from
+     «الهوية البصرية» first, his file second. With neither (any stack but his
+     that has not uploaded one) the band closes up to the words alone —
+     nothing else branches. */
+  const host = brandImage(await getBranding(), 'honorHost');
   const races = groupByRace(active.entries);
 
   return (
@@ -104,10 +106,8 @@ export default async function HonorBoardArchivePage({
         </div>
         {host ? (
           <figure className="honor-hero__host">
-            <Image
-              src={host.src}
-              width={host.width}
-              height={host.height}
+            <ThemedImage
+              image={host}
               alt=""
               sizes="(min-width: 64rem) 18rem, 11rem"
               priority

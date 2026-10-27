@@ -1,7 +1,7 @@
-import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
-import { BRAND_ASSET_RATIO, getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
-import { mediaUrl } from '@ayman/ui/branding';
+import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
+import { uploadedAsset } from '@/lib/brand-image';
+import { ThemedImage } from '@/components/themed-image';
 import { tenantName } from '@/lib/tenant';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { SITE_TAGLINE, STACK_MONOGRAM } from '@/lib/subject-copy';
@@ -63,6 +63,7 @@ export function MediaSlot({
   quality,
   sizes = '100vw',
   tenantKey,
+  tenantDarkKey,
 }: {
   kind: BrandAssetKind;
   alt: string;
@@ -80,58 +81,37 @@ export function MediaSlot({
    * بدل ما كل خانة على الصفحة تنده الكاش لوحدها.
    */
   tenantKey?: string | null;
+  /**
+   * The dark-mode file, when the instructor uploaded a different one. Null
+   * means the same picture in both modes. See `<ThemedImage>`.
+   */
+  tenantDarkKey?: string | null;
   className?: string;
   priority?: boolean;
   fetchPriority?: 'high' | 'low' | 'auto';
   quality?: number;
   sizes?: string;
 }) {
-  const asset = getBrandAsset(kind);
-
   /*
    * صورة المدرّس الأول، وملفات أيمن بعدها.
    *
    * على ستاك أيمن `tenantKey` بيفضل فاضي فبيسقط على ملفاته المكتوبة في الكود
    * وما بيتغيّرش عنده ولا بايت. وعلى ستاك تاني `getBrandAsset` بيرجّع
    * `undefined` أصلًا (متجيّت بـ`aymanOnly`) — فالصورة المرفوعة هي الوحيدة.
+   *
+   * المقاس من جدول النسب (`uploadedAsset`)، مش رقمين ثابتين: كان
+   * `width={1200} height={kind === 'portrait' ? 1600 : 800}` — يعني ٣:٢ لكل
+   * خانة غير البورتريه، بما فيها `mark` الدايرة و`logo` اللوكاب ٣:١، وخانة
+   * متعرّفة غلط = قفزة في أول رندر.
    */
-  if (tenantKey) {
-    /*
-     * المقاس من جدول النسب، مش رقمين ثابتين.
-     *
-     * كان `width={1200} height={kind === 'portrait' ? 1600 : 800}` — يعني ٣:٢
-     * لكل خانة غير البورتريه، **بما فيها `mark` و`logo`**. و`mark` دايرة ١:١،
-     * و`logo` لوكاب ٣:١. الأبعاد دي هي اللي `next/image` بيحجز بيها المكان قبل
-     * ما البايتات تنزل، فخانة متعرّفة غلط = قفزة في أول رندر.
-     *
-     * الصورة المرفوعة أبعادها الحقيقية مش في پيلود الإعدادات (نفس اللي
-     * `<BoardMark>` و`<CourseCover>` مكتوب فيهم بالحرف)، فالمطلوب هنا **نسبة**
-     * صح مش قياس صح — وكل خانة `object-fit` بتاعها في الـCSS بيتكفّل بالباقي.
-     */
-    const width = 1200;
-    const height = Math.round(width / BRAND_ASSET_RATIO[kind]);
+  const light = tenantKey ? uploadedAsset(tenantKey, kind) : getBrandAsset(kind);
+  const dark = tenantDarkKey ? uploadedAsset(tenantDarkKey, kind) : null;
+  const image = light ? { light, dark } : dark ? { light: dark, dark: null } : null;
 
+  if (image) {
     return (
-      <Image
-        src={mediaUrl(tenantKey)}
-        width={width}
-        height={height}
-        alt={alt}
-        priority={priority}
-        fetchPriority={fetchPriority}
-        quality={quality}
-        sizes={sizes}
-        className={className}
-      />
-    );
-  }
-
-  if (asset) {
-    return (
-      <Image
-        src={asset.src}
-        width={asset.width}
-        height={asset.height}
+      <ThemedImage
+        image={image}
         alt={alt}
         priority={priority}
         fetchPriority={fetchPriority}

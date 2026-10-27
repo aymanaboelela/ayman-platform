@@ -211,7 +211,18 @@ export const HOMEWORK_KEY_PATTERN = /^hw\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
  */
 export const DESIGN_KEY_PATTERN = /^design\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:png|jpg|webp)$/;
 
-/** Any of the seven shapes. `MediaStorage` implementations validate against this. */
+/**
+ * «استوديو البوستات» pictures — `sp/<uuid>.jpg`.
+ *
+ * TWO segments on purpose, so the public `GET /media/:prefix/:name` route
+ * serves them: Instagram's Graph API takes an `image_url` it downloads
+ * itself, from the open internet, and will not accept bytes. JPEG and not
+ * the library's WebP for the same reason — Instagram refuses WebP. No
+ * `media_assets` row: these are the post's own pictures, not library images.
+ */
+export const SOCIAL_POST_KEY_PATTERN = /^sp\/[0-9a-f-]{36}\.jpg$/;
+
+/** Any of the eight shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
@@ -220,7 +231,8 @@ export function isValidStorageKey(key: string): boolean {
     PAYMENT_PROOF_KEY_PATTERN.test(key) ||
     BOOK_ORDER_PROOF_KEY_PATTERN.test(key) ||
     HOMEWORK_KEY_PATTERN.test(key) ||
-    DESIGN_KEY_PATTERN.test(key)
+    DESIGN_KEY_PATTERN.test(key) ||
+    SOCIAL_POST_KEY_PATTERN.test(key)
   );
 }
 

@@ -49,11 +49,20 @@ import { MediaSlot } from '@/components/site/media-slot';
  * dark on every preset. `logoLightKey` is the fallback rather than nothing,
  * because an admin who uploaded exactly one file uploaded it to whichever slot
  * they happened to open.
+ *
+ * Both of those come AFTER `markKey`, the circle's own slot on «الهوية
+ * البصرية» («الصورة اللي فوق»), which is cropped square for exactly this box
+ * and can carry a separate dark-mode file.
  */
 export async function SiteBrandSlot() {
   const branding = await getBranding();
 
-  return <SiteBrandMarks markKey={branding.logoDarkKey ?? branding.logoLightKey} />;
+  return (
+    <SiteBrandMarks
+      markKey={branding.markKey ?? branding.logoDarkKey ?? branding.logoLightKey}
+      markDarkKey={branding.markDarkKey}
+    />
+  );
 }
 
 /**
@@ -70,7 +79,13 @@ export function SiteBrandSlotFallback() {
   return <SiteBrandMarks markKey={null} />;
 }
 
-function SiteBrandMarks({ markKey }: { markKey: string | null }) {
+function SiteBrandMarks({
+  markKey,
+  markDarkKey = null,
+}: {
+  markKey: string | null;
+  markDarkKey?: string | null;
+}) {
   return (
     <>
       {/*
@@ -83,7 +98,14 @@ function SiteBrandMarks({ markKey }: { markKey: string | null }) {
         the browser pick a candidate for a full-width image and pull the
         largest one for a 36px circle.
       */}
-      <MediaSlot kind="mark" tenantKey={markKey} alt="" className="site-mark" sizes="36px" />
+      <MediaSlot
+        kind="mark"
+        tenantKey={markKey}
+        tenantDarkKey={markDarkKey}
+        alt=""
+        className="site-mark"
+        sizes="36px"
+      />
       {/*
         No `tenantKey`, and that is the decision this file's docblock is about
         rather than the bug it fixed — one uploaded mark cannot fill two boxes.

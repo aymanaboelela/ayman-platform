@@ -33,7 +33,7 @@ It sends one message when told to, and reports whether it worked.
 | `WA_PORT`         | HTTP port. Default `3400`. Internal network only — never routed. |
 | `WA_TOKEN`        | Shared secret. Every request must carry it as `x-wa-token`.     |
 | `WA_AUTH_DIR`     | Where the pairing credentials live. **Must be a volume.**       |
-| `WA_INBOUND_URL`  | Optional. Incoming messages are POSTed here (for «قف»).         |
+| `WA_INBOUND_URL`  | Optional. Incoming messages are POSTed here (for «قف» and the auto-reply bot). |
 | `WA_RECEIPT_URL`  | **Set this.** Delivery receipts are POSTed here. Unset, the service goes back to reporting a send as successful the moment WhatsApp's servers take custody — one grey tick — which is how a campaign that reached nobody reported «٧٤ من ٧٤ · اتبعت». |
 | `WA_LOG_LEVEL`    | Optional, default `info` — OUR lines, one per send. It used to default to `warn`, and the logs being empty is why a campaign that delivered nothing could not be diagnosed after the fact. |
 | `WA_BAILEYS_LOG_LEVEL` | Optional, default `warn`. The library's own noise, kept separate so `info` on ours does not bury them. `warn` still carries «received error in ack» — where WhatsApp's refusal codes appear. |

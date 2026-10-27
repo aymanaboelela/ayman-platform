@@ -66,6 +66,19 @@ export const OutreachFactsSchema = z.discriminatedUnion('kind', [
      */
     url: z.string(),
   }),
+  // `z.string()` for both URLs, for the snapshot reason above.
+  z.object({
+    kind: z.literal('checkout_recovery'),
+    target: z.enum(['course', 'book_order']),
+    title: z.string().nullable(),
+    url: z.string(),
+  }),
+  z.object({
+    kind: z.literal('signup_nudge'),
+    step: z.union([z.literal(1), z.literal(2)]),
+    courseTitle: z.string().nullable(),
+    url: z.string(),
+  }),
 ]);
 
 export const OutreachLogRowSchema = z.object({

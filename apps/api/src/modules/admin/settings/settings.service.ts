@@ -1,5 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { BRAND_IMAGE_FIELDS, BRAND_IMAGE_SLOTS } from '@ayman/contracts/admin/brand-images';
+import { OG_PAGES } from '@ayman/contracts/admin/seo-pages';
 import {
+  BrandingReadSchema,
+  SeoReadSchema,
   SECTION_SCHEMAS,
   SiteSettingsSchema,
   type BrandingRead,
@@ -73,40 +77,46 @@ export class SettingsService {
   }
 
   /**
-   * Branding PLUS the storage key behind each of its three asset slots.
+   * Branding PLUS the storage key behind each of its picture slots, light and
+   * dark.
    *
    * The root layout needs a URL and holds an id, and `mediaUrl()` takes a
    * storage key — see `BrandingReadSchema` for the 404 that gap produced.
+   *
+   * Walks `BRAND_IMAGE_SLOTS` rather than naming fields: a slot added there is
+   * resolved here without anyone remembering this method exists. One query for
+   * all of them, however many are set.
    */
   async readBranding(): Promise<BrandingRead> {
     const { branding } = await this.read();
-    const keys = await this.resolveAssetKeys([
-      branding.logoLightAssetId,
-      branding.logoDarkAssetId,
-      branding.faviconAssetId,
-      branding.heroAssetId,
-      branding.portraitAssetId,
-      branding.loginAssetId,
-    ]);
+    const keys = await this.resolveAssetKeys(BRAND_IMAGE_FIELDS.map((field) => branding[field]));
 
-    return {
-      ...branding,
-      logoLightKey: key(keys, branding.logoLightAssetId),
-      logoDarkKey: key(keys, branding.logoDarkAssetId),
-      faviconKey: key(keys, branding.faviconAssetId),
-      heroKey: key(keys, branding.heroAssetId),
-      portraitKey: key(keys, branding.portraitAssetId),
-      loginKey: key(keys, branding.loginAssetId),
-    };
+    const resolved: Record<string, string | null> = {};
+    for (const def of BRAND_IMAGE_SLOTS) {
+      resolved[def.lightKey] = key(keys, branding[def.light]);
+      if (def.dark && def.darkKey) resolved[def.darkKey] = key(keys, branding[def.dark]);
+    }
+
+    return BrandingReadSchema.parse({ ...branding, ...resolved });
   }
 
-  /** Same resolution for the OG image, on every page's `generateMetadata`. */
+  /**
+   * Same resolution for the OG images — the site-wide one and each section's
+   * (`OG_PAGES`) — on every page's `generateMetadata`. Still one query.
+   */
   async readPublicResolved(): Promise<PublicSettingsRead> {
     const settings = await this.read();
-    const keys = await this.resolveAssetKeys([settings.seo.ogImageAssetId]);
+    const { seo } = settings;
+    const keys = await this.resolveAssetKeys([
+      seo.ogImageAssetId,
+      ...OG_PAGES.map((def) => seo[def.field]),
+    ]);
+
+    const pageKeys: Record<string, string | null> = {};
+    for (const def of OG_PAGES) pageKeys[def.key] = key(keys, seo[def.field]);
 
     return {
-      seo: { ...settings.seo, ogImageKey: key(keys, settings.seo.ogImageAssetId) },
+      seo: SeoReadSchema.parse({ ...seo, ogImageKey: key(keys, seo.ogImageAssetId), ...pageKeys }),
       contact: settings.contact,
       about: settings.about,
     };

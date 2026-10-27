@@ -11,6 +11,7 @@ import {
   type OutreachSettings,
 } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminAutoOutreach as auto } from '@ayman/contracts/copy/admin-auto-outreach';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Switch } from '@ayman/ui/components/switch';
@@ -25,12 +26,23 @@ const c = copy.admin.outreach;
  *  the identical note `branding-form.tsx` and `contact-form.tsx` carry. */
 type FormValues = z.input<typeof OutreachSettingsSchema>;
 
-type ToggleName = 'quizResult' | 'quizNudge' | 'lessonPraise' | 'whatsappInvite';
+type ToggleName =
+  | 'quizResult'
+  | 'quizNudge'
+  | 'lessonPraise'
+  | 'whatsappInvite'
+  | 'checkoutRecovery'
+  | 'signupNudge';
 type NumberName =
   | 'nudgeAfterHours'
   | 'groupInviteEveryDays'
   | 'maxInvitesPerStudent'
-  | 'maxPerStudentPerDay';
+  | 'maxPerStudentPerDay'
+  | 'checkoutRecoveryAfterHours'
+  | 'checkoutRecoveryEveryDays'
+  | 'signupNudgeAfterHours'
+  | 'signupNudgeSecondAfterDays'
+  | 'autoWhatsappDailyCap';
 
 const TOGGLES: readonly { name: ToggleName; label: string; hint: string }[] = [
   { name: 'quizResult', label: c.quizResult, hint: c.quizResultHint },
@@ -44,6 +56,25 @@ const NUMBERS: readonly { name: NumberName; label: string; hint: string }[] = [
   { name: 'groupInviteEveryDays', label: c.groupInviteEveryDays, hint: c.groupInviteEveryDaysHint },
   { name: 'maxInvitesPerStudent', label: c.maxInvitesPerStudent, hint: c.maxInvitesPerStudentHint },
   { name: 'maxPerStudentPerDay', label: c.maxPerStudentPerDay, hint: c.maxPerStudentPerDayHint },
+];
+
+/**
+ * «رسايل الواتساب التلقائية» — drawn only on a stack that holds the
+ * `outreach.whatsapp` entitlement. The VALUES are in the same settings object
+ * everywhere (they ride the one PATCH below either way, at their defaults);
+ * what is withheld elsewhere is a switch for a sweeper that never runs there.
+ */
+const AUTO_TOGGLES: readonly { name: ToggleName; label: string; hint: string }[] = [
+  { name: 'checkoutRecovery', label: auto.checkoutRecovery, hint: auto.checkoutRecoveryHint },
+  { name: 'signupNudge', label: auto.signupNudge, hint: auto.signupNudgeHint },
+];
+
+const AUTO_NUMBERS: readonly { name: NumberName; label: string; hint: string }[] = [
+  { name: 'checkoutRecoveryAfterHours', label: auto.checkoutRecoveryAfterHours, hint: auto.checkoutRecoveryAfterHoursHint },
+  { name: 'checkoutRecoveryEveryDays', label: auto.checkoutRecoveryEveryDays, hint: auto.checkoutRecoveryEveryDaysHint },
+  { name: 'signupNudgeAfterHours', label: auto.signupNudgeAfterHours, hint: auto.signupNudgeAfterHoursHint },
+  { name: 'signupNudgeSecondAfterDays', label: auto.signupNudgeSecondAfterDays, hint: auto.signupNudgeSecondAfterDaysHint },
+  { name: 'autoWhatsappDailyCap', label: auto.autoWhatsappDailyCap, hint: auto.autoWhatsappDailyCapHint },
 ];
 
 /**
@@ -64,7 +95,13 @@ const NUMBERS: readonly { name: NumberName; label: string; hint: string }[] = [
  * `whatsappInvite` on but `groupInviteEveryDays` still at yesterday's number —
  * is a state he did not ask for. One form, one PATCH, one section.
  */
-export function OutreachSettingsForm({ defaultValues }: { defaultValues: OutreachSettings }) {
+export function OutreachSettingsForm({
+  defaultValues,
+  autoWhatsapp = false,
+}: {
+  defaultValues: OutreachSettings;
+  autoWhatsapp?: boolean;
+}) {
   const router = useRouter();
   const [saveError, setSaveError] = useState<string | null>(null);
   const form = useForm<FormValues, unknown, OutreachSettings>({
@@ -158,6 +195,72 @@ export function OutreachSettingsForm({ defaultValues }: { defaultValues: Outreac
           />
         ))}
       </div>
+
+      {autoWhatsapp ? (
+        <fieldset className="flex flex-col gap-5 rounded-xl border border-accent/30 bg-accent/6 p-4">
+          <legend className="px-1 text-[length:var(--fs-text-sm)] font-semibold text-accent-text">
+            {auto.settingsHeading}
+          </legend>
+          <ul className="flex flex-col divide-y divide-line-subtle">
+            {AUTO_TOGGLES.map((toggle) => (
+              <li key={toggle.name} className="flex items-start justify-between gap-4 py-3.5 first:pt-0">
+                <span className="min-w-0">
+                  <label
+                    htmlFor={`outreach-${toggle.name}`}
+                    className="block text-[length:var(--fs-text-sm)] font-medium text-fg"
+                  >
+                    {toggle.label}
+                  </label>
+                  <span className="mt-0.5 block text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {toggle.hint}
+                  </span>
+                </span>
+                <Switch
+                  id={`outreach-${toggle.name}`}
+                  checked={form.watch(toggle.name) ?? true}
+                  onCheckedChange={(checked) =>
+                    form.setValue(toggle.name, checked, { shouldDirty: true })
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {AUTO_NUMBERS.map((field) => (
+              <SettingsField
+                key={field.name}
+                name={field.name}
+                label={field.label}
+                description={field.hint}
+                issues={issues}
+                render={(controlProps) => (
+                  <Input
+                    {...controlProps}
+                    type="number"
+                    inputMode="numeric"
+                    dir="ltr"
+                    value={String(form.watch(field.name) ?? '')}
+                    onChange={(event) => {
+                      /*
+                       * `Number.parseInt`, and NaN is passed through rather than
+                       * swallowed. An empty box must fail the schema and show its
+                       * message, not silently save as 0 — «كل 0 يوم يعزم على
+                       * الجروب» is a message every student gets every hour.
+                       */
+                      const parsed = Number.parseInt(event.target.value, 10);
+                      form.setValue(field.name, Number.isNaN(parsed) ? ('' as never) : parsed, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                    }}
+                  />
+                )}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
 
       <p className={cn('text-[length:var(--fs-text-xs)] leading-[1.7] text-fg-muted')}>
         {c.settingsNote}

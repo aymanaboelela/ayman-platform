@@ -15,8 +15,16 @@ export interface ShareBrand {
   platform: string;
   /** `aymanaboelela.com` — printed under the QR, so it has no scheme. */
   siteHost: string;
-  /** The hero composite (his face + the dragon), his stack only. */
+  /** The hero: an upload from «الهوية البصرية», else his composite (his stack only). */
   heroSrc?: string;
+  /**
+   * The teacher's signature from «الهوية البصرية». `signatureSrc` is dark ink
+   * for the ivory exam certificate, `signatureDarkSrc` light ink for the
+   * black unit certificate; each certificate falls back to the other file,
+   * then to the name set in the script face.
+   */
+  signatureSrc?: string;
+  signatureDarkSrc?: string;
   qr: QrMatrix;
 }
 

@@ -1,53 +1,43 @@
-'use client';
-
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminReferralsCopy } from '@ayman/contracts/copy/admin-referrals';
-import { cn } from '@ayman/ui/lib/cn';
-import { useFeature } from '@/components/admin/entitlements-context';
+import { socialPostsCopy } from '@ayman/contracts/copy/social-posts';
+import { copy as bot } from '@ayman/contracts/copy/wa-bot';
+import { getEntitlements } from '@/lib/entitlements';
+import { MarketingTabsNav, type MarketingTab } from './tabs-nav';
 
 const c = copy.marketing;
 
-const TABS = [
-  { href: '/admin/marketing/campaigns', label: c.title },
-  { href: '/admin/marketing/device', label: c.deviceTitle },
-  { href: '/admin/marketing/opt-outs', label: c.optOutsTitle },
-  // «دعوة الصحاب» — behind its own entitlement, hidden below where it is off.
-  { href: '/admin/marketing/referrals', label: adminReferralsCopy.tab, feature: 'referrals' },
-] as const;
-
 /**
- * The screens behind «التسويق»: campaigns, the device that sends them, who has
- * opted out of ever receiving one, and «دعوة الصحاب» where that is open.
+ * The screens behind «التسويق»: campaigns, the device that sends them, who
+ * has opted out of ever receiving one, «دعوة الصحاب», the social post
+ * studio, and the auto-reply bot's leads and settings.
  *
- * A client component only for `usePathname` — the tab bar itself renders the
- * same three links on every page under this section, and each page decides
- * its own content.
+ * Three features share this section, and any of them can be off on a stack:
+ * a teacher entitled to the studio and not to WhatsApp must not see three tabs
+ * that all 404. So the tabs are picked here, on the server, from the same
+ * entitlements each page's own `notFound()` reads.
  */
-export function MarketingTabs() {
-  const pathname = usePathname();
-  const referrals = useFeature('referrals');
+export async function MarketingTabs() {
+  const features = await getEntitlements();
+  const tabs: MarketingTab[] = [
+    ...(features['marketing.whatsapp']
+      ? [
+          { href: '/admin/marketing/campaigns', label: c.title },
+          { href: '/admin/marketing/device', label: c.deviceTitle },
+          { href: '/admin/marketing/opt-outs', label: c.optOutsTitle },
+        ]
+      : []),
+    ...(features.referrals ? [{ href: '/admin/marketing/referrals', label: adminReferralsCopy.tab }] : []),
+    ...(features.socialPosts ? [{ href: '/admin/marketing/posts', label: socialPostsCopy.tab }] : []),
+    // «الرد الآلي» — its leads and its settings. Its inbox is a tab under
+    // «صندوق الوارد», beside المساعد's.
+    ...(features['whatsapp.bot']
+      ? [
+          { href: '/admin/marketing/leads', label: bot.admin.tabLeads },
+          { href: '/admin/marketing/bot', label: bot.admin.tabBot },
+        ]
+      : []),
+  ];
 
-  return (
-    <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line-subtle">
-      {TABS.filter((tab) => !('feature' in tab) || referrals).map((tab) => {
-        const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
-        return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={cn(
-              'border-b-2 px-3 py-2 text-[length:var(--fs-text-sm)] font-medium transition-colors duration-[160ms]',
-              active
-                ? 'border-accent text-fg'
-                : 'border-transparent text-fg-muted hover:text-fg',
-            )}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  return <MarketingTabsNav tabs={tabs} />;
 }

@@ -169,6 +169,93 @@ export const FEATURE_DECLARATIONS = [
       'رقم الطلبات المستنية على أيقونة التطبيق، ومراجعة الاشتراكات واحد واحد، وملخص آخر اليوم، وتنبيه لو الواتساب فصل أو رفع فيديو فشل.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول». بيبعت من الرقم المربوط من غير ما حد يدوس — فلازم يبقى
+     * مقفول على أي ستاك تاني لحد ما يتفتح بقصد، وبيحتاج `marketing.whatsapp`
+     * وجهاز مربوط كمان عشان يبعت أي حاجة.
+     */
+    key: 'outreach.whatsapp',
+    nameAr: 'رسايل الواتساب التلقائية',
+    descriptionAr: 'تذكير «كمّل الدفع» للي فتح الدفع وماكمّلش، ورسالة للي سجّل ومااشتركش في أي كورس.',
+    defaultForTenant: false,
+  },
+  {
+    /*
+     * «لأيمن الأول»، زي `shareCards`. البوستات بتتنشر على صفحة المدرّس هو
+     * وبالتوكن بتاعه هو، فلما تتفتح لمدرّس مفيش حاجة من بتاعة أيمن بتعدّي.
+     */
+    key: 'socialPosts',
+    nameAr: 'بوستات السوشيال',
+    descriptionAr: 'بوستات جاهزة من لوحة الشرف والنتايج والشهادات والمحتوى الجديد، وتقويم ونشر على فيسبوك وإنستجرام.',
+    defaultForTenant: false,
+  },
+  {
+    /*
+     * "Ayman first": built at his request and off on every other stack until
+     * the owner opens it from the signed document. It replies FROM a real
+     * WhatsApp number, so it also needs `marketing.whatsapp` (the linked
+     * device) to do anything at all.
+     */
+    key: 'whatsapp.bot',
+    nameAr: 'الرد الآلي على الواتساب',
+    descriptionAr: 'ردود تلقائية على الأسئلة المتكررة، وقائمة «المهتمين»، وصندوق محادثات الواتساب.',
+    defaultForTenant: false,
+  },
+  /*
+   * The engagement features (`contracts/engagement.ts`). Ayman first, like
+   * everything new: on for him, off on any other stack until the owner opens
+   * them one by one. None carries his identity, so an opened stack works at
+   * once with its own name on it.
+   */
+  {
+    key: 'dailyQuestion',
+    nameAr: 'سؤال اليوم',
+    descriptionAr: 'سؤال واحد كل يوم من كورسات الطالب، وسلسلة الأيام اللي جاوب فيها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'lessonNotes',
+    nameAr: 'ملاحظاتي',
+    descriptionAr: 'ملاحظات الطالب على المحاضرة، متعلّمة على دقيقة في الفيديو، وصفحة بيها كلها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'studyPlan',
+    nameAr: 'خطة المذاكرة',
+    descriptionAr: 'الطالب يختار ميعاد امتحانه، والمنصة توزّع اللي عليه على الأيام الباقية.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'badges',
+    nameAr: 'أوسمتي',
+    descriptionAr: 'أوسمة برونز وفضة ودهب على المحاضرات والكويزات والسلسلة وغيرها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'monthlyRecap',
+    nameAr: 'ملخص الشهر',
+    descriptionAr: 'الشهر بالأرقام — ساعات المذاكرة والدرجات والأيام — وصورة ستوري يشيّرها.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'flashCards',
+    nameAr: 'بطاقات المراجعة',
+    descriptionAr: 'أسئلة الكورس كبطاقات يقلبها الطالب، واللي مش حافظه بيرجعله لحد ما يحفظه.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'focusRoom',
+    nameAr: 'أوضة المذاكرة',
+    descriptionAr: 'تايمر مذاكرة ٢٥ دقيقة وبريك، وعدد الطلاب اللي بيذاكروا معاه في نفس اللحظة.',
+    defaultForTenant: false,
+  },
+  {
+    key: 'weeklyLeague',
+    nameAr: 'دوري الأسبوع',
+    descriptionAr: 'نقط على شغل الأسبوع وترتيب مع طلاب نفس السنة، بيبدأ من جديد كل سبت.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

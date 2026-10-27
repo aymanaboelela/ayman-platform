@@ -48,6 +48,7 @@ import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { FollowUpModule } from './modules/follow-up/follow-up.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
+import { AutoOutreachModule } from './modules/auto-outreach/auto-outreach.module';
 import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookOrdersModule } from './modules/book-orders/book-orders.module';
@@ -63,6 +64,8 @@ import { MistakesModule } from './modules/mistakes/mistakes.module';
 import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
+import { SocialPostsModule } from './modules/social-posts/social-posts.module';
+import { EngagementModule } from './modules/engagement/engagement.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
 
 @Module({
@@ -176,6 +179,8 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     AuditReadModule,
     AssistantModule,
     OutreachModule,
+    // «كمّل الدفع» + «الحساب جاهز» over WhatsApp — behind `outreach.whatsapp`.
+    AutoOutreachModule,
     FollowUpModule,
     DiagnosticsModule,
     CohortAnalyticsModule,
@@ -202,6 +207,8 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     // «دعوة الصحاب» — share links, and the wallet reward on a friend's first real payment.
     ReferralsModule,
     AdminMobileModule,
+    SocialPostsModule,
+    EngagementModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,
   ],
