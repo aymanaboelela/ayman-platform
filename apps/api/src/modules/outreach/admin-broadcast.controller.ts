@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  BroadcastAccessSchema,
   BroadcastRequestSchema,
+  type BroadcastCourses,
   type BroadcastResponse,
   type BroadcastTarget,
   type RecipientCount,
@@ -28,16 +30,25 @@ import { RequireFeature } from '../../auth/decorators/require-feature.decorator'
  * a role that is not gets no separate door in.
  */
 
-/** `?type=all` or `?type=user&userId=…` — a query string, not a JSON blob
- *  URL-encoded into one param: this is the same two shapes
- *  `BroadcastTargetSchema` describes for the POST body, just spelled the way
- *  a GET actually carries them. */
+/** `?type=all`, `?type=user&userId=…` or `?type=course&courseId=…&monthId=…
+ *  &access=…&paidBefore=true` — a query string, not a JSON blob URL-encoded
+ *  into one param: the same shapes `BroadcastTargetSchema` describes for the
+ *  POST body, just spelled the way a GET actually carries them. */
 const TargetQuerySchema = z
   .discriminatedUnion('type', [
     z.object({ type: z.literal('all') }),
     z.object({ type: z.literal('user'), userId: z.string() }),
+    z.object({
+      type: z.literal('course'),
+      courseId: z.uuid(),
+      monthId: z.uuid().optional(),
+      access: BroadcastAccessSchema.default('any'),
+      paidBefore: z.enum(['true', 'false']).default('false'),
+    }),
   ])
-  .transform((value): BroadcastTarget => value);
+  .transform((value): BroadcastTarget =>
+    value.type === 'course' ? { ...value, paidBefore: value.paidBefore === 'true' } : value,
+  );
 
 // الإذاعة بتوصل لكل الطلبة مرة واحدة — فيتشر بتتفتح، مش بتتفترض.
 @RequireFeature('broadcast')
@@ -46,7 +57,7 @@ export class AdminBroadcastController {
   constructor(private readonly broadcast: BroadcastService) {}
 
   /**
-   * How many accounts `{ type: 'all' }` currently reaches — read BEFORE the
+   * How many accounts an `all` or `course` target currently reaches — read BEFORE the
    * confirm dialog lets the admin press send, and by the same query `send`
    * itself resolves, so the number on screen is never a stale guess.
    */
@@ -55,14 +66,29 @@ export class AdminBroadcastController {
   async recipientCount(
     @Query('type') type?: string,
     @Query('userId') userId?: string,
+    @Query('courseId') courseId?: string,
+    @Query('monthId') monthId?: string,
+    @Query('access') access?: string,
+    @Query('paidBefore') paidBefore?: string,
   ): Promise<RecipientCount> {
     // `parseRequest`, never a bare `.parse()`: `AllExceptionsFilter` fails
     // closed, a `ZodError` is not an `HttpException`, and a typo in the query
     // string would come back as a 500 and file an error-log entry blaming the
     // server for the caller's input. `query-parse-validation.spec.ts` is the
     // gate, and it postdates the commit this screen was written in.
-    const target = parseRequest(TargetQuerySchema, { type, userId }, 'target');
+    const target = parseRequest(
+      TargetQuerySchema,
+      { type, userId, courseId, monthId: monthId || undefined, access, paidBefore },
+      'target',
+    );
     return { count: await this.broadcast.recipientCount(target) };
+  }
+
+  /** The «طلبة كورس» picker — courses and their curriculum months. */
+  @RequirePermission('conversation:reply')
+  @Get('courses')
+  async courses(): Promise<BroadcastCourses> {
+    return { courses: await this.broadcast.courses() };
   }
 
   @RequirePermission('conversation:reply')

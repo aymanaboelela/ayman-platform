@@ -1,5 +1,7 @@
 import { copy } from '@ayman/contracts/copy/admin';
 import { notFound } from 'next/navigation';
+import { BroadcastCoursesSchema } from '@ayman/contracts/outreach/broadcast';
+import { adminGet } from '@/lib/admin-api';
 import { getEntitlements } from '@/lib/entitlements';
 import { BroadcastForm } from './broadcast-form';
 
@@ -25,6 +27,8 @@ export default async function AdminBroadcastPage() {
    */
   if (!(await getEntitlements()).broadcast) notFound();
 
+  const { courses } = await adminGet('/api/admin/broadcast/courses', BroadcastCoursesSchema);
+
   return (
     <>
       <header className="mb-6">
@@ -37,7 +41,7 @@ export default async function AdminBroadcastPage() {
         </p>
       </header>
 
-      <BroadcastForm />
+      <BroadcastForm courses={courses} />
     </>
   );
 }
