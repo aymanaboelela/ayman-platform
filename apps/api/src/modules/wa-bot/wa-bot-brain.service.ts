@@ -312,7 +312,7 @@ export class WaBotBrainService {
     }
     const trimmed = text.trim();
     if (!meta.provider || escalate || !trimmed || trimmed === copy.assistant.ai.refused) return null;
-    return [trimmed, ...links].join('\n');
+    return clip([trimmed, ...links].join('\n'));
   }
 
   /** Every placeholder's value for this reply — read live, see `WaBotFactsService`. */
@@ -383,8 +383,20 @@ export class WaBotBrainService {
             ? bot.reply.greetParent
             : bot.reply.greetHello;
     }
-    return opener ? `${opener}\n${rendered}` : rendered;
+    return clip(opener ? `${opener}\n${rendered}` : rendered);
   }
+}
+
+/**
+ * A WhatsApp message a person reads on a phone, not a page. The renderers
+ * already cap the course lists; this is the last word on length, cut at a
+ * line break so no link is ever sent half-written.
+ */
+const MAX_REPLY_CHARS = 2500;
+function clip(text: string): string {
+  if (text.length <= MAX_REPLY_CHARS) return text;
+  const cut = text.lastIndexOf('\n', MAX_REPLY_CHARS);
+  return text.slice(0, cut > 0 ? cut : MAX_REPLY_CHARS).trimEnd();
 }
 
 /** «وعليكم السلام» above the year question too — it is the first thing they read back. */

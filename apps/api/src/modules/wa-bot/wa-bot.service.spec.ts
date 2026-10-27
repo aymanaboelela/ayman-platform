@@ -2,7 +2,7 @@
 // so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../generated/prisma/client';
+import { PrismaClient, type Prisma } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { WhatsappDeviceService } from '../marketing/whatsapp-device.service';
@@ -49,6 +49,7 @@ describe('WaBotService + WaBotReplier', () => {
   let studentId: string;
   let instructorId: string;
   let courseId: string;
+  let previousSettings: Prisma.JsonValue | null = null;
 
   beforeAll(async () => {
     prisma = new PrismaClient({
@@ -72,6 +73,7 @@ describe('WaBotService + WaBotReplier', () => {
     );
 
     // Quiet hours off, so the suite means the same thing at 2 a.m. in Cairo.
+    previousSettings = (await prisma.waBotSettings.findUnique({ where: { id: 1 } }))?.data ?? null;
     const data = { ...DEFAULT_BOT_SETTINGS, quietHoursEnabled: false };
     await prisma.waBotSettings.upsert({ where: { id: 1 }, create: { id: 1, data }, update: { data } });
 
@@ -101,7 +103,9 @@ describe('WaBotService + WaBotReplier', () => {
 
   afterAll(async () => {
     await prisma.waChat.deleteMany({ where: { phone: { in: ALL } } });
-    await prisma.waBotSettings.deleteMany({ where: { id: 1 } });
+    // Put back whatever the database held — a shared dev database has its own.
+    if (previousSettings === null) await prisma.waBotSettings.deleteMany({ where: { id: 1 } });
+    else await prisma.waBotSettings.update({ where: { id: 1 }, data: { data: previousSettings } });
     if (studentId) await prisma.paymentSubmission.deleteMany({ where: { userId: studentId } });
     await prisma.course.deleteMany({ where: { id: courseId } });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, instructorId].filter(Boolean) } } });

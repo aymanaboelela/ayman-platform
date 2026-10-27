@@ -192,14 +192,14 @@ export default async function LeadsPage({
                       <dt className="text-[length:var(--fs-text-xs)] text-fg-faint">
                         {c.colFirst} · <time dateTime={lead.firstMessageAt}>{time.format(new Date(lead.firstMessageAt))}</time>
                       </dt>
-                      <dd className="line-clamp-2 text-fg">{lead.firstMessage}</dd>
+                      <dd className="line-clamp-2 text-fg [unicode-bidi:plaintext]">{lead.firstMessage}</dd>
                     </div>
                     <div className="min-w-0">
                       <dt className="text-[length:var(--fs-text-xs)] text-fg-faint">
                         {c.colLast} · <time dateTime={lead.lastMessageAt}>{time.format(new Date(lead.lastMessageAt))}</time> ·{' '}
                         {c.messagesCount.replace('{count}', String(lead.messageCount))}
                       </dt>
-                      <dd className="line-clamp-2 text-fg">{lead.lastMessage}</dd>
+                      <dd className="line-clamp-2 text-fg [unicode-bidi:plaintext]">{lead.lastMessage}</dd>
                     </div>
                   </dl>
 
