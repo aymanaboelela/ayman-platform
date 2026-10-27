@@ -157,6 +157,7 @@ function renderStudioBlock(
           secondaryCtaHref={props.secondaryCtaHref}
           stats={props.stats}
           portraitKey={branding.portraitKey}
+          portraitDarkKey={branding.portraitDarkKey}
           level={level}
         />
       );

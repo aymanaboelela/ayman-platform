@@ -1,7 +1,7 @@
-import Image from 'next/image';
+import { ThemedImage } from '@/components/themed-image';
+import { keyPair } from '@/lib/brand-image';
 import Link from 'next/link';
 import type { BrandingRead } from '@ayman/contracts/admin/settings';
-import { mediaUrl } from '@ayman/ui/branding';
 import { BoardMark } from './board-mark';
 
 /**
@@ -203,12 +203,10 @@ export function BoardPanel({
             معلومة في الصورة إن قارئ الشاشة محتاجها.
           */
           <div className="board-portrait" aria-hidden="true">
-            <Image
+            <ThemedImage
               className="board-portrait__img"
-              src={mediaUrl(branding.heroKey)}
+              image={keyPair(branding.heroKey, branding.heroDarkKey, 900, 1104)}
               alt=""
-              width={900}
-              height={1104}
               sizes="(min-width: 48rem) 34rem, 82vw"
               priority
             />

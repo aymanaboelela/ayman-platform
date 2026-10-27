@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, BookOpenCheck, Languages, Lightbulb, ListChecks } from 'lucide-react';
@@ -8,7 +7,9 @@ import { PRACTICE_TRACKS, PRACTICE_YEARS, type PracticeYear } from '@ayman/contr
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { IS_AYMAN } from '@/lib/tenant';
-import { getBrandAsset } from '@/lib/brand-assets';
+import { brandImage } from '@/lib/brand-image';
+import { getBranding } from '@/lib/settings';
+import { ThemedImage } from '@/components/themed-image';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import { getPracticeListOrEmpty, practicePath, practiceTotals } from '@/lib/practice/catalog';
@@ -26,7 +27,7 @@ const YEARS_SHOWN: readonly PracticeYear[] = [...PRACTICE_YEARS].reverse();
 
 export default async function PracticeIndexPage() {
   if (!IS_AYMAN) notFound();
-  const { sets } = await getPracticeListOrEmpty();
+  const [{ sets }, branding] = await Promise.all([getPracticeListOrEmpty(), getBranding()]);
   const totals = practiceTotals(sets);
 
   return (
@@ -73,16 +74,14 @@ export default async function PracticeIndexPage() {
 
         <div className="practice-years-grid">
           {YEARS_SHOWN.map((year) => {
-            const poster = getBrandAsset(year === 1 ? 'trackYear1' : 'trackYear2');
+            const poster = brandImage(branding, year === 1 ? 'trackYear1' : 'trackYear2');
             const yearTotals = practiceTotals(sets, { year });
             return (
               <article key={year} className="practice-year-card" data-year={year}>
                 <Link href={practicePath(year)} className="practice-year-card__poster" tabIndex={-1} aria-hidden="true">
                   {poster ? (
-                    <Image
-                      src={poster.src}
-                      width={poster.width}
-                      height={poster.height}
+                    <ThemedImage
+                      image={poster}
                       alt=""
                       sizes="(max-width: 48rem) 100vw, 36rem"
                     />

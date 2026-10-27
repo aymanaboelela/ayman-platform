@@ -1,4 +1,4 @@
-import { centerText, drawQr, fitFontSize, rng, seedOf, wrapLines, type CardFonts } from './canvas-kit';
+import { centerText, drawQr, drawSignature, fitFontSize, rng, seedOf, wrapLines, type CardFonts } from './canvas-kit';
 import { CERT } from './draw-unit-certificate';
 import type { QrMatrix } from './model';
 
@@ -34,6 +34,8 @@ export interface ExamCertificateInput {
     siteHost: string;
   };
   qr: QrMatrix;
+  /** The uploaded signature (dark ink); the name in the script face without one. */
+  signature?: HTMLImageElement;
   fonts: CardFonts;
 }
 
@@ -149,10 +151,14 @@ export function drawExamCertificate(canvas: HTMLCanvasElement, input: ExamCertif
   const date = new Date(input.earnedAt);
   const valid = !Number.isNaN(date.getTime());
   const sigX = cx + 620;
-  ctx.fillStyle = PAPER.navy;
-  const sigSize = fitFontSize(ctx, text.teacher, (s) => `700 ${s}px ${fonts.script}`, 92, 540, 48);
-  ctx.font = `700 ${sigSize}px ${fonts.script}`;
-  centerText(ctx, text.teacher, sigX, rowY - 10);
+  if (input.signature) {
+    drawSignature(ctx, input.signature, sigX, rowY + 18, 480, 160);
+  } else {
+    ctx.fillStyle = PAPER.navy;
+    const sigSize = fitFontSize(ctx, text.teacher, (s) => `700 ${s}px ${fonts.script}`, 92, 540, 48);
+    ctx.font = `700 ${sigSize}px ${fonts.script}`;
+    centerText(ctx, text.teacher, sigX, rowY - 10);
+  }
   rule(ctx, sigX, rowY + 26, 250, false);
   ctx.fillStyle = PAPER.navySoft;
   ctx.font = `500 34px ${fonts.body}`;

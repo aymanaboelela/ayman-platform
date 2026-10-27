@@ -1,3 +1,4 @@
+import { ogPageFor } from '@ayman/contracts/admin/seo-pages';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
@@ -178,9 +179,20 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
    * the platform decides, so an admin who set a share image watched WhatsApp
    * and Facebook ignore it with no error anywhere to explain why.
    */
+  /*
+   * The page's own picture first (a course cover), then its SECTION's share
+   * image from «جوجل والمشاركة» (`OG_PAGES` — /courses, /books, …), then the
+   * site-wide one, then the shipped file.
+   */
+  const section = ogPageFor(input.path);
+  const sectionKey = section ? seo[section.key] : null;
   const image =
     input.image ??
-    (seo.ogImageKey ? mediaUrl(seo.ogImageKey) : aymanOnly(`${SITE_URL}${FALLBACK_OG_IMAGE}`));
+    (sectionKey
+      ? mediaUrl(sectionKey)
+      : seo.ogImageKey
+        ? mediaUrl(seo.ogImageKey)
+        : aymanOnly(`${SITE_URL}${FALLBACK_OG_IMAGE}`));
 
   return {
     title,

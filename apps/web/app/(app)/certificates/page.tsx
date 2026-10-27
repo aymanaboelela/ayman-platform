@@ -46,7 +46,7 @@ export default async function CertificatesPage() {
   const earnedUnits = payload.units.filter((unit) => unit.earned);
   const pendingUnits = payload.units.filter((unit) => !unit.earned);
   const earnedCount = earnedUnits.length + payload.exams.length;
-  const brand = shareBrand();
+  const brand = await shareBrand();
 
   return (
     <main className={`${lalezar.variable} mx-auto w-full max-w-[var(--w-app)] px-4 py-6 md:px-6 md:py-8`}>

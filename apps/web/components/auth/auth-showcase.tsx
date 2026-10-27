@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { THEME_IMG_DARK, THEME_IMG_LIGHT } from '@/components/themed-image';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getBranding } from '@/lib/settings';
 import { copy } from '@ayman/contracts';
@@ -84,7 +85,15 @@ const POINTS = [c.point1, c.point2, c.point3] as const;
  */
 export async function AuthShowcase() {
   const branding = await getBranding();
-  const photo = IS_AYMAN ? '/brand/auth-library.webp' : (branding.loginKey ? mediaUrl(branding.loginKey) : null);
+  /* The upload first, his file second — the order every other brand picture
+     follows. Uploading is the explicit act and should win over the file
+     shipped in the code, on his stack as on anyone's. */
+  const photo = branding.loginKey
+    ? mediaUrl(branding.loginKey)
+    : IS_AYMAN
+      ? '/brand/auth-library.webp'
+      : null;
+  const photoDark = photo && branding.loginDarkKey ? mediaUrl(branding.loginDarkKey) : null;
 
   return (
     <aside className="auth-aside" aria-label={EYEBROW}>
@@ -115,8 +124,17 @@ export async function AuthShowcase() {
             alt=""
             fill
             sizes="(min-width: 62rem) 52vw, 1px"
-            className="auth-aside__photo"
+            className={photoDark ? `auth-aside__photo ${THEME_IMG_LIGHT}` : 'auth-aside__photo'}
           />
+          {photoDark ? (
+            <Image
+              src={photoDark}
+              alt=""
+              fill
+              sizes="(min-width: 62rem) 52vw, 1px"
+              className={`auth-aside__photo ${THEME_IMG_DARK}`}
+            />
+          ) : null}
           <div className="auth-aside__scrim" aria-hidden="true" />
         </>
       ) : null}

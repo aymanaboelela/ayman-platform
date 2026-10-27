@@ -1,7 +1,7 @@
-import Image from 'next/image';
+import { ThemedImage } from '@/components/themed-image';
+import { keyPair } from '@/lib/brand-image';
 import Link from 'next/link';
 
-import { mediaUrl } from '@ayman/ui/branding';
 
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 
@@ -19,6 +19,8 @@ export interface StudioHeroProps {
   stats: readonly { labelAr: string; value: string }[];
   /** The instructor's photograph, resolved to a storage key by the API. */
   portraitKey: string | null;
+  /** The dark-mode portrait, when a different one was uploaded. */
+  portraitDarkKey?: string | null;
   level: 1 | 2;
 }
 
@@ -69,6 +71,7 @@ export function StudioHero({
   secondaryCtaHref,
   stats,
   portraitKey,
+  portraitDarkKey = null,
   level,
 }: StudioHeroProps) {
   const Title = level === 1 ? 'h1' : 'h2';
@@ -146,12 +149,10 @@ export function StudioHero({
               A third reading of the same name is noise, and there is no
               information in the photograph a reader who cannot see it needs.
             */
-            <Image
+            <ThemedImage
               className="st-hero__portrait"
-              src={mediaUrl(portraitKey)}
+              image={keyPair(portraitKey, portraitDarkKey, 1200, 1600)}
               alt=""
-              width={1200}
-              height={1600}
               sizes="(max-width: 60rem) 80vw, 34rem"
               priority
             />

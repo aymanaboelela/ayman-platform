@@ -58,6 +58,10 @@ export async function loadFonts(fonts: CardFonts): Promise<void> {
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Uploads live on the media origin, a different origin by design. Without
+    // a CORS request the canvas is tainted and `toBlob` throws AFTER drawing;
+    // the media route answers `Access-Control-Allow-Origin: *`.
+    img.crossOrigin = 'anonymous';
     img.decoding = 'async';
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`image failed: ${src}`));
@@ -209,6 +213,25 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+/**
+ * A signature image, `contain`-fitted into `maxW × maxH` and sitting ON the
+ * line at `baseY` — the way ink sits on a signature line, not centred in a
+ * box above it.
+ */
+export function drawSignature(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  cx: number,
+  baseY: number,
+  maxW: number,
+  maxH: number,
+): void {
+  const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+  const w = img.naturalWidth * scale;
+  const h = img.naturalHeight * scale;
+  ctx.drawImage(img, cx - w / 2, baseY - h, w, h);
 }
 
 /** `object-fit: cover` for `drawImage`, with a focal point. */

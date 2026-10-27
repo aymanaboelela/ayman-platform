@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { ThemedImage } from '@/components/themed-image';
+import { keyPair } from '@/lib/brand-image';
 import Link from 'next/link';
 import {
   BookOpenText,
@@ -106,6 +108,8 @@ export function KitHero({
   // load-bearing: with no photo the art becomes the name's first letter, set
   // in the preset's display face — a monogram, not an empty frame.
   const photo = branding.heroKey ?? branding.portraitKey;
+  // The dark file of WHICHEVER picture `photo` picked, never a mix of the two.
+  const photoDark = branding.heroKey ? branding.heroDarkKey : branding.portraitDarkKey;
 
   return (
     <section className="pk-hero" data-site-hero>
@@ -152,12 +156,10 @@ export function KitHero({
           {preset === 'ruqaa' ? <RuqaaArch /> : null}
           <div className="pk-hero__frame">
             {photo ? (
-              <Image
+              <ThemedImage
                 className="pk-hero__photo"
-                src={mediaUrl(photo)}
+                image={keyPair(photo, photoDark, 900, 1104)}
                 alt=""
-                width={900}
-                height={1104}
                 sizes="(min-width: 60rem) 26rem, 70vw"
                 priority
               />
@@ -462,7 +464,7 @@ export async function KitInstructor({ preset, level }: { preset: KitPreset; leve
         <div className="pk-id">
           {branding.portraitKey ? (
             <span className="pk-id__portrait">
-              <Image src={mediaUrl(branding.portraitKey)} alt="" width={192} height={256} sizes="192px" />
+              <ThemedImage image={keyPair(branding.portraitKey, branding.portraitDarkKey, 192, 256)} alt="" sizes="192px" />
             </span>
           ) : null}
           {/* `tenantName()`, never `copy.site.instructor` directly — CLAUDE.md §2. */}
