@@ -67,6 +67,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // The designer's door is `/studio`; an `/admin` bookmark should land there,
     // not on a 404 that reads like a broken account.
     if (can(session, 'design:read')) redirect('/studio');
+    if (can(session, 'montage:read')) redirect('/montage');
     notFound();
   }
 

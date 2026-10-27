@@ -55,8 +55,12 @@ export const SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
  * (`ResourceVideoUploadService`) — the two differ in which row they check
  * first, never in what counts as a part that made it.
  */
-export async function reopenSession(storage: MirrorStorage, input: VideoUploadResume): Promise<VideoUploadResumed> {
-  const key = uploadSourceKey(input.videoId);
+export async function reopenSession(
+  storage: MirrorStorage,
+  input: VideoUploadResume,
+  // «المونتاج» keeps its originals under its own root (`montageSourceKey`).
+  key: string = uploadSourceKey(input.videoId),
+): Promise<VideoUploadResumed> {
   const uploaded = await storage.listParts(key, input.uploadId);
   if (uploaded === null) {
     throw new NotFoundException('الرفع ده وقته خلص — ابدأ من الأول');
