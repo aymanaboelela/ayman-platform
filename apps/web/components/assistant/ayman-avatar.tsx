@@ -1,7 +1,11 @@
+'use client';
+
 import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
+import { mediaUrl } from '@ayman/ui/branding';
 import { getBrandAsset } from '@/lib/brand-assets';
+import { useBrandMark } from '@/components/brand-mark-provider';
 import { tenantName } from '@/lib/tenant';
 
 /**
@@ -93,7 +97,13 @@ export function AymanAvatar({
   size?: 'sm' | 'md';
   className?: string;
 }) {
-  const mark = getBrandAsset('mark');
+  /* The mark set on «الهوية البصرية» first — the same circle `<BrandLockup>`
+     draws, from the root layout's provider — and his registered file second.
+     A client component for exactly this read; it renders nothing a server
+     component needs. */
+  const uploaded = useBrandMark();
+  const registered = getBrandAsset('mark');
+  const mark = uploaded ? { src: mediaUrl(uploaded), width: 128, height: 128 } : registered;
   const px = size === 'sm' ? 28 : 44;
 
   /*

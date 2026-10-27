@@ -231,6 +231,40 @@ export const BrandingSchema = z
     heroAssetId: assetId,
     portraitAssetId: assetId,
     loginAssetId: assetId,
+
+    /*
+     * Every other picture on the platform, and a dark-mode file for each.
+     *
+     * Until these existed, the round avatar in the top bar, the three year
+     * posters, the honour-board host and the practice guide were files in
+     * `apps/web/public/brand/`, reachable on Ayman's stack only and changeable
+     * only by a deploy. Each is now a slot here, and an upload WINS over the
+     * file — the same order `<MediaSlot>` already used for the hero.
+     *
+     * The `…Dark…` fields are optional overrides: null means «same picture in
+     * both modes», which is what every stored row means today. The list of
+     * slots, which pair goes with which, and what each one is called on the
+     * admin form all live in `brand-images.ts` so the form, the API resolver
+     * and the renderers cannot drift apart.
+     *
+     * `logoLight/DarkAssetId` above are already a pair and stay as they are.
+     */
+    markAssetId: assetId,
+    markDarkAssetId: assetId,
+    faviconDarkAssetId: assetId,
+    heroDarkAssetId: assetId,
+    portraitDarkAssetId: assetId,
+    loginDarkAssetId: assetId,
+    trackEssentialsAssetId: assetId,
+    trackEssentialsDarkAssetId: assetId,
+    trackYear1AssetId: assetId,
+    trackYear1DarkAssetId: assetId,
+    trackYear2AssetId: assetId,
+    trackYear2DarkAssetId: assetId,
+    honorHostAssetId: assetId,
+    honorHostDarkAssetId: assetId,
+    practiceGuideAssetId: assetId,
+    practiceGuideDarkAssetId: assetId,
   })
   .strict();
 
@@ -283,6 +317,22 @@ export const BrandingReadSchema = BrandingSchema.extend({
   heroKey: resolvedKey,
   portraitKey: resolvedKey,
   loginKey: resolvedKey,
+  markKey: resolvedKey,
+  markDarkKey: resolvedKey,
+  faviconDarkKey: resolvedKey,
+  heroDarkKey: resolvedKey,
+  portraitDarkKey: resolvedKey,
+  loginDarkKey: resolvedKey,
+  trackEssentialsKey: resolvedKey,
+  trackEssentialsDarkKey: resolvedKey,
+  trackYear1Key: resolvedKey,
+  trackYear1DarkKey: resolvedKey,
+  trackYear2Key: resolvedKey,
+  trackYear2DarkKey: resolvedKey,
+  honorHostKey: resolvedKey,
+  honorHostDarkKey: resolvedKey,
+  practiceGuideKey: resolvedKey,
+  practiceGuideDarkKey: resolvedKey,
 });
 
 export type BrandingRead = z.infer<typeof BrandingReadSchema>;

@@ -187,6 +187,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {branding.faviconKey ? (
           <link rel="icon" href={mediaUrl(branding.faviconKey)} type="image/webp" />
         ) : null}
+        {/*
+          The dark-mode icon follows the BROWSER's theme, not the site's: the
+          tab strip it sits on is drawn by the browser, so `prefers-color-scheme`
+          is the right switch here even though the page ignores it. Listed
+          second because a browser takes the last matching icon.
+        */}
+        {branding.faviconDarkKey ? (
+          <link
+            rel="icon"
+            href={mediaUrl(branding.faviconDarkKey)}
+            type="image/webp"
+            media="(prefers-color-scheme: dark)"
+          />
+        ) : null}
       </head>
       <body>
         {/*
@@ -235,8 +249,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               presets: the two slots are theme variants of one mark, and the
               surfaces that render it — a 38px circle on a dark rail, on a dark
               admin sidebar, on the dark auth panel — want the dark-ground one.
+
+              `markKey` before both: the circle's own slot («الصورة اللي فوق»
+              on «الهوية البصرية»), cropped square for this box, with its own
+              dark-mode file.
             */}
-            <BrandMarkProvider markKey={branding.logoDarkKey ?? branding.logoLightKey}>
+            <BrandMarkProvider
+              markKey={branding.markKey ?? branding.logoDarkKey ?? branding.logoLightKey}
+              markDarkKey={branding.markDarkKey}
+            >
               <RouteProgress>{children}</RouteProgress>
             </BrandMarkProvider>
           </MotionProvider>

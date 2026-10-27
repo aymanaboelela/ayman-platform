@@ -5,7 +5,7 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogCourse, CatalogList } from '@ayman/contracts/catalog';
 import type { BookCatalog } from '@ayman/contracts/books';
-import type { BrandingRead } from '@ayman/contracts/admin/settings';
+import { BrandingReadSchema, type BrandingRead } from '@ayman/contracts/admin/settings';
 import type { HomeBlock, HomeBlockProps } from '@ayman/contracts/admin/home-blocks';
 import { copy } from '@ayman/contracts/copy';
 
@@ -117,6 +117,8 @@ beforeEach(() => {
 
 function branding(overrides: Partial<BrandingRead> = {}): BrandingRead {
   return {
+    // Every picture slot null, so a slot added later needs no edit here.
+    ...BrandingReadSchema.parse({}),
     accent: 'amber',
     accentHue: null,
     landingPreset: 'board',

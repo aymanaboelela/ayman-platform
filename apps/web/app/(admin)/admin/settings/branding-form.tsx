@@ -22,7 +22,9 @@ import { formatOklch } from '@ayman/ui/oklch';
 import { Button } from '@ayman/ui/components/button';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Select } from '@ayman/ui/components/select';
-import { AssetPicker } from '@/components/admin/asset-picker';
+import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
+import type { BrandImageSlot } from '@ayman/contracts/admin/brand-images';
+import { BrandImagesPanel } from './brand-images-panel';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { SettingsField, issuesFromErrors } from './settings-field';
 import { updateBrandingAction } from './actions';
@@ -41,6 +43,14 @@ const RADIUS_LABEL: Record<(typeof RADIUS_SLOTS)[number], string> = {
   default: copy.admin.branding.radiusDefault,
   soft: copy.admin.branding.radiusSoft,
 };
+
+/**
+ * Every choice on this card is a bordered tile that lights up when picked,
+ * not a bare radio in a list: ten landing pages in a single column was a
+ * scroll longer than the rest of the form, and the selected one was a dot.
+ */
+const CHOICE_CARD =
+  'flex items-center gap-3 rounded-[var(--r-md)] border border-line px-3 py-2 has-[[data-state=checked]]:border-accent has-[[data-state=checked]]:bg-accent/10';
 
 /** The radio value for "not a slot". Cannot collide — `ACCENT_SLOTS` are plain words. */
 const CUSTOM = '__custom__';
@@ -211,6 +221,10 @@ function LayoutPreview({ layout }: { layout: (typeof LANDING_LAYOUTS)[number] })
 export interface BrandingFormProps {
   defaultValues: Branding;
   assets: readonly MediaAsset[];
+  /** What each picture slot shows while nothing is uploaded — `builtInBrandImages()`. */
+  builtIn: Partial<Record<BrandImageSlot, string>>;
+  /** The picture slots this stack actually renders. */
+  offered: readonly BrandImageSlot[];
 }
 
 /**
@@ -245,7 +259,7 @@ type BrandingFormValues = z.input<typeof BrandingSchema>;
  * Its swatch also comes from the real generator, so what the slider previews
  * is what the page will render.
  */
-export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
+export function BrandingForm({ defaultValues, assets, builtIn, offered }: BrandingFormProps) {
   const router = useRouter();
   const [saveError, setSaveError] = useState<string | null>(null);
   const form = useForm<BrandingFormValues, unknown, Branding>({
@@ -278,6 +292,8 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
     const result = await updateBrandingAction(values);
     if (result.ok) {
       toast.success(copy.admin.common.saved);
+      // Re-baseline, so the save bar stops saying there is something unsaved.
+      form.reset(values);
       router.refresh();
     } else {
       setSaveError(copy.admin.common.saveFailed);
@@ -286,293 +302,227 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
   }
 
   return (
-    <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
       {saveError ? (
         <p role="alert" className="text-[length:var(--fs-text-sm)] text-err">
           {saveError}
         </p>
       ) : null}
 
-      <SettingsField
-        name="accent"
-        label={copy.admin.settings.accent}
-        issues={issues}
-        render={(controlProps) => (
-          <RadioGroup
-            {...controlProps}
-            value={isCustom ? CUSTOM : (form.watch('accent') ?? defaultValues.accent)}
-            onValueChange={(value) => {
-              // The two fields are one choice, so they are always written
-              // together: a leftover hue beside a chosen slot would silently
-              // win at render, because `renderBrandingStyle` prefers the hue.
-              if (value === CUSTOM) {
-                form.setValue('accentHue', hue, { shouldValidate: true });
-                return;
-              }
-              form.setValue('accentHue', null, { shouldValidate: true });
-              form.setValue('accent', value as Branding['accent'], { shouldValidate: true });
-            }}
-            aria-label={copy.admin.settings.accent}
-          >
-            {ACCENT_SLOTS.map((slot) => (
-              <label key={slot} className="flex items-center gap-3">
-                <RadioGroupItem value={slot} />
-                <span
-                  aria-hidden="true"
-                  className="size-5 shrink-0 rounded-full border border-line"
-                  style={{ background: ACCENT_RAMPS[slot]?.light[0] }}
-                />
-                <span className="text-fg">{ACCENT_LABEL[slot]}</span>
-              </label>
-            ))}
-            <label className="flex items-center gap-3">
-              <RadioGroupItem value={CUSTOM} />
-              <span
-                aria-hidden="true"
-                className="size-5 shrink-0 rounded-full border border-line"
-                style={{ background: swatch }}
-              />
-              <span className="text-fg">{copy.admin.settings.accentCustom}</span>
-            </label>
-          </RadioGroup>
-        )}
-      />
-
-      {isCustom ? (
-        <SettingsField
-          name="accentHue"
-          label={copy.admin.settings.accentHue}
-          description={copy.admin.settings.accentHueHint}
-          issues={issues}
-          render={(controlProps) => (
-            <div className="flex items-center gap-3">
-              <input
+      <Card id="look" className="scroll-mt-24">
+        <CardHeader>
+          <CardTitle>{copy.admin.settings.lookSection}</CardTitle>
+          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.settings.lookLead}</p>
+        </CardHeader>
+        <CardBody className="flex flex-col gap-6">
+          <SettingsField
+            name="accent"
+            label={copy.admin.settings.accent}
+            issues={issues}
+            render={(controlProps) => (
+              <RadioGroup
                 {...controlProps}
-                type="range"
-                min={0}
-                max={359}
-                step={1}
-                value={hue}
-                onChange={(event) =>
-                  form.setValue('accentHue', Number(event.target.value), { shouldValidate: true })
-                }
-                className="h-2 w-full cursor-pointer appearance-none rounded-full"
-                /* The track IS the choice, so it shows every hue at the
-                   lightness the generator will actually use. A grey slider
-                   beside a swatch makes the admin guess. */
-                style={{
-                  background:
-                    'linear-gradient(to right, ' +
-                    HUE_STOPS.map((stop) => stop.css).join(', ') +
-                    ')',
+                value={isCustom ? CUSTOM : (form.watch('accent') ?? defaultValues.accent)}
+                onValueChange={(value) => {
+                  // The two fields are one choice, so they are always written
+                  // together: a leftover hue beside a chosen slot would silently
+                  // win at render, because `renderBrandingStyle` prefers the hue.
+                  if (value === CUSTOM) {
+                    form.setValue('accentHue', hue, { shouldValidate: true, shouldDirty: true });
+                    return;
+                  }
+                  form.setValue('accentHue', null, { shouldValidate: true, shouldDirty: true });
+                  form.setValue('accent', value as Branding['accent'], { shouldValidate: true, shouldDirty: true });
                 }}
-              />
-              <output className="w-12 shrink-0 text-end tabular-nums text-fg">{hue}°</output>
-            </div>
-          )}
-        />
-      ) : null}
+                aria-label={copy.admin.settings.accent}
+                className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+              >
+                {ACCENT_SLOTS.map((slot) => (
+                  <label key={slot} className={CHOICE_CARD}>
+                    <RadioGroupItem value={slot} />
+                    <span
+                      aria-hidden="true"
+                      className="size-5 shrink-0 rounded-full border border-line"
+                      style={{ background: ACCENT_RAMPS[slot]?.light[0] }}
+                    />
+                    <span className="text-fg">{ACCENT_LABEL[slot]}</span>
+                  </label>
+                ))}
+                <label className={CHOICE_CARD}>
+                  <RadioGroupItem value={CUSTOM} />
+                  <span
+                    aria-hidden="true"
+                    className="size-5 shrink-0 rounded-full border border-line"
+                    style={{ background: swatch }}
+                  />
+                  <span className="text-fg">{copy.admin.settings.accentCustom}</span>
+                </label>
+              </RadioGroup>
+            )}
+          />
+
+          {isCustom ? (
+            <SettingsField
+              name="accentHue"
+              label={copy.admin.settings.accentHue}
+              description={copy.admin.settings.accentHueHint}
+              issues={issues}
+              render={(controlProps) => (
+                <div className="flex items-center gap-3">
+                  <input
+                    {...controlProps}
+                    type="range"
+                    min={0}
+                    max={359}
+                    step={1}
+                    value={hue}
+                    onChange={(event) =>
+                      form.setValue('accentHue', Number(event.target.value), { shouldValidate: true, shouldDirty: true })
+                    }
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full"
+                    /* The track IS the choice, so it shows every hue at the
+                       lightness the generator will actually use. A grey slider
+                       beside a swatch makes the admin guess. */
+                    style={{
+                      background:
+                        'linear-gradient(to right, ' +
+                        HUE_STOPS.map((stop) => stop.css).join(', ') +
+                        ')',
+                    }}
+                  />
+                  <output className="w-12 shrink-0 text-end tabular-nums text-fg">{hue}°</output>
+                </div>
+              )}
+            />
+          ) : null}
+
+          {/*
+            ⚠️ ABOVE the shape picker, and the order is the meaning: this control
+            decides which page renders, and the one under it only has an effect
+            once that answer is «كلاسيك». Reading them the other way round — shape
+            first, then page — is how an instructor ends up choosing a shape, then
+            a preset that discards it, and reporting that the shape setting does
+            not save.
+          */}
+          <SettingsField
+            name="landingPreset"
+            label={copy.admin.settings.landingPreset}
+            description={copy.admin.settings.landingPresetHint}
+            issues={issues}
+            render={(controlProps) => (
+              <RadioGroup
+                {...controlProps}
+                value={form.watch('landingPreset') ?? defaultValues.landingPreset}
+                onValueChange={(value) =>
+                  form.setValue('landingPreset', value as Branding['landingPreset'], {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                aria-label={copy.admin.settings.landingPreset}
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                {OFFERED_PRESETS.map((preset) => (
+                  <label key={preset} className={`${CHOICE_CARD} items-start py-3`}>
+                    <RadioGroupItem value={preset} />
+                    <span className="flex flex-col">
+                      <span className="text-fg">{PRESET_LABEL[preset].name}</span>
+                      <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                        {PRESET_LABEL[preset].hint}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            )}
+          />
+
+          <SettingsField
+            name="landingLayout"
+            label={copy.admin.settings.landingLayout}
+            description={copy.admin.settings.landingLayoutHint}
+            issues={issues}
+            render={(controlProps) => (
+              <RadioGroup
+                {...controlProps}
+                value={form.watch('landingLayout') ?? defaultValues.landingLayout}
+                onValueChange={(value) =>
+                  form.setValue('landingLayout', value as Branding['landingLayout'], {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                aria-label={copy.admin.settings.landingLayout}
+                className="grid gap-2 lg:grid-cols-3"
+              >
+                {LANDING_LAYOUTS.map((layout) => (
+                  <label key={layout} className={`${CHOICE_CARD} items-start py-3`}>
+                    <RadioGroupItem value={layout} />
+                    <LayoutPreview layout={layout} />
+                    <span className="flex flex-col">
+                      <span className="text-fg">{LAYOUT_LABEL[layout].name}</span>
+                      <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                        {LAYOUT_LABEL[layout].hint}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            )}
+          />
+
+          <SettingsField
+            name="radius"
+            label={copy.admin.settings.radius}
+            issues={issues}
+            render={(controlProps) => (
+              <Select {...controlProps} {...form.register('radius')}>
+                {RADIUS_SLOTS.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {RADIUS_LABEL[slot]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          />
+        </CardBody>
+      </Card>
 
       {/*
-        ⚠️ ABOVE the shape picker, and the order is the meaning: this control
-        decides which page renders, and the one under it only has an effect
-        once that answer is «كلاسيك». Reading them the other way round — shape
-        first, then page — is how an instructor ends up choosing a shape, then
-        a preset that discards it, and reporting that the shape setting does
-        not save.
+        Every picture, light beside dark — including the logo, favicon and the
+        three instructor photographs that used to be a column of single
+        pickers under the colour controls. One table drives the cards
+        (`BRAND_IMAGE_SLOTS`), and each card shows what the site is serving
+        right now. See `brand-images-panel.tsx`.
       */}
-      <SettingsField
-        name="landingPreset"
-        label={copy.admin.settings.landingPreset}
-        description={copy.admin.settings.landingPresetHint}
-        issues={issues}
-        render={(controlProps) => (
-          <RadioGroup
-            {...controlProps}
-            value={form.watch('landingPreset') ?? defaultValues.landingPreset}
-            onValueChange={(value) =>
-              form.setValue('landingPreset', value as Branding['landingPreset'], {
-                shouldValidate: true,
-              })
-            }
-            aria-label={copy.admin.settings.landingPreset}
-          >
-            {OFFERED_PRESETS.map((preset) => (
-              <label key={preset} className="flex items-start gap-3 py-1">
-                <RadioGroupItem value={preset} />
-                <span className="flex flex-col">
-                  <span className="text-fg">{PRESET_LABEL[preset].name}</span>
-                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                    {PRESET_LABEL[preset].hint}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
-        )}
-      />
-
-      <SettingsField
-        name="landingLayout"
-        label={copy.admin.settings.landingLayout}
-        description={copy.admin.settings.landingLayoutHint}
-        issues={issues}
-        render={(controlProps) => (
-          <RadioGroup
-            {...controlProps}
-            value={form.watch('landingLayout') ?? defaultValues.landingLayout}
-            onValueChange={(value) =>
-              form.setValue('landingLayout', value as Branding['landingLayout'], {
-                shouldValidate: true,
-              })
-            }
-            aria-label={copy.admin.settings.landingLayout}
-          >
-            {LANDING_LAYOUTS.map((layout) => (
-              <label key={layout} className="flex items-start gap-3 py-1">
-                <RadioGroupItem value={layout} />
-                <LayoutPreview layout={layout} />
-                <span className="flex flex-col">
-                  <span className="text-fg">{LAYOUT_LABEL[layout].name}</span>
-                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                    {LAYOUT_LABEL[layout].hint}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
-        )}
-      />
-
-      <SettingsField
-        name="radius"
-        label={copy.admin.settings.radius}
-        issues={issues}
-        render={(controlProps) => (
-          <Select {...controlProps} {...form.register('radius')}>
-            {RADIUS_SLOTS.map((slot) => (
-              <option key={slot} value={slot}>
-                {RADIUS_LABEL[slot]}
-              </option>
-            ))}
-          </Select>
-        )}
-      />
-
-      <SettingsField
-        name="logoLightAssetId"
-        label={copy.admin.settings.logoLight}
-        description={copy.admin.settings.logoLightHint}
-        issues={issues}
-        render={(controlProps) => (
-          <AssetPicker
-            {...controlProps}
-            slot="logo"
-            assets={assets}
-            value={form.watch('logoLightAssetId') ?? null}
-            onChange={(value) => form.setValue('logoLightAssetId', value, { shouldValidate: true })}
-          />
-        )}
-      />
-
-      <SettingsField
-        name="logoDarkAssetId"
-        label={copy.admin.settings.logoDark}
-        description={copy.admin.settings.logoDarkHint}
-        issues={issues}
-        render={(controlProps) => (
-          <AssetPicker
-            {...controlProps}
-            slot="logo"
-            assets={assets}
-            value={form.watch('logoDarkAssetId') ?? null}
-            onChange={(value) => form.setValue('logoDarkAssetId', value, { shouldValidate: true })}
-          />
-        )}
-      />
-
-      <SettingsField
-        name="faviconAssetId"
-        label={copy.admin.settings.favicon}
-        issues={issues}
-        render={(controlProps) => (
-          <AssetPicker
-            {...controlProps}
-            slot="favicon"
-            assets={assets}
-            value={form.watch('faviconAssetId') ?? null}
-            onChange={(value) => form.setValue('faviconAssetId', value, { shouldValidate: true })}
-          />
-        )}
-      />
+      <Card id="images" className="scroll-mt-24">
+        <CardHeader>
+          <CardTitle>{copy.admin.settings.imagesSection}</CardTitle>
+          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.settings.imagesLead}</p>
+        </CardHeader>
+        <CardBody>
+          <BrandImagesPanel form={form} assets={assets} builtIn={builtIn} offered={offered} />
+        </CardBody>
+      </Card>
 
       {/*
-        ⚠️ THE THREE INSTRUCTOR PHOTOGRAPHS, AND THIS FORM IS WHY THEY WERE
-        INVISIBLE.
-
-        `heroAssetId`, `portraitAssetId` and `loginAssetId` have been on
-        `BrandingSchema` — stored, validated, resolved to storage keys by the
-        API and read by `<SiteHero>`, `<AboutInstructor>` and
-        `<AuthShowcase>` — with no control anywhere in the dashboard. The only
-        way an instructor's own photographs ever reached their own site was
-        somebody else sending a `PATCH` by hand, which is not a feature, and
-        which meant every one of those screens fell back to a stand-in for as
-        long as nobody did.
-
-        They sit after the logo and favicon because those two are the site's
-        identity and these three are its photography; and each carries a hint
-        saying WHERE it lands, because «صورة المدرّس» describes all three and
-        they are neither the same shape nor interchangeable.
+        One save for both cards, pinned to the bottom of the viewport: with
+        a dozen picture cards between the colour picker and the end of the
+        form, a button at the very bottom was a scroll away from every change
+        it saved. It says when there is something unsaved, because a picked
+        image looks identical before and after a save.
       */}
-      <SettingsField
-        name="heroAssetId"
-        label={copy.admin.settings.heroImage}
-        description={copy.admin.settings.heroImageHint}
-        issues={issues}
-        render={(controlProps) => (
-          <AssetPicker
-            {...controlProps}
-            slot="hero"
-            assets={assets}
-            value={form.watch('heroAssetId') ?? null}
-            onChange={(value) => form.setValue('heroAssetId', value, { shouldValidate: true })}
-          />
-        )}
-      />
-
-      <SettingsField
-        name="portraitAssetId"
-        label={copy.admin.settings.portraitImage}
-        description={copy.admin.settings.portraitImageHint}
-        issues={issues}
-        render={(controlProps) => (
-          <AssetPicker
-            {...controlProps}
-            slot="portrait"
-            assets={assets}
-            value={form.watch('portraitAssetId') ?? null}
-            onChange={(value) => form.setValue('portraitAssetId', value, { shouldValidate: true })}
-          />
-        )}
-      />
-
-      <SettingsField
-        name="loginAssetId"
-        label={copy.admin.settings.loginImage}
-        description={copy.admin.settings.loginImageHint}
-        issues={issues}
-        render={(controlProps) => (
-          <AssetPicker
-            {...controlProps}
-            slot="login"
-            assets={assets}
-            value={form.watch('loginAssetId') ?? null}
-            onChange={(value) => form.setValue('loginAssetId', value, { shouldValidate: true })}
-          />
-        )}
-      />
-
-      <div>
+      <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-lg)] border border-line bg-surface-1 p-3 shadow-[var(--shadow-md)]">
+        <span
+          className={
+            form.formState.isDirty
+              ? 'text-[length:var(--fs-text-sm)] font-medium text-warn'
+              : 'text-[length:var(--fs-text-sm)] text-fg-muted'
+          }
+          aria-live="polite"
+        >
+          {form.formState.isDirty ? copy.admin.settings.unsaved : copy.admin.settings.allSaved}
+        </span>
         <Button type="submit" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? copy.admin.common.saving : copy.admin.common.save}
         </Button>

@@ -132,6 +132,7 @@
     "./admin/video-analytics": "./src/admin/video-analytics.ts",
     "./admin/audit": "./src/admin/audit.ts",
     "./admin/settings": "./src/admin/settings.ts",
+    "./admin/brand-images": "./src/admin/brand-images.ts",
     "./admin/tenant-branding": "./src/admin/tenant-branding.ts",
     "./admin/roles": "./src/admin/roles.ts",
     "./admin/permission-categories": "./src/admin/permission-categories.ts",

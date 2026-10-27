@@ -42,6 +42,9 @@ import { createContext, useContext, type ReactNode } from 'react';
  */
 const BrandMarkContext = createContext<string | null>(null);
 
+/** The dark-mode mark, when a different file was uploaded for dark mode. */
+const BrandMarkDarkContext = createContext<string | null>(null);
+
 /**
  * `markKey` is a storage key (`<2 hex>/<uuid>.webp`), never an asset id — the
  * two are not interconvertible, and passing the id is the bug that made every
@@ -49,12 +52,18 @@ const BrandMarkContext = createContext<string | null>(null);
  */
 export function BrandMarkProvider({
   markKey,
+  markDarkKey = null,
   children,
 }: {
   markKey: string | null;
+  markDarkKey?: string | null;
   children: ReactNode;
 }) {
-  return <BrandMarkContext.Provider value={markKey}>{children}</BrandMarkContext.Provider>;
+  return (
+    <BrandMarkContext.Provider value={markKey}>
+      <BrandMarkDarkContext.Provider value={markDarkKey}>{children}</BrandMarkDarkContext.Provider>
+    </BrandMarkContext.Provider>
+  );
 }
 
 /**
@@ -65,4 +74,9 @@ export function BrandMarkProvider({
  */
 export function useBrandMark(): string | null {
   return useContext(BrandMarkContext);
+}
+
+/** `null` means the light mark serves both modes. */
+export function useBrandMarkDark(): string | null {
+  return useContext(BrandMarkDarkContext);
 }

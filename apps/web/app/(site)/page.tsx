@@ -1,3 +1,5 @@
+import type { BrandingRead } from '@ayman/contracts/admin/settings';
+import { brandImage } from '@/lib/brand-image';
 import { getBranding } from '@/lib/settings';
 import { Fragment } from 'react';
 import { cacheLife } from 'next/cache';
@@ -235,21 +237,22 @@ export default async function HomePage() {
    */
   return (
     <main data-layout={branding.landingLayout}>
-      {blocks.map((block) => renderBlock(block, honorBoard, branding.heroKey))}
+      {blocks.map((block) => renderBlock(block, honorBoard, branding))}
     </main>
   );
 }
 
-/* `heroKey` بيتمرّر مش بيتقري هنا: الدالة دي مش async ومش مكوّن، فنداء
+/* `branding` بيتمرّر مش بيتقري هنا: الدالة دي مش async ومش مكوّن، فنداء
    `getBranding()` جوّاها كان هيخلّيها كده. الصفحة بتقراه مرة وبتمرّره. */
-function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], heroKey: string | null) {
+function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], branding: BrandingRead) {
   const { props } = block;
 
   switch (props.type) {
     case 'hero':
       return (
         <SiteHero
-          heroKey={heroKey}
+          heroKey={branding.heroKey}
+          heroDarkKey={branding.heroDarkKey}
           key={block.id}
           eyebrow={props.eyebrowAr}
           headline={props.headlineAr}
@@ -311,7 +314,16 @@ function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], heroKey: s
       return <InstructorProfile key={block.id} />;
 
     case 'yearTracks':
-      return <YearTracks key={block.id} />;
+      return (
+        <YearTracks
+          key={block.id}
+          posters={{
+            trackEssentials: brandImage(branding, 'trackEssentials'),
+            trackYear1: brandImage(branding, 'trackYear1'),
+            trackYear2: brandImage(branding, 'trackYear2'),
+          }}
+        />
+      );
 
     /* Placement-only like the two above, and currently a placeholder: the
        board fills from the monthly exam and the first paper has not been sat.

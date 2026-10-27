@@ -3236,3 +3236,14 @@ html[data-player-fullscreen] .route-fade {
 }
 
 
+
+/* A brand picture with a separate dark-mode file — `<ThemedImage>`. Both are
+   in the DOM and the one this theme does not want is hidden. `data-theme` is
+   always present (server renders `light`, the prepaint script writes the
+   stored one), so no `prefers-color-scheme` branch: the platform does not
+   follow the OS. The `:root[…]` prefix also outranks any single-class
+   `display` a surface puts on the same image. */
+:root:not([data-theme='dark']) .theme-img--dark,
+:root[data-theme='dark'] .theme-img--light {
+  display: none;
+}
