@@ -34,13 +34,6 @@ export interface ResultCardData {
   total: number;
 }
 
-export interface CertificateData {
-  studentName: string;
-  courseTitle: string;
-  /** ISO date the last lesson was completed. */
-  completedAt: string;
-}
-
 export function qrMatrix(text: string): QrMatrix {
   // `M`, as on the centre attendance card: survives a thumb over a corner of a
   // story screenshot and keeps the matrix small enough to scan off a phone.
