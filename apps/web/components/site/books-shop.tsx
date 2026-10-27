@@ -5,6 +5,7 @@ import { ArrowLeft, BookOpen, Check, Layers, Minus, Plus, ShoppingBag, Truck } f
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
+  BookCatalogSchema,
   MAX_BOOK_QUANTITY,
   bookOrderTotals,
   minBookShippingCents,
@@ -23,6 +24,7 @@ import {
 import { CourseArt } from '@/components/course-art';
 import { StreamBadge } from '@/components/stream-badge';
 import { BookOrderPanel } from '@/components/site/book-order-panel';
+import { apiGet } from '@/lib/api';
 import { subjectArt } from '@/lib/subject-art';
 import { formatEGP } from '@/lib/price';
 
@@ -75,7 +77,7 @@ const TERMS: readonly { key: BookTerm; label: string }[] = [
  * («مرة واحدة على الطلب كله») is stated once rather than twice.
  */
 export function BooksShop({
-  catalog,
+  catalog: cachedCatalog,
   instapay,
   vodafoneCash,
 }: {
@@ -85,6 +87,46 @@ export function BooksShop({
   /** The wallet number, threaded beside `instapay` — see `ContactSchema`. */
   vodafoneCash: string | null;
 }) {
+  /*
+   * ⚠️ «الكتب مش بتحمّل… ولما أعمل ريفرش بتظهر».
+   *
+   * Empty shelves from the server are not proof the shop is empty. Both
+   * loaders (`getBookCatalogOrEmpty`, `getBookCatalogForStudent`) are
+   * `'use cache'` and cache their OWN failure as empty shelves for minutes —
+   * `/books` is prerendered at `next build` with no API, and either entry can
+   * be filled during the seconds a deploy restarts Nest. The page then served
+   * «لسه مفيش كتب» until a refresh happened to land after revalidation.
+   *
+   * So an empty catalogue is re-asked from the browser, where `/api/books`
+   * goes through the `/api/*` rewrite straight to Nest, past every Next cache.
+   * Only when empty: a populated one is already an answer the API gave, and a
+   * second read on every view of a public page spends the visitor's per-IP
+   * throttle for nothing. `undefined` =
+   * still asking — the empty state is not drawn until the API itself agrees.
+   */
+  const needsLiveRead = cachedCatalog.shelves.length === 0;
+  const [liveCatalog, setLiveCatalog] = useState<BookCatalog | null | undefined>(
+    needsLiveRead ? undefined : null,
+  );
+  useEffect(() => {
+    if (!needsLiveRead) return;
+    let cancelled = false;
+    apiGet('/api/books', BookCatalogSchema)
+      .then((value) => {
+        if (!cancelled) setLiveCatalog(value);
+      })
+      .catch(() => {
+        // 404 on a stack that does not sell books, or the API is really
+        // down — the cached empty state is then the honest answer.
+        if (!cancelled) setLiveCatalog(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsLiveRead]);
+  const catalog = liveCatalog ?? cachedCatalog;
+  const hasShelves = catalog.shelves.length > 0;
+
   /*
     Land on the right book when the URL carries one.
 
@@ -101,9 +143,10 @@ export function BooksShop({
     be there, not to watch a journey — and a smooth scroll from the top of a
     long shop is a second of nothing happening.
 
-    `[]` — mount only. A hash change while the page is already open is the
-    browser's own job and it can do it, because the anchors are in the DOM by
-    then.
+    Keyed on `hasShelves`, not `[]`: when the shelves come from the live
+    re-read above, they paint one render AFTER mount, and that render is the
+    first one the anchor exists in. A hash change while the page is already
+    open is the browser's own job, because the anchors are in the DOM by then.
   */
   useEffect(() => {
     const id = window.location.hash.slice(1);
@@ -112,7 +155,7 @@ export function BooksShop({
     // author-controlled and can carry characters that are not a valid CSS
     // identifier, which would throw rather than miss.
     document.getElementById(id)?.scrollIntoView({ behavior: 'auto', block: 'start' });
-  }, []);
+  }, [hasShelves]);
 
   /** `bookId → quantity`. Absent means "not in the basket"; a quantity is never 0. */
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -174,7 +217,11 @@ export function BooksShop({
     });
   }
 
-  if (catalog.shelves.length === 0) {
+  if (!hasShelves && liveCatalog === undefined) {
+    return <div className="site-shell books-shelves" role="status" aria-busy="true" />;
+  }
+
+  if (!hasShelves) {
     return (
       <div className="site-shell books-shelves">
         <div className="books-empty">

@@ -20,6 +20,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { TaxonomySchema, type Taxonomy } from '@ayman/contracts/taxonomy';
+import { PublicSettingsReadSchema } from '@ayman/contracts/admin/settings';
 import { BookOrderSchema, type BookOrder } from '@ayman/contracts/book-orders';
 import {
   bookShippingCentsFor,
@@ -172,8 +173,8 @@ export function BookOrderPanel({
   items,
   itemsCents,
   shippingRates,
-  instapay,
-  vodafoneCash,
+  instapay: cachedInstapay,
+  vodafoneCash: cachedVodafoneCash,
   resumeOrderId,
   summaryLines,
   onCancel,
@@ -324,6 +325,45 @@ export function BookOrderPanel({
     };
   }, [previewUrl]);
 
+  /*
+   * ⚠️ The payment numbers are read LIVE, the moment the dialog opens.
+   *
+   * The props come from `getPublicSettingsOrDefaults()` on the server, a
+   * `'use cache'` entry that holds its own fallback — empty contact — for
+   * minutes whenever it was filled without the API: at `next build`, or in the
+   * seconds a deploy restarts Nest. Deciding from them alone put
+   * «طلب الكتاب مش متاح دلوقتي. تواصل معانا على واتساب» in front of a parent
+   * holding the money, on a platform with both numbers configured. Same trap,
+   * same cure, as `SubscribePanel`: from the browser, `/api/settings/public`
+   * goes through the `/api/*` rewrite straight to Nest, past every Next cache.
+   *
+   * `undefined` = not answered yet; the props are only the fallback for a live
+   * read that FAILED, never a reason to skip it.
+   */
+  const [liveContact, setLiveContact] = useState<
+    { instapay: string | null; vodafoneCash: string | null } | null | undefined
+  >(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    apiGet('/api/settings/public', PublicSettingsReadSchema)
+      .then(({ contact }) => {
+        if (!cancelled) {
+          setLiveContact({
+            instapay: contact.instapay ?? null,
+            vodafoneCash: contact.vodafoneCash ?? null,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLiveContact(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const instapay = liveContact ? liveContact.instapay : cachedInstapay;
+  const vodafoneCash = liveContact ? liveContact.vodafoneCash : cachedVodafoneCash;
+
   useEffect(() => {
     let cancelled = false;
     apiGet('/api/taxonomy', TaxonomySchema)
@@ -459,6 +499,17 @@ export function BookOrderPanel({
    * Above the early return below, as every hook here must be.
    */
   useCheckoutIntent('book_order', (step === 'payment' || step === 'submitting') && order ? order.id : null);
+
+  // Not «مش متاح» while the live read is still out — that sentence is only
+  // true once the API itself has said there is no number.
+  if (!instapay && !vodafoneCash && liveContact === undefined) {
+    return (
+      <p className="bco-loading" role="status">
+        <LoaderCircle className="bco-loading__spin" size={22} aria-hidden="true" />
+        {copy.common.loading}
+      </p>
+    );
+  }
 
   if (!instapay && !vodafoneCash) {
     return (

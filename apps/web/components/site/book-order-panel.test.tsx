@@ -42,10 +42,17 @@ const stored = {
   shippedAt: null,
 } as unknown as BookOrder;
 
+/** What `/api/settings/public` answers — `null` makes the read fail. */
+let liveContact: { instapay: string | null; vodafoneCash: string | null } | null = null;
+
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
-  apiGet: vi.fn(async (path: string) =>
-    path === '/api/taxonomy'
+  apiGet: vi.fn(async (path: string) => {
+    if (path === '/api/settings/public') {
+      if (!liveContact) throw new Error('settings down');
+      return { contact: liveContact };
+    }
+    return path === '/api/taxonomy'
       ? {
           // One governorate, so the address form has something to pick. «RS»
           // (the stored order's) is deliberately NOT in it — the resume tests
@@ -54,8 +61,8 @@ vi.mock('@/lib/api', async (importOriginal) => ({
           pinnedGovernorateCodes: [],
           systems: [],
         }
-      : stored,
-  ),
+      : stored;
+  }),
   apiPost: vi.fn(),
 }));
 
@@ -75,6 +82,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  liveContact = null;
 });
 
 function renderBasket(copies: number) {
@@ -157,5 +165,39 @@ describe('BookOrderPanel — the address step', () => {
     ).toBeTruthy();
     // …and the summary's «الشحن» row names the same zone.
     expect(screen.getByText(copy.books.shippingZoneFar)).toBeTruthy();
+  });
+});
+
+/**
+ * «لما حد بيطلب الكتب بيقول مش موجود كلمهم واتساب». The numbers on the props
+ * come from a server cache that holds an EMPTY contact for minutes after a
+ * deploy; the panel must ask the API itself before calling the shop closed.
+ * The props here are deliberately the wrong (empty) ones.
+ */
+describe('BookOrderPanel — the payment numbers are read live', () => {
+  function renderWithEmptyProps() {
+    render(
+      <BookOrderPanel
+        items={[{ bookId: BOOK, quantity: 1 }]}
+        itemsCents={15000}
+        shippingRates={{ cairo_giza: 15000, delta: 15000, far: 15000 }}
+        instapay={null}
+        vodafoneCash={null}
+        onCancel={() => undefined}
+      />,
+    );
+  }
+
+  it('opens the checkout when the live settings have a number the cached props lost', async () => {
+    liveContact = { instapay: null, vodafoneCash: '+201021196367' };
+    renderWithEmptyProps();
+    expect(await screen.findByLabelText(copy.bookOrder.fullNameLabel)).toBeTruthy();
+    expect(screen.queryByText(copy.bookOrder.noNumber)).toBeNull();
+  });
+
+  it('still says «مش متاح» when the API itself has no number', async () => {
+    liveContact = { instapay: null, vodafoneCash: null };
+    renderWithEmptyProps();
+    expect(await screen.findByText(copy.bookOrder.noNumber)).toBeTruthy();
   });
 });
