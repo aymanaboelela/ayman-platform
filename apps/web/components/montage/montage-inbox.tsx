@@ -46,6 +46,8 @@ import {
 import { PublishDialog } from './publish-dialog';
 
 const c = montageCopy;
+/** «8 جيجا», the way the limit is said — not the 8.6 decimal gigabytes `formatBytes` would print. */
+const MAX_LABEL = formatCopy(c.gigabytes, { n: String(Math.round(MAX_MONTAGE_BYTES / 1024 ** 3)) });
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' });
 
 /** What the bucket is told the file is — advisory; ffprobe decides at encode time. */
@@ -127,7 +129,7 @@ export function MontageInbox({
           continue;
         }
         if (file.size > MAX_MONTAGE_BYTES) {
-          toast.error(formatCopy(c.tooLarge, { name: file.name, size: formatBytes(MAX_MONTAGE_BYTES) }));
+          toast.error(formatCopy(c.tooLarge, { name: file.name, size: MAX_LABEL }));
           continue;
         }
         const title = titleOf(file);
@@ -214,7 +216,7 @@ export function MontageInbox({
             {c.pick}
           </Button>
           <p className="mt-3 text-[length:var(--fs-text-sm)] text-fg-muted">
-            {formatCopy(c.dropHint, { size: formatBytes(MAX_MONTAGE_BYTES) })}
+            {formatCopy(c.dropHint, { size: MAX_LABEL })}
           </p>
           <p
             dir="ltr"
@@ -401,9 +403,7 @@ function VideoRow({
             <span dir="ltr" className="mono max-w-full truncate [unicode-bidi:isolate]">
               {video.fileName}
             </span>
-            <span dir="ltr" className="mono tabular [unicode-bidi:isolate]">
-              {formatBytes(video.sizeBytes)}
-            </span>
+            <span className="tabular">{formatBytes(video.sizeBytes)}</span>
             <span>{dateFormatter.format(new Date(video.createdAt))}</span>
             {video.uploadedBy !== null ? <span>{formatCopy(c.by, { name: video.uploadedBy })}</span> : null}
           </p>
@@ -435,13 +435,11 @@ function VideoRow({
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 text-[length:var(--fs-text-xs)] text-fg-muted">
             <span className="mono tabular font-semibold text-fg">{percent}%</span>
-            <span dir="ltr" className="mono tabular [unicode-bidi:isolate]">
+            <span className="tabular">
               {formatBytes(upload.sent)} / {formatBytes(upload.total)}
             </span>
             {upload.bytesPerSecond !== null ? (
-              <span dir="ltr" className="mono tabular [unicode-bidi:isolate]">
-                {formatSpeed(upload.bytesPerSecond)}
-              </span>
+              <span className="tabular">{formatSpeed(upload.bytesPerSecond)}</span>
             ) : null}
             {upload.secondsLeft !== null && upload.secondsLeft > 0 ? (
               <span>{formatCopy(c.remaining, { eta: formatEta(upload.secondsLeft) })}</span>
