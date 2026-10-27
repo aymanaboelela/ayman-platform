@@ -261,6 +261,13 @@ model User {
   /// phone, and (on a student) the admins whose phones hold them.
   contactExportsMade         ContactExport[]         @relation("ContactExportAdmin")
   contactExportsOf           ContactExport[]         @relation("ContactExportStudent")
+  /// «ادعي صاحبك» — this student's own share code, the friends who joined
+  /// through it, the referral that brought THIS account in (at most one — the
+  /// UNIQUE on `referred_user_id`), and (for an admin) the ones voided.
+  referralCode               ReferralCode?
+  referralsMade              Referral[]              @relation("ReferralReferrer")
+  referredBy                 Referral?               @relation("ReferralReferred")
+  referralsVoided            Referral[]              @relation("ReferralVoidedBy")
 
   @@unique([email])
   @@map("users")
@@ -2573,6 +2580,8 @@ model PaymentSubmission {
   walletTransaction WalletTransaction? @relation("WalletPurchase", fields: [walletTransactionId], references: [id], onDelete: NoAction)
   /// Wallet refunds given back against this payment — see `WalletTransaction.refundOfSubmissionId`.
   walletRefunds     WalletTransaction[] @relation("WalletRefund")
+  /// The referral this payment earned its reward on — see `Referral.triggerSubmissionId`.
+  referralTrigger   Referral?
 
   /// Anchors `payment_submission_months_submission_in_course`. Prisma cannot
   /// see that composite FK and will offer to drop this unique with it.
@@ -4585,8 +4594,9 @@ model Wallet {
 }
 
 /// What moved the money. The SIGN is fixed per kind by CHECK
-/// (`wallet_transactions_sign_by_kind`): the first four only ever add, the
-/// last two only ever take.
+/// (`wallet_transactions_sign_by_kind`): `admin_credit`, `code_topup`,
+/// `transfer_topup`, `refund` and `referral_reward` only ever add; the rest
+/// only ever take.
 enum WalletTransactionKind {
   /// An admin typed an amount on «شحن المحفظة».
   admin_credit
@@ -4603,6 +4613,13 @@ enum WalletTransactionKind {
   /// An admin took money out — a correction of a wrong credit, or cash handed
   /// back to the student.
   admin_debit
+  /// «ادعي صاحبك» — the reward for a friend's first real payment, on BOTH
+  /// sides (the referrer's and the friend's). Never income: no money arrived.
+  /// `referralId` names the referral.
+  referral_reward
+  /// The same reward taken back — the friend's payment was refunded, or an
+  /// admin voided the referral. Never more than the wallet holds.
+  referral_reversal
 
   @@map("wallet_transaction_kind")
   @@schema("app")
@@ -4643,6 +4660,10 @@ model WalletTransaction {
   unlockCodeId         String?               @unique @map("unlock_code_id") @db.Uuid
   refundOfSubmissionId String?               @map("refund_of_submission_id") @db.Uuid
   idempotencyKey       String?               @unique @map("idempotency_key") @db.Uuid
+  /// «ادعي صاحبك» — the referral a `referral_reward` / `referral_reversal`
+  /// row belongs to (CHECK: no other kind may carry one). `SetNull` when the
+  /// referral goes with a deleted account; the money row stays.
+  referralId           String?               @map("referral_id") @db.Uuid
   /// The admin who pressed the button; `null` for a row the STUDENT caused
   /// (a code, a purchase) or one whose admin account was since deleted.
   actorUserId          String?               @map("actor_user_id")
@@ -4656,12 +4677,17 @@ model WalletTransaction {
   refundOfSubmission PaymentSubmission? @relation("WalletRefund", fields: [refundOfSubmissionId], references: [id], onDelete: SetNull)
   /// The subscription this debit bought — see `PaymentSubmission.walletTransactionId`.
   purchase           PaymentSubmission? @relation("WalletPurchase")
+  referral           Referral?          @relation(fields: [referralId], references: [id], onDelete: SetNull)
 
   /// The statement: one student, newest first.
   @@index([userId, createdAt(sort: Desc)])
   /// Finance's day-by-day scan of income rows.
   @@index([createdAt])
   @@index([refundOfSubmissionId])
+  /// One reward and one reversal per person per referral — the database's own
+  /// answer to «can this referral pay twice». NULLs are distinct, so every
+  /// non-referral row is untouched by it.
+  @@unique([referralId, userId, kind])
   @@map("wallet_transactions")
   @@schema("app")
 }
@@ -4721,6 +4747,127 @@ model WalletTopup {
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@map("wallet_topups")
+  @@schema("app")
+}
+
+/// «ادعي صاحبك» — the program's switches and numbers. A singleton (`id = 1`),
+/// read as its defaults until an admin first saves — and the default is OFF:
+/// a stack where nobody chose the amounts never pays anyone.
+///
+/// Its own row rather than a section of `site_settings`: that blob is parsed on
+/// every page render through the root layout, and a key added there is a key
+/// every page fails on if it ever stops parsing. Nothing public reads this.
+model ReferralProgram {
+  id                  Int      @id @default(1)
+  enabled             Boolean  @default(false)
+  /// What the student who SHARED the link gets, in piastres. 0 = nothing.
+  referrerRewardCents Int      @default(5000) @map("referrer_reward_cents")
+  /// What the friend who joined through it gets, in piastres. 0 = nothing.
+  friendRewardCents   Int      @default(2500) @map("friend_reward_cents")
+  /// Rewards one referrer may earn per Cairo calendar month.
+  monthlyCap          Int      @default(10) @map("monthly_cap")
+  /// How long a click on `/r/<code>` still attributes a sign-up, in days.
+  windowDays          Int      @default(30) @map("window_days")
+  /// «وصلتلك مكافأة» on the referrer's WhatsApp when the reward lands.
+  whatsappNotice      Boolean  @default(true) @map("whatsapp_notice")
+  updatedBy           String?  @map("updated_by")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("referral_program")
+  @@schema("app")
+}
+
+/// A student's share code — `/r/<code>`. One per student, minted on the first
+/// visit to «ادعي صاحبك» and never changed, so a link sent last term still
+/// works. The code is not a secret: it only says who shared.
+model ReferralCode {
+  userId    String   @id @map("user_id")
+  code      String   @unique @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("referral_codes")
+  @@schema("app")
+}
+
+enum ReferralStatus {
+  /// Signed up through the link; no qualifying payment yet.
+  joined
+  /// The friend paid and both rewards landed.
+  credited
+  /// Credited, then taken back because the triggering payment was refunded.
+  reversed
+  /// The friend paid, and an abuse rule refused the reward (`blockReason`).
+  blocked
+  /// An admin voided it. Any reward it had paid was taken back.
+  voided
+
+  @@map("referral_status")
+  @@schema("app")
+}
+
+/// «ادعي صاحبك» — one friend who signed up through one student's link.
+///
+/// ## Attribution happens once, at sign-up
+///
+/// `referred_user_id` is UNIQUE: an account is attributed when it is created
+/// and never again, whatever links it clicks later. A click only sets a
+/// cookie; the row is written by the sign-up hook in `auth.config.ts`.
+///
+/// ## The reward is the referral's state, moved by a conditional UPDATE
+///
+/// `joined → credited` is an `updateMany … WHERE status = 'joined'` in the
+/// same transaction as both ledger credits, and the ledger's own
+/// `(referral_id, user_id, kind)` UNIQUE refuses a second credit even if that
+/// guard were ever bypassed. Two sweeps, a retry, a restart mid-pass: one
+/// reward.
+model Referral {
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  referrerUserId      String         @map("referrer_user_id")
+  referredUserId      String         @unique @map("referred_user_id")
+  /// The code the click carried — a snapshot, in case a code is ever reissued.
+  code                String         @db.VarChar(16)
+  status              ReferralStatus @default(joined)
+  /// Why a `blocked` row was refused: `self`, `same_phone`, `guardian_phone`,
+  /// `monthly_cap`, `banned`. Text, not an enum: the admin screen renders the
+  /// known ones and prints any other verbatim.
+  blockReason         String?        @map("block_reason") @db.VarChar(32)
+  /// The friend's first qualifying payment. UNIQUE: a payment rewards once.
+  triggerSubmissionId String?        @unique @map("trigger_submission_id") @db.Uuid
+  /// What was actually credited — a snapshot of the program's amounts at the
+  /// moment, so changing the setting later never rewrites history.
+  referrerRewardCents Int?           @map("referrer_reward_cents")
+  friendRewardCents   Int?           @map("friend_reward_cents")
+  creditedAt          DateTime?      @map("credited_at")
+  /// What was taken back, in total, when reversed or voided. Can be LESS than
+  /// what was credited: a reversal never takes a wallet below zero, so money a
+  /// student already spent is gone and this says how much came back.
+  reversedCents       Int?           @map("reversed_cents")
+  reversedAt          DateTime?      @map("reversed_at")
+  voidedAt            DateTime?      @map("voided_at")
+  voidedByUserId      String?        @map("voided_by_user_id")
+  voidReason          String?        @map("void_reason") @db.VarChar(300)
+  /// The referrer's WhatsApp notice: when it was claimed for sending, and how
+  /// it ended (`sent`, `opted_out`, `no_phone`, `not_on_whatsapp`,
+  /// `sending`). `null` = not attempted yet.
+  noticeAt            DateTime?      @map("notice_at")
+  noticeOutcome       String?        @map("notice_outcome") @db.VarChar(32)
+  createdAt           DateTime       @default(now()) @map("created_at")
+
+  referrer          User                @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referred          User                @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  voidedBy          User?               @relation("ReferralVoidedBy", fields: [voidedByUserId], references: [id], onDelete: SetNull)
+  triggerSubmission PaymentSubmission?  @relation(fields: [triggerSubmissionId], references: [id], onDelete: SetNull)
+  transactions      WalletTransaction[]
+
+  /// «صحابك» on the student page, and the monthly cap's count.
+  @@index([referrerUserId, createdAt(sort: Desc)])
+  /// The sweeper's two scans and the admin list's filter.
+  @@index([status, createdAt])
+  /// The WhatsApp notice's scan: credited, recently.
+  @@index([status, creditedAt])
+  @@map("referrals")
   @@schema("app")
 }
 

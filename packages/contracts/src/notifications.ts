@@ -501,7 +501,7 @@ export const SuspectKeyNotificationSchema = z.object({
  * sentence for each. `code` is not here: the student typed the code and is
  * looking at the success screen already.
  */
-export const WalletCreditSourceSchema = z.enum(['topup', 'admin', 'refund']);
+export const WalletCreditSourceSchema = z.enum(['topup', 'admin', 'refund', 'referral']);
 export type WalletCreditSource = z.infer<typeof WalletCreditSourceSchema>;
 
 /** STUDENT — «اتشحنلك ٢٠٠ جنيه في المحفظة». */

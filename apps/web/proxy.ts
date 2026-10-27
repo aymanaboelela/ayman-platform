@@ -175,6 +175,9 @@ export const PROTECTED_PREFIXES = [
   // «المحفظة» — a student's own balance and statement, read with
   // `apiGetAuthed`; a signed-out visitor has no wallet to show.
   '/wallet',
+  // «دعوة صحابك» — the student's own share link, read with `apiGetAuthed`.
+  // NOT `/r/<code>`: that one is for the visitor who has no account yet.
+  '/invite',
 ] as const;
 
 /**

@@ -1,5 +1,6 @@
 import {
   CircleMinus,
+  Gift,
   GraduationCap,
   Landmark,
   Ticket,
@@ -33,6 +34,8 @@ const KIND_ICON: Record<WalletTransactionKind, LucideIcon> = {
   refund: Undo2,
   course_purchase: GraduationCap,
   admin_debit: CircleMinus,
+  referral_reward: Gift,
+  referral_reversal: Undo2,
 };
 
 const KIND_HUE: Record<WalletTransactionKind, string> = {
@@ -42,6 +45,8 @@ const KIND_HUE: Record<WalletTransactionKind, string> = {
   refund: 'var(--viz-5)',
   course_purchase: 'var(--viz-3)',
   admin_debit: 'var(--err)',
+  referral_reward: 'var(--viz-4)',
+  referral_reversal: 'var(--err)',
 };
 
 function detailOf(row: AdminWalletTransaction): string | null {

@@ -4243,6 +4243,8 @@ const admin = {
       refund: 'فلوس رجعت من اشتراك',
       course_purchase: 'اشتراك من المحفظة',
       admin_debit: 'خصم بإيد الأدمن',
+      referral_reward: 'مكافأة دعوة الصحاب',
+      referral_reversal: 'مكافأة دعوة اترجعت',
     },
     via: {
       instapay: 'إنستاباي',

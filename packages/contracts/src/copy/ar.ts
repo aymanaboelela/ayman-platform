@@ -448,6 +448,8 @@ export const copy = {
     /** «دفتر غلطاتي». الكوبي كلها في `copy/mistakes.ts`. */
     mistakes: 'غلطاتي',
     certificates: 'شهاداتي',
+    /** «دعوة صحابك» — the share link. Nominal, not «ادعي»: one label for every reader. */
+    invite: 'دعوة صحابك',
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
@@ -3856,31 +3858,7 @@ export const copy = {
      *  rediscover it. */
     closedClose: 'تمام',
   },
-  /**
-   * صفحة ولي الأمر.
-   *
-   * النبرة هنا مش نبرة الطالب: الأب مش بيذاكر، هو بيطمن. فمفيش «يلا نكمّل»
-   * ولا أي دعوة لفعل — الصفحة بتقول الحقيقة وخلاص، والفعل عند ابنه.
-   */
-  guardian: {
-    eyebrow: 'متابعة ولي الأمر',
-    title: 'متابعة الطالب',
-    of: 'من',
-    noCourses: 'لسه مش مشترك في أي كورس.',
-    /** «سلّم ٣ من ٥» — المقام مش زينة: رقم من غير مقام مالوش معنى لحد مش
-     *  عارف الكورس فيه كام واجب. */
-    homeworkLabel: 'الواجبات',
-    needsWork: '{n} محتاج يتعاد',
-    quizzesLabel: 'امتحانات دخلها',
-    passedOf: 'عدّى في {passed}',
-    averageLabel: 'متوسط الدرجات',
-    /** مكان المتوسط قبل أول ورقة. «٠٪» بيقرا «امتحن وجاب صفر» — وهي جملة
-     *  تانية خالص في بيت. */
-    noAverage: 'لسه ماامتحنش',
-    papersTitle: 'آخر الامتحانات',
-    passed: 'عدّى',
-    failed: 'مامشيش',
-  },
+  /* صفحة ولي الأمر — `copy/guardian.ts` (موديول لوحده، زي `copy/backlog.ts`). */
 
   dashboard: {
     eyebrow: '01 / حسابي',
@@ -5104,6 +5082,7 @@ export const copy = {
     walletCreditedTopup: 'اتشحن {amount} جنيه في المحفظة',
     walletCreditedAdmin: 'اتضاف {amount} جنيه للمحفظة',
     walletCreditedRefund: 'رجع {amount} جنيه للمحفظة',
+    walletCreditedReferral: 'مكافأة دعوة: نزل {amount} جنيه في المحفظة',
     walletTopupRejected: 'طلب شحن المحفظة ({amount} جنيه) مااتقبلش',
     /** ADMIN — `{name}` at the end, same reason as `paymentSubmitted`. */
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
@@ -7291,6 +7270,8 @@ export const copy = {
       refund: 'فلوس رجعت من اشتراك',
       course_purchase: 'اشتراك',
       admin_debit: 'خصم من الإدارة',
+      referral_reward: 'مكافأة دعوة',
+      referral_reversal: 'مكافأة دعوة اترجعت',
     },
     via: {
       instapay: 'إنستاباي',
