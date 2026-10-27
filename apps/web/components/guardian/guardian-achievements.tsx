@@ -4,6 +4,7 @@ import { guardianCopy as c } from '@ayman/contracts/copy/guardian';
 import { formatCopy } from '@ayman/contracts/format';
 import type { GuardianView } from '@ayman/contracts/guardian-view';
 import { formatDate } from '@/lib/guardian-view';
+import { IsolatedFigures } from '@/components/results/isolated-figures';
 import { SectionHead } from './section-head';
 
 /**
@@ -32,9 +33,15 @@ export function GuardianAchievements({ view }: { view: GuardianView }) {
             <span className="gd-badge__label">{formatCopy(c.achievements.rank, { cohort: rank.cohortLabel })}</span>
             <span className="gd-badge__value gd-num">{formatCopy(c.achievements.rankValue, { rank: rank.rank })}</span>
             <span className="gd-badge__note">
-              {rank.betterThanPercent !== null
-                ? formatCopy(c.achievements.betterThan, { percent: Math.round(rank.betterThanPercent) })
-                : formatCopy(c.achievements.points, { points: rank.points })}
+              {/* «أحسن من 80% من الدفعة» — the figure isolated, or the RTL line
+                  carries the percent sign to the wrong side of it. */}
+              <IsolatedFigures
+                text={
+                  rank.betterThanPercent !== null
+                    ? formatCopy(c.achievements.betterThan, { percent: Math.round(rank.betterThanPercent) })
+                    : formatCopy(c.achievements.points, { points: rank.points })
+                }
+              />
             </span>
           </article>
         ) : null}
@@ -66,7 +73,11 @@ export function GuardianAchievements({ view }: { view: GuardianView }) {
               <ul className="gd-certs">
                 {certificates.exams.map((exam) => (
                   <li key={`e:${exam.id}`}>
-                    <span>{formatCopy(c.achievements.examCertificate, { title: exam.title, percent: Math.round(exam.percent) })}</span>
+                    <span>
+                      <IsolatedFigures
+                        text={formatCopy(c.achievements.examCertificate, { title: exam.title, percent: Math.round(exam.percent) })}
+                      />
+                    </span>
                     <span className="gd-certs__meta">
                       {exam.courseTitle} · {formatDate(exam.earnedAt)}
                     </span>

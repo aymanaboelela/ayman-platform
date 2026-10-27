@@ -132,9 +132,11 @@
 }
 .gd-hero__extras { font-size: var(--fs-text-sm); color: var(--ink-fg-2); }
 .gd-hero__last { margin-top: 0.25rem; color: var(--ink-fg-2); font-weight: var(--fw-medium); }
-.gd-hero__art { display: none; }
+/* On a phone the drawing sits under the words, small and centred — a parent's
+   page on a phone is still the page that should look made for them. */
+.gd-hero__art { justify-self: center; width: min(12rem, 70%); margin-top: 0.25rem; }
 @media (min-width: 640px) {
-  .gd-hero__art { display: block; }
+  .gd-hero__art { width: 100%; margin-top: 0; }
 }
 
 /* the drawing — every fill a token, white alphas over the gradient */

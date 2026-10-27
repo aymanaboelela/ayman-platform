@@ -43,7 +43,8 @@ import { GuardianReportService } from './guardian-report.service';
  *     EX the course exam: 45 of 50 ✓
  *     M1 «امتحان الشهر» on its shelf: essay still with the teacher
  *   B «كورس الفيزياء» — the grant EXPIRED yesterday; the enrollment row still
- *     says `active`, as it always does. One lecture watched; QB quiz 12/20 ✗.
+ *     says `active`, as it always does. LB1 watched, LB2 never opened (and no
+ *     longer can be); QB quiz 12/20 ✗.
  *   C «كورس الرياضة» — sells by month; holds «شهر ١» only. LC1 (month 1)
  *     watched 3 days ago; LC2 (month 2) not theirs and must not count.
  *
@@ -355,9 +356,11 @@ describe('GuardianReportService — the whole page over real rows', () => {
       data: { courseId: b.id, title: 'الوحدة', position: 1, isPublished: true },
     });
     await makeLesson('LB1', b.id, unitB.id, 1);
-    await makeLesson('QB', b.id, unitB.id, 2, 'quiz');
+    // Never opened — and the subscription is gone, so it will not open.
+    await makeLesson('LB2', b.id, unitB.id, 2);
+    await makeLesson('QB', b.id, unitB.id, 3, 'quiz');
     const qb = await makeQuiz(lesson.QB!, 20);
-    const enrolB = await prisma.enrollment.create({ data: { userId: studentId, courseId: b.id, progressPercent: 100 } });
+    const enrolB = await prisma.enrollment.create({ data: { userId: studentId, courseId: b.id, progressPercent: 50 } });
     await prisma.accessGrant.create({
       data: { userId: studentId, scope: 'course', courseId: b.id, source: 'purchase', validFrom: daysAgo(120), validUntil: daysAgo(1) },
     });
@@ -467,7 +470,7 @@ describe('GuardianReportService — the whole page over real rows', () => {
     const byTitle = new Map(view.courses.map((course) => [course.title, course.lectures]));
     //            watched / published lectures (no quizzes, no unpublished L5, no unheld month)
     expect(byTitle.get('كورس البرمجة')).toEqual({ completed: 2, total: 4, percent: 50 });
-    expect(byTitle.get('كورس الفيزياء')).toEqual({ completed: 1, total: 1, percent: 100 });
+    expect(byTitle.get('كورس الفيزياء')).toEqual({ completed: 1, total: 2, percent: 50 });
     expect(byTitle.get('كورس الرياضة')).toEqual({ completed: 1, total: 1, percent: 100 });
 
     const own = await dashboard.forUser(studentId);
@@ -493,10 +496,12 @@ describe('GuardianReportService — the whole page over real rows', () => {
       quizzes: own.counts.quizzes,
       homework: own.counts.homework,
     });
-    expect(view.backlog).toMatchObject({ lectures: 2, quizzes: 0, homework: 2 });
+    // The same three «المتراكم» lists — LB2 included, as the path draws it.
+    expect(view.backlog).toMatchObject({ lectures: 3, quizzes: 0, homework: 2 });
     expect(view.backlog.items.map((item) => [item.title, item.kind])).toEqual([
       ['L3', 'lecture'],
       ['L4', 'lecture'],
+      ['LB2', 'lecture'],
     ]);
   });
 
@@ -548,11 +553,12 @@ describe('GuardianReportService — the whole page over real rows', () => {
 
     const b = view.courses.find((course) => course.title === 'كورس الفيزياء')!;
     expect(b.quizzes).toEqual({ taken: 1, average: 60 });
-    expect(b.backlog).toEqual({ lectures: 0, quizzes: 0, homework: 0 });
+    expect(b.backlog).toEqual({ lectures: 1, quizzes: 0, homework: 0 });
   });
 
   it('the week: «٢ محاضرات من ٤», one paper sat, one homework handed in', () => {
-    // L1 (2 days) + LC1 (3 days) done; L3 + L4 still open → 2 of 4.
+    // L1 (2 days) + LC1 (3 days) done; L3 + L4 still open → 2 of 4. LB2 is
+    // NOT waiting: its course's subscription ended, so it cannot be opened.
     expect(view.week).toEqual({ lecturesDone: 2, lecturesOpen: 4, quizzesSat: 1, homeworkHandedIn: 1 });
   });
 

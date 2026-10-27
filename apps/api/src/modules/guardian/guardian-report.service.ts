@@ -248,7 +248,11 @@ export class GuardianReportService {
       lastActivityAt: lastActivity?.toISOString() ?? null,
       week: {
         lecturesDone: lecturesDoneThisWeek,
-        lecturesOpen: lecturesDoneThisWeek + backlog.counts.lectures,
+        // A course whose subscription ended still draws its lectures as open
+        // on the path, but they will not open — so they are not «waiting».
+        lecturesOpen:
+          lecturesDoneThisWeek +
+          courses.filter((course) => course.access.state !== 'ended').reduce((sum, course) => sum + course.backlog.lectures, 0),
         quizzesSat: quizzesThisWeek,
         homeworkHandedIn: homeworkThisWeek,
       },

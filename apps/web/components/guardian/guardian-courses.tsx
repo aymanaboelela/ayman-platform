@@ -41,6 +41,7 @@ function CourseCard({ course, now }: { course: GuardianCourse; now: Date }) {
   const AccessIcon = ACCESS_ICON[access.tone];
   const behind = courseBehind(course);
   const last = whenLabel(course.lastActivityAt, now);
+  const ended = course.published && course.access.state === 'ended';
 
   return (
     <li className="gd-course">
@@ -65,11 +66,9 @@ function CourseCard({ course, now }: { course: GuardianCourse; now: Date }) {
 
       <dl className="gd-course__facts">
         <div>
-          <dt>{c.stats.lectures}</dt>
-          <dd>
-            {course.lectures.total === 0
-              ? c.courses.lecturesNone
-              : formatCopy(c.courses.lectures, { done: course.lectures.completed, total: course.lectures.total })}
+          <dt>{c.courses.lecturesLabel}</dt>
+          <dd className="gd-num">
+            {course.lectures.total === 0 ? c.courses.noMark : `${course.lectures.completed}/${course.lectures.total}`}
           </dd>
         </div>
         <div>
@@ -83,7 +82,9 @@ function CourseCard({ course, now }: { course: GuardianCourse; now: Date }) {
       </dl>
 
       <div className="gd-course__foot">
-        {behind.length === 0 ? (
+        {/* A course whose subscription ended has nothing «فاضل» that can be
+            opened — «محتاج متابعة» says it once, as the subscription. */}
+        {ended ? null : behind.length === 0 ? (
           <span className="gd-pill" data-tone="ok">
             {c.courses.upToDate}
           </span>

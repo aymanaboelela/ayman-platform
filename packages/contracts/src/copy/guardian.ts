@@ -129,8 +129,7 @@ export const guardianCopy = {
 
   courses: {
     title: 'الكورسات',
-    lectures: '{done} من {total} محاضرة',
-    lecturesNone: 'لسه مفيش محاضرات نزلت',
+    lecturesLabel: 'المحاضرات',
     access: {
       full: 'الاشتراك شغّال',
       term: 'اشتراك الترم شغّال',
