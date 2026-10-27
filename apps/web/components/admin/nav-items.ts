@@ -46,6 +46,7 @@ import {
   BanknoteArrowUp,
   FileDown,
   Brush,
+  Share2,
   Clapperboard,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
@@ -53,6 +54,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { adminPractice } from '@ayman/contracts/copy/admin-practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 import { designsCopy } from '@ayman/contracts/copy/designs';
+import { socialPostsCopy } from '@ayman/contracts/copy/social-posts';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
@@ -531,6 +533,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Megaphone,
     permission: 'marketing:read',
     feature: 'marketing.whatsapp',
+    group: 'messages',
+  },
+  {
+    // «استوديو البوستات». Its own row and not only a tab under «التسويق»:
+    // that row is gated on WhatsApp, and a stack can have the studio without
+    // it.
+    href: '/admin/marketing/posts',
+    labelAr: socialPostsCopy.nav,
+    icon: Share2,
+    permission: 'social:read',
+    feature: 'socialPosts',
     group: 'messages',
   },
 

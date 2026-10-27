@@ -165,7 +165,11 @@
     "./share-cards": "./src/share-cards.ts",
     "./copy/mistakes": "./src/copy/mistakes.ts",
     "./backlog": "./src/backlog.ts",
-    "./copy/backlog": "./src/copy/backlog.ts"
+    "./copy/backlog": "./src/copy/backlog.ts",
+    "./copy/social-posts": "./src/copy/social-posts.ts",
+    "./social/posts": "./src/social/posts.ts",
+    "./social/caption": "./src/social/caption.ts",
+    "./social/names": "./src/social/names.ts"
   },
   "scripts": {
     "lint": "eslint src",

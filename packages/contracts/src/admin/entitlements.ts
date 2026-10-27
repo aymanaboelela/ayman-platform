@@ -182,6 +182,16 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * «لأيمن الأول»، زي `shareCards`. البوستات بتتنشر على صفحة المدرّس هو
+     * وبالتوكن بتاعه هو، فلما تتفتح لمدرّس مفيش حاجة من بتاعة أيمن بتعدّي.
+     */
+    key: 'socialPosts',
+    nameAr: 'بوستات السوشيال',
+    descriptionAr: 'بوستات جاهزة من لوحة الشرف والنتايج والشهادات والمحتوى الجديد، وتقويم ونشر على فيسبوك وإنستجرام.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first": built at his request and off on every other stack until
      * the owner opens it from the signed document. It replies FROM a real
      * WhatsApp number, so it also needs `marketing.whatsapp` (the linked
