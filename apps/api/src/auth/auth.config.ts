@@ -280,7 +280,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: ['admin', 'owner', 'student', 'designer'],
+        type: ['admin', 'owner', 'student', 'designer', 'video_editor'],
         required: false,
         defaultValue: 'student',
         input: false,
