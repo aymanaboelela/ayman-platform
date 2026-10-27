@@ -16,12 +16,34 @@ import { PlayerVideoMirrorSchema } from '@ayman/contracts/video';
  *     COMPLETION_VIDEO_COMPLETE_PERCENTAGE = 0.95 has exactly this hole)
  *   • watch-time only → leave the tab playing in the background and never
  *     look at it
- * Requiring both means the student must have reached the end AND spent most
- * of the runtime getting there.
+ * Requiring both means the student must have reached the end AND spent a
+ * real share of the runtime getting there — "a real share" measured at the
+ * fastest speed the player offers, not at 1×.
  * ──────────────────────────────────────────────────────────────────────── */
 
-export const VIDEO_POSITION_THRESHOLD = 0.95;
-export const VIDEO_WATCHED_THRESHOLD = 0.7;
+/**
+ * The fastest speed the player offers (`SPEEDS` in `player-chrome.tsx`, held
+ * to this by its test).
+ *
+ * It matters to the rule because `watchedSeconds` is WALL-CLOCK time: every
+ * heartbeat is intersected with the server's own clock (see
+ * `allowedHeartbeatSeconds`), so a student on 2× earns one second per second
+ * while the video moves two. A watch threshold written in video seconds is
+ * therefore unreachable above a certain speed — at 0.7 it was 60% at best on
+ * 2×, and every lecture watched that way, start to finish, sat in «المتراكم»
+ * forever. Students noticed before we did.
+ */
+export const MAX_PLAYBACK_RATE = 2;
+
+/**
+ * 0.9, not 0.95: the last minutes of a lecture are the goodbye, and on an
+ * hour-long one 5% is three minutes of it. A student who closed the tab there
+ * had watched the lecture.
+ */
+export const VIDEO_POSITION_THRESHOLD = 0.9;
+/** 70% of the runtime at the fastest speed the player offers — see
+ *  `MAX_PLAYBACK_RATE`. Still far above what dragging the scrubber earns. */
+export const VIDEO_WATCHED_THRESHOLD = 0.7 / MAX_PLAYBACK_RATE;
 
 /** The client posts one heartbeat per 10s of playback. */
 export const HEARTBEAT_INTERVAL_MS = 10_000;
