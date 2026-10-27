@@ -12,5 +12,8 @@ import { MistakesService } from './mistakes.service';
   imports: [PrismaModule],
   controllers: [MistakesController],
   providers: [MistakesGateService, MistakesOpenGuard, MistakesService],
+  // The guardian report's «محتاج يتراجع» reads the notebook through the gate,
+  // so a stack with the notebook closed shows the parent nothing of it.
+  exports: [MistakesGateService, MistakesService],
 })
 export class MistakesModule {}

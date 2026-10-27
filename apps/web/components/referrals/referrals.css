@@ -1,0 +1,375 @@
+/* =============================================================================
+   «دعوة صحابك» — `/invite`.
+
+   A page that has to look like a reward, not a settings form: a rose→violet
+   band with a gift opening on it, the link in a container of its own with two
+   unmistakable buttons (copy, WhatsApp), four coloured tiles that count what
+   the link has done, numbered steps, and every friend as a row with their own
+   colour and a status chip.
+
+   Tokens only (and `color-mix` of tokens, always in `oklab`) — the tenant's hue
+   and the dark theme follow without a second set of rules. RTL throughout:
+   every offset is logical, and the Latin link and code are isolated `ltr`.
+   ========================================================================== */
+
+/* ── the band ───────────────────────────────────────────────────────────── */
+.rf-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.75rem 1.5rem 2.25rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(110% 90% at 100% 0%, color-mix(in oklab, var(--viz-1) 55%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--viz-5) 50%, transparent) 0%, transparent 65%),
+    linear-gradient(135deg, var(--viz-4) 0%, var(--viz-3) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+@media (min-width: 768px) {
+  .rf-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 16rem);
+    padding: 2.25rem 2.5rem 3rem;
+  }
+}
+.rf-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.16) 1px, transparent 1.5px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.85), transparent 85%);
+  pointer-events: none;
+}
+.rf-hero > * { position: relative; }
+
+.rf-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.28);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rf-hero__title {
+  margin-top: 0.9rem;
+  font-size: clamp(1.6rem, 6vw, 2.4rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.35;
+}
+.rf-hero__lead {
+  margin-top: 0.75rem;
+  max-width: 34rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.8;
+  color: rgb(255 255 255 / 0.92);
+}
+.rf-hero__art {
+  justify-self: center;
+  width: min(55%, 10rem);
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 0.22));
+}
+@media (min-width: 768px) {
+  .rf-hero__art { width: min(100%, 15rem); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rf-hero__art { animation: rf-float 5s var(--ease-out) infinite alternate; }
+  .rf-art .rf-art__coin-a { animation: rf-bob 2.6s var(--ease-out) infinite alternate; }
+  .rf-art .rf-art__coin-b { animation: rf-bob 3.1s var(--ease-out) 0.4s infinite alternate; }
+}
+@keyframes rf-float {
+  from { transform: translateY(0) rotate(-2deg); }
+  to   { transform: translateY(-8px) rotate(1.5deg); }
+}
+@keyframes rf-bob {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-6px); }
+}
+
+/* the illustration's paints */
+.rf-art .rf-art__glow   { fill: rgb(255 255 255 / 0.14); }
+.rf-art .rf-art__box    { fill: var(--viz-1); }
+.rf-art .rf-art__lid    { fill: color-mix(in oklab, var(--viz-1) 80%, #fff 20%); }
+.rf-art .rf-art__ribbon { fill: var(--viz-6); }
+.rf-art .rf-art__bow    { fill: color-mix(in oklab, var(--viz-6) 75%, #fff 25%); stroke: var(--viz-6); stroke-width: 3; }
+.rf-art .rf-art__coin   { fill: color-mix(in oklab, var(--viz-1) 70%, #fff 30%); stroke: var(--viz-1); stroke-width: 3; }
+.rf-art .rf-art__coin-mark { fill: none; stroke: color-mix(in oklab, var(--viz-1) 60%, var(--ink) 40%); stroke-width: 3; }
+.rf-art .rf-art__spark  { fill: #fff; opacity: 0.85; }
+.rf-art .rf-art__coin-a,
+.rf-art .rf-art__coin-b { transform-box: fill-box; transform-origin: center; }
+
+/* the column under the band rides up over its edge on wide screens */
+@media (min-width: 1024px) {
+  .rf-lift { margin-top: -2.5rem; }
+}
+
+/* ── «البرنامج واقف» ────────────────────────────────────────────────────── */
+.rf-paused {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--viz-1) 45%, var(--color-line));
+  background: color-mix(in oklab, var(--viz-1) 12%, var(--color-surface-2));
+  color: var(--color-fg);
+  line-height: 1.7;
+}
+.rf-paused svg { color: var(--viz-1); }
+.rf-paused__title { font-weight: var(--fw-bold); }
+
+/* ── cards ──────────────────────────────────────────────────────────────── */
+.rf-card {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+@media (min-width: 640px) {
+  .rf-card { padding: 1.5rem; }
+}
+.rf-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+
+/* ── the link ───────────────────────────────────────────────────────────── */
+.rf-share { position: relative; }
+.rf-share__label {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg-muted);
+}
+.rf-share__link {
+  margin-top: 0.4rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-md);
+  border: 2px dashed color-mix(in oklab, var(--viz-3) 45%, var(--color-line));
+  background: color-mix(in oklab, var(--viz-3) 7%, var(--color-surface-1));
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-base);
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.rf-share__actions {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+@media (min-width: 480px) {
+  .rf-share__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.rf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-out), background 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+.rf-btn:hover { transform: translateY(-1px); }
+.rf-btn:focus-visible { outline: 3px solid color-mix(in oklab, var(--viz-3) 55%, transparent); outline-offset: 2px; }
+.rf-btn--copy {
+  border: 2px solid var(--viz-3);
+  background: color-mix(in oklab, var(--viz-3) 10%, var(--color-surface-1));
+  color: var(--viz-3);
+}
+.rf-btn--done {
+  border-color: var(--ok);
+  background: color-mix(in oklab, var(--ok) 14%, var(--color-surface-1));
+  color: var(--ok);
+}
+.rf-btn--whatsapp {
+  border: 2px solid var(--viz-6);
+  background: var(--viz-6);
+  color: #fff;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--viz-6) 35%, transparent);
+}
+.rf-btn--wallet {
+  width: 100%;
+  margin-top: 1rem;
+  border: 2px solid var(--viz-2);
+  background: color-mix(in oklab, var(--viz-2) 12%, var(--color-surface-1));
+  color: var(--viz-2);
+}
+
+.rf-code {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg-muted);
+}
+.rf-code__value {
+  padding: 0.2rem 0.7rem;
+  border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--viz-1) 16%, var(--color-surface-1));
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.25em;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ── what the link has done ─────────────────────────────────────────────── */
+.rf-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+@media (min-width: 768px) {
+  .rf-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.rf-stat {
+  --rf-hue: var(--viz-2);
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--rf-hue) 35%, var(--color-line));
+  background: color-mix(in oklab, var(--rf-hue) 10%, var(--color-surface-1));
+}
+.rf-stat--joined   { --rf-hue: var(--viz-2); }
+.rf-stat--paid     { --rf-hue: var(--viz-5); }
+.rf-stat--credited { --rf-hue: var(--viz-6); }
+.rf-stat--earned   { --rf-hue: var(--viz-1); }
+.rf-stat__icon { width: 1.4rem; height: 1.4rem; color: var(--rf-hue); }
+.rf-stat__value {
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+}
+.rf-stat--earned .rf-stat__value { font-size: var(--fs-title-3); }
+.rf-num { direction: ltr; unicode-bidi: isolate; }
+.rf-stat__label { font-size: var(--fs-text-sm); color: var(--color-fg-muted); }
+
+/* ── friends ────────────────────────────────────────────────────────────── */
+.rf-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: var(--r-md);
+  background: var(--color-surface-1);
+  color: var(--color-fg-muted);
+}
+.rf-friends { display: grid; gap: 0.5rem; }
+.rf-friend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'avatar name chip'
+    'avatar date chip';
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+}
+.rf-friend__avatar {
+  grid-area: avatar;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-full);
+  color: #fff;
+  font-weight: var(--fw-bold);
+  background: var(--viz-2);
+}
+.rf-friend__avatar--1 { background: var(--viz-1); }
+.rf-friend__avatar--2 { background: var(--viz-2); }
+.rf-friend__avatar--3 { background: var(--viz-3); }
+.rf-friend__avatar--4 { background: var(--viz-4); }
+.rf-friend__avatar--5 { background: var(--viz-5); }
+.rf-friend__avatar--6 { background: var(--viz-6); }
+.rf-friend__name {
+  grid-area: name;
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rf-friend__date { grid-area: date; font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+
+.rf-chip {
+  --rf-hue: var(--viz-2);
+  grid-area: chip;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--rf-hue) 15%, var(--color-surface-1));
+  color: var(--rf-hue);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.rf-chip--joined   { --rf-hue: var(--viz-5); }
+.rf-chip--credited { --rf-hue: var(--ok); }
+.rf-chip--reversed { --rf-hue: var(--err); }
+.rf-chip--closed   { --rf-hue: var(--color-fg-muted); }
+
+/* ── how it works ───────────────────────────────────────────────────────── */
+.rf-steps { display: grid; gap: 0.7rem; }
+.rf-step {
+  --rf-hue: var(--viz-3);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  line-height: 1.7;
+  color: var(--color-fg);
+}
+.rf-step--1 { --rf-hue: var(--viz-4); }
+.rf-step--2 { --rf-hue: var(--viz-3); }
+.rf-step--3 { --rf-hue: var(--viz-5); }
+.rf-step--4 { --rf-hue: var(--viz-6); }
+.rf-step__n {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: var(--r-full);
+  background: var(--rf-hue);
+  color: #fff;
+  font-weight: var(--fw-bold);
+}
+.rf-rules {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--color-line);
+  font-size: var(--fs-text-sm);
+  line-height: 1.8;
+  color: var(--color-fg-muted);
+}

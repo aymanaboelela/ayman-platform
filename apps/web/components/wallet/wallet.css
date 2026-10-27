@@ -539,6 +539,7 @@
 .wl-row__icon--out { --wl-tone: var(--err); }
 .wl-row__icon--course_purchase { --wl-tone: var(--viz-3); }
 .wl-row__icon--code_topup { --wl-tone: var(--viz-1); }
+.wl-row__icon--referral_reward { --wl-tone: var(--viz-4); }
 .wl-row__body { display: grid; gap: 0.1rem; min-width: 0; }
 .wl-row__title {
   font-weight: var(--fw-semibold);

@@ -655,6 +655,34 @@ export const SUBSCRIBE_CLOSERS = [
 ] as const;
 
 /**
+ * «مكافأة الدعوة نزلت» — the WhatsApp notice to a student whose share link
+ * brought in a paying account. Sent from his own linked device, never by the
+ * in-app thread (`ReferralNoticeService`).
+ *
+ * The friend is «حساب» throughout — whoever it is, the platform does not know
+ * whether to say «صاحبك» or «صاحبتك», and the reader may not either from a
+ * name alone.
+ */
+export const REFERRAL_REWARD_OPENERS = [
+  'فيه اشتراك جديد جه من لينك الدعوة بتاعك.',
+  'لينك الدعوة بتاعك جاب اشتراك جديد.',
+  'حساب من اللي اتعملوا من لينك الدعوة بتاعك دفع أول اشتراك.',
+] as const;
+
+/** `{amount}` — the reward, in pounds. */
+export const REFERRAL_REWARD_BODIES = [
+  'نزلت مكافأة {amount} جنيه في محفظتك على المنصة.',
+  'المحفظة زادت {amount} جنيه — دي مكافأة الدعوة.',
+  'مكافأة {amount} جنيه بقت في محفظتك من دلوقتي.',
+] as const;
+
+export const REFERRAL_REWARD_CLOSERS = [
+  'شكرًا على المشاركة — دي حاجة بتفرق معايا جدًا.',
+  'واللينك لسه شغال، وكل اشتراك جديد منه بمكافأة زيها.',
+  'كل حساب جديد من نفس اللينك عليه مكافأة زي دي.',
+] as const;
+
+/**
  * The course link, ALONE on its own line — the same contract
  * `WHATSAPP_LINK_LINE` documents, and for the identical reason: `MessageBody`
  * keys off a line being nothing but a URL, turns it into a pressable card, and

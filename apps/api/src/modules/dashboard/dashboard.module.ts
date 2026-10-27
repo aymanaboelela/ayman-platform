@@ -30,6 +30,9 @@ import { SCORE_FEED } from './score-feed';
    * backlog spread over days, and it must be the SAME backlog — the same gate,
    * the same months — or the plan would list doors the backlog says are shut.
    */
-  exports: [DashboardService, BacklogService],
+  // `PathService` and `BacklogService` too, for the guardian report — which
+  // must count «المتراكم» with the same gate the student's own screen uses,
+  // not a copy of it.
+  exports: [DashboardService, PathService, BacklogService],
 })
 export class DashboardModule {}

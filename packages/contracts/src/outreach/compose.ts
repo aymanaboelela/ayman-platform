@@ -28,6 +28,9 @@ import {
   QUIZ_CLOSERS,
   QUIZ_RESULT_OPENERS,
   QUIZ_SCORE_LINES,
+  REFERRAL_REWARD_BODIES,
+  REFERRAL_REWARD_CLOSERS,
+  REFERRAL_REWARD_OPENERS,
   STRENGTH_LINES,
   SUBSCRIBE_BODIES,
   SUBSCRIBE_BODIES_UNKNOWN,
@@ -127,6 +130,21 @@ export type OutreachFacts =
       courseTitle: string | null;
       /** Absolute. The course page when there is a course, else the catalog. */
       url: string;
+    }
+  | {
+      /**
+       * «مكافأة الدعوة نزلت» — a friend who signed up through this student's
+       * share link made a first real payment, and the reward landed.
+       *
+       * ⚠️ NOT one of `OUTREACH_KINDS`. It is composed here, so it gets the
+       * same voice, the same greeting pool and the same variety, but it is
+       * delivered over WhatsApp by `ReferralNoticeService` and is never
+       * written to `outreach_messages` — its once-only guard is the referral
+       * row's own `notice_at`, claimed before the send.
+       */
+      kind: 'referral_reward';
+      /** The reward, in whole pounds, already formatted. */
+      amount: string;
     };
 
 export interface ComposeInput {
@@ -217,6 +235,8 @@ const NO_TAGALONG: ReadonlySet<OutreachFacts['kind']> = new Set([
   'whatsapp_invite',
   'follow_up',
   'subscribe_nudge',
+  // Already on WhatsApp — inviting them to the channel from inside it is noise.
+  'referral_reward',
 ]);
 
 export function bandFor(scorePercent: number): OutreachBand {
@@ -418,6 +438,14 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
       blocks.push(body);
 
       blocks.push([formatCopy(take('c', SUBSCRIBE_CLOSERS), scoped)]);
+      break;
+    }
+
+    case 'referral_reward': {
+      const scoped = { ...vars, amount: input.facts.amount };
+      blocks.push([formatCopy(take('o', REFERRAL_REWARD_OPENERS), scoped)]);
+      blocks.push([formatCopy(take('b', REFERRAL_REWARD_BODIES), scoped)]);
+      blocks.push([formatCopy(take('c', REFERRAL_REWARD_CLOSERS), scoped)]);
       break;
     }
 

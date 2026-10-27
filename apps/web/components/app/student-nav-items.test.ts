@@ -194,6 +194,7 @@ describe('STUDENT_TABS', () => {
       '/cards',
       '/codes',
       '/wallet',
+      '/invite',
       '/store',
       '/external-books',
       '/playground',
@@ -269,5 +270,6 @@ describe('STUDENT_NAV entitlement rows', () => {
     expect(byHref.get('/notes')).toBe('lessonNotes');
     expect(byHref.get('/badges')).toBe('badges');
     expect(byHref.get('/recap')).toBe('monthlyRecap');
+    expect(byHref.get('/invite')).toBe('referrals');
   });
 });
