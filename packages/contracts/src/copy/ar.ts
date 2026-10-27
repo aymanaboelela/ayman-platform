@@ -438,6 +438,11 @@ export const copy = {
      */
     menuMore: 'حاجات تانية',
     menuQuick: 'الوصول السريع',
+    /** The rail's section headings — `STUDENT_NAV_GROUPS` in `student-nav-items.ts`. */
+    groupStudy: 'المذاكرة',
+    groupGrades: 'درجاتي',
+    groupPlay: 'التحديات',
+    groupMoney: 'المحفظة والكتب',
     railCourses: 'كورساتي',
     railCoursesEmpty: 'لسه مفيش كورسات',
     results: 'نتائجي',

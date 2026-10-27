@@ -178,26 +178,26 @@ describe('STUDENT_TABS', () => {
 
     expect(rest.length + STUDENT_TABS.length).toBe(primary.length);
     expect(rest.map((item) => item.href)).toEqual([
-      '/backlog',
+      '/codes',
       '/plan',
+      '/backlog',
       '/daily',
       '/focus',
+      '/mistakes',
+      '/notes',
+      '/cards',
+      '/playground',
       '/rank',
-      '/league',
       '/badges',
       '/certificates',
       '/recap',
       '/game',
       '/arena',
-      '/mistakes',
-      '/notes',
-      '/cards',
-      '/codes',
+      '/league',
       '/wallet',
       '/invite',
       '/store',
       '/external-books',
-      '/playground',
     ]);
   });
 });
