@@ -4,6 +4,7 @@
 import 'dotenv/config';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import type { CampaignService } from './campaign.service';
+import type { WhatsappDeviceService } from './whatsapp-device.service';
 import { WhatsappReceiptController } from './whatsapp-receipt.controller';
 
 /**
@@ -22,11 +23,14 @@ describe('WhatsappReceiptController', () => {
   const markDelivered = jest.fn().mockResolvedValue(undefined);
   const markRefused = jest.fn().mockResolvedValue(undefined);
   const campaigns = { markDelivered, markRefused } as unknown as CampaignService;
-  const controller = new WhatsappReceiptController(campaigns);
+  const recordReceipt = jest.fn().mockResolvedValue(undefined);
+  const device = { recordReceipt } as unknown as WhatsappDeviceService;
+  const controller = new WhatsappReceiptController(campaigns, device);
 
   beforeEach(() => {
     markDelivered.mockClear();
     markRefused.mockClear();
+    recordReceipt.mockClear();
     process.env.WA_SERVICE_URL = 'http://wa:3400';
     process.env.WA_SERVICE_TOKEN = 'secret-1';
   });
@@ -82,23 +86,37 @@ describe('WhatsappReceiptController', () => {
     }
   });
 
-  it('records a refusal reason without touching the status', async () => {
-    await controller.receipt('secret-1', {
-      messageId: 'A',
-      status: 0,
-      code: '463',
-      detail: 'واتساب رافض يبدأ محادثات جديدة من الرقم ده (463).',
-    });
+  it('records a refusal and its code without touching the status', async () => {
+    await controller.receipt('secret-1', { messageId: 'A', status: 0, code: '463' });
 
-    expect(markRefused).toHaveBeenCalledWith('A', 'واتساب رافض يبدأ محادثات جديدة من الرقم ده (463).');
+    // The CODE travels; the Arabic sentence for it is the campaign service's
+    // job (`waErrorFor`), so a sidecar's own wording can never leak through.
+    expect(markRefused).toHaveBeenCalledWith('A', '463');
+    expect(recordReceipt).toHaveBeenCalledWith('A', 0, '463');
     // The runner owns attempts and the pending/sent/failed machine; a route
     // with no session behind it must not be able to settle rows.
     expect(markDelivered).not.toHaveBeenCalled();
   });
 
-  it('says nothing about a refusal it cannot explain', async () => {
+  it('a refusal with no code is still recorded as a refusal', async () => {
     await controller.receipt('secret-1', { messageId: 'A', status: 0 });
-    expect(markRefused).not.toHaveBeenCalled();
+    expect(markRefused).toHaveBeenCalledWith('A', null);
+  });
+
+  it('drops a code that is not a code', async () => {
+    await controller.receipt('secret-1', { messageId: 'A', status: 0, code: '<script>alert(1)</script>' });
+    expect(markRefused).toHaveBeenCalledWith('A', null);
+  });
+
+  it('writes every receipt to the ledger, campaign or not', async () => {
+    await controller.receipt('secret-1', { messageId: 'SHIP-1', status: 4 });
+    expect(recordReceipt).toHaveBeenCalledWith('SHIP-1', 4, null);
+  });
+
+  it('still acks when the ledger write fails', async () => {
+    recordReceipt.mockRejectedValueOnce(new Error('database is down'));
+    await expect(controller.receipt('secret-1', { messageId: 'A', status: 3 })).resolves.toEqual({ ok: true });
+    expect(markDelivered).toHaveBeenCalledWith('A');
   });
 
   it('acks a receipt for a message it has never heard of', async () => {

@@ -35,6 +35,7 @@ import {
   NotebookPen,
   PackageOpen,
   Wallet,
+  Smartphone,
   ShieldCheck,
   School,
   ScanLine,
@@ -45,12 +46,14 @@ import {
   BanknoteArrowUp,
   FileDown,
   Brush,
+  Clapperboard,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminPractice } from '@ayman/contracts/copy/admin-practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 import { designsCopy } from '@ayman/contracts/copy/designs';
+import { montageCopy } from '@ayman/contracts/copy/montage';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -185,6 +188,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.payments,
     icon: Wallet,
     permission: 'payment:read',
+    group: 'money',
+  },
+  {
+    // «مراجعة سريعة» — the same queue, one card at a time, for the phone a
+    // push lands on. Right under the table it is a second view of, and gated
+    // like the page itself (`adminMobile`), which also 404s on its own.
+    href: '/admin/review',
+    labelAr: copy.admin.nav.review,
+    icon: Smartphone,
+    permission: 'payment:read',
+    feature: 'adminMobile',
     group: 'money',
   },
   {
@@ -580,6 +594,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: 'design:read',
     group: 'site',
     aymanOnly: true,
+  },
+  {
+    // «المونتاج» — the video editor's hand-overs. Behind its entitlement, not
+    // `aymanOnly`: a teacher's stack can be given it from the platforms screen.
+    href: '/admin/montage',
+    labelAr: montageCopy.nav,
+    icon: Clapperboard,
+    permission: 'montage:read',
+    feature: 'montage',
+    group: 'site',
   },
   {
     // «المساعد يقدر يعمل إيه». في `system` جنب الفلاجات وسجل التدقيق: التلاتة

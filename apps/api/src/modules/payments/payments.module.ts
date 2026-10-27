@@ -32,6 +32,9 @@ import { TransfersService } from './transfers.service';
     SubscriptionExpirySweeper,
     TransfersService,
   ],
+  // The night summary quotes the finance screen's own figures — see
+  // `AdminMobileService.sendDailySummary`.
+  exports: [FinanceDailyService],
 })
 export class PaymentsModule implements NestModule {
   /** `main.ts` bootstraps with `bodyParser: false`, so a content type nobody

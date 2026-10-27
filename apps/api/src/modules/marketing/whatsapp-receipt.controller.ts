@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Headers, Post, UnauthorizedExcep
 import { Public } from '../../auth/decorators/public.decorator';
 import { loadEnv } from '../../config/env';
 import { CampaignService } from './campaign.service';
+import { WhatsappDeviceService } from './whatsapp-device.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { tokensMatch } from '../../common/security/tokens-match';
 
@@ -48,10 +49,14 @@ import { tokensMatch } from '../../common/security/tokens-match';
 const REFUSED = 0;
 const DELIVERY_ACK = 3;
 
+
 @RequireFeature('marketing.whatsapp')
 @Controller('marketing/wa')
 export class WhatsappReceiptController {
-  constructor(private readonly campaigns: CampaignService) {}
+  constructor(
+    private readonly campaigns: CampaignService,
+    private readonly device: WhatsappDeviceService,
+  ) {}
 
   @Public()
   @Post('receipt')
@@ -64,8 +69,18 @@ export class WhatsappReceiptController {
 
     const messageId = typeof body.messageId === 'string' ? body.messageId : null;
     const status = typeof body.status === 'number' ? body.status : null;
-    const detail = typeof body.detail === 'string' ? body.detail : null;
+    // The CODE is what counts; its Arabic sentence is applied here from the
+    // contracts copy (`waErrorFor`). An older sidecar image also sent a
+    // `detail` sentence of its own — ignored, so the three screens that show a
+    // refusal can never disagree about what it means.
+    const code =
+      typeof body.code === 'string' && /^[\w-]{1,16}$/u.test(body.code) ? body.code : null;
     if (!messageId || status === null) throw new BadRequestException('messageId and status are required');
+
+    // The ledger first: it covers EVERY message the number sent — shipping
+    // notices and test sends as well as campaign rows — and is what the
+    // device page's delivery rate is read from.
+    await this.device.recordReceipt(messageId, status, code).catch(() => undefined);
 
     // Anything at or above DELIVERY_ACK means a device has it — READ (4) and
     // PLAYED (5) both imply delivery, and a read receipt can be parsed before
@@ -78,23 +93,17 @@ export class WhatsappReceiptController {
 
     /*
       ⚠️ A REFUSAL, AND ITS REASON. This is the line the whole exercise was for.
-     
+
       The status is NOT changed to `failed`: the runner owns attempts and
       retries, and a route reachable without a session must not be able to
-      settle rows. What it does is write down WHAT WhatsApp said, on the row
-      that said it, where the campaign screen already renders `error`.
-     
-      The one that matters is 463 — `MessageAccountRestriction`: a 1:1 message
-      with no privacy token, which means WhatsApp is blocking this account from
-      STARTING new chats while leaving existing conversations alone. A campaign
-      is nothing but new chats, which is why every message failed identically
-      and a reply typed by hand into an open chat went through seconds later.
-     
-      Without this, the fix built to explain the failure would have turned
-      «٧٤ من ٧٤ · اتبعت» into «٧٤ فشل» and still never said the number.
+      settle rows. What it does is write down WHAT WhatsApp said — the code and
+      its Arabic sentence — on the row that said it.
+
+      The one that matters is 463: WhatsApp blocking this account from
+      STARTING new chats. On a brand-new number every message is a new chat.
     */
-    if (status === REFUSED && detail) {
-      await this.campaigns.markRefused(messageId, detail).catch(() => undefined);
+    if (status === REFUSED) {
+      await this.campaigns.markRefused(messageId, code).catch(() => undefined);
     }
 
     return { ok: true };

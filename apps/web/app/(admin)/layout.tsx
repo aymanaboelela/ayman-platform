@@ -22,6 +22,7 @@ import { WalletTopupsAlertsProvider } from '@/components/admin/wallet-topups-ale
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
 import { HomeworkAlertsProvider } from '@/components/admin/homework-alerts';
 import { UploadDock } from '@/components/admin/upload-dock';
+import { AppBadge } from '@/components/admin/app-badge';
 import { GradingAlertsProvider } from '@/components/admin/grading-alerts';
 import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
 import {
@@ -66,6 +67,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // The designer's door is `/studio`; an `/admin` bookmark should land there,
     // not on a 404 that reads like a broken account.
     if (can(session, 'design:read')) redirect('/studio');
+    if (can(session, 'montage:read')) redirect('/montage');
     notFound();
   }
 
@@ -158,6 +160,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </div>
       {/* «رفع الفيديو» in the corner, on every admin screen — see `UploadDock`. */}
       <UploadDock />
+      {/* The home-screen icon's number — see `AppBadge`. */}
+      {features.adminMobile ? <AppBadge /> : null}
     </div>
     </AdminPermissionsProvider>
     </AdminEntitlementsProvider>

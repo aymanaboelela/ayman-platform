@@ -134,6 +134,28 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول». بتحتاج تخزين الفيديو نفسه (`video.upload`) مظبوط على
+     * الستاك، لأن الفيديوهات بتتخزّن في نفس الباكت — من غيره الراوتس بترد
+     * إن التخزين مش مفعّل بدل ما تفشل في النص.
+     */
+    key: 'montage',
+    nameAr: 'المونتاج',
+    descriptionAr: 'حساب للمونتير يرفع الفيديوهات الجاهزة، وتنزّلها أو تحطها في درس.',
+    defaultForTenant: false,
+  },
+  {
+    /*
+     * «لأيمن الأول» — اتعملت بطلبه بعد ما ركّب اللوحة على الآيفون. ولا حاجة
+     * فيها بتحمل اسمه، فلما تتفتح لمدرّس بتشتغل على طول.
+     */
+    key: 'adminMobile',
+    nameAr: 'لوحة التحكم على الموبايل',
+    descriptionAr:
+      'رقم الطلبات المستنية على أيقونة التطبيق، ومراجعة الاشتراكات واحد واحد، وملخص آخر اليوم، وتنبيه لو الواتساب فصل أو رفع فيديو فشل.',
+    defaultForTenant: false,
+  },
   /*
    * The engagement features (`contracts/engagement.ts`). Ayman first, like
    * everything new: on for him, off on any other stack until the owner opens

@@ -307,9 +307,10 @@ export const AdminStaffRoleSchema = z
      * `designer` — «مصمم جرافيك»: the studio and nothing else (see the role in
      * `apps/api/src/auth/permissions.ts`). Safe on this narrow door for the
      * reason `owner` is: it is not `admin`, and `changeRole` refuses to appoint
-     * anyone holding permissions the appointer does not.
+     * anyone holding permissions the appointer does not. `video_editor` —
+     * «مونتير» — is the same shape for «المونتاج».
      */
-    role: z.enum(['owner', 'designer', 'student']),
+    role: z.enum(['owner', 'designer', 'video_editor', 'student']),
     /*
      * نفس `reason` اللي تغيير الدور العادي بيطلبه، ومطلوب هنا بنفس الدرجة.
      * «مين خلّى ده مساعد وليه» سؤال بيتسأل بعد شهور، وسجل التدقيق هو المكان

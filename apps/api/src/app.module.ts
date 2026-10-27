@@ -41,6 +41,7 @@ import { MarketingModule } from './modules/marketing/marketing.module';
 import { NewsModule } from './modules/news/news.module';
 import { PdfsModule } from './modules/pdfs/pdfs.module';
 import { DesignsModule } from './modules/designs/designs.module';
+import { MontageModule } from './modules/montage/montage.module';
 import { PracticeModule } from './modules/practice/practice.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
@@ -60,6 +61,7 @@ import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-e
 import { ArenaModule } from './modules/arena/arena.module';
 import { MistakesModule } from './modules/mistakes/mistakes.module';
 import { ShareCardsModule } from './modules/share-cards/share-cards.module';
+import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
 
@@ -168,6 +170,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     NewsModule,
     PdfsModule,
     DesignsModule,
+    MontageModule,
     // «اختبارات مجانية» — public practice quizzes, gated on `practice.enabled`.
     PracticeModule,
     AuditReadModule,
@@ -196,6 +199,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     // «دفتر غلطاتي» — كل سؤال غلط فيه الطالب (فلاج `mistakes.enabled`).
     MistakesModule,
     ShareCardsModule,
+    AdminMobileModule,
     EngagementModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,

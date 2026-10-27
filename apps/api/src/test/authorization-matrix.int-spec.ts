@@ -46,6 +46,7 @@ import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
 import { DesignsModule } from '../modules/designs/designs.module';
+import { MontageModule } from '../modules/montage/montage.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
@@ -81,6 +82,9 @@ import { AdminPaymentsController } from '../modules/payments/admin-payments.cont
 import { AdminTransfersController } from '../modules/payments/admin-transfers.controller';
 import { TransfersIngestController } from '../modules/payments/transfers-ingest.controller';
 import { AdminFinanceController } from '../modules/payments/admin-finance.controller';
+import { AdminMobileController } from '../modules/admin-mobile/admin-mobile.controller';
+import { AdminMobileService } from '../modules/admin-mobile/admin-mobile.service';
+import { PushService } from '../modules/notifications/push.service';
 import { PaymentsService } from '../modules/payments/payments.service';
 import { TransfersService } from '../modules/payments/transfers.service';
 import { FinanceService } from '../modules/payments/finance.service';
@@ -263,6 +267,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `NotificationsService`) are all already available from this
         // fixture's other entries.
         AdminFinanceController,
+        // «لوحة التحكم على الموبايل» — the icon number. Its service is listed
+        // below with `PushService`, which nothing else here injects.
+        AdminMobileController,
         // الكتاب الورقي. `BookOrdersService`'s own dependencies (Prisma,
         // `AuditService`, `MediaService`) are all already available from
         // `AuditModule`/`MediaModule` above, same reasoning as
@@ -338,6 +345,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         PdfsModule,
         // «ستوديو التصميم» — Ayman-only like PdfsModule, so it answers here.
         DesignsModule,
+        // «المونتاج» — `montage` is on for Ayman's stack (no TENANT_KEY here).
+        MontageModule,
         // «اختبارات مجانية» — Prisma + `AuditService` only, both already here.
         // Open in this fixture because the run has no `TENANT_KEY` (Ayman's
         // stack), where `practice.enabled` defaults on.
@@ -441,6 +450,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FinanceService,
         // «الفلوس يوم بيوم» — `AdminFinanceController`'s second dependency.
         FinanceDailyService,
+        AdminMobileService,
+        PushService,
         BookOrdersService,
         BookOrderCourierService,
         TorodClient,
@@ -1384,6 +1395,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing device: anonymous', method: 'get', path: () => '/api/admin/marketing/device', actor: 'anonymous', status: 401 },
     { label: 'marketing device: student', method: 'get', path: () => '/api/admin/marketing/device', actor: 'student', status: 403 },
     { label: 'marketing device: admin', method: 'get', path: () => '/api/admin/marketing/device', actor: 'admin', status: 200 },
+    // «الإرسال في آخر ٢٤ ساعة» — reads the `whatsapp_sends` ledger, sends
+    // nothing; `marketing:read` like the device status beside it. The admin
+    // row is meaningful: it answers 200 with a disabled device, from the DB.
+    { label: 'marketing device health: anonymous', method: 'get', path: () => '/api/admin/marketing/device/health', actor: 'anonymous', status: 401 },
+    { label: 'marketing device health: student', method: 'get', path: () => '/api/admin/marketing/device/health', actor: 'student', status: 403 },
+    { label: 'marketing device health: admin', method: 'get', path: () => '/api/admin/marketing/device/health', actor: 'admin', status: 200 },
     { label: 'marketing device link: anonymous', method: 'post', path: () => '/api/admin/marketing/device/link', actor: 'anonymous', status: 401 },
     { label: 'marketing device link: student', method: 'post', path: () => '/api/admin/marketing/device/link', actor: 'student', status: 403 },
     { label: 'marketing device unlink: anonymous', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'anonymous', status: 401 },
@@ -2056,6 +2073,30 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'designs folder detail: admin, unknown', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, not a uuid', method: 'get', path: () => '/api/designs/folders/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs download: admin, unknown', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'admin', status: 404 },
+    // «المونتاج» — every route closed to a student; the editor's own reach is
+    // pinned in `permissions.spec.ts`. An unknown or malformed id is a 404.
+    { label: 'montage list: anonymous', method: 'get', path: () => '/api/montage', actor: 'anonymous', status: 401 },
+    { label: 'montage list: student', method: 'get', path: () => '/api/montage', actor: 'student', status: 403 },
+    { label: 'montage upload start: anonymous', method: 'post', path: () => '/api/montage/uploads', actor: 'anonymous', status: 401, body: () => ({ title: 'x', fileName: 'x.mp4', sizeBytes: 1, contentType: 'video/mp4' }) },
+    { label: 'montage upload start: student', method: 'post', path: () => '/api/montage/uploads', actor: 'student', status: 403, body: () => ({ title: 'x', fileName: 'x.mp4', sizeBytes: 1, contentType: 'video/mp4' }) },
+    { label: 'montage upload resume: anonymous', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/resume`, actor: 'anonymous', status: 401, body: () => ({ sizeBytes: 1 }) },
+    { label: 'montage upload resume: student', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/resume`, actor: 'student', status: 403, body: () => ({ sizeBytes: 1 }) },
+    { label: 'montage upload complete: anonymous', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/complete`, actor: 'anonymous', status: 401, body: () => ({ uploadId: 'x', parts: [{ partNumber: 1, etag: 'x' }] }) },
+    { label: 'montage upload complete: student', method: 'post', path: () => `/api/montage/${randomUUID()}/upload/complete`, actor: 'student', status: 403, body: () => ({ uploadId: 'x', parts: [{ partNumber: 1, etag: 'x' }] }) },
+    { label: 'montage patch: anonymous', method: 'patch', path: () => `/api/montage/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ title: 'x' }) },
+    { label: 'montage patch: student', method: 'patch', path: () => `/api/montage/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ title: 'x' }) },
+    { label: 'montage delete: anonymous', method: 'delete', path: () => `/api/montage/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'montage delete: student', method: 'delete', path: () => `/api/montage/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'montage download: anonymous', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'anonymous', status: 401 },
+    { label: 'montage download: student', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'student', status: 403 },
+    { label: 'montage targets: anonymous', method: 'get', path: () => '/api/admin/montage/targets', actor: 'anonymous', status: 401 },
+    { label: 'montage targets: student', method: 'get', path: () => '/api/admin/montage/targets', actor: 'student', status: 403 },
+    { label: 'montage publish: anonymous', method: 'post', path: () => `/api/admin/montage/${randomUUID()}/publish`, actor: 'anonymous', status: 401, body: () => ({ lessonId: randomUUID() }) },
+    { label: 'montage publish: student', method: 'post', path: () => `/api/admin/montage/${randomUUID()}/publish`, actor: 'student', status: 403, body: () => ({ lessonId: randomUUID() }) },
+    { label: 'montage list: admin', method: 'get', path: () => '/api/montage', actor: 'admin', status: 200 },
+    { label: 'montage targets: admin', method: 'get', path: () => '/api/admin/montage/targets', actor: 'admin', status: 200 },
+    { label: 'montage download: admin, unknown', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'admin', status: 404 },
+    { label: 'montage download: admin, not a uuid', method: 'get', path: () => '/api/montage/not-a-uuid/download', actor: 'admin', status: 404 },
     // «اختبارات مجانية» — two public reads, and the admin side on the question
     // bank's own permissions (`question:read` / `question:write`).
     { label: 'practice public list: anonymous', method: 'get', path: () => '/api/practice/sets', actor: 'anonymous', status: 200 },
@@ -2813,6 +2854,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin homework pending count: anonymous', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'anonymous', status: 401 },
     { label: 'admin homework pending count: student', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'student', status: 403 },
     { label: 'admin homework pending count: admin', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'admin', status: 200 },
+    // «لوحة التحكم على الموبايل» — رقم الأيقونة. `admin:access` + فيتشر `adminMobile`.
+    { label: 'admin mobile pending: anonymous', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'anonymous', status: 401 },
+    { label: 'admin mobile pending: student', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'student', status: 403 },
+    { label: 'admin mobile pending: admin', method: 'get', path: () => '/api/admin/mobile/pending', actor: 'admin', status: 200 },
     { label: 'admin homework lessons: anonymous', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'anonymous', status: 401 },
     { label: 'admin homework lessons: student', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'student', status: 403 },
     { label: 'admin homework lessons: admin', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'admin', status: 200 },

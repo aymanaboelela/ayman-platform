@@ -59,7 +59,7 @@ export default async function AdminGradingPaperPage({
   params: Promise<{ attemptId: string }>;
   /** Only present when the paper was opened from `/admin/grading` with a
    *  non-default tab/sort/exam/day — see `../nav`. */
-  searchParams: Promise<{ tab?: string; sort?: string; exam?: string; day?: string }>;
+  searchParams: Promise<{ tab?: string; sort?: string; exam?: string; day?: string; q?: string }>;
 }) {
   const { attemptId } = await params;
   const query = await searchParams;

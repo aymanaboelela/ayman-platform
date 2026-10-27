@@ -49,6 +49,50 @@ class FakeRedis {
     this.hashes.set(key, { ...(this.hashes.get(key) ?? {}), ...fields });
     return Object.keys(fields).length;
   }
+
+  // ── the build check: GETSET, a paged SCAN, UNLINK, DEL ──
+  plain = new Map<string, string>();
+
+  async getset(key: string, value: string) {
+    this.guard();
+    const previous = this.plain.get(key) ?? null;
+    this.plain.set(key, value);
+    return previous;
+  }
+
+  /**
+   * Pages of two, so the cursor loop is exercised and not just one call. The
+   * cursor is the last key returned, not an offset — real SCAN still reaches
+   * every key that survives the whole scan when earlier ones are deleted
+   * between pages, and an offset would skip them.
+   */
+  scanCursors = new Map<string, string>();
+
+  async scan(cursor: string, _match: string, pattern: string) {
+    this.guard();
+    const prefix = pattern.replace(/\*$/, '');
+    const after = cursor === '0' ? '' : (this.scanCursors.get(cursor) ?? '');
+    const rest = [...this.strings.keys()]
+      .filter((key) => key.startsWith(prefix) && key > after)
+      .sort();
+    const page = rest.slice(0, 2);
+    if (rest.length <= 2) return ['0', page] as [string, string[]];
+    const next = String(this.scanCursors.size + 1);
+    this.scanCursors.set(next, page[page.length - 1]!);
+    return [next, page] as [string, string[]];
+  }
+
+  async unlink(...keys: string[]) {
+    this.guard();
+    for (const key of keys) this.strings.delete(key);
+    return keys.length;
+  }
+
+  async del(key: string) {
+    this.guard();
+    this.strings.delete(key);
+    return Number(this.hashes.delete(key));
+  }
 }
 
 /** The shape Next hands to `set` — a stream plus the four timing fields. */
@@ -413,5 +457,51 @@ describe('corrupt data in Redis', () => {
   it('is a miss, not an error', async () => {
     client.strings.set('next:cache:k', Buffer.from('not a frame'));
     await expect(handler().get('k')).resolves.toBeUndefined();
+  });
+});
+
+describe('a new build', () => {
+  it('starts on an empty cache: the previous build\'s entries and tags are wiped', async () => {
+    const old = handler({ buildId: 'build-a' });
+    for (const key of ['a', 'b', 'c', 'd', 'e']) await old.set(key, entry(key, { tags: ['catalog'] }));
+    await old.updateTags(['catalog']);
+    client.strings.set('ratelimit:someone', Buffer.from('1'));
+
+    const fresh = handler({ buildId: 'build-b' });
+    expect(await fresh.get('a')).toBeUndefined();
+
+    // Every page of the SCAN went, the manifest went, and nothing else did.
+    expect([...client.strings.keys()]).toEqual(['ratelimit:someone']);
+    expect(client.hashes.has('next:tags')).toBe(false);
+    expect(client.plain.get('next:build')).toBe('build-b');
+  });
+
+  it('a restart of the SAME build keeps its warm cache', async () => {
+    const first = handler({ buildId: 'build-a' });
+    await first.set('k', entry('warm'));
+
+    const restarted = handler({ buildId: 'build-a' });
+    const hit = await restarted.get('k');
+    expect(hit).toBeDefined();
+    expect(await read(hit)).toBe('warm');
+  });
+
+  it('wipes once per process, not on every call', async () => {
+    const cache = handler({ buildId: 'build-b' });
+    await cache.get('x');
+    await cache.set('k', entry('mine'));
+    const hit = await cache.get('k');
+    expect(await read(hit)).toBe('mine');
+  });
+
+  it('fails open when the wipe errors', async () => {
+    client.getset = async () => {
+      throw new Error('NOPERM');
+    };
+    const errors: string[] = [];
+    const cache = handler({ buildId: 'build-b', onError: (op: string) => errors.push(op) });
+    await cache.set('k', entry('still works'));
+    expect(await read(await cache.get('k'))).toBe('still works');
+    expect(errors).toContain('purge');
   });
 });

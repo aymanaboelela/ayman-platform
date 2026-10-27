@@ -47,6 +47,15 @@ describe('normalizeGradingQuery', () => {
     );
   });
 
+  it('carries a search back to the list, trimmed, and drops a blank one', () => {
+    // A paper opened from a search must land back on that search, not on the
+    // eight hundred papers it was found among.
+    expect(gradingListHref(normalizeGradingQuery({ tab: 'marked', q: '  مريم ' }))).toBe(
+      `/admin/grading?tab=marked&q=${encodeURIComponent('مريم')}`.replace(/%20/g, '+'),
+    );
+    expect(normalizeGradingQuery({ q: '   ' }).q).toBeUndefined();
+  });
+
   it('a hand-edited URL with junk lands on the plain default list', () => {
     expect(
       gradingListHref(normalizeGradingQuery({ tab: 'bogus', sort: 'bogus', day: 'bogus' })),
