@@ -1,13 +1,19 @@
 import type { ComponentType } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CalendarCheck, Flame, Medal, Sparkles, type LucideProps } from 'lucide-react';
+import { ArrowLeft, CalendarCheck, Crown, Flame, Layers, Medal, Sparkles, Timer, type LucideProps } from 'lucide-react';
 import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { arabicCount } from '@ayman/contracts/arabic-count';
 import {
+  CardsSummarySchema,
   DailyPayloadSchema,
+  FocusPayloadSchema,
+  LeagueSummarySchema,
   RecapPayloadSchema,
   StudyPlanPayloadSchema,
+  type CardsSummary,
   type DailyPayload,
+  type FocusPayload,
+  type LeagueSummary,
   type RecapPayload,
   type StudyPlanPayload,
 } from '@ayman/contracts/engagement';
@@ -44,7 +50,7 @@ function Row({
 }: {
   href: string;
   icon: ComponentType<LucideProps>;
-  hue: 'amber' | 'blue' | 'teal' | 'rose';
+  hue: 'amber' | 'blue' | 'teal' | 'rose' | 'violet' | 'green';
   lit?: boolean;
   title: string;
   line: string;
@@ -110,6 +116,63 @@ function planRow(plan: StudyPlanPayload) {
   );
 }
 
+function focusRow(focus: FocusPayload) {
+  const parts = [
+    focus.open ? c.focus.running : focus.live > 0 ? arabicCount(focus.live, c.focus.live) : null,
+    focus.today.minutes > 0 ? formatCopy(c.focus.today, { n: focus.today.minutes }) : null,
+  ].filter(Boolean);
+  return (
+    <Row
+      key="focus"
+      href="/focus"
+      icon={Timer}
+      hue="violet"
+      lit={focus.open !== null || focus.live > 0 || focus.today.minutes > 0}
+      title={c.focus.title}
+      line={parts.length > 0 ? parts.join(' · ') : c.focus.idle}
+      cta={focus.open ? c.focus.ctaRunning : c.focus.cta}
+    />
+  );
+}
+
+function cardsRow(cards: CardsSummary) {
+  const parts = [
+    cards.due > 0 ? arabicCount(cards.due, c.cards.due) : null,
+    cards.reviewedToday > 0 ? formatCopy(c.cards.reviewed, { n: cards.reviewedToday }) : null,
+  ].filter(Boolean);
+  return (
+    <Row
+      key="cards"
+      href="/cards"
+      icon={Layers}
+      hue="green"
+      lit={cards.due > 0 || cards.reviewedToday > 0}
+      title={c.cards.title}
+      line={parts.length > 0 ? parts.join(' · ') : c.cards.none}
+      cta={c.cards.cta}
+    />
+  );
+}
+
+function leagueRow(league: LeagueSummary) {
+  const line =
+    league.rank === null
+      ? c.league.unranked
+      : `${formatCopy(c.league.rank, { rank: league.rank, players: league.players })} · ${formatCopy(c.league.points, { n: league.points })}`;
+  return (
+    <Row
+      key="league"
+      href="/league"
+      icon={Crown}
+      hue="amber"
+      lit={league.rank !== null}
+      title={c.league.title}
+      line={line}
+      cta={c.league.cta}
+    />
+  );
+}
+
 function recapRow(recap: RecapPayload) {
   return (
     <Row
@@ -126,8 +189,9 @@ function recapRow(recap: RecapPayload) {
 
 /**
  * «النهارده» — the daily habits in the dashboard's aside: the day's question
- * and its streak, the plan's share for today, and, in a month's first week,
- * the recap of the month that just ended.
+ * and its streak, the plan's share for today, the focus room, the cards due,
+ * the week's league place, and, in a month's first week, the recap of the
+ * month that just ended.
  *
  * In the ASIDE, not the main column: the page keeps exactly one amber action
  * (the resume card), and these rows are tinted per feature rather than amber.
@@ -136,15 +200,23 @@ function recapRow(recap: RecapPayload) {
  */
 export async function TodayStrip({ features }: { features: Entitlements }) {
   const day = Number(cairoDayOfMonth.format(new Date()));
-  const [daily, plan, recap] = await Promise.all([
+  const [daily, plan, recap, focus, cards, league] = await Promise.all([
     features.dailyQuestion ? orNull(apiGetAuthed('/api/me/daily', DailyPayloadSchema)) : null,
     features.studyPlan ? orNull(apiGetAuthed('/api/me/plan', StudyPlanPayloadSchema)) : null,
     features.monthlyRecap && day <= RECAP_BANNER_DAYS ? orNull(apiGetAuthed('/api/me/recap', RecapPayloadSchema)) : null,
+    features.focusRoom ? orNull(apiGetAuthed('/api/me/focus', FocusPayloadSchema)) : null,
+    // The summaries, not the pages' reads: the deck reads the whole bank and
+    // the table names twenty students — the dashboard needs a count and a place.
+    features.flashCards ? orNull(apiGetAuthed('/api/me/cards/summary', CardsSummarySchema)) : null,
+    features.weeklyLeague ? orNull(apiGetAuthed('/api/me/league/summary', LeagueSummarySchema)) : null,
   ]);
 
   const rows = [
     daily && daily.question !== null ? dailyRow(daily) : null,
     plan ? planRow(plan) : null,
+    focus ? focusRow(focus) : null,
+    cards ? cardsRow(cards) : null,
+    league ? leagueRow(league) : null,
     // The API opens on the ended month only when it had something in it.
     recap && !recap.partial ? recapRow(recap) : null,
     features.badges ? (

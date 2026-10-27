@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Post, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { CardsQuerySchema, type CardReviewResult, type CardsPayload } from '@ayman/contracts/engagement';
+import { CardsQuerySchema, type CardReviewResult, type CardsPayload, type CardsSummary } from '@ayman/contracts/engagement';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
@@ -25,6 +25,12 @@ export class CardsController {
     const query = CardsQuerySchema.safeParse({ courseId });
     if (!query.success) throw new BadRequestException();
     return this.cards.forUser(user.id, query.data.courseId);
+  }
+
+  /** Counts only, for «النهارده» on the dashboard. */
+  @Get('summary')
+  summary(@CurrentUser() user: AuthenticatedUser): Promise<CardsSummary> {
+    return this.cards.summary(user.id);
   }
 
   @Post('review')

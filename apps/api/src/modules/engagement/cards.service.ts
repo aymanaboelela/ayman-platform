@@ -11,6 +11,7 @@ import {
   type CardReviewResult,
   type CardsCourse,
   type CardsPayload,
+  type CardsSummary,
 } from '@ayman/contracts/engagement';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -175,6 +176,20 @@ export class CardsService {
       update: { box, dueOn: dateOf(dueOn), reviews: { increment: 1 }, lastSeenAt: now },
     });
     return { box, dueOn };
+  }
+
+  /**
+   * The dashboard's row: cards already seen that are due, from the student's
+   * own rows only. New cards are not counted — that would need the bank.
+   */
+  async summary(userId: string, now: Date = new Date()): Promise<CardsSummary> {
+    const today = cairoDayKey(now);
+    const [due, mastered, reviewedToday] = await Promise.all([
+      this.prisma.flashCard.count({ where: { userId, dueOn: { lte: dateOf(today) } } }),
+      this.mastered(userId),
+      this.reviewedOn(userId, today),
+    ]);
+    return { due, mastered, reviewedToday };
   }
 
   /** Cards in the top box — the «بطاقات المراجعة» badge. */

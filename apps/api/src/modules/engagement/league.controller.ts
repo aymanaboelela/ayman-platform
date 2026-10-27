@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Put, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import type { LeaguePayload } from '@ayman/contracts/engagement';
+import type { LeaguePayload, LeagueSummary } from '@ayman/contracts/engagement';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
@@ -17,6 +17,12 @@ export class LeagueController {
   @Get()
   get(@CurrentUser() user: AuthenticatedUser): Promise<LeaguePayload> {
     return this.league.forUser(user.id);
+  }
+
+  /** The reader's place only, for «النهارده» on the dashboard. */
+  @Get('summary')
+  summary(@CurrentUser() user: AuthenticatedUser): Promise<LeagueSummary> {
+    return this.league.summary(user.id);
   }
 
   /** Hide the name and photo from everyone else's table. */

@@ -8,6 +8,7 @@ import {
   type LeagueCounts,
   type LeaguePayload,
   type LeagueRow,
+  type LeagueSummary,
 } from '@ayman/contracts/engagement';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -80,28 +81,23 @@ export class LeagueService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /** The dashboard's row: the same ranking, without the names or last week. */
+  async summary(userId: string, now: Date = new Date()): Promise<LeagueSummary> {
+    const { today, to, ranked, myRow, myCounts } = await this.standing(userId, now);
+    return {
+      rank: myRow?.rank ?? null,
+      points: leaguePoints(myCounts),
+      players: ranked.length,
+      daysLeft: daysBetween(today, to),
+    };
+  }
+
   async forUser(userId: string, now: Date = new Date()): Promise<LeaguePayload> {
-    const today = cairoDayKey(now);
-    const from = leagueWeekStart(today);
-    const to = shiftDayKey(from, 7);
-    const [profile, setting] = await Promise.all([
-      this.prisma.studentProfile.findUnique({ where: { userId }, select: { year: true } }),
+    const [{ today, from, to, year, ranked, myRow, myCounts }, setting] = await Promise.all([
+      this.standing(userId, now),
       this.prisma.leagueSetting.findUnique({ where: { userId }, select: { hidden: true } }),
     ]);
-    const year = profile?.year ?? null;
-
-    const [table, mine, previous] = await Promise.all([
-      this.table(year, from, to, now),
-      this.counts(year, from, to, now, userId),
-      this.table(year, shiftDayKey(from, -7), from, now),
-    ]);
-    const myCounts = mine[0]?.counts ?? ZERO;
-    const standings = [
-      ...table.filter((standing) => standing.userId !== userId),
-      ...(profile ? [{ userId, counts: myCounts, points: leaguePoints(myCounts) }] : []),
-    ];
-    const ranked = rankStandings(standings);
-    const myRow = ranked.find((standing) => standing.userId === userId);
+    const previous = await this.table(year, shiftDayKey(from, -7), from, now);
 
     const shown = ranked.slice(0, LEAGUE_TABLE_SIZE);
     if (myRow && !shown.includes(myRow)) shown.push(myRow);
@@ -134,6 +130,28 @@ export class LeagueService {
       },
       lastWeek: champions.map(row),
     };
+  }
+
+  /** This week's ranked table with the reader's own row counted fresh. */
+  private async standing(userId: string, now: Date) {
+    const today = cairoDayKey(now);
+    const from = leagueWeekStart(today);
+    const to = shiftDayKey(from, 7);
+    const profile = await this.prisma.studentProfile.findUnique({ where: { userId }, select: { year: true } });
+    const year = profile?.year ?? null;
+
+    const [table, mine] = await Promise.all([
+      this.table(year, from, to, now),
+      this.counts(year, from, to, now, userId),
+    ]);
+    const myCounts = mine[0]?.counts ?? ZERO;
+    const standings = [
+      ...table.filter((standing) => standing.userId !== userId),
+      ...(profile ? [{ userId, counts: myCounts, points: leaguePoints(myCounts) }] : []),
+    ];
+    const ranked = rankStandings(standings);
+    const myRow = ranked.find((standing) => standing.userId === userId);
+    return { today, from, to, year, ranked, myRow, myCounts };
   }
 
   async setHidden(userId: string, hidden: boolean): Promise<void> {

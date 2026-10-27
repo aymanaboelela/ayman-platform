@@ -341,6 +341,14 @@ export type CardReview = z.infer<typeof CardReviewSchema>;
 export const CardReviewResultSchema = z.object({ box: z.number().int().min(1).max(CARD_BOXES), dueOn: DayKeySchema });
 export type CardReviewResult = z.infer<typeof CardReviewResultSchema>;
 
+/** «النهارده» on the dashboard — counts only, no deck (the deck reads the whole bank). */
+export const CardsSummarySchema = z.object({
+  due: z.number().int().min(0),
+  mastered: z.number().int().min(0),
+  reviewedToday: z.number().int().min(0),
+});
+export type CardsSummary = z.infer<typeof CardsSummarySchema>;
+
 /** Where a card goes after one answer. `box` 0 is a card never seen. */
 export function nextCardBox(box: number, knew: boolean): number {
   return knew ? Math.min(Math.max(box, 0) + 1, CARD_BOXES) : 1;
@@ -448,6 +456,15 @@ export const LeaguePayloadSchema = z.object({
   lastWeek: z.array(LeagueRowSchema).max(3),
 });
 export type LeaguePayload = z.infer<typeof LeaguePayloadSchema>;
+
+/** «النهارده» on the dashboard — the reader's place only, no names. */
+export const LeagueSummarySchema = z.object({
+  rank: z.number().int().min(1).nullable(),
+  points: z.number().int().min(0),
+  players: z.number().int().min(0),
+  daysLeft: z.number().int().min(1).max(7),
+});
+export type LeagueSummary = z.infer<typeof LeagueSummarySchema>;
 
 export const LeagueSettingsSchema = z.object({ hidden: z.boolean() });
 export type LeagueSettings = z.infer<typeof LeagueSettingsSchema>;
