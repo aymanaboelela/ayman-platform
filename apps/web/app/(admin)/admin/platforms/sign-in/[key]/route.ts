@@ -20,8 +20,10 @@ import { discoverStacks } from '@/lib/provisioning/provision';
  * GET with a side effect is fine here: the worst a cross-site link can do is
  * sign the owner himself into an instructor's admin in his own browser — the
  * token never reaches the page that linked here.
+ *
+ * No `dynamic` export: `cacheComponents` refuses it, and reading the session
+ * cookie already makes every request run.
  */
-export const dynamic = 'force-dynamic';
 
 function failed(status: number): Response {
   return new Response(copy.admin.tenants.openAdminFailed, {
