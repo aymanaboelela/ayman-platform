@@ -1,9 +1,10 @@
-import { WhatsappDeviceSchema } from '@ayman/contracts/marketing/campaign';
+import { WhatsappDeviceSchema, WhatsappHealthSchema } from '@ayman/contracts/marketing/campaign';
 import { notFound } from 'next/navigation';
 import { getEntitlements } from '@/lib/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminGet } from '@/lib/admin-api';
+import { adminGet, adminGetOrNull } from '@/lib/admin-api';
 import { MarketingTabs } from '../tabs';
+import { DeviceHealth } from './device-health';
 import { DevicePanel } from './device-panel';
 import { TestSend } from './test-send';
 
@@ -21,7 +22,12 @@ export default async function MarketingDevicePage() {
    */
   if (!(await getEntitlements())['marketing.whatsapp']) notFound();
 
-  const device = await adminGet('/api/admin/marketing/device', WhatsappDeviceSchema);
+  // In parallel, and the health read may fail on its own: a ledger query that
+  // errors must not take the pairing controls down with it.
+  const [device, health] = await Promise.all([
+    adminGet('/api/admin/marketing/device', WhatsappDeviceSchema),
+    adminGetOrNull('/api/admin/marketing/device/health', WhatsappHealthSchema).catch(() => null),
+  ]);
 
   return (
     <>
@@ -43,6 +49,12 @@ export default async function MarketingDevicePage() {
       {device.state === 'connected' ? (
         <div className="mt-6">
           <TestSend />
+        </div>
+      ) : null}
+
+      {device.state !== 'disabled' ? (
+        <div className="mt-6">
+          <DeviceHealth initial={health} />
         </div>
       ) : null}
     </>

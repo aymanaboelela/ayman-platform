@@ -154,7 +154,7 @@ export class WaBotReplier {
     let sent: { messageId: string | null } | null = null;
     if (result.reply) {
       try {
-        sent = await this.device.send({ phone: chat.phone, text: result.reply });
+        sent = await this.device.send({ phone: chat.phone, text: result.reply, source: 'bot' });
       } catch (error) {
         this.logger.warn(`wa-bot send failed: ${error instanceof Error ? error.message : 'unknown'}`);
       }

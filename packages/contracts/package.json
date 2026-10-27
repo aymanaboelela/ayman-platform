@@ -95,6 +95,8 @@
     "./marketing/pacing": "./src/marketing/pacing.ts",
     "./marketing/campaign": "./src/marketing/campaign.ts",
     "./marketing/render": "./src/marketing/render.ts",
+    "./marketing/device-ceiling": "./src/marketing/device-ceiling.ts",
+    "./marketing/wa-errors": "./src/marketing/wa-errors.ts",
     "./outreach/kinds": "./src/outreach/kinds.ts",
     "./outreach/compose": "./src/outreach/compose.ts",
     "./outreach/admin": "./src/outreach/admin.ts",

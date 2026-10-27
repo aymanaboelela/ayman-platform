@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -22,6 +23,7 @@ import type {
   TestSendReceipt,
   TestSendResult,
   WhatsappDevice,
+  WhatsappHealth,
 } from '@ayman/contracts/marketing/campaign';
 import { RECIPIENT_FILTERS, type RecipientFilter } from '@ayman/contracts/marketing/campaign';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
@@ -30,11 +32,17 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { AuditService } from '../../audit/audit.service';
 import { CampaignService } from './campaign.service';
-import { NotOnWhatsAppError, WhatsappDeviceService, type SendResult } from './whatsapp-device.service';
+import {
+  NotOnWhatsAppError,
+  WhatsappDeviceService,
+  WhatsappRestrictedError,
+  type SendResult,
+} from './whatsapp-device.service';
 import {
   AudiencePreviewDto,
   CampaignCreateDto,
   CampaignPatchDto,
+  LinkDeviceDto,
   OptOutCreateDto,
   TestSendDto,
 } from './marketing.dto';
@@ -103,18 +111,37 @@ export class MarketingController {
     return this.device.status();
   }
 
+  /**
+   * «الإرسال في آخر ٢٤ ساعة» — delivered / refused / waiting, the last
+   * delivery, WhatsApp's refusal codes in Arabic, and the number's ceiling.
+   * `marketing:read`: it reads the ledger and sends nothing.
+   */
+  @RequirePermission('marketing:read')
+  @Get('device/health')
+  deviceHealth(): Promise<WhatsappHealth> {
+    return this.device.health();
+  }
+
+  /**
+   * Begin pairing. An optional `phone` asks for an 8-character pairing code
+   * instead of a QR — the way to link from the same phone the admin page is
+   * open on. An Egyptian `01…` is normalised like everywhere else; anything
+   * already international is passed through for the sidecar to check.
+   */
   @RequirePermission('marketing:device')
   @RequireCsrf()
   @Post('device/link')
-  async link(@CurrentUser() user: AuthenticatedUser): Promise<WhatsappDevice> {
-    const status = await this.device.link();
+  async link(@CurrentUser() user: AuthenticatedUser, @Body() body: LinkDeviceDto): Promise<WhatsappDevice> {
+    const raw = body?.phone?.trim() || null;
+    const phone = raw ? (normalizeEgyptianPhone(raw) ?? raw) : null;
+    const status = await this.device.link(phone);
     await this.audit.record({
       action: 'whatsapp:link',
       resourceType: 'whatsapp_device',
       resourceId: null,
       outcome: 'success',
       actorUserId: user.id,
-      metadata: { state: status.state },
+      metadata: { state: status.state, byCode: phone !== null },
     });
     return status;
   }
@@ -146,8 +173,11 @@ export class MarketingController {
 
     let result: SendResult;
     try {
-      result = await this.device.send({ phone, text: body.text ?? DEFAULT_TEST_TEXT });
+      result = await this.device.send({ phone, text: body.text ?? DEFAULT_TEST_TEXT, source: 'test' });
     } catch (error) {
+      // WhatsApp is not allowing new chats right now and the sidecar refused
+      // to send into that. Said in Arabic, not as a 500 «حصل خطأ».
+      if (error instanceof WhatsappRestrictedError) throw new ConflictException(error.userMessage);
       if (error instanceof NotOnWhatsAppError) {
         await this.audit.record({
           action: 'whatsapp:test-send',
