@@ -15,7 +15,7 @@ export interface DailySummaryInput {
 }
 
 /**
- * «ملخص النهارده» — one tray line, three facts: what sold, what it came to,
+ * «ملخص اليوم» — one tray line, three facts: what sold, what it came to,
  * and what is still waiting.
  *
  * The numbers are the finance screen's own (`FinanceDailyService.daily`), not
@@ -24,7 +24,7 @@ export interface DailySummaryInput {
  * left out of the count for the same reason the finance screen splits them —
  * they are access, not sales.
  *
- * A quiet day still sends. «مفيش اشتراكات النهارده» is an answer; silence
+ * A quiet day still sends. «مفيش اشتراكات اليوم ده» is an answer; silence
  * reads as "the summary broke".
  */
 export function dailySummaryPayload(input: DailySummaryInput): PushPayload {

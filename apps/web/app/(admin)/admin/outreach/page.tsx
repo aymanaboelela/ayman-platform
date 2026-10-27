@@ -21,6 +21,10 @@ import type { OutreachKind } from '@ayman/contracts/outreach/kinds';
 import { adminGet } from '@/lib/admin-api';
 import { AymanAvatar } from '@/components/assistant/ayman-avatar';
 import { OutreachSettingsForm } from './outreach-settings-form';
+import { AutoOutreachCard } from './auto-outreach-card';
+import { adminAutoOutreach as auto } from '@ayman/contracts/copy/admin-auto-outreach';
+import { AutoOutreachOverviewSchema } from '@ayman/contracts/outreach/auto';
+import { featureEnabled } from '@/lib/entitlements';
 
 const c = copy.admin.outreach;
 const RowsSchema = listResponse(OutreachLogRowSchema);
@@ -37,6 +41,8 @@ const KIND_LABELS: Record<OutreachKind, string> = {
   whatsapp_invite: c.kindWhatsappInvite,
   follow_up: c.kindFollowUp,
   subscribe_nudge: c.kindSubscribeNudge,
+  checkout_recovery: auto.kindCheckoutRecovery,
+  signup_nudge: auto.kindSignupNudge,
 };
 
 const FILTER_LABELS: Record<OutreachLogFilter, string> = {
@@ -90,11 +96,24 @@ export default async function AdminOutreachPage({
   const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
   const page = Math.max(1, Number(rawPage) || 1);
 
-  const [log, stats, preview, settings] = await Promise.all([
+  /*
+   * «رسايل الواتساب التلقائية» exists on this stack only when the owner has
+   * switched `outreach.whatsapp` on for it. Asked FIRST and on its own: the
+   * route behind the card is a 404 elsewhere, and a card fetched
+   * unconditionally would take the whole screen down on every teacher's stack.
+   */
+  const autoWhatsapp = await featureEnabled('outreach.whatsapp');
+
+  const [log, stats, preview, settings, autoOverview] = await Promise.all([
     adminGet(`/api/admin/outreach?filter=${filter}&page=${page}&perPage=${PER_PAGE}`, RowsSchema),
     adminGet('/api/admin/outreach/stats', OutreachStatsSchema),
     adminGet('/api/admin/outreach/preview', OutreachPreviewSchema),
     adminGet('/api/admin/settings', SiteSettingsSchema),
+    // `.catch`: during a deploy the web can be one build ahead of the API,
+    // and a card that 404s for two minutes must cost the card, not the page.
+    autoWhatsapp
+      ? adminGet('/api/admin/outreach/auto', AutoOutreachOverviewSchema).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -133,6 +152,8 @@ export default async function AdminOutreachPage({
           })}
         </p>
       ) : null}
+
+      {autoOverview ? <AutoOutreachCard overview={autoOverview} /> : null}
 
       <section className="mb-8">
         <h2 className="text-[length:var(--fs-title-4)] font-semibold text-fg">{c.logTitle}</h2>
@@ -223,7 +244,7 @@ export default async function AdminOutreachPage({
           <p className="mb-5 text-[length:var(--fs-text-sm)] leading-[1.75] text-fg-muted">
             {c.settingsLead}
           </p>
-          <OutreachSettingsForm defaultValues={settings.outreach} />
+          <OutreachSettingsForm defaultValues={settings.outreach} autoWhatsapp={autoWhatsapp} />
         </CardBody>
       </Card>
     </>
@@ -426,5 +447,11 @@ function reasonFor(row: OutreachLogRow): string {
       return row.facts.courseTitle
         ? formatCopy(c.whySubscribeNudge, { course: row.facts.courseTitle })
         : c.whySubscribeNudgeCatalog;
+    case 'checkout_recovery':
+      return row.facts.target === 'course' && row.facts.title
+        ? formatCopy(auto.whyCheckoutCourse, { title: row.facts.title })
+        : auto.whyCheckoutBook;
+    case 'signup_nudge':
+      return row.facts.step === 2 ? auto.whySignup2 : auto.whySignup1;
   }
 }

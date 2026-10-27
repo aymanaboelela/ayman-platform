@@ -10,7 +10,7 @@ describe('dailySummaryPayload', () => {
       pending: 4,
     });
 
-    expect(push.title).toBe('ملخص النهارده');
+    expect(push.title).toBe('ملخص اليوم');
     expect(push.body).toBe('5 اشتراك (3 جديد، 2 تجديد) · الصافي 1250 جنيه · 4 طلب مستني مراجعة');
     expect(push.url).toBe('/admin/finance');
   });
@@ -24,7 +24,7 @@ describe('dailySummaryPayload', () => {
       pending: 0,
     });
 
-    expect(push.body).toBe('مفيش اشتراكات النهارده · الصافي 0 جنيه · مفيش طلبات مستنية');
+    expect(push.body).toBe('مفيش اشتراكات اليوم ده · الصافي 0 جنيه · مفيش طلبات مستنية');
   });
 });
 

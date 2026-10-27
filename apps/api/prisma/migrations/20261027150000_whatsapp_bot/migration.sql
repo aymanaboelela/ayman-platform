@@ -129,9 +129,10 @@ CREATE TABLE "app"."wa_bot_settings" (
     CONSTRAINT "wa_bot_settings_singleton_check" CHECK ("id" = 1)
 );
 
--- The send ledger (`20261027120000_whatsapp_send_ledger`) names who sent each
+-- The send ledger (`20261027120000_whatsapp_send_ledger`, widened for `outreach`
+-- in `20261027140100_checkout_intents`) names who sent each
 -- message; the bot and the WhatsApp inbox are two new senders. Both count
 -- toward the number's daily ceiling like everything else.
 ALTER TABLE "app"."whatsapp_sends" DROP CONSTRAINT "whatsapp_sends_source_check";
 ALTER TABLE "app"."whatsapp_sends" ADD CONSTRAINT "whatsapp_sends_source_check"
-  CHECK ("source" IN ('campaign', 'shipping', 'test', 'other', 'bot', 'inbox'));
+  CHECK ("source" IN ('campaign', 'shipping', 'outreach', 'test', 'other', 'bot', 'inbox'));

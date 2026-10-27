@@ -44,6 +44,17 @@ import {
   WHATSAPP_TAGALONGS,
   type OutreachBand,
 } from '@ayman/contracts/copy/outreach';
+import {
+  CHECKOUT_BODIES,
+  CHECKOUT_BOOK_OPENERS,
+  CHECKOUT_CLOSERS,
+  CHECKOUT_COURSE_OPENERS,
+  SIGNUP_BODIES,
+  SIGNUP_BODIES_UNKNOWN,
+  SIGNUP_CLOSERS,
+  SIGNUP_OPENERS,
+  SIGNUP_SECOND_OPENERS,
+} from '@ayman/contracts/copy/outreach-auto';
 
 /**
  * Turns facts into a message that reads as if a person wrote it, and picks a
@@ -129,6 +140,24 @@ export type OutreachFacts =
        */
       courseTitle: string | null;
       /** Absolute. The course page when there is a course, else the catalog. */
+      url: string;
+    }
+  | {
+      kind: 'checkout_recovery';
+      /** What the abandoned payment step was buying. */
+      target: 'course' | 'book_order';
+      /** The course title. `null` for a book order — the openers name none. */
+      title: string | null;
+      /** Absolute deep link back to the very step that was left. */
+      url: string;
+    }
+  | {
+      kind: 'signup_nudge';
+      /** First nudge, or the optional second one days later. */
+      step: 1 | 2;
+      /** The course the student's year and stream point at, or `null`. */
+      courseTitle: string | null;
+      /** Absolute. That course's page, else the catalog. */
       url: string;
     }
   | {
@@ -235,6 +264,10 @@ const NO_TAGALONG: ReadonlySet<OutreachFacts['kind']> = new Set([
   'whatsapp_invite',
   'follow_up',
   'subscribe_nudge',
+  // Both end on ONE link that is the whole point, and both are also sent as a
+  // WhatsApp message — where a second link would steal the preview.
+  'checkout_recovery',
+  'signup_nudge',
   // Already on WhatsApp — inviting them to the channel from inside it is noise.
   'referral_reward',
 ]);
@@ -438,6 +471,49 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
       blocks.push(body);
 
       blocks.push([formatCopy(take('c', SUBSCRIBE_CLOSERS), scoped)]);
+      break;
+    }
+
+    /**
+     * «كمّل الدفع» — the payment step that was left open.
+     *
+     * Same shape as `subscribe_nudge`: what was noticed, the link alone on its
+     * own line at the end of the middle block, and a closer that offers help
+     * rather than pressure. The facts never say WHEN it was left: «من ٣
+     * ساعات» is a line that reads as being watched.
+     */
+    case 'checkout_recovery': {
+      const facts = input.facts;
+      const scoped = { ...vars, title: facts.title ?? '' };
+      blocks.push([
+        facts.target === 'course' && facts.title
+          ? formatCopy(take('o', CHECKOUT_COURSE_OPENERS), scoped)
+          : formatCopy(take('ob', CHECKOUT_BOOK_OPENERS), scoped),
+      ]);
+      blocks.push([
+        formatCopy(take('b', CHECKOUT_BODIES), scoped),
+        formatCopy(COURSE_LINK_LINE, { url: facts.url }),
+      ]);
+      blocks.push([formatCopy(take('c', CHECKOUT_CLOSERS), scoped)]);
+      break;
+    }
+
+    /** «الحساب جاهز» — the account that has bought nothing yet. */
+    case 'signup_nudge': {
+      const facts = input.facts;
+      const scoped = { ...vars, course: facts.courseTitle ?? '' };
+      blocks.push([
+        facts.step === 2
+          ? formatCopy(take('o2', SIGNUP_SECOND_OPENERS), scoped)
+          : formatCopy(take('o', SIGNUP_OPENERS), scoped),
+      ]);
+      blocks.push([
+        facts.courseTitle
+          ? formatCopy(take('b', SIGNUP_BODIES), scoped)
+          : formatCopy(take('bu', SIGNUP_BODIES_UNKNOWN), scoped),
+        formatCopy(COURSE_LINK_LINE, { url: facts.url }),
+      ]);
+      blocks.push([formatCopy(take('c', SIGNUP_CLOSERS), scoped)]);
       break;
     }
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import type { AdminMobilePending } from '@ayman/contracts/admin/mobile';
+import type { AdminMobilePending, AdminMobileToday } from '@ayman/contracts/admin/mobile';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { MIRROR_MAX_ATTEMPTS } from '@ayman/contracts/video';
@@ -90,14 +90,63 @@ export class AdminMobileService {
   }
 
   /**
-   * «ملخص النهارده», at nine in the evening Cairo time — late enough that the
-   * day's sales are in, early enough that it is read before sleeping rather
-   * than waking anybody.
+   * «النهارده» on `/admin` — today so far, cut to what the caller may see.
+   * Each part needs the permission its own screen needs, and is `null`
+   * without it; see `AdminMobileToday`.
+   */
+  async today(user: { id: string; role: string }): Promise<AdminMobileToday> {
+    const may = (permission: string) => userHasPermission(user.id, user.role, permission);
+    const [sales, whatsapp, failedVideos] = await Promise.all([
+      may('payment:read')
+        ? this.finance
+            // `includeBooks` exactly as `AdminFinanceController` decides it, so
+            // the band and «الفلوس يوم بيوم» agree on today's net.
+            .daily({ days: 1, includeBooks: may('book-order:read') })
+            .then(({ totals }) => ({
+              count: Math.max(0, totals.subscriptionCount - totals.freeCount),
+              newCount: totals.newCount,
+              renewalCount: totals.renewalCount,
+              netCents: totals.netCents,
+            }))
+        : null,
+      may('marketing:read') && isFeatureEnabled('marketing.whatsapp') && this.whatsapp.enabled
+        ? this.whatsapp.status().then((device) => device.state)
+        : null,
+      may('lesson:write') ? this.failedVideos() : null,
+    ]);
+    return { sales, whatsapp, failedVideos };
+  }
+
+  /** The same rows `watchVideos` pushes about, as a standing list: an upload
+   *  that gave up stays here until it is re-uploaded or retried. */
+  private async failedVideos(): Promise<NonNullable<AdminMobileToday['failedVideos']>> {
+    const where = {
+      provider: 'upload',
+      mirrorStatus: 'failed',
+      mirrorAttempts: { gte: MIRROR_MAX_ATTEMPTS },
+    } as const;
+    const [count, rows] = await Promise.all([
+      this.prisma.lessonVideo.count({ where }),
+      this.prisma.lessonVideo.findMany({
+        where,
+        orderBy: [{ mirrorAt: 'desc' }, { lessonId: 'desc' }],
+        select: { lessonId: true, lesson: { select: { title: true } } },
+        take: 3,
+      }),
+    ]);
+    return { count, lessons: rows.map((row) => ({ lessonId: row.lessonId, title: row.lesson.title })) };
+  }
+
+  /**
+   * «ملخص اليوم», at midnight Cairo time, about the day that just closed —
+   * asked for at twelve rather than nine, so the evening's sales are in it
+   * too. The finance window is taken from an hour BEFORE the tick: at 00:00
+   * "today" is already the new, empty day.
    *
    * To `payment:read`, because it is the finance screen's figures; book money
    * is in them only when that same role could read it there.
    */
-  @Cron('0 21 * * *', { timeZone: 'Africa/Cairo' })
+  @Cron('0 0 * * *', { timeZone: 'Africa/Cairo' })
   async sendDailySummary(): Promise<void> {
     if (!isFeatureEnabled('adminMobile')) return;
     if (!(await this.lock('ayman:admin-mobile:daily-summary'))) return;
@@ -106,7 +155,7 @@ export class AdminMobileService {
       const roles = rolesWithPermission('payment:read');
       const includeBooks = roles.some((role) => rolesWithPermission('book-order:read').includes(role));
       const [report, queues] = await Promise.all([
-        this.finance.daily({ days: 1, includeBooks }),
+        this.finance.daily({ days: 1, includeBooks, now: new Date(Date.now() - 60 * 60 * 1000) }),
         // Everything waiting, whoever could clear it — the summary is a
         // picture of the platform, not of one admin's desk.
         this.queueCounts(() => true),

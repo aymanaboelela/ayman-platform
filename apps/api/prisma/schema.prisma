@@ -176,6 +176,8 @@ model User {
   // "which wording has this person already had", and that question dies with
   // the person. The MESSAGE itself lives on the conversation, which survives.
   outreachMessages           OutreachMessage[]
+  /// «فتح خطوة الدفع» — see `CheckoutIntent`.
+  checkoutIntents            CheckoutIntent[]
   // المساعد's open chat — what this student typed into it. `SetNull` on the far
   // side, like `conversations`: deleting the account must not erase the
   // QUESTION, because the question is what the corpus gets written from and it
@@ -5640,6 +5642,19 @@ model OutreachMessage {
   /// claim two ledger rows for one thing the student read.
   messageId      String @unique @map("message_id") @db.Uuid
 
+  /// The WhatsApp leg of an AUTOMATIC kind (`checkout_recovery`,
+  /// `signup_nudge`) — `null` for every other kind, which only ever lands in
+  /// the platform's own chat.
+  ///
+  /// `sent` means WhatsApp TOOK the message (one grey tick), not that it
+  /// arrived — `whatsappDeliveredAt` is the arrival, written by the receipt
+  /// relay. `opted_out` / `not_on_whatsapp` / `no_phone` are the three reasons
+  /// a reminder went into the chat only. CHECK-constrained in the migration.
+  whatsappStatus      String?   @map("whatsapp_status")
+  /// WhatsApp's id for the message, so a receipt can find this row.
+  whatsappMessageId   String?   @map("whatsapp_message_id")
+  whatsappDeliveredAt DateTime? @map("whatsapp_delivered_at")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -5655,7 +5670,61 @@ model OutreachMessage {
   /// The `/admin/outreach` log, and the per-day cap the delivery path enforces.
   @@index([createdAt(sort: Desc)])
   @@index([kind, createdAt(sort: Desc)])
+  /// The receipt relay's lookup. Partial in SQL (`WHERE … IS NOT NULL`).
+  @@index([whatsappMessageId])
   @@map("outreach_messages")
+  @@schema("app")
+}
+
+/// «فتح خطوة الدفع» — a logged-in student opened a payment step.
+///
+/// ## Why this table exists at all
+///
+/// Nothing else records the OPENING. A `payment_submissions` row exists only
+/// once a transfer was claimed, and an abandoned checkout is by definition one
+/// that never got that far — so without this the platform cannot tell a
+/// student who opened the checkout and walked away from one who never looked.
+///
+/// ## One row per (student, target), upserted
+///
+/// Reopening the same checkout moves `openedAt` forward rather than adding a
+/// row: the reminder is about "this checkout is still open", and its clock
+/// should start from the last time the student was actually on it. That also
+/// makes the write idempotent — a panel that mounts twice writes once.
+///
+/// `targetId` is a course id or a book order id, deliberately without a
+/// foreign key: the two kinds point at two tables, and a deleted course or
+/// order simply stops matching (`AutoOutreachSweeper` re-reads the target
+/// before writing). `path` is BUILT by the API from the target, never taken
+/// from the browser — see `@ayman/contracts/outreach/auto`.
+model CheckoutIntent {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  userId     String         @map("user_id")
+  target     CheckoutTarget
+  targetId   String         @map("target_id") @db.Uuid
+  /// Relative, starts with `/`. The deep link the reminder carries.
+  path       String
+  openedAt   DateTime       @default(now()) @map("opened_at")
+  /// The last reminder written about this row. Compared against `openedAt` so
+  /// a reopened checkout can be reminded about again — after the configured
+  /// number of days, never sooner.
+  remindedAt DateTime?      @map("reminded_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, target, targetId])
+  /// The sweeper's scan: opened inside the window, oldest first.
+  @@index([openedAt])
+  @@map("checkout_intents")
+  @@schema("app")
+}
+
+enum CheckoutTarget {
+  course
+  book_order
+
+  @@map("checkout_target")
   @@schema("app")
 }
 
@@ -5675,6 +5744,10 @@ enum OutreachKind {
   follow_up
   /// An account with no seat in the course its own year and stream point at.
   subscribe_nudge
+  /// A payment step opened and left — swept, and sent over WhatsApp too.
+  checkout_recovery
+  /// An account that bought nothing — swept, and sent over WhatsApp too.
+  signup_nudge
 
   @@map("outreach_kind")
   @@schema("app")

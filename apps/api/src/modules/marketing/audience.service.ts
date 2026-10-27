@@ -4,6 +4,7 @@ import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isFeatureEnabled } from '../../common/entitlements';
 import type { Prisma } from '../../generated/prisma/client';
+import { neverSubscribedWhere } from '../auto-outreach/auto-outreach.rules';
 
 /**
  * Who a campaign is for, resolved ONCE into a list of numbers.
@@ -178,6 +179,13 @@ export class AudienceService {
           ? { enrollments: { some: { courseId: { in: audience.courseIds } } } }
           : {}),
         ...this.bookOrderFilter(audience),
+        /*
+         * «من غير اشتراك في أي كورس» — the exact predicate the automatic
+         * signup nudge uses, imported rather than restated, so the backlog
+         * campaign and the daily nudge can never disagree about who it means.
+         * Composed with the other axes by AND, like every filter here.
+         */
+        ...(audience.neverSubscribed ? neverSubscribedWhere(new Date()) : {}),
       },
       select: {
         id: true,
