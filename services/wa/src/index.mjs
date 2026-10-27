@@ -243,6 +243,14 @@ const receipts = new ReceiptStore();
  */
 let queue = Promise.resolve();
 
+/**
+ * The chat a send is in flight to, from just before `sendMessage` until its
+ * id is in `sent`. Closes the one window where our own message could be
+ * relayed back as somebody typing on the handset. Sends are serialised, so
+ * one value is enough.
+ */
+let sending = null;
+
 function digitsOf(value) {
   return String(value).replace(/\D/gu, '');
 }
@@ -415,21 +423,31 @@ async function connect() {
 }
 
 /**
- * Forwards what people reply, so «قف» can actually stop a campaign.
+ * Forwards what people reply, so «قف» can stop a campaign and the API's
+ * auto-reply bot can answer.
  *
- * Only inbound personal messages — never groups, never our own echoes. The
- * API decides what counts as an opt-out; this just relays the text, and a
- * failure to relay is logged and dropped rather than retried, because the
- * next message will carry the same intent and a retry storm against the API
- * is worse than a missed one.
+ * Only personal chats — never groups, never status broadcasts (neither ends in
+ * `@s.whatsapp.net`). The API decides what a message means; this just relays
+ * it, and a failure to relay is logged and dropped rather than retried,
+ * because the next message will carry the same intent and a retry storm
+ * against the API is worse than a missed one.
+ *
+ * ## Our own messages: only the ones a PERSON typed
+ *
+ * A reply somebody types on the linked handset itself is relayed with
+ * `fromMe: true` — it is what tells the bot a human has taken the chat over.
+ * Everything THIS process sent is not: those arrive as `append` (Baileys'
+ * own-event echo) rather than `notify`, and the `sent` store and `sending`
+ * below catch the rest, so the bot never mistakes its own reply for a person.
  */
 async function onIncoming({ messages, type }) {
   if (type !== 'notify') return;
 
   for (const message of messages ?? []) {
     const jid = message.key?.remoteJid ?? '';
-    if (message.key?.fromMe) continue;
     if (!jid.endsWith('@s.whatsapp.net')) continue;
+    const fromMe = Boolean(message.key?.fromMe);
+    if (fromMe && (sent.get(message.key) || sending === jid)) continue;
 
     const text =
       message.message?.conversation ?? message.message?.extendedTextMessage?.text ?? '';
@@ -439,7 +457,15 @@ async function onIncoming({ messages, type }) {
       await fetch(INBOUND_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-wa-token': TOKEN },
-        body: JSON.stringify({ phone: `+${digitsOf(jid.split('@')[0])}`, text: text.slice(0, 300) }),
+        body: JSON.stringify({
+          phone: `+${digitsOf(jid.split('@')[0])}`,
+          text: text.slice(0, 1000),
+          // What they call themselves — display text for the leads list only.
+          name: fromMe ? null : (message.pushName ?? null),
+          // For the API to record a message relayed twice only once.
+          messageId: message.key?.id ?? null,
+          fromMe,
+        }),
         signal: AbortSignal.timeout(8000),
       });
     } catch (error) {
@@ -579,7 +605,14 @@ async function send({ phone: to, text, imageUrl }) {
     ? { image: { url: imageUrl }, caption: text }
     : { text };
 
-  const message = await sock.sendMessage(jid, payload);
+  sending = jid;
+  let message;
+  try {
+    message = await sock.sendMessage(jid, payload);
+  } catch (error) {
+    sending = null;
+    throw error;
+  }
 
   // Info, not debug: the container runs at `warn` by default, and these three
   // fields are the ones somebody reading `docker logs` after the next silent
@@ -592,6 +625,7 @@ async function send({ phone: to, text, imageUrl }) {
   // Recorded before returning, not after: the caller logs the send and moves
   // on, and a retry receipt can land while it is still doing that.
   sent.remember(message?.key?.id, message?.message);
+  sending = null;
   return {
     messageId: message?.key?.id ?? null,
     onWhatsApp: true,

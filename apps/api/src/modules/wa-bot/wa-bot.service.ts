@@ -187,6 +187,20 @@ export class WaBotService {
   private async recordHandsetReply(phone: string, text: string, messageId: string | null, now: Date): Promise<void> {
     const chat = await this.prisma.waChat.findUnique({ where: { phone } });
     if (!chat) return;
+    // Belt and braces with the sidecar's own filter: a line identical to what
+    // the bot or the inbox sent here a moment ago is that message echoed
+    // back, not a person — and reading it as one would silence the bot for
+    // hours on the strength of its own reply.
+    const echo = await this.prisma.waChatMessage.findFirst({
+      where: {
+        chatId: chat.id,
+        author: { in: ['bot', 'admin'] },
+        body: text,
+        createdAt: { gte: new Date(now.getTime() - 2 * 60_000) },
+      },
+      select: { id: true },
+    });
+    if (echo) return;
     await this.prisma.$transaction(async (tx) => {
       await tx.waChatMessage.create({
         data: { chatId: chat.id, author: 'phone', body: text, waMessageId: messageId, status: 'sent' },
