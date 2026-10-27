@@ -18,6 +18,7 @@ export const montageCopy = {
   pick: 'اختار فيديو',
   dropHint: 'لحد {size} للفيديو الواحد. الرفع بيكمّل لو النت قطع.',
   formats: 'MP4 · MOV · MKV · WebM',
+  gigabytes: '{n} جيجا',
 
   listTitle: 'الفيديوهات',
   empty: 'لسه مفيش فيديوهات.',
