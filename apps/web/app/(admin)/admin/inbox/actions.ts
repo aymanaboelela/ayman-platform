@@ -52,10 +52,11 @@ export async function replyAction(
   replyToId?: string | null,
 ): Promise<InboxActionResult> {
   try {
+    // Only when there IS a quote, so a plain reply's body is what it always was.
     const body = ReplySchema.parse({
       message,
       attachment: attachment ?? null,
-      replyToId: replyToId ?? null,
+      ...(replyToId ? { replyToId } : {}),
     });
     await adminSendVoid('POST', `/api/admin/conversations/${id}/reply`, body);
     revalidatePath('/admin/inbox');
