@@ -21,6 +21,9 @@ import {
   QUIZ_CLOSERS,
   QUIZ_RESULT_OPENERS,
   QUIZ_SCORE_LINES,
+  REFERRAL_REWARD_BODIES,
+  REFERRAL_REWARD_CLOSERS,
+  REFERRAL_REWARD_OPENERS,
   STRENGTH_LINES,
   SUBSCRIBE_BODIES,
   SUBSCRIBE_BODIES_UNKNOWN,
@@ -455,6 +458,7 @@ describe('composeOutreach — content', () => {
       { kind: 'follow_up', missedLessons: [], missedQuizzes: ['الدوال', 'المصفوفات'] },
       { kind: 'subscribe_nudge', courseTitle: 'الصف الأول', url: 'https://x.test/courses/y1' },
       { kind: 'subscribe_nudge', courseTitle: null, url: 'https://x.test/courses' },
+      { kind: 'referral_reward', amount: '50' },
     ];
     for (const kind of facts) {
       for (let index = 0; index < 25; index += 1) {
@@ -588,6 +592,9 @@ describe('the voice — one message, written for either reader', () => {
     ...SUBSCRIBE_BODIES,
     ...SUBSCRIBE_BODIES_UNKNOWN,
     ...SUBSCRIBE_CLOSERS,
+    ...REFERRAL_REWARD_OPENERS,
+    ...REFERRAL_REWARD_BODIES,
+    ...REFERRAL_REWARD_CLOSERS,
   ];
 
   it('never addresses the student as a boy', () => {
@@ -615,6 +622,7 @@ describe('the voice — one message, written for either reader', () => {
       { kind: 'follow_up', missedLessons: ['الدوال', 'المصفوفات'], missedQuizzes: ['الدوال'] },
       { kind: 'subscribe_nudge', courseTitle: 'الصف الأول', url: 'https://x.test/courses/y1' },
       { kind: 'subscribe_nudge', courseTitle: null, url: 'https://x.test/courses' },
+      { kind: 'referral_reward', amount: '50' },
     ];
 
     for (const facts of kinds) {
@@ -680,6 +688,16 @@ describe('the kind catalogue', () => {
       'subscribe_nudge',
     ];
     expect([...OUTREACH_KINDS].sort()).toEqual([...composed].sort());
+  });
+
+  it('keeps the WhatsApp-only referral notice out of the stored kinds', () => {
+    // Composed here for the voice, delivered by `ReferralNoticeService` over
+    // WhatsApp, and never inserted into `outreach_messages` — so it must NOT
+    // be an `OUTREACH_KINDS` value (the Prisma enum would need it too).
+    const whatsappOnly: OutreachFacts['kind'] = 'referral_reward';
+    expect((OUTREACH_KINDS as readonly string[]).includes(whatsappOnly)).toBe(false);
+    const body = composeOutreach(input({ facts: { kind: 'referral_reward', amount: '50' } })).body;
+    expect(body).toContain('50');
   });
 });
 
