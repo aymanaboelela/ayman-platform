@@ -18,7 +18,14 @@ import {
 import { toast } from 'sonner';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 import { formatCopy } from '@ayman/contracts/format';
-import { MAX_MONTAGE_BYTES, MONTAGE_NOTE_MAX, MONTAGE_TITLE_MAX, type MontageList, type MontageVideo } from '@ayman/contracts/montage';
+import {
+  MAX_MONTAGE_BYTES,
+  MONTAGE_NOTE_MAX,
+  MONTAGE_TITLE_MAX,
+  type MontageEditor,
+  type MontageList,
+  type MontageVideo,
+} from '@ayman/contracts/montage';
 import { UPLOAD_VIDEO_MIME } from '@ayman/contracts/video';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -43,6 +50,7 @@ import {
   useMontageUploads,
   type UploadEntry,
 } from '@/lib/video-upload-manager';
+import { MontageEditors } from './montage-editors';
 import { PublishDialog } from './publish-dialog';
 
 const c = montageCopy;
@@ -85,8 +93,11 @@ export function MontageInbox({
   canWrite,
   canPublish,
   href,
+  editors,
 }: {
   initial: MontageList;
+  /** The editor accounts — the instructor's screen only (`montage:publish`). */
+  editors?: MontageEditor[];
   canWrite: boolean;
   canPublish: boolean;
   /** This screen's own path — where the dashboard's corner card links back to. */
@@ -94,6 +105,8 @@ export function MontageInbox({
 }) {
   const [list, setList] = useState(initial);
   const [query, setQuery] = useState('');
+  /** Whose work the list shows — `null` is everybody's. */
+  const [uploader, setUploader] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<MontageVideo | null>(null);
   const [deleting, setDeleting] = useState<MontageVideo | null>(null);
@@ -170,11 +183,26 @@ export function MontageInbox({
     }
   };
 
+  /** Everyone who has uploaded something, with how much — the filter chips. */
+  const uploaders = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; count: number }>();
+    for (const video of list.videos) {
+      if (video.uploadedById === null) continue;
+      const entry = byId.get(video.uploadedById) ?? { id: video.uploadedById, name: video.uploadedBy ?? '—', count: 0 };
+      entry.count += 1;
+      byId.set(video.uploadedById, entry);
+    }
+    return [...byId.values()];
+  }, [list.videos]);
+
   const visible = useMemo(() => {
     const needle = query.trim();
-    if (needle === '') return list.videos;
-    return list.videos.filter((video) => video.title.includes(needle) || video.fileName.includes(needle));
-  }, [list.videos, query]);
+    return list.videos.filter(
+      (video) =>
+        (uploader === null || video.uploadedById === uploader) &&
+        (needle === '' || video.title.includes(needle) || video.fileName.includes(needle)),
+    );
+  }, [list.videos, query, uploader]);
 
   const liveFor = (video: MontageVideo): UploadEntry | undefined => live.find((entry) => entry.montageId === video.id);
   const ready = list.videos.filter((video) => video.status === 'ready').length;
@@ -188,6 +216,7 @@ export function MontageInbox({
 
   return (
     <div className="grid gap-5">
+      {editors !== undefined ? <MontageEditors initial={editors} selected={uploader} onSelect={setUploader} /> : null}
       {canWrite ? (
         <div
           onDragOver={(event) => {
@@ -269,6 +298,27 @@ export function MontageInbox({
             </label>
           ) : null}
         </div>
+
+        {canPublish && uploaders.length > 1 ? (
+          <div role="group" aria-label={c.filterLabel} className="flex flex-wrap gap-2">
+            {[{ id: null, name: c.filterAll, count: list.videos.length }, ...uploaders].map((entry) => (
+              <button
+                key={entry.id ?? 'all'}
+                type="button"
+                aria-pressed={uploader === entry.id}
+                onClick={() => setUploader(entry.id)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-[length:var(--fs-text-sm)] transition-colors',
+                  uploader === entry.id
+                    ? 'border-accent bg-accent/12 text-accent-text'
+                    : 'border-line text-fg-muted hover:bg-surface-3 hover:text-fg',
+                )}
+              >
+                {entry.name} <span className="tabular">({entry.count})</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {list.videos.length === 0 ? (
           <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-line px-4 py-12 text-center text-fg-muted">

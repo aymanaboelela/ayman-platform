@@ -5,6 +5,8 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/curre
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import {
+  MontageEditorCreateDto,
+  MontageEditorPasswordDto,
   MontagePublishDto,
   MontageUploadCompleteDto,
   MontageUploadResumeDto,
@@ -85,6 +87,45 @@ export class MontageController {
   @Get('admin/montage/targets')
   targets() {
     return this.montage.targets();
+  }
+
+  /*
+   * «المونتيرين». `montage:publish` — the instructor's side of the feature —
+   * and every service method refuses an account that is not `video_editor`,
+   * so none of these can reach a student, an assistant or the instructor.
+   */
+  @RequirePermission('montage:publish')
+  @Get('admin/montage/editors')
+  editors() {
+    return this.montage.editors();
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors')
+  createEditor(@Body() body: MontageEditorCreateDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.montage.createEditor(body, user.id);
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors/:userId/password')
+  setEditorPassword(
+    @Param('userId') userId: string,
+    @Body() body: MontageEditorPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.montage.setEditorPassword(userId, body.password, user.id);
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors/:userId/disable')
+  disableEditor(@Param('userId') userId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.montage.setEditorDisabled(userId, true, user.id);
+  }
+
+  @RequirePermission('montage:publish')
+  @Post('admin/montage/editors/:userId/enable')
+  enableEditor(@Param('userId') userId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.montage.setEditorDisabled(userId, false, user.id);
   }
 
   @RequirePermission('montage:publish')

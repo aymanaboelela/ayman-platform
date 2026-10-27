@@ -14,6 +14,7 @@ import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { stampPathname } from './lib/request-pathname';
 import { safeNext } from './lib/safe-next';
+import { staffShellFor } from './lib/staff-shell';
 import { TEACHES_CODE, isProgrammingOnlyRoute } from './lib/tenant-subject';
 
 /**
@@ -427,9 +428,11 @@ export function isDevOnlyRoute(pathname: string): boolean {
 export interface AuthState {
   authenticated: boolean;
   onboardingCompleted: boolean;
+  /** A designer's or a video editor's own page — see `lib/staff-shell.ts`. */
+  staffShell?: '/studio' | '/montage' | null;
 }
 
-export type RedirectDecision = 'login' | 'onboarding' | 'dashboard' | 'next' | null;
+export type RedirectDecision = 'login' | 'onboarding' | 'dashboard' | 'next' | 'staff-shell' | null;
 
 /**
  * The redirect matrix as a PURE decision, deliberately separated from
@@ -471,6 +474,10 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
 
   // Don't strand a fully onboarded student in a flow they already finished.
   if (auth.onboardingCompleted && isOnboardingRoute(pathname)) return 'dashboard';
+
+  // A designer or a video editor asking for the student dashboard is sent to
+  // their own page here, before the dashboard's loading screen ever paints.
+  if (auth.staffShell && (pathname === '/dashboard' || pathname.startsWith('/dashboard/'))) return 'staff-shell';
 
   return null;
 }
@@ -549,8 +556,15 @@ async function resolveAuthState(request: NextRequest): Promise<AuthState | null>
     if (response.status === 401 || response.status === 403) return SIGNED_OUT;
     if (!response.ok) return inconclusive;
 
-    const body = (await response.json()) as { onboardingCompleted?: unknown };
-    return { authenticated: true, onboardingCompleted: body.onboardingCompleted === true };
+    const body = (await response.json()) as { onboardingCompleted?: unknown; permissions?: unknown };
+    const permissions = Array.isArray(body.permissions)
+      ? body.permissions.filter((permission): permission is string => typeof permission === 'string')
+      : [];
+    return {
+      authenticated: true,
+      onboardingCompleted: body.onboardingCompleted === true,
+      staffShell: staffShellFor(permissions),
+    };
   } catch {
     return inconclusive;
   }
@@ -610,13 +624,15 @@ async function resolveRedirect(request: NextRequest): Promise<URL | null> {
       return onboardingUrl;
     }
     case 'dashboard':
-      return new URL('/dashboard', request.url);
+      return new URL(auth.staffShell ?? '/dashboard', request.url);
+    case 'staff-shell':
+      return new URL(auth.staffShell ?? '/dashboard', request.url);
     case 'next': {
       // An authenticated, onboarded visitor who landed on /login or /register.
       // `safeNext` is the only reason reflecting a query parameter into a
       // redirect is safe here — an unvalidated `next` would make this proxy the
       // open redirect the forms were careful not to be.
-      const target = safeNext(request.nextUrl.searchParams.get('next')) ?? '/dashboard';
+      const target = safeNext(request.nextUrl.searchParams.get('next')) ?? auth.staffShell ?? '/dashboard';
       return new URL(target, request.url);
     }
     case null:

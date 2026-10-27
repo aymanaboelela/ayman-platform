@@ -252,3 +252,64 @@ describe('MontageService.list', () => {
     expect((await half.service.list()).totalBytes).toBe(0);
   });
 });
+
+describe('MontageService — the editor accounts', () => {
+  function accounts(users: { id: string; role: string; phoneNumber: string | null }[]) {
+    const writes: string[] = [];
+    const prisma = {
+      user: {
+        findFirst: async (args: { where: { id: string; role: string } }) =>
+          users.find((user) => user.id === args.where.id && user.role === args.where.role) ?? null,
+        findMany: async () =>
+          users
+            .filter((user) => user.role === 'video_editor')
+            .map((user) => ({ ...user, name: 'مونتير', bannedAt: null, createdAt: new Date() })),
+        update: async () => {
+          writes.push('user.update');
+          return {};
+        },
+      },
+      montageVideo: { groupBy: async () => [] },
+      account: {
+        upsert: async () => {
+          writes.push('account.upsert');
+          return {};
+        },
+      },
+      session: { deleteMany: async () => writes.push('session.deleteMany') },
+      sessionDevice: { deleteMany: async () => writes.push('sessionDevice.deleteMany') },
+      $transaction: async (ops: unknown[]) => Promise.all(ops),
+    } as unknown as PrismaService;
+    const service = new MontageService(
+      prisma,
+      { objectStorage: null } as unknown as VideoMirrorService,
+      {} as VideoArchiveService,
+      {} as LessonService,
+      { record: async () => undefined } as unknown as AuditService,
+    );
+    return { service, writes };
+  }
+
+  it('never sets a password on an account that is not an editor', async () => {
+    const t = accounts([{ id: 'student-1', role: 'student', phoneNumber: '+201000000001' }]);
+    await expect(t.service.setEditorPassword('student-1', 'montage2026', 'admin')).rejects.toBeInstanceOf(NotFoundException);
+    expect(t.writes).toEqual([]);
+  });
+
+  it('a new password ends every session the editor had', async () => {
+    const t = accounts([{ id: 'ed-1', role: 'video_editor', phoneNumber: '+201500000777' }]);
+    const editor = await t.service.setEditorPassword('ed-1', 'montage2026', 'admin');
+    expect(editor.id).toBe('ed-1');
+    expect(t.writes).toEqual(expect.arrayContaining(['account.upsert', 'session.deleteMany']));
+  });
+
+  it('stopping an editor signs them out everywhere; never touches anyone else', async () => {
+    const t = accounts([
+      { id: 'ed-1', role: 'video_editor', phoneNumber: null },
+      { id: 'owner-1', role: 'owner', phoneNumber: null },
+    ]);
+    await t.service.setEditorDisabled('ed-1', true, 'admin');
+    expect(t.writes).toEqual(['user.update', 'session.deleteMany', 'sessionDevice.deleteMany']);
+    await expect(t.service.setEditorDisabled('owner-1', true, 'admin')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

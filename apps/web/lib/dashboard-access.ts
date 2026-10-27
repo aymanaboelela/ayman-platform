@@ -1,4 +1,5 @@
 import { can, type SessionUser } from '@/lib/session';
+import { staffShellFor } from '@/lib/staff-shell';
 
 /**
  * What `/dashboard`'s THROWING reads need — `/api/me/dashboard`
@@ -30,10 +31,5 @@ export function canOpenDashboard(session: SessionUser | null): boolean {
  * signing in. Everyone else who lands here is staff with the dashboard.
  */
 export function landingForStaff(session: SessionUser | null): '/admin' | '/studio' | '/montage' {
-  if (session && !can(session, 'admin:access')) {
-    if (can(session, 'design:read')) return '/studio';
-    // The video editor (`video_editor`) — «المونتاج» and nothing else.
-    if (can(session, 'montage:read')) return '/montage';
-  }
-  return '/admin';
+  return (session && staffShellFor(session.permissions)) ?? '/admin';
 }

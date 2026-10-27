@@ -563,6 +563,11 @@ export const AUDIT_ACTIONS = [
   'montage:update',
   'montage:delete',
   'montage:publish',
+  // The editor accounts themselves, managed from «المونتاج».
+  'montage:editor-create',
+  'montage:editor-password',
+  'montage:editor-disable',
+  'montage:editor-enable',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

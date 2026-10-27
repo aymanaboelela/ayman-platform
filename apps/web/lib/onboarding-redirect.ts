@@ -1,6 +1,11 @@
+import { z } from 'zod';
 import { ProfileMeSchema } from '@ayman/contracts/profile';
 import { apiGet } from './api';
 import { safeNext, withNext } from './safe-next';
+import { staffShellFor } from './staff-shell';
+
+/** Only the field this file reads — `/api/session` answers any signed-in account. */
+const SessionPermissionsSchema = z.object({ permissions: z.array(z.string()).optional() });
 
 /**
  * Where to send a user immediately after LOGIN establishes a session, based on
@@ -26,6 +31,20 @@ import { safeNext, withNext } from './safe-next';
  */
 export async function resolvePostLoginDestination(next?: string | null): Promise<string> {
   const safe = safeNext(next);
+
+  /*
+   * A designer or a video editor goes straight to their own page. Asked of
+   * `/api/session` FIRST because `/api/profile/me` is a student permission
+   * they do not hold: its 403 used to fall into the catch below, send them
+   * to `/onboarding`, then `/dashboard`, then — finally — their page.
+   */
+  try {
+    const session = await apiGet('/api/session', SessionPermissionsSchema);
+    const shell = staffShellFor(session.permissions ?? []);
+    if (shell !== null) return safe?.startsWith(shell) ? safe : shell;
+  } catch {
+    /* fall through to the student path — it fails toward onboarding on its own */
+  }
 
   try {
     const me = await apiGet('/api/profile/me', ProfileMeSchema);

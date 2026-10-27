@@ -2,6 +2,11 @@
 
 import {
   MontageDownloadSchema,
+  MontageEditorSchema,
+  MontageEditorsSchema,
+  type MontageEditor,
+  type MontageEditorCreate,
+  type MontageEditors,
   MontageListSchema,
   MontagePublishResultSchema,
   MontageTargetsSchema,
@@ -81,6 +86,18 @@ export const montageApi = {
   remove: (id: string): Promise<void> => send('DELETE', at(id), undefined, null),
   download: (id: string): Promise<MontageDownload> => send('GET', `${at(id)}/download`, undefined, MontageDownloadSchema),
   targets: (): Promise<MontageTargets> => send('GET', '/api/admin/montage/targets', undefined, MontageTargetsSchema),
+  editors: (): Promise<MontageEditors> => send('GET', '/api/admin/montage/editors', undefined, MontageEditorsSchema),
+  createEditor: (input: MontageEditorCreate): Promise<MontageEditor> =>
+    send('POST', '/api/admin/montage/editors', input, MontageEditorSchema),
+  setEditorPassword: (id: string, password: string): Promise<MontageEditor> =>
+    send('POST', `/api/admin/montage/editors/${encodeURIComponent(id)}/password`, { password }, MontageEditorSchema),
+  setEditorDisabled: (id: string, disabled: boolean): Promise<MontageEditor> =>
+    send(
+      'POST',
+      `/api/admin/montage/editors/${encodeURIComponent(id)}/${disabled ? 'disable' : 'enable'}`,
+      undefined,
+      MontageEditorSchema,
+    ),
   publish: (id: string, input: MontagePublish): Promise<MontagePublishResult> =>
     send('POST', `/api/admin/montage/${encodeURIComponent(id)}/publish`, input, MontagePublishResultSchema),
 };
