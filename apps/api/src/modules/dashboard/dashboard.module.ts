@@ -26,6 +26,9 @@ import { SCORE_FEED } from './score-feed';
    * `PathService` or the score feed would widen what the assistant can reach
    * for no question it needs to answer.
    */
-  exports: [DashboardService],
+  // `PathService` and `BacklogService` too, for the guardian report — which
+  // must count «المتراكم» with the same gate the student's own screen uses,
+  // not a copy of it.
+  exports: [DashboardService, PathService, BacklogService],
 })
 export class DashboardModule {}
