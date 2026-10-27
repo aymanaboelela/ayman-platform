@@ -2,6 +2,7 @@ import { z } from '@ayman/contracts/zod';
 import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
 import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
 import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
+import { LeadStatusSchema } from '@ayman/contracts/wa-bot/schemas';
 
 /**
  * «حملة واتساب» — the shapes the admin screen, the API and the sender all
@@ -157,6 +158,27 @@ export const AudienceSchema = z.object({
    * cannot be pasted in wholesale.
    */
   extraPhones: z.array(z.string()).max(500),
+  /**
+   * «المهتمين» — numbers that wrote to the WhatsApp number first and match no
+   * account (`wa_chats` with `who = lead`). Behind the `whatsapp.bot`
+   * entitlement on the API side, so a stack without the bot resolves it to
+   * nobody rather than to an error.
+   *
+   * The SAFEST audience on this list for a WhatsApp number, not the riskiest:
+   * every one of these people opened the chat themselves, which is exactly
+   * the condition under which WhatsApp lets a message through (see
+   * `whatsapp-sent-is-not-delivered`'s nack 463).
+   *
+   * `.default(false)` so every campaign row written before it still parses.
+   */
+  leads: z.boolean().default(false),
+  /**
+   * Which leads. Empty = every lead that is still `new` or `contacted` — a
+   * lead marked «مفيش اهتمام» asked to be left alone in all but words, and one
+   * that subscribed is a student now, reached through «الطلبة». Ticking those
+   * two explicitly is the only way to include them.
+   */
+  leadStatuses: z.array(LeadStatusSchema).default([]),
 });
 export type Audience = z.infer<typeof AudienceSchema>;
 
@@ -169,6 +191,8 @@ export const EMPTY_AUDIENCE: Audience = {
   notSubscribedOnly: false,
   bookOrderStatuses: [],
   extraPhones: [],
+  leads: false,
+  leadStatuses: [],
 };
 
 /**

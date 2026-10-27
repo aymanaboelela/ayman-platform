@@ -5,6 +5,7 @@ import 'dotenv/config';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import type { CampaignService } from './campaign.service';
 import { WhatsappInboundController } from './whatsapp-inbound.controller';
+import type { WaBotService } from '../wa-bot/wa-bot.service';
 
 /**
  * The token check is the entire authorization story for this route (see its
@@ -15,10 +16,13 @@ import { WhatsappInboundController } from './whatsapp-inbound.controller';
 describe('WhatsappInboundController', () => {
   const addOptOut = jest.fn().mockResolvedValue(undefined);
   const campaigns = { addOptOut } as unknown as CampaignService;
-  const controller = new WhatsappInboundController(campaigns);
+  const recordInbound = jest.fn().mockResolvedValue(undefined);
+  const bot = { recordInbound } as unknown as WaBotService;
+  const controller = new WhatsappInboundController(campaigns, bot);
 
   beforeEach(() => {
     addOptOut.mockClear();
+    recordInbound.mockClear();
   });
 
   afterEach(() => {
@@ -79,5 +83,54 @@ describe('WhatsappInboundController', () => {
     configure('secret-1');
     addOptOut.mockRejectedValueOnce(new Error('not a valid egyptian number'));
     await expect(controller.inbound('secret-1', { phone: '+1555', text: 'stop' })).resolves.toEqual({ ok: true });
+  });
+
+  describe('the auto-reply bot', () => {
+    it('hands every inbound message to the bot, with the sender name and message id', async () => {
+      configure('secret-1');
+      await controller.inbound('secret-1', {
+        phone: '+201000000000',
+        text: 'الكورس بكام؟',
+        name: 'Mona',
+        messageId: 'ABC',
+      });
+      expect(recordInbound).toHaveBeenCalledWith({
+        phone: '+201000000000',
+        text: 'الكورس بكام؟',
+        name: 'Mona',
+        messageId: 'ABC',
+        fromMe: false,
+      });
+    });
+
+    it('never reads a message typed on the linked handset as an opt-out', async () => {
+      // «قف» typed by the instructor INTO a chat is him telling somebody to
+      // stop, not the chat's other side asking to be left alone.
+      configure('secret-1');
+      await controller.inbound('secret-1', { phone: '+201000000000', text: 'قف', fromMe: true });
+      expect(addOptOut).not.toHaveBeenCalled();
+      expect(recordInbound).toHaveBeenCalledWith(expect.objectContaining({ fromMe: true }));
+    });
+
+    it('still records the opt-out AND tells the bot (which then stays silent)', async () => {
+      configure('secret-1');
+      await controller.inbound('secret-1', { phone: '+201000000000', text: 'قف' });
+      expect(addOptOut).toHaveBeenCalled();
+      expect(recordInbound).toHaveBeenCalledWith(expect.objectContaining({ text: 'قف', fromMe: false }));
+    });
+
+    it('acks the sidecar even when the bot throws', async () => {
+      configure('secret-1');
+      recordInbound.mockRejectedValueOnce(new Error('db down'));
+      await expect(
+        controller.inbound('secret-1', { phone: '+201000000000', text: 'السلام عليكم' }),
+      ).resolves.toEqual({ ok: true });
+    });
+
+    it('treats a non-boolean fromMe as an ordinary inbound message', async () => {
+      configure('secret-1');
+      await controller.inbound('secret-1', { phone: '+201000000000', text: 'قف', fromMe: 'true' });
+      expect(addOptOut).toHaveBeenCalled();
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../../audit/audit.module';
 import { OutreachModule } from '../outreach/outreach.module';
+import { WaBotModule } from '../wa-bot/wa-bot.module';
 import { EnvMediaUrlResolver, MEDIA_URL_RESOLVER } from '../../common/media/media-url';
 import { AudienceService } from './audience.service';
 import { CampaignRunner } from './campaign-runner.service';
@@ -27,7 +28,9 @@ import { WhatsappDeviceService } from './whatsapp-device.service';
  * shipping notice uses, rather than a second way to append to a conversation.
  */
 @Module({
-  imports: [AuditModule, OutreachModule],
+  // `WaBotModule` for the inbound webhook: every message a phone sends back is
+  // also the auto-reply bot's to record (behind its own entitlement).
+  imports: [AuditModule, OutreachModule, WaBotModule],
   controllers: [MarketingController, WhatsappInboundController, WhatsappReceiptController],
   providers: [
     CampaignService,

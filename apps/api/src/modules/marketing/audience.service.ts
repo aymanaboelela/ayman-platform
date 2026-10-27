@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Audience } from '@ayman/contracts/marketing/campaign';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isFeatureEnabled } from '../../common/entitlements';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -88,6 +89,19 @@ export class AudienceService {
       }
     }
 
+    // «المهتمين» — after the students and parents, so a lead who has since
+    // signed up is addressed as the student they now are. No name: a WhatsApp
+    // push name is whatever someone typed into their own profile, and
+    // «أهلاً يا 🦋» is worse than «أهلاً».
+    for (const lead of await this.leads(audience)) {
+      const phone = normalizeEgyptianPhone(lead.phone);
+      if (!phone) {
+        unreachable += 1;
+        continue;
+      }
+      if (!byPhone.has(phone)) byPhone.set(phone, { phone, name: null, userId: null });
+    }
+
     for (const raw of audience.extraPhones) {
       const phone = normalizeEgyptianPhone(raw);
       if (!phone) {
@@ -108,6 +122,37 @@ export class AudienceService {
       unreachable,
       optedOut: optedOutRows.length,
     };
+  }
+
+  /**
+   * The leads the audience asks for — numbers that wrote to the WhatsApp
+   * number first and matched no account.
+   *
+   * Empty `leadStatuses` means «still worth a message»: `new` and
+   * `contacted`. `not_interested` and `subscribed` are reached only when the
+   * admin ticks them — see the schema field's own note.
+   *
+   * Nobody on a stack without the bot: the leads table only fills while
+   * `whatsapp.bot` is on, and an audience that names it on a stack where it is
+   * off is an old form, not a request for an error.
+   *
+   * A chat the bot muted as automated, and one that asked to stop, are never
+   * included — the opt-out list catches the second for an Egyptian number, and
+   * this catches it for the rest.
+   */
+  private async leads(audience: Audience) {
+    if (!audience.leads || !isFeatureEnabled('whatsapp.bot')) return [];
+    const statuses = audience.leadStatuses.length > 0 ? audience.leadStatuses : (['new', 'contacted'] as const);
+    return this.prisma.waChat.findMany({
+      where: {
+        isLead: true,
+        leadStatus: { in: [...statuses] },
+        optedOutAt: null,
+        OR: [{ mutedUntil: null }, { mutedUntil: { lt: new Date() } }],
+      },
+      select: { phone: true },
+      orderBy: [{ firstMessageAt: 'asc' }, { id: 'asc' }],
+    });
   }
 
   /**
