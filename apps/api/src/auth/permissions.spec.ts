@@ -90,6 +90,16 @@ describe('permission catalogue', () => {
     expect(roleHasPermission('designer', 'student:read')).toBe(false);
   });
 
+  // «المونتاج». Same shape as the designer: hand files over, never put one
+  // on a lesson, never open the dashboard.
+  it('video_editor holds the hand-overs and nothing else — no dashboard, no lessons', () => {
+    expect([...permissionsForRole('video_editor')].sort()).toEqual(['montage:read', 'montage:write']);
+    expect(roleHasPermission('video_editor', 'admin:access')).toBe(false);
+    expect(roleHasPermission('video_editor', 'montage:publish')).toBe(false);
+    expect(roleHasPermission('video_editor', 'lesson:write')).toBe(false);
+    expect(roleHasPermission('video_editor', 'course:read-admin')).toBe(false);
+  });
+
   // The catalogue must be exhaustive: a @RequirePermission string that is not
   // in PERMISSIONS is a route nobody can ever reach, and it fails silently.
   it('every @RequirePermission argument in the repo is catalogued', () => {

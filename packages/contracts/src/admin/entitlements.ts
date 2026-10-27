@@ -134,6 +134,17 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صورة نتيجة الامتحان للستوري، وشهادة إتمام الكورس باسم الطالب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * «لأيمن الأول». بتحتاج تخزين الفيديو نفسه (`video.upload`) مظبوط على
+     * الستاك، لأن الفيديوهات بتتخزّن في نفس الباكت — من غيره الراوتس بترد
+     * إن التخزين مش مفعّل بدل ما تفشل في النص.
+     */
+    key: 'montage',
+    nameAr: 'المونتاج',
+    descriptionAr: 'حساب للمونتير يرفع الفيديوهات الجاهزة، وتنزّلها أو تحطها في درس.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];
