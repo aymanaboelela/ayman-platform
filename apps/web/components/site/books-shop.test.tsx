@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { copy } from '@ayman/contracts';
 import type { BookCard, BookCatalog } from '@ayman/contracts/books';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { apiGet } from '@/lib/api';
 import { BooksShop } from './books-shop';
 
 // `BookOrderPanel` (inside the checkout dialog) calls `useRouter` on the
@@ -9,6 +10,15 @@ import { BooksShop } from './books-shop';
 // throws without this.
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+// Every browser read fails unless a test says otherwise — the shop only reads
+// live when the server handed it empty shelves.
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
+  apiGet: vi.fn(async () => {
+    throw new Error('no API in jsdom');
+  }),
 }));
 
 // Explicit, as every component test in this repo does it — `vitest.setup.ts`
@@ -197,5 +207,34 @@ describe('BooksShop', () => {
     fireEvent.click(screen.getAllByRole('button', { name: copy.books.checkout })[0]!);
 
     expect(screen.getAllByText(copy.books.total)).toHaveLength(1);
+  });
+});
+
+/**
+ * «قسم الكتب مش بيحمّل، بيقول مفيش، ولما أعمل ريفرش بتظهر». The server's
+ * catalogue is a `'use cache'` entry that holds EMPTY shelves for minutes after
+ * a build or an API restart. Empty from the server is a question, not an answer.
+ */
+describe('BooksShop — empty shelves from the server', () => {
+  const EMPTY: BookCatalog = { ...catalogOf(), shelves: [], total: 0 };
+
+  it('re-reads the catalogue live and shows the books the cache lost', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce(catalog);
+    render(<BooksShop catalog={EMPTY} instapay={null} vodafoneCash={null} />);
+    expect(await screen.findByText(book().titleAr)).toBeTruthy();
+    expect(screen.queryByText(copy.books.empty)).toBeNull();
+    expect(apiGet).toHaveBeenCalledWith('/api/books', expect.anything());
+  });
+
+  it('shows «لسه مفيش كتب» only once the API agrees', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce(EMPTY);
+    render(<BooksShop catalog={EMPTY} instapay={null} vodafoneCash={null} />);
+    expect(await screen.findByText(copy.books.empty)).toBeTruthy();
+  });
+
+  it('does not re-read a catalogue that already has books', () => {
+    vi.mocked(apiGet).mockClear();
+    render(<BooksShop catalog={catalog} instapay={null} vodafoneCash={null} />);
+    expect(apiGet).not.toHaveBeenCalledWith('/api/books', expect.anything());
   });
 });
