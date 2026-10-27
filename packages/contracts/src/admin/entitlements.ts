@@ -190,6 +190,18 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'بوستات جاهزة من لوحة الشرف والنتايج والشهادات والمحتوى الجديد، وتقويم ونشر على فيسبوك وإنستجرام.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first": built at his request and off on every other stack until
+     * the owner opens it from the signed document. It replies FROM a real
+     * WhatsApp number, so it also needs `marketing.whatsapp` (the linked
+     * device) to do anything at all.
+     */
+    key: 'whatsapp.bot',
+    nameAr: 'الرد الآلي على الواتساب',
+    descriptionAr: 'ردود تلقائية على الأسئلة المتكررة، وقائمة «المهتمين»، وصندوق محادثات الواتساب.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

@@ -73,6 +73,12 @@ import { AdminAutoOutreachController } from '../modules/auto-outreach/admin-auto
 import { CheckoutIntentsService } from '../modules/auto-outreach/checkout-intents.service';
 import { AutoOutreachCandidates } from '../modules/auto-outreach/auto-outreach-candidates.service';
 import { AutoOutreachOverviewService } from '../modules/auto-outreach/auto-outreach-overview.service';
+import { WaBotController } from '../modules/wa-bot/wa-bot.controller';
+import { WaBotService } from '../modules/wa-bot/wa-bot.service';
+import { WaBotBrainService } from '../modules/wa-bot/wa-bot-brain.service';
+import { WaBotFactsService } from '../modules/wa-bot/wa-bot-facts.service';
+import { WaBotIdentityService } from '../modules/wa-bot/wa-bot-identity.service';
+import { WaBotSettingsService } from '../modules/wa-bot/wa-bot-settings.service';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
@@ -251,6 +257,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // to be checking. Both of these were added to the product without
         // being added here.
         WhatsappReceiptController,
+        // «الرد الآلي» — the bot's admin routes. Its services are listed in
+        // `providers` below, and `WhatsappInboundController` above now needs
+        // `WaBotService` too: every inbound message is the bot's to record.
+        WaBotController,
         AdminBroadcastController,
         // «متابعة الطلبة». Registered by class like every entry here rather
         // than through `FollowUpModule`, and it resolves for the usual reason:
@@ -419,6 +429,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         CheckoutIntentsService,
         AutoOutreachCandidates,
         AutoOutreachOverviewService,
+        /*
+         * «الرد الآلي». `WaBotReplier` (the five-second loop) is deliberately
+         * NOT here: no route injects it, and a cron in an authorization table
+         * would only ever answer chats nobody wrote. Everything else is what
+         * the two controllers transitively need; `AssistantAiService` is
+         * listed further down for المساعد and is shared.
+         */
+        WaBotService,
+        WaBotBrainService,
+        WaBotFactsService,
+        WaBotIdentityService,
+        WaBotSettingsService,
         AssistantService,
         // The file layer behind the two attachment routes. Listed beside
         // `AssistantService` rather than reached through `AssistantModule`,
@@ -1475,6 +1497,46 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/cancel`, actor: 'student', status: 403 },
     { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
     { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
+
+    // ── «الرد الآلي»: the WhatsApp bot, «المهتمين» and the WhatsApp inbox.
+    // The campaigns' own permission split — read / write / send (a typed
+    // reply leaves the instructor's number, like starting a campaign) — and
+    // the `whatsapp.bot` entitlement, which is on here because the matrix
+    // runs as Ayman's stack (see the `FeatureGuard` note in the fixture).
+    { label: 'wa-bot settings: anonymous', method: 'get', path: () => '/api/admin/wa-bot/settings', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot settings: student', method: 'get', path: () => '/api/admin/wa-bot/settings', actor: 'student', status: 403 },
+    { label: 'wa-bot settings: admin', method: 'get', path: () => '/api/admin/wa-bot/settings', actor: 'admin', status: 200 },
+    { label: 'wa-bot settings save: anonymous', method: 'put', path: () => '/api/admin/wa-bot/settings', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot settings save: student', method: 'put', path: () => '/api/admin/wa-bot/settings', actor: 'student', status: 403 },
+    { label: 'wa-bot answers: anonymous', method: 'get', path: () => '/api/admin/wa-bot/answers', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answers: student', method: 'get', path: () => '/api/admin/wa-bot/answers', actor: 'student', status: 403 },
+    { label: 'wa-bot answers: admin', method: 'get', path: () => '/api/admin/wa-bot/answers', actor: 'admin', status: 200 },
+    { label: 'wa-bot answer create: anonymous', method: 'post', path: () => '/api/admin/wa-bot/answers', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answer create: student', method: 'post', path: () => '/api/admin/wa-bot/answers', actor: 'student', status: 403 },
+    { label: 'wa-bot answer update: anonymous', method: 'put', path: () => '/api/admin/wa-bot/answers/price', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answer update: student', method: 'put', path: () => '/api/admin/wa-bot/answers/price', actor: 'student', status: 403 },
+    { label: 'wa-bot answer reset: anonymous', method: 'delete', path: () => '/api/admin/wa-bot/answers/price', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot answer reset: student', method: 'delete', path: () => '/api/admin/wa-bot/answers/price', actor: 'student', status: 403 },
+    { label: 'wa-bot preview: anonymous', method: 'post', path: () => '/api/admin/wa-bot/preview', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot preview: student', method: 'post', path: () => '/api/admin/wa-bot/preview', actor: 'student', status: 403 },
+    { label: 'wa-bot leads: anonymous', method: 'get', path: () => '/api/admin/wa-bot/leads', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot leads: student', method: 'get', path: () => '/api/admin/wa-bot/leads', actor: 'student', status: 403 },
+    { label: 'wa-bot leads: admin', method: 'get', path: () => '/api/admin/wa-bot/leads', actor: 'admin', status: 200 },
+    { label: 'wa-bot leads csv: anonymous', method: 'get', path: () => '/api/admin/wa-bot/leads.csv', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot leads csv: student', method: 'get', path: () => '/api/admin/wa-bot/leads.csv', actor: 'student', status: 403 },
+    { label: 'wa-bot leads csv: admin', method: 'get', path: () => '/api/admin/wa-bot/leads.csv', actor: 'admin', status: 200 },
+    { label: 'wa-bot lead patch: anonymous', method: 'patch', path: () => `/api/admin/wa-bot/leads/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot lead patch: student', method: 'patch', path: () => `/api/admin/wa-bot/leads/${MISSING_UUID}`, actor: 'student', status: 403 },
+    { label: 'wa-bot chats: anonymous', method: 'get', path: () => '/api/admin/wa-bot/chats', actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chats: student', method: 'get', path: () => '/api/admin/wa-bot/chats', actor: 'student', status: 403 },
+    { label: 'wa-bot chats: admin', method: 'get', path: () => '/api/admin/wa-bot/chats', actor: 'admin', status: 200 },
+    { label: 'wa-bot chat: anonymous', method: 'get', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chat: student', method: 'get', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'student', status: 403 },
+    { label: 'wa-bot chat: admin', method: 'get', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'admin', status: 404 },
+    { label: 'wa-bot chat reply: anonymous', method: 'post', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}/reply`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chat reply: student', method: 'post', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}/reply`, actor: 'student', status: 403 },
+    { label: 'wa-bot chat patch: anonymous', method: 'patch', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'wa-bot chat patch: student', method: 'patch', path: () => `/api/admin/wa-bot/chats/${MISSING_UUID}`, actor: 'student', status: 403 },
 
     // ── «/admin/broadcast»: the instructor's own words, sent on purpose —
     // deliberately `conversation:reply`, not `outreach:read` (see the

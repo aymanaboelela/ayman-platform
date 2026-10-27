@@ -6086,6 +6086,192 @@ model MarketingOptOut {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// «الرد الآلي» — the WhatsApp auto-reply bot, its leads and its inbox
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Who is on the other end of a WhatsApp chat, as matched by phone number.
+enum WaChatWho {
+  student
+  parent
+  lead
+
+  @@map("wa_chat_who")
+  @@schema("app")
+}
+
+/// «المهتمين»'s four states. `subscribed` is also written by the conversion
+/// sweep the moment the number signs up and pays.
+enum WaLeadStatus {
+  new
+  contacted
+  subscribed
+  not_interested
+
+  @@map("wa_lead_status")
+  @@schema("app")
+}
+
+/// `contact` wrote it; `bot` and `admin` sent it through the API; `phone` is a
+/// reply somebody typed on the linked handset itself, relayed by the sidecar.
+enum WaChatAuthor {
+  contact
+  bot
+  admin
+  phone
+
+  @@map("wa_chat_author")
+  @@schema("app")
+}
+
+enum WaMessageStatus {
+  sent
+  failed
+
+  @@map("wa_message_status")
+  @@schema("app")
+}
+
+/// One WhatsApp chat — one row per phone number that ever wrote to the linked
+/// device. A LEAD is a row whose number matched no account when it first wrote
+/// (`isLead`), and «المهتمين» is this table filtered on that.
+///
+/// ## Why not `conversations`
+///
+/// المساعد's inbox is a thread between a browser and the instructor: its CHECK
+/// requires exactly one of `user_id` / `guest_token_hash`, its replies render
+/// in a chat panel on the site, and its unread logic is built on that. A
+/// WhatsApp number has neither owner and is answered on WhatsApp. Folding it in
+/// would mean loosening a CHECK every other reader relies on, so the inbox
+/// SCREEN hosts it (a tab under «صندوق الوارد») and the data stays here.
+///
+/// ## No foreign key to `users`, on purpose
+///
+/// `userId` is the account the number matched — for a parent, the child's.
+/// It is a lookup cache rewritten on every inbound message, never an owner: a
+/// deleted account leaves a chat that simply stops matching, and the history
+/// of what was said to that number must not disappear with it.
+model WaChat {
+  id       String    @id @default(uuid(7)) @db.Uuid
+  /// E.164 for an Egyptian number; `+<digits>` for any other.
+  phone    String    @unique @db.VarChar(20)
+  /// What WhatsApp says this person calls themselves. Untrusted display text.
+  pushName String?   @map("push_name") @db.VarChar(120)
+  userId   String?   @map("user_id")
+  who      WaChatWho @default(lead)
+
+  isLead     Boolean      @default(false) @map("is_lead")
+  leadStatus WaLeadStatus @default(new) @map("lead_status")
+  /// The year they said they are in, as the bot's numbered options name it.
+  yearSystem String?      @map("year_system") @db.VarChar(40)
+  year       Int?
+  yearLabel  String?      @map("year_label") @db.VarChar(80)
+  /// Every built-in intent this number has asked about, de-duplicated.
+  intents    String[]     @default([])
+  notes      String?
+  /// When the conversion sweep saw this number sign up and pay.
+  convertedAt DateTime?   @map("converted_at")
+
+  firstMessage      String       @map("first_message") @db.VarChar(300)
+  lastMessage       String       @map("last_message") @db.VarChar(300)
+  firstMessageAt    DateTime     @default(now()) @map("first_message_at")
+  lastInboundAt     DateTime     @default(now()) @map("last_inbound_at")
+  lastMessageAt     DateTime     @default(now()) @map("last_message_at")
+  lastMessageAuthor WaChatAuthor @default(contact) @map("last_message_author")
+  /// Inbound messages only.
+  messageCount      Int          @default(0) @map("message_count")
+
+  /// When the replier should look at this chat — set a few seconds after each
+  /// inbound message so a burst of three is answered once. The replier claims
+  /// a chat by clearing it, which is what makes the queue survive a restart.
+  replyDueAt          DateTime? @map("reply_due_at")
+  awaitingYear        Boolean   @default(false) @map("awaiting_year")
+  /// What they asked before the bot asked for their year.
+  pendingIntents      String[]  @default([]) @map("pending_intents")
+  yearAsks            Int       @default(0) @map("year_asks")
+  lastBotReplyAt      DateTime? @map("last_bot_reply_at")
+  /// The Cairo day `botRepliesToday` counts. A new day resets the count.
+  botRepliesDay       String?   @map("bot_replies_day") @db.VarChar(10)
+  botRepliesToday     Int       @default(0) @map("bot_replies_today")
+  lastHandoffNoticeAt DateTime? @map("last_handoff_notice_at")
+  /// The last time a PERSON answered — from the inbox or on the handset.
+  humanRepliedAt      DateTime? @map("human_replied_at")
+  needsHuman          Boolean   @default(false) @map("needs_human")
+  handoffAt           DateTime? @map("handoff_at")
+  botPaused           Boolean   @default(false) @map("bot_paused")
+  /// Set when the other side looks like a bot — see `looksAutomated`.
+  mutedUntil          DateTime? @map("muted_until")
+  optedOutAt          DateTime? @map("opted_out_at")
+  adminReadAt         DateTime? @map("admin_read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages WaChatMessage[]
+
+  @@index([needsHuman, lastMessageAt(sort: Desc)])
+  @@index([isLead, lastMessageAt(sort: Desc)])
+  @@index([lastMessageAt(sort: Desc)])
+  @@index([replyDueAt])
+  @@index([userId])
+  @@map("wa_chats")
+  @@schema("app")
+}
+
+model WaChatMessage {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  chatId      String           @map("chat_id") @db.Uuid
+  chat        WaChat           @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  author      WaChatAuthor
+  body        String
+  intents     String[]         @default([])
+  status      WaMessageStatus?
+  /// WhatsApp's own id. UNIQUE, so the sidecar relaying the same message twice
+  /// (a reconnect replays recent history) records it once.
+  waMessageId String?          @unique @map("wa_message_id") @db.VarChar(128)
+  /// Inbound only: false until the replier has considered it.
+  handled     Boolean          @default(true)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([chatId, createdAt])
+  /// The day's global reply count — `author = bot AND created_at >= today`.
+  @@index([author, createdAt])
+  @@map("wa_chat_messages")
+  @@schema("app")
+}
+
+/// The admin's version of one answer. A built-in intent with no row says the
+/// copy-table default; a `custom:<uuid>` key is an answer the admin wrote.
+///
+/// Nothing seeds this table — see `copy/wa-bot.ts`'s header for why that is
+/// the whole defence against the seed-overwrites-the-admin trap.
+model WaBotAnswer {
+  key         String   @id @db.VarChar(80)
+  /// Custom answers only; a built-in's label is the copy table's.
+  label       String?  @db.VarChar(80)
+  answer      String
+  /// Extra keywords, ADDED to a built-in's own list.
+  keywords    String[] @default([])
+  enabled     Boolean  @default(true)
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("wa_bot_answers")
+  @@schema("app")
+}
+
+/// One row, `id = 1`. `data` is `BotSettingsSchema`, parsed on read over the
+/// defaults so a field added later needs no migration.
+model WaBotSettings {
+  id        Int      @id @default(1)
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("wa_bot_settings")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // «الألعاب» — الإعدادات لكل لعبة، والجولات، والإجابات
 // ═══════════════════════════════════════════════════════════════════════
 
