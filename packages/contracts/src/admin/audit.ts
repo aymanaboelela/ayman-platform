@@ -554,6 +554,15 @@ export const AUDIT_ACTIONS = [
   'design:update',
   'design:delete',
   'design:publish',
+  /*
+   * «المونتاج». Audited for the studio's reason — the editor's account belongs
+   * to someone outside the team. `montage:publish` is the one that reaches
+   * students: a hand-over put on a lesson, with the lesson's id.
+   */
+  'montage:upload',
+  'montage:update',
+  'montage:delete',
+  'montage:publish',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

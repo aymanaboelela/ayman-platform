@@ -41,6 +41,7 @@ import { MarketingModule } from './modules/marketing/marketing.module';
 import { NewsModule } from './modules/news/news.module';
 import { PdfsModule } from './modules/pdfs/pdfs.module';
 import { DesignsModule } from './modules/designs/designs.module';
+import { MontageModule } from './modules/montage/montage.module';
 import { PracticeModule } from './modules/practice/practice.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
@@ -168,6 +169,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     NewsModule,
     PdfsModule,
     DesignsModule,
+    MontageModule,
     // «اختبارات مجانية» — public practice quizzes, gated on `practice.enabled`.
     PracticeModule,
     AuditReadModule,

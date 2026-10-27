@@ -119,6 +119,8 @@ export const AUDIT_RESOURCES = {
   /// «ستوديو التصميم» — the designer's folders and the pictures in them.
   designFolder: 'design_folders',
   designAsset: 'design_assets',
+  /// «المونتاج» — a video the editor handed over.
+  montageVideo: 'montage_videos',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

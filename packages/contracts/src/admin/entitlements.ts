@@ -136,6 +136,17 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * «لأيمن الأول». بتحتاج تخزين الفيديو نفسه (`video.upload`) مظبوط على
+     * الستاك، لأن الفيديوهات بتتخزّن في نفس الباكت — من غيره الراوتس بترد
+     * إن التخزين مش مفعّل بدل ما تفشل في النص.
+     */
+    key: 'montage',
+    nameAr: 'المونتاج',
+    descriptionAr: 'حساب للمونتير يرفع الفيديوهات الجاهزة، وتنزّلها أو تحطها في درس.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * «لأيمن الأول» — on for him, off on every other stack until the owner
      * opens it. It moves WALLET MONEY (a credit to two students per paying
      * friend), so a teacher must decide to fund it; and even once opened the

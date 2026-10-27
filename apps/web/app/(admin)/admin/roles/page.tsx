@@ -6,6 +6,7 @@ import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
 import { PermissionGrid } from './permission-grid';
 import { StaffSection } from './staff-section';
 import { getSession } from '@/lib/session';
+import { featureEnabled } from '@/lib/entitlements';
 import { z } from '@ayman/contracts/zod';
 
 const c = copy.admin.roles;
@@ -119,6 +120,7 @@ export default async function RolesPage() {
           reasonMin={STAFF_ROLE_REASON_MIN}
           founderId={founderId}
           loadFailed={!staffResult.ok}
+          canAddEditor={await featureEnabled('montage')}
         />
       </div>
 

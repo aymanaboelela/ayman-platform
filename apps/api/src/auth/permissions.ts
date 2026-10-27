@@ -290,6 +290,14 @@ export const PERMISSIONS = [
   'design:read',
   'design:write',
   'design:publish',
+  // «المونتاج» — the video editor's hand-overs. The same split as the studio
+  // above, for the same reason: `read`/`write` are the editor's whole job
+  // (upload, rename, download, delete), and `publish` — putting a video on a
+  // lesson students watch — is the instructor's call. The `video_editor` role
+  // holds the first two and never the third.
+  'montage:read',
+  'montage:write',
+  'montage:publish',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -310,7 +318,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * ships to the operator first and reaches the instructor when somebody decides
  * it should — which is exactly the behaviour asked for.
  */
-export type Role = 'admin' | 'owner' | 'student' | 'designer';
+export type Role = 'admin' | 'owner' | 'student' | 'designer' | 'video_editor';
 
 /**
  * `'*'` grants every permission, including ones added after this line was
@@ -406,6 +414,15 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
    * site's images stay the instructor's call).
    */
   designer: new Set<Permission>(['design:read', 'design:write']),
+  /**
+   * The video editor («مونتير») — «المونتاج» and nothing else.
+   *
+   * A concrete list for the designer's reason: an account that belongs to
+   * somebody outside the teaching team must not inherit tomorrow's permission
+   * the day it ships. No `admin:access`, no lesson writes, no
+   * `montage:publish` — the most this account can do is hand files over.
+   */
+  video_editor: new Set<Permission>(['montage:read', 'montage:write']),
 };
 
 const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));
