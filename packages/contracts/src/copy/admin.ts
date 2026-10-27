@@ -90,6 +90,8 @@ const admin = {
      *  queue of InstaPay / Vodafone Cash top-up requests. */
     wallet: 'شحن المحفظة',
     walletRequests: 'طلبات الشحن',
+    /** «لوحة التحكم على الموبايل» — the one-at-a-time review card. */
+    review: 'مراجعة سريعة',
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
     /**
@@ -3383,6 +3385,35 @@ const admin = {
     bulkDeleteReasonAuthored: 'مؤلف محتوى',
     bulkDeleteReasonOutranked: 'صلاحياته أعلى منك',
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
+  },
+  /**
+   * «مراجعة سريعة» — `/admin/review`, the payments queue one card at a time,
+   * for a phone. Behind `adminMobile`. Approve/reject reuse `payments.*`'s
+   * own words and errors; only what this screen adds is here. Never a verb
+   * aimed at the reader: a teacher may be a man or a woman.
+   */
+  review: {
+    eyebrow: 'مراجعة سريعة',
+    title: 'الاشتراكات المستنية',
+    /** `{n}` of `{total}` — where the reader is in the queue. */
+    position: '{n} من {total}',
+    allPayments: 'كل المدفوعات',
+    later: 'بعدين',
+    /** On the big screenshot, which opens full-screen on tap. */
+    zoomHint: 'اللمس بيكبّر الصورة',
+    noScreenshot: 'مفيش صورة تحويل مع الطلب ده',
+    doneTitle: 'خلصت كل الطلبات',
+    doneHint: 'أول ما طلب جديد يوصل هيظهر هنا لوحده.',
+    backToDashboard: 'لوحة التحكم',
+    approved: 'اتوافق — {name}',
+    rejected: 'اترفض — {name}',
+    /** One tap fills the reason box; it is still editable before sending. */
+    quickReasonsLabel: 'أسباب جاهزة',
+    quickReasons: [
+      'المبلغ في الصورة مش مطابق للباقة',
+      'الصورة مش واضحة، محتاجين صورة أوضح',
+      'التحويل ماوصلش لحد دلوقتي',
+    ],
   },
   payments: {
     /* ── الفرز والفلترة ──────────────────────────────────────────────── */

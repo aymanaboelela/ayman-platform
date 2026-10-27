@@ -147,6 +147,17 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * «لأيمن الأول» — اتعملت بطلبه بعد ما ركّب اللوحة على الآيفون. ولا حاجة
+     * فيها بتحمل اسمه، فلما تتفتح لمدرّس بتشتغل على طول.
+     */
+    key: 'adminMobile',
+    nameAr: 'لوحة التحكم على الموبايل',
+    descriptionAr:
+      'رقم الطلبات المستنية على أيقونة التطبيق، ومراجعة الاشتراكات واحد واحد، وملخص آخر اليوم، وتنبيه لو الواتساب فصل أو رفع فيديو فشل.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first": built at his request and off on every other stack until
      * the owner opens it from the signed document. It replies FROM a real
      * WhatsApp number, so it also needs `marketing.whatsapp` (the linked

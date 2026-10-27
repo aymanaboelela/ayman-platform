@@ -1,6 +1,7 @@
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
+import { isFeatureEnabled } from '../../common/entitlements';
 import { IS_AYMAN } from '../../common/tenant';
 import type { PushPayload } from './push.service';
 
@@ -76,7 +77,9 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
       return {
         title: formatCopy(c.paymentSubmitted, { name: entry.studentName }),
         body: entry.courseTitle,
-        url: '/admin/payments',
+        // The tap lands on the one-at-a-time review card where the stack has
+        // it: the push is read on a phone, and the full table is a desk screen.
+        url: isFeatureEnabled('adminMobile') ? '/admin/review' : '/admin/payments',
         tag: 'ayman-payments',
       };
 
@@ -86,6 +89,24 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         body: c.bookOrderQueue,
         url: '/admin/books',
         tag: 'ayman-book-orders',
+      };
+
+    /*
+      The top-up desk's alert. It was the one admin queue with money behind it
+      that never reached a phone: the row was written and the bell lit up, but
+      a request sent at night sat unseen until somebody opened `/admin`. Same
+      shape as `payment_submitted` above — a student waiting on money is the
+      same wait whichever form they filled in. A bug fix, so no feature gate.
+    */
+    case 'wallet_topup_submitted':
+      return {
+        title: formatCopy(c.walletTopupSubmitted, {
+          amount: String(Math.round(entry.amountCents / 100)),
+          name: entry.studentName,
+        }),
+        body: c.walletQueue,
+        url: '/admin/wallet/requests',
+        tag: 'ayman-wallet-topups',
       };
 
     case 'assistant_question_received':

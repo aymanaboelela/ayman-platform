@@ -33,6 +33,8 @@ import { PushService } from './push.service';
   imports: [PrismaModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsRealtimeService, PushService],
-  exports: [NotificationsService],
+  // `PushService` for the admin app's own pushes, which are not feed rows —
+  // see `AdminMobileService`.
+  exports: [NotificationsService, PushService],
 })
 export class NotificationsModule {}
