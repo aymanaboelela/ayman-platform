@@ -34,6 +34,8 @@
     "./sessions": "./src/sessions.ts",
     "./device-limit": "./src/device-limit.ts",
     "./guardian": "./src/guardian.ts",
+    "./guardian-view": "./src/guardian-view.ts",
+    "./copy/guardian": "./src/copy/guardian.ts",
     "./centers": "./src/centers.ts",
     "./unlock-codes": "./src/unlock-codes.ts",
     "./video": "./src/video.ts",

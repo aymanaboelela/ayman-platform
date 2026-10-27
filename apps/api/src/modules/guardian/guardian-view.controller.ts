@@ -1,28 +1,21 @@
 import { Controller, Get, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
-import type { Dashboard } from '@ayman/contracts';
+import type { GuardianView } from '@ayman/contracts/guardian-view';
 import { Public } from '../../auth/decorators/public.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
-import { DashboardService } from '../dashboard/dashboard.service';
 import { GuardianSessionService, codeFingerprint } from './guardian-session.service';
-import { GuardianReportService, type GuardianReport } from './guardian-report.service';
+import { GuardianReportService } from './guardian-report.service';
 import { readCookie } from '../assistant/guest-token';
 import { GUARDIAN_COOKIE } from './guardian-cookie';
-
-export interface GuardianView {
-  student: { name: string; year: number | null };
-  dashboard: Dashboard;
-  report: GuardianReport;
-}
 
 /**
  * اللي ولي الأمر بيشوفه.
  *
- * ## ليه بيعيد استخدام `DashboardService.forUser`
+ * ## ليه كل رقم بيتقرا من شاشة الطالب نفسها
  *
- * لأن ده بالظبط السؤال: «ابني وصل لفين». تجميع تاني بنفس المعنى كان هيبقى
- * مصدر تاني للحقيقة — والأب يشوف رقم والابن يشوف رقم تاني على نفس الشاشتين،
- * والاتنين مقتنعين. نفس الحساب، نفس الأرقام.
+ * لأن ده بالظبط السؤال: «وصل لفين». تجميع تاني بنفس المعنى كان هيبقى مصدر
+ * تاني للحقيقة — والأب يشوف رقم والطالب يشوف رقم تاني على نفس الشاشتين،
+ * والاتنين مقتنعين. `GuardianReportService` بيقول كل بلوك جاي منين.
  *
  * ## والقراية بس
  *
@@ -33,7 +26,6 @@ export interface GuardianView {
 export class GuardianViewController {
   constructor(
     private readonly sessions: GuardianSessionService,
-    private readonly dashboard: DashboardService,
     private readonly report: GuardianReportService,
     private readonly prisma: PrismaService,
   ) {}
@@ -63,7 +55,14 @@ export class GuardianViewController {
       // ما الطالب يغيّر كوده.
       //
       // `guardianCode` IS read now — to compare, never to send. See below.
-      select: { fullName: true, year: true, guardianCode: true, user: { select: { bannedAt: true } } },
+      select: {
+        fullName: true,
+        year: true,
+        systemId: true,
+        track: { select: { labelAr: true } },
+        guardianCode: true,
+        user: { select: { bannedAt: true } },
+      },
     });
     if (!profile) throw new UnauthorizedException();
 
@@ -85,20 +84,18 @@ export class GuardianViewController {
       throw new UnauthorizedException();
     }
 
-    return {
-      student: { name: profile.fullName, year: profile.year },
-      // بالتوازي: الاتنين قرايات مستقلة، وتسلسلهم كان بيضاعف انتظار
-      // الصفحة الوحيدة اللي الأب بيفتحها.
-      ...(await this.both(session.studentUserId)),
-    };
-  }
-
-  /** القرايتين مع بعض — اقرا مكان النداء. */
-  private async both(userId: string): Promise<{ dashboard: Dashboard; report: GuardianReport }> {
-    const [dashboard, report] = await Promise.all([
-      this.dashboard.forUser(userId),
-      this.report.forStudent(userId),
-    ]);
-    return { dashboard, report };
+    /*
+     * The ONLY id that reaches the report is the one the signed token carries,
+     * re-checked against the row just above. Every block of the page — marks,
+     * homework, rank, centre — is keyed on it inside the report; nothing on
+     * this route takes an id from the request.
+     */
+    return this.report.forStudent({
+      userId: session.studentUserId,
+      fullName: profile.fullName,
+      year: profile.year,
+      systemId: profile.systemId,
+      trackLabel: profile.track?.labelAr ?? null,
+    });
   }
 }
