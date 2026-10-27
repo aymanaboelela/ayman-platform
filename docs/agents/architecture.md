@@ -120,6 +120,7 @@ the total.
 | news | `news`, `news/:slug`, `admin/news` |
 | notifications | `me/notifications` (SSE stream), `me/push/*` (web-push/VAPID) |
 | outreach | Messages in the teacher's voice: `admin/outreach`, `admin/broadcast`. Sweeper crons |
+| auto-outreach | «كمّل الدفع» (abandoned checkout, via `checkout_intents`) and «الحساب جاهز» (signup nudge) over WhatsApp + chat. `outreach.whatsapp` entitlement; one send per tick, device/window/daily-cap gated |
 | payments | `payments` (screenshot submissions, wallet purchase), `ingest/transfers` (Android handset), `admin/{payments,transfers,finance}`. Expiry sweeper |
 | player | `courses/:slug/outline`, `lessons/:id/player`, resources, `videos/:id/key` (HLS AES key, entitlement-gated) |
 | profile | `profile/me`, onboarding, section, avatar |

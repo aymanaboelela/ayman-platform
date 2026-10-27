@@ -49,6 +49,7 @@ import {
 } from './checkout-parts';
 import { WalletPayCard } from '@/components/wallet/wallet-pay-card';
 import { newIdempotencyKey } from '@/lib/idempotency-key';
+import { useCheckoutIntent } from '@/lib/checkout-intent';
 import { formatEGPExact } from '@/lib/price';
 import '@/components/wallet/wallet.css';
 /* The checkout frame's stylesheet — shared with the book checkout, `:root`
@@ -343,6 +344,8 @@ export function SubscribePanel({
   // through (the API would 409 it anyway, but landing there via a fresh
   // "choose a plan" screen reads like the platform forgot they already paid).
   const [step, setStep] = useState<Step>('checking');
+  // «كمّل الدفع» — the checkout is on screen. Fire-and-forget; see the hook.
+  useCheckoutIntent('course', courseId, { monthsFromUrl: true });
   // `SellablePaymentPlan`, not `PaymentPlan`: the narrower enum is what makes
   // «٣ شهور» unreachable from this component rather than merely un-rendered —
   // the card is gone below, and the type is what stops a later edit putting one

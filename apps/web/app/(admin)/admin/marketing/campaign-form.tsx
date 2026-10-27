@@ -20,6 +20,7 @@ import {
 import type { Pacing } from '@ayman/contracts/marketing/pacing';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminAutoOutreach as autoCopy } from '@ayman/contracts/copy/admin-auto-outreach';
 import { formatCopy } from '@ayman/contracts/format';
 import { mediaUrl } from '@ayman/ui/branding';
 import { Button } from '@ayman/ui/components/button';
@@ -370,6 +371,23 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
                 {audience.courseIds.length === 0
                   ? c.audienceNotSubscribedOnlyNeedsCourse
                   : c.audienceNotSubscribedOnlyHint}
+              </span>
+            </span>
+          </label>
+
+          {/* «من غير اشتراك في أي كورس» — the backlog the automatic signup
+              nudge deliberately never reaches (it writes about the last week
+              of sign-ups only). Not tied to `courseIds` like the box above:
+              this one asks "subscribed to anything", so it never disables. */}
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={audience.neverSubscribed}
+              onCheckedChange={(v) => setAudience((a) => ({ ...a, neverSubscribed: v === true }))}
+            />
+            <span>
+              {autoCopy.audienceNeverSubscribed}
+              <span className="ms-2 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {autoCopy.audienceNeverSubscribedHint}
               </span>
             </span>
           </label>

@@ -7331,6 +7331,7 @@ const marketing = {
   sendSources: {
     campaign: 'حملة',
     shipping: 'إشعار شحن',
+    outreach: 'رسالة تلقائية',
     test: 'تجربة',
     other: 'تانية',
   },
