@@ -5767,6 +5767,9 @@ const admin = {
     unreachable: 'Dokploy مردّش دلوقتي، فالحالة مش ظاهرة.',
     open: 'افتح الموقع',
     openAdmin: 'لوحته',
+    /** «لوحته» could not sign the one-minute key, or Dokploy does not know the
+     *  stack's address. Plain text on a blank tab — nothing else is there. */
+    openAdminFailed: 'مقدرناش نفتح لوحته دلوقتي. اتأكد إن Dokploy متوصّل وإن CONTROL_PLANE_PRIVATE_KEY موجود، وجرّب تاني.',
     redeploy: 'إعادة نشر',
     redeploying: 'بنبدأ النشر…',
     redeployed: 'النشر بدأ — بياخد حوالي ١٠ دقايق.',

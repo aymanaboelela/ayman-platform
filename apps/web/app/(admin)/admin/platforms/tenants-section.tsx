@@ -196,6 +196,7 @@ function TenantCard({ tenant, now }: { tenant: TenantSummary; now: number }) {
 
         <div className="mt-auto">
           <TenantRowActions
+            tenantKey={tenant.key}
             composeId={tenant.composeId}
             name={tenant.name}
             subject={tenant.subject}

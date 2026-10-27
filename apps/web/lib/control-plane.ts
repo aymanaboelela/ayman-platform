@@ -1,10 +1,11 @@
-import { createPrivateKey, sign } from 'node:crypto';
+import { createPrivateKey, randomUUID, sign, type KeyObject } from 'node:crypto';
 import {
   CONTROL_ISSUER,
   ENTITLEMENTS_VERSION,
   FEATURE_DECLARATIONS,
   type FeatureKey,
 } from '@ayman/contracts/admin/entitlements';
+import { OWNER_SIGN_IN_AUDIENCE, OWNER_SIGN_IN_TTL_SECONDS, OWNER_SIGN_IN_TYP } from '@ayman/contracts/admin/owner-sign-in';
 
 /**
  * The signing half of the control plane — Ayman's stack, and nowhere else.
@@ -146,15 +147,7 @@ export function signEntitlementsDocument(options: {
   enabled: ReadonlySet<string>;
   days: number;
 }): SignedDocument {
-  const pem = (process.env.CONTROL_PLANE_PRIVATE_KEY ?? '').trim();
-  if (pem === '') throw new Error('CONTROL_PLANE_PRIVATE_KEY is not set');
-
-  // A PEM pasted into a panel arrives with literal `\n` as often as with real
-  // newlines, and `createPrivateKey` rejects the first without saying why.
-  const key = createPrivateKey(pem.includes('\\n') ? pem.replace(/\\n/g, '\n') : pem);
-  if (key.asymmetricKeyType !== 'ed25519') {
-    throw new Error(`CONTROL_PLANE_PRIVATE_KEY is ${key.asymmetricKeyType ?? 'unknown'}, not ed25519`);
-  }
+  const key = controlPrivateKey();
 
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + Math.round(options.days * 24 * 60 * 60);
@@ -175,10 +168,58 @@ export function signEntitlementsDocument(options: {
     features,
   };
 
+  return { token: signCompact(header, payload, key), expiresAt };
+}
+
+/**
+ * «لوحته» — a one-minute token that opens this instructor's admin with no
+ * password. See `@ayman/contracts/admin/owner-sign-in` for why it carries a
+ * `typ` and an `aud` an entitlements document never has: without them, the
+ * document sitting in the instructor's own environment would open the door.
+ *
+ * `jti` is what the stack burns on first use, so a token that leaks from a
+ * log after the click is already spent.
+ */
+export function signOwnerSignInToken(tenantKey: string): string {
+  if (!TENANT_KEY_PATTERN.test(tenantKey)) throw new Error(`not a tenant key: ${tenantKey}`);
+  const key = controlPrivateKey();
+  const now = Math.floor(Date.now() / 1000);
+  return signCompact(
+    { alg: 'EdDSA', kid: CONTROL_KEY_ID, typ: OWNER_SIGN_IN_TYP },
+    {
+      iss: CONTROL_ISSUER,
+      sub: tenantKey,
+      aud: OWNER_SIGN_IN_AUDIENCE,
+      jti: randomUUID(),
+      iat: now,
+      nbf: now,
+      exp: now + OWNER_SIGN_IN_TTL_SECONDS,
+    },
+    key,
+  );
+}
+
+/**
+ * Throws when `CONTROL_PLANE_PRIVATE_KEY` is missing or is not an Ed25519 key.
+ */
+function controlPrivateKey(): KeyObject {
+  const pem = (process.env.CONTROL_PLANE_PRIVATE_KEY ?? '').trim();
+  if (pem === '') throw new Error('CONTROL_PLANE_PRIVATE_KEY is not set');
+
+  // A PEM pasted into a panel arrives with literal `\n` as often as with real
+  // newlines, and `createPrivateKey` rejects the first without saying why.
+  const key = createPrivateKey(pem.includes('\\n') ? pem.replace(/\\n/g, '\n') : pem);
+  if (key.asymmetricKeyType !== 'ed25519') {
+    throw new Error(`CONTROL_PLANE_PRIVATE_KEY is ${key.asymmetricKeyType ?? 'unknown'}, not ed25519`);
+  }
+
+  return key;
+}
+
+function signCompact(header: object, payload: object, key: KeyObject): string {
   const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(payload))}`;
   // `null` as the digest: Ed25519 hashes internally and Node rejects any
   // explicit algorithm here.
   const signature = sign(null, Buffer.from(signingInput, 'utf8'), key);
-
-  return { token: `${signingInput}.${b64url(signature)}`, expiresAt };
+  return `${signingInput}.${b64url(signature)}`;
 }

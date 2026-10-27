@@ -34,6 +34,8 @@ import { LoginSecurityService } from './login-security.service';
 import { loginThrottle } from './login-throttle.instance';
 import { createTurnstileCheck } from './human-check';
 import { OTP_PATHS_WITHOUT_DELIVERY } from './phone-identity';
+import { ownerSignIn } from './owner-sign-in.plugin';
+import { IS_AYMAN } from '../common/tenant';
 import { attributeSignup } from '../modules/referrals/referral-attribution';
 
 const env = loadEnv(process.env);
@@ -158,6 +160,8 @@ async function generateAppleClientSecret(
 // to be set in one major dev browser, the prefix (and the `secure`
 // attribute) is applied in production only — development gets a plain,
 // still-httpOnly/SameSite=Lax cookie without a scheme requirement.
+const SESSION_SECONDS = 60 * 60 * 24 * 90;
+
 export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
@@ -226,7 +230,7 @@ export const auth = betterAuth({
   // a live security control for it is not the trade to make. Decided
   // explicitly — see §3.4 of the design.
   session: {
-    expiresIn: 60 * 60 * 24 * 90,
+    expiresIn: SESSION_SECONDS,
     updateAge: 60 * 60 * 24,
   },
 
@@ -451,6 +455,13 @@ export const auth = betterAuth({
         });
       },
     }),
+
+    /**
+     * «لوحته» — the platform owner opening this instructor's admin from his
+     * control plane, with no password. Not registered on his own stack at
+     * all, so the route does not exist there (404), not merely refuses.
+     */
+    ...(IS_AYMAN ? [] : [ownerSignIn({ prisma, appUrl: env.APP_URL, sessionSeconds: SESSION_SECONDS })]),
   ],
 
   advanced: {
