@@ -282,8 +282,9 @@ export function checkTenantEnv(env, options = {}) {
   //
   // An unknown slug is dropped silently at boot, and one typo in
   // `prep1,prep2,prpe3` would take تالتة إعدادي off the onboarding picker and
-  // out of the seed. Programming is a one-system stack (البكالوريا, fixed
-  // section), so grades there would be a second, contradicting answer.
+  // out of the seed. A programming stack may list grades too: its البكالوريا
+  // grades keep the fixed section, anything else is its own system
+  // (`apps/web/lib/code-section.ts`).
   const grades = get(env, 'TENANT_GRADES');
   if (grades !== '') {
     const unknown = grades
@@ -295,9 +296,6 @@ export function checkTenantEnv(env, options = {}) {
         `TENANT_GRADES has unknown grade(s): ${unknown.map((u) => `"${u}"`).join(', ')}. ` +
           `Use a comma list of: ${GRADE_SLUGS.join(', ')} (or leave it empty).`,
       );
-    }
-    if (subject === '' || subject === 'programming_cs') {
-      fail('TENANT_GRADES is for a non-programming stack; a programming stack has one fixed section.');
     }
   }
 

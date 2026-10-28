@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import type { UseFormWatch } from 'react-hook-form';
 import type { Onboarding } from '@ayman/contracts/onboarding';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { CODE_ASKS_GRADE } from '@/lib/code-section';
 
 /**
  * The onboarding wizard's answers, kept alive across ONE navigation away and
@@ -76,8 +77,12 @@ const DRAFT_FIELDS = [
    * track anyway, a forged id fails the API's S10 check like a wrong one, and
    * leaving them out would make a return from the privacy page silently drop
    * two answers the form had shown as given.
+   *
+   * A programming stack with grades asks the grade, which is the system and
+   * the year — without the system a restored «تالتة إعدادي» would come back
+   * as year 3 alone and be filed as «تالتة بكالوريا» (`lib/code-section.ts`).
    */
-  ...(TEACHES_CODE ? [] : (['system', 'trackId'] as const)),
+  ...(TEACHES_CODE ? (CODE_ASKS_GRADE ? (['system'] as const) : []) : (['system', 'trackId'] as const)),
 ] as const satisfies ReadonlyArray<keyof Onboarding>;
 
 /**

@@ -6,7 +6,7 @@ vi.mock('@/lib/tenant-grades', () => ({
   TENANT_GRADES: parseTenantGrades('prep1,prep2,prep3,sec1'),
 }));
 
-const { courseYearLabel, yearPageOf, yearPages } = await import('./grade-pages');
+const { courseYearLabel, legacyGradeSegment, yearPageOf, yearPages } = await import('./grade-pages');
 
 describe('grade pages', () => {
   it('has one page per grade, keyed by slug', () => {
@@ -21,6 +21,13 @@ describe('grade pages', () => {
   it('404s the numbered pages and a grade the stack does not teach', () => {
     expect(yearPageOf('1')).toBeNull();
     expect(yearPageOf('sec2')).toBeNull();
+  });
+
+  it('moves an old number URL to the one secondary grade with that year', () => {
+    expect(legacyGradeSegment('1')).toBe('sec1');
+    // Only prep3 has year 3 — a number never meant الإعدادية.
+    expect(legacyGradeSegment('3')).toBeNull();
+    expect(legacyGradeSegment('prep1')).toBeNull();
   });
 
   it('matches a course by system AND year', () => {

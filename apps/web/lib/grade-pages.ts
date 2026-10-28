@@ -1,4 +1,4 @@
-import type { Grade } from '@ayman/contracts/grades';
+import { PREPARATORY_SYSTEM, type Grade } from '@ayman/contracts/grades';
 import { copy } from '@ayman/contracts';
 import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
@@ -91,6 +91,22 @@ export function yearPageOf(raw: string): YearPage | null {
   // `Number('')` is 0 and `Number(' 1 ')` is 1 — neither is a valid segment,
   // so the shape is checked before the value.
   return /^[123]$/.test(raw) ? numberPage(Number(raw)) : null;
+}
+
+/**
+ * The grade page an old number URL (`/years/2`) now lives at, or null.
+ *
+ * A stack that gains `TENANT_GRADES` after launch — a programming stack adding
+ * «تالتة إعدادي» — already has `/years/1`… indexed and linked from shared
+ * posts, and those segments stop parsing the day the grades ship. The number
+ * meant a secondary year, so it moves to the ONE secondary grade with that
+ * year; two candidates (`sec2` and `bac2`) or none is a 404, as before.
+ */
+export function legacyGradeSegment(raw: string): string | null {
+  if (!ASKS_GRADE || !/^[123]$/.test(raw)) return null;
+  const year = Number(raw);
+  const candidates = TENANT_GRADES.filter((g) => g.system !== PREPARATORY_SYSTEM.slug && g.year === year);
+  return candidates.length === 1 ? candidates[0]!.slug : null;
 }
 
 /** `isYearIndexable` for a page — the same rule, by the page's own predicate. */

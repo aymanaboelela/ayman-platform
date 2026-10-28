@@ -21,6 +21,7 @@ import {
   yearOptionsFor,
 } from '@/lib/subject-section';
 import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
+import { CODE_ASKS_GRADE } from '@/lib/code-section';
 import { SelectField } from './select-field';
 
 /** `useSyncExternalStore` with nothing to subscribe to — see `live` below. */
@@ -94,8 +95,9 @@ export function SectionPickers({
   const years = yearOptionsFor(taxonomy, shownSystem);
   const tracks = trackOptionsFor(taxonomy, shownSystem, shownYear);
 
+  // Never on a programming stack: its track is fixed (`lib/code-section.ts`).
   const trackSelect =
-    tracks.length > 0 ? (
+    tracks.length > 0 && !CODE_ASKS_GRADE ? (
       <SelectField
         key={`tracks-${shownSystem ?? 'none'}-${shownYear ?? 'none'}`}
         variant={variant}
