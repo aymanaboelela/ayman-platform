@@ -3959,6 +3959,28 @@
    keeps the whole subject on screen at every viewport, and `object-position:
    bottom` spends the slack at the top, where the background is, rather than
    on his chin. */
+/* A warm pool of the brand colour behind the photograph. A cut-out portrait
+   with a dark composition (a suit, a dark backdrop shape) vanished into the
+   dark theme's ground — the subject's outline was the only edge left. The
+   glow gives it a ground of its own in both themes without framing it. */
+[data-preset='studio'] .st-hero[data-has-portrait] .st-hero__stage::before {
+  content: '';
+  position: absolute;
+  inset: 8% 4% 0;
+  z-index: 0;
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--p-200), transparent 30%), transparent);
+  pointer-events: none;
+}
+
+:root:not([data-theme='light']) [data-preset='studio'] .st-hero[data-has-portrait] .st-hero__stage::before {
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--p-500), transparent 40%), transparent 92%);
+}
+
+[data-preset='studio'] .st-hero[data-has-portrait] .st-hero__portrait {
+  position: relative;
+  z-index: 1;
+}
+
 [data-preset='studio'] .st-hero__portrait {
   display: block;
   inline-size: 100%;
@@ -4271,6 +4293,29 @@
 [data-preset='studio'] .st-year__c {
   color: var(--st-ink-2);
   font-size: var(--fs-text-sm);
+}
+
+/* Wide grids: four tiles a row leave ~10rem for the name once the medallion
+   and the arrow take theirs, and «الصف الأول الإعدادي» broke over two lines
+   in every tile. Stacked, the name gets the tile's whole width. A phone keeps
+   the row — one tile per line has the width already. */
+@media (min-width: 44rem) {
+  [data-preset='studio'] .st-year__link {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 1rem;
+    padding: 1.375rem 1.5rem;
+  }
+
+  [data-preset='studio'] .st-year__body {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  [data-preset='studio'] .st-year__go {
+    margin-inline-start: auto;
+    align-self: center;
+  }
 }
 
 [data-preset='studio'] .st-year__go {
@@ -4776,6 +4821,30 @@
   --site-line-strong: var(--p-200);
   --site-fg: var(--p-950);
   --site-fg-2: color-mix(in oklch, var(--p-950), transparent 32%);
+  /* The header's «حساب جديد» is the same button as the opener's «يلا نبدأ».
+     It was `--accent-cta`, a FIXED orange-red in `@ayman/ui` that does not
+     follow the brand hue — so on any tenant hue the header CTA and the page's
+     own CTA were two different colours one row apart. Same step and hover as
+     `.st-btn--solid`. */
+  --site-accent-solid: var(--p-700);
+  --site-accent-solid-hover: var(--p-950);
+  --site-on-accent: var(--n-1);
+}
+
+/* The dark half of the same fix: the step `--st-accent` takes in dark. */
+:root:root:not([data-theme='light']) .site:has(main[data-preset='studio']) {
+  --site-accent-solid: var(--p-400);
+  --site-accent-solid-hover: var(--p-300);
+  --site-on-accent: var(--p-950);
+}
+
+/* «لغات» paints itself in the `--e-*` ramp, a fixed rose. Beside a brand
+   accent that is a second red on the card — read as a warning rather than as
+   a school type. On this page it takes the brand's own wash. */
+[data-preset='studio'] .stream-chip--languages {
+  border-color: var(--st-rule);
+  background: var(--st-wash);
+  color: var(--st-accent);
 }
 
 /* ⚠️ `.site-nav--over` is set from `[data-site-hero]`'s scroll position alone
