@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import {
+  AUTO_SYNC_FRESH_MS,
   SocialCountsInputSchema,
   SocialCountsSchema,
+  isAutoSynced,
   shortFollowerCount,
   visibleSocialCounts,
 } from '@ayman/contracts/admin/social-counts';
@@ -75,5 +77,36 @@ describe('storage', () => {
   it('rejects negative and fractional counts', () => {
     expect(SocialCountsInputSchema.safeParse({ youtube: -1 }).success).toBe(false);
     expect(SocialCountsInputSchema.safeParse({ youtube: 1.5 }).success).toBe(false);
+  });
+});
+
+describe('automatic counts', () => {
+  // A row saved before the YouTube sync existed has neither key.
+  it('reads a row saved before the sync existed as all manual', () => {
+    const counts = SocialCountsSchema.parse({ youtube: 120_000, updatedAt: '2026-10-01T00:00:00.000Z' });
+    expect(counts.sources).toBeUndefined();
+    expect(isAutoSynced(counts, 'youtube')).toBe(false);
+  });
+
+  // Rollback safety: an older image re-parsing a row a newer one wrote.
+  it('strips a stored key it does not know instead of refusing the whole settings row', () => {
+    expect(SiteSettingsSchema.parse({ socialCounts: { youtube: 5, someFutureKey: true } }).socialCounts).not.toHaveProperty(
+      'someFutureKey',
+    );
+  });
+
+  it('still refuses `sources` and `syncedAt` from the form', () => {
+    expect(SocialCountsInputSchema.safeParse({ sources: { youtube: 'auto' } }).success).toBe(false);
+    expect(SocialCountsInputSchema.safeParse({ syncedAt: '2026-10-29T00:00:00.000Z' }).success).toBe(false);
+  });
+
+  it('is auto only while the last sync is fresh', () => {
+    const syncedAt = '2026-10-29T00:00:00.000Z';
+    const at = Date.parse(syncedAt);
+    const counts = { sources: { youtube: 'auto' as const }, syncedAt };
+    expect(isAutoSynced(counts, 'youtube', at + 1000)).toBe(true);
+    expect(isAutoSynced(counts, 'youtube', at + AUTO_SYNC_FRESH_MS)).toBe(false);
+    expect(isAutoSynced(counts, 'facebook', at + 1000)).toBe(false);
+    expect(isAutoSynced({ sources: { youtube: 'auto' }, syncedAt: null }, 'youtube', at)).toBe(false);
   });
 });

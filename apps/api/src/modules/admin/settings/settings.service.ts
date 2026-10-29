@@ -12,7 +12,11 @@ import {
   type SettingsSection,
   type SiteSettings,
 } from '@ayman/contracts/admin/settings';
-import { SocialCountsInputSchema, type SocialCounts } from '@ayman/contracts/admin/social-counts';
+import {
+  SocialCountsInputSchema,
+  isAutoSynced,
+  type SocialCounts,
+} from '@ayman/contracts/admin/social-counts';
 import { currentActor } from '../../../audit/audit-context';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -177,6 +181,12 @@ export class SettingsService {
    *
    * `updatedAt` is stamped HERE, on every save, so «آخر تحديث» on the admin
    * card is when the numbers were last confirmed rather than something typed.
+   *
+   * While YouTube is kept by the automatic sync (`isAutoSynced`), the stored
+   * figure wins over whatever the form sent for it: the admin card shows that
+   * field read-only, and this is the same rule enforced where it cannot be
+   * bypassed. Once the sync has gone quiet past `AUTO_SYNC_FRESH_MS` the
+   * field is the admin's again, and saving it marks it manual.
    */
   async updateSocialCounts(payload: unknown): Promise<SocialCounts> {
     const result = SocialCountsInputSchema.safeParse(payload);
@@ -186,27 +196,100 @@ export class SettingsService {
         issues: result.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
       });
     }
-    const value: SocialCounts = { ...result.data, updatedAt: new Date().toISOString() };
+    const input = result.data;
 
-    const next = await this.persist('socialCounts', value);
+    const next = await this.persist('socialCounts', (current: SiteSettings): SocialCounts => {
+      const stored = current.socialCounts;
+      const keepYoutube = isAutoSynced(stored, 'youtube');
+      return {
+        ...input,
+        youtube: keepYoutube ? stored.youtube : input.youtube,
+        updatedAt: new Date().toISOString(),
+        // Every network the admin just saved is manual; only a live sync keeps YouTube.
+        ...(keepYoutube ? { sources: { youtube: 'auto' as const } } : {}),
+        ...(stored.syncedAt !== undefined ? { syncedAt: stored.syncedAt } : {}),
+      };
+    });
 
     await this.audit.record({
       action: 'settings:update',
       resourceType: AUDIT_RESOURCES.siteSettings,
       resourceId: String(SITE_SETTINGS_ID),
       outcome: 'success',
-      metadata: { section: 'socialCounts', value },
+      metadata: { section: 'socialCounts', value: next.socialCounts },
     });
 
     return next.socialCounts;
   }
 
   /**
+   * The automatic sync's write (`SocialCountsSyncService`): one network's
+   * figure from the network itself. Only YouTube has one.
+   *
+   * `count` — the figure, marked `auto`, with `syncedAt` and `updatedAt` now.
+   * `hidden` — the channel owner hid the count on YouTube, so this site must
+   * not publish it either: a figure the sync itself wrote is cleared, and the
+   * field is handed back to the admin. A figure the admin typed is left alone
+   * — showing it is their call, not the sync's.
+   *
+   * Audited only when the figure or its source changed; a daily "still
+   * 120,000" is not a settings change anybody needs a trail of. Returns
+   * whether anything was written that the landing page would show.
+   */
+  async applyYoutubeSync(
+    result: { kind: 'count'; count: number } | { kind: 'hidden' },
+  ): Promise<{ changed: boolean; counts: SocialCounts }> {
+    const now = new Date().toISOString();
+    // Filled inside the transaction; an object so the closure's writes are visible here.
+    const seen: { before?: SocialCounts } = {};
+
+    const next = await this.persist('socialCounts', (current: SiteSettings): SocialCounts => {
+      const before = current.socialCounts;
+      seen.before = before;
+      if (result.kind === 'count') {
+        return { ...before, youtube: result.count, sources: { ...before.sources, youtube: 'auto' }, syncedAt: now, updatedAt: now };
+      }
+      if (before.sources?.youtube === 'auto') {
+        return { ...before, youtube: null, sources: { ...before.sources, youtube: 'manual' }, updatedAt: now };
+      }
+      return before;
+    });
+
+    const before = seen.before!;
+    const after = next.socialCounts;
+    const changed = before.youtube !== after.youtube || before.sources?.youtube !== after.sources?.youtube;
+    if (changed) {
+      await this.audit.record({
+        action: 'settings:update',
+        resourceType: AUDIT_RESOURCES.siteSettings,
+        resourceId: String(SITE_SETTINGS_ID),
+        outcome: 'success',
+        // No actor: nobody pressed anything. Said in the metadata so the row
+        // does not read as a write with its actor missing.
+        metadata: {
+          section: 'socialCounts',
+          by: 'youtube-sync',
+          youtube: { from: before.youtube, to: after.youtube, hidden: result.kind === 'hidden' },
+        },
+      });
+    }
+
+    return { changed, counts: next.socialCounts };
+  }
+
+  /**
    * Replace one top-level key of the singleton and leave the rest untouched.
    * Callers validate first; this re-parses the whole blob so a stored row can
    * never hold a shape `read()` would refuse.
+   *
+   * `value` may be a function of the current settings, evaluated inside the
+   * transaction — for the writes that merge with what is stored rather than
+   * replace it (the social counts' manual save and automatic sync).
    */
-  private async persist(key: keyof SiteSettings, value: unknown): Promise<SiteSettings> {
+  private async persist(
+    key: keyof SiteSettings,
+    value: unknown | ((current: SiteSettings) => unknown),
+  ): Promise<SiteSettings> {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.siteSetting.findUniqueOrThrow({
         where: { id: SITE_SETTINGS_ID },
@@ -214,7 +297,8 @@ export class SettingsService {
       });
 
       const current = SiteSettingsSchema.parse(row.data ?? {});
-      const merged = SiteSettingsSchema.parse({ ...current, [key]: value });
+      const resolved = typeof value === 'function' ? (value as (c: SiteSettings) => unknown)(current) : value;
+      const merged = SiteSettingsSchema.parse({ ...current, [key]: resolved });
 
       await tx.siteSetting.update({
         where: { id: SITE_SETTINGS_ID },

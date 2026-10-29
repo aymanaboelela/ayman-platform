@@ -7,9 +7,13 @@ import { socialCountsCopy as c } from '@ayman/contracts/copy/social-counts';
  * «عدد السوشيال ميديا» — follower counts typed in by the admin, shown on the
  * landing page as social proof.
  *
- * Typed, not fetched: none of the four networks gives a follower count to a
- * site without an app review and a token per account, and a number that is a
- * week old is still the right order of magnitude for «+120 ألف».
+ * Typed, not fetched — except YouTube. Facebook, Instagram and TikTok give a
+ * follower count to a site only after an app review and a token per account,
+ * and a number that is a week old is still the right order of magnitude for
+ * «+120 ألف». YouTube's Data API answers a public channel's subscriber count
+ * to a plain API key, so where the stack has `YOUTUBE_API_KEY` the API keeps
+ * that one figure current itself (`SocialCountsSyncService`) and marks it
+ * `sources.youtube = 'auto'`.
  *
  * `null` is "not entered" and renders nothing — distinct from `0`, which is a
  * real count nobody would want shown either, so the landing filters both. The
@@ -41,16 +45,64 @@ export const SocialCountsInputSchema = z
 
 export type SocialCountsInput = z.infer<typeof SocialCountsInputSchema>;
 
+export const SOCIAL_COUNT_SOURCES = ['manual', 'auto'] as const;
+export type SocialCountSource = (typeof SOCIAL_COUNT_SOURCES)[number];
+
+const source = z.enum(SOCIAL_COUNT_SOURCES).optional();
+
 /**
  * What is stored and returned: the input plus when it was last saved.
  * `updatedAt` is stamped by the API on every save, never sent by the form —
  * a «آخر تحديث» the admin could type would say nothing.
+ *
+ * `sources` and `syncedAt` are OPTIONAL with no default, so a row saved before
+ * the auto-sync existed parses unchanged and reads as "all manual". Absent
+ * `sources.<network>` means `'manual'`.
+ *
+ * ⚠️ Deliberately NOT `.strict()` (unlike the input schema above): this is the
+ * shape `SiteSettingsSchema` re-parses on EVERY settings read, the root
+ * layout's included. A strict stored shape would turn the next field anybody
+ * adds here into a rollback hazard — the previous image would refuse the row
+ * the new one wrote, and every settings read would 500 until the key was
+ * removed by hand. Unknown keys are stripped instead. The client can still
+ * not send them: the PATCH is validated against `SocialCountsInputSchema`.
  */
-export const SocialCountsSchema = SocialCountsInputSchema.extend({
+export const SocialCountsSchema = z.object({
+  ...SocialCountsInputSchema.shape,
   updatedAt: z.iso.datetime().nullable().default(null),
-}).strict();
+  sources: z
+    .object({ youtube: source, facebook: source, instagram: source, tiktok: source })
+    .optional(),
+  /** Last SUCCESSFUL automatic refresh — what «آخر مزامنة» on the admin card says. */
+  syncedAt: z.iso.datetime().nullable().optional(),
+});
 
 export type SocialCounts = z.infer<typeof SocialCountsSchema>;
+
+/**
+ * How long an automatic figure stays the API's to keep after its last
+ * successful sync. The job runs daily; three days absorbs a couple of failed
+ * runs (quota, a YouTube outage) without the admin card flapping, and past it
+ * the figure is handed back to the admin — a sync that stopped (key removed,
+ * feature closed, channel link deleted) must not leave a read-only field
+ * nobody can correct.
+ */
+export const AUTO_SYNC_FRESH_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether `network`'s figure is currently kept by the automatic sync — the
+ * ONE rule both the admin card (read-only field) and the API's manual save
+ * (keeps the synced figure) ask, so they cannot disagree.
+ */
+export function isAutoSynced(
+  counts: Pick<SocialCounts, 'sources' | 'syncedAt'>,
+  network: SocialCountNetwork,
+  now: number = Date.now(),
+): boolean {
+  if (counts.sources?.[network] !== 'auto' || !counts.syncedAt) return false;
+  const syncedAt = Date.parse(counts.syncedAt);
+  return Number.isFinite(syncedAt) && now - syncedAt < AUTO_SYNC_FRESH_MS;
+}
 
 /**
  * The networks that have a number worth showing, in display order.

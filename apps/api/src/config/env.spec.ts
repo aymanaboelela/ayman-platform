@@ -96,6 +96,11 @@ describe('loadEnv', () => {
     expect(env.APPLE_CLIENT_ID).toBeUndefined();
   });
 
+  it('treats an empty YOUTUBE_API_KEY as unset (the follower-count sync is off, the API boots)', () => {
+    expect(loadEnv({ ...VALID, YOUTUBE_API_KEY: '' }).YOUTUBE_API_KEY).toBeUndefined();
+    expect(loadEnv({ ...VALID, YOUTUBE_API_KEY: 'test-youtube-key' }).YOUTUBE_API_KEY).toBe('test-youtube-key');
+  });
+
   // The pairing rule still has to bite on a half-filled pair — normalising ""
   // to "absent" must not turn a real misconfiguration into a silent no-op.
   it('still rejects a real client id paired with an empty secret', () => {

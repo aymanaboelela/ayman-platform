@@ -11,7 +11,7 @@ import { SeoForm } from '../seo-form';
 import { ContactForm } from '../contact-form';
 import { ShippingForm } from '../shipping-form';
 import { SocialCountsForm } from '../social-counts-form';
-import { SOCIAL_COUNT_NETWORKS, type SocialCountNetwork } from '@ayman/contracts/admin/social-counts';
+import { SOCIAL_COUNT_NETWORKS, isAutoSynced, type SocialCountNetwork } from '@ayman/contracts/admin/social-counts';
 import { socialCountsCopy } from '@ayman/contracts/copy/social-counts';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { formatArticleDate } from '@/lib/format';
@@ -62,7 +62,11 @@ export default async function SettingsPage() {
    * `loadSocialCountItems` uses, so «مفيش لينك» is said exactly when the
    * figure will really render without one.
    */
-  const { youtube, facebook, instagram, tiktok, updatedAt } = settings.socialCounts;
+  const { youtube, facebook, instagram, tiktok, updatedAt, syncedAt } = settings.socialCounts;
+  // The same rule the API's save enforces, so the read-only field and the
+  // figure the server keeps cannot disagree.
+  const youtubeSyncedAt =
+    syncedAt && isAutoSynced(settings.socialCounts, 'youtube') ? formatArticleDate(syncedAt) : null;
   const linked = Object.fromEntries(
     SOCIAL_COUNT_NETWORKS.map((network) => [
       network,
@@ -142,6 +146,7 @@ export default async function SettingsPage() {
                 <SocialCountsForm
                   defaultValues={{ youtube, facebook, instagram, tiktok }}
                   lastUpdated={updatedAt ? formatArticleDate(updatedAt) : null}
+                  youtubeSyncedAt={youtubeSyncedAt}
                   linked={linked}
                 />
               </CardBody>

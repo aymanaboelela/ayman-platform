@@ -43,5 +43,10 @@ export const socialCountsCopy = {
     /** `{date}` — when the counts were last saved. */
     lastUpdated: 'آخر تحديث: {date}',
     neverUpdated: 'لسه ما اتكتبش أي رقم.',
+    /**
+     * Under the YouTube field while the API keeps it (`isAutoSynced`); the
+     * field is read-only then. `{date}` — the last successful sync.
+     */
+    autoSynced: 'بيتحدّث تلقائياً من يوتيوب · آخر مزامنة: {date}',
   },
 } as const;

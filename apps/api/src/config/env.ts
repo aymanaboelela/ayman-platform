@@ -389,6 +389,18 @@ const schema = z
     ANTHROPIC_API_KEY: optionalSecret,
 
     /**
+     * «عدد السوشيال ميديا» — a YouTube Data API v3 key (Google Cloud console,
+     * "API key", restricted to the YouTube Data API). With it, and with the
+     * `socialCounts` feature open, `SocialCountsSyncService` refreshes the
+     * YouTube subscriber figure once a day from the channel in
+     * `contact.youtube`. Without it the figure is typed in like the others.
+     *
+     * `optionalSecret`, never a bare `.optional()`: an unfilled compose
+     * variable arrives as `""`, and `""` must mean "off", not a boot crash.
+     */
+    YOUTUBE_API_KEY: optionalSecret,
+
+    /**
      * Web Push — the leg of the notification system that reaches a browser
      * with no tab open. ALL THREE OPTIONAL, same discipline as the assistant
      * chat keys above: the platform is whole without them, `PushService`

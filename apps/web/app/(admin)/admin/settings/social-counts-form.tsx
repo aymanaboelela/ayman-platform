@@ -29,6 +29,11 @@ export interface SocialCountsFormProps {
   lastUpdated: string | null;
   /** Whether the landing page has a profile to link each count to. */
   linked: Record<SocialCountNetwork, boolean>;
+  /**
+   * When the API keeps the YouTube figure itself (`isAutoSynced`): the last
+   * sync, formatted. `null` = YouTube is typed like the rest.
+   */
+  youtubeSyncedAt?: string | null;
 }
 
 /** See `shipping-form.tsx`: `.default()` fields make the Zod INPUT optional. */
@@ -45,7 +50,7 @@ type SocialCountsFormValues = z.input<typeof SocialCountsInputSchema>;
  * the rounding is deliberate (always down, «+» when it did) and the admin
  * should see it before a visitor does.
  */
-export function SocialCountsForm({ defaultValues, lastUpdated, linked }: SocialCountsFormProps) {
+export function SocialCountsForm({ defaultValues, lastUpdated, linked, youtubeSyncedAt = null }: SocialCountsFormProps) {
   const router = useRouter();
   const [saveError, setSaveError] = useState<string | null>(null);
   const form = useForm<SocialCountsFormValues, unknown, SocialCountsInput>({
@@ -84,7 +89,15 @@ export function SocialCountsForm({ defaultValues, lastUpdated, linked }: SocialC
 
       {SOCIAL_COUNT_NETWORKS.map((network) => {
         const value = form.watch(network);
+        /*
+         * Read-only rather than an override: the next daily sync would undo
+         * an override anyway, and the API's save keeps the synced figure
+         * whatever is sent (`SettingsService.updateSocialCounts`). The field
+         * becomes typable again by itself once the sync goes quiet.
+         */
+        const auto = network === 'youtube' && youtubeSyncedAt !== null;
         const hints = [
+          auto ? formatCopy(c.admin.autoSynced, { date: youtubeSyncedAt }) : null,
           typeof value === 'number' && Number.isInteger(value) && value > 0
             ? formatCopy(c.admin.preview, { preview: `${shortFollowerCount(value)} ${c.networks[network].unit}` })
             : null,
@@ -105,6 +118,7 @@ export function SocialCountsForm({ defaultValues, lastUpdated, linked }: SocialC
                 inputMode="numeric"
                 dir="ltr"
                 value={value ?? ''}
+                readOnly={auto}
                 onChange={(event) => setCount(network, event.target.value)}
               />
             )}
