@@ -3127,6 +3127,11 @@ describe('BookOrdersService', () => {
       expect(byId.get(first.id)).toBe(2);
       expect(byId.get(second.id)).toBe(2);
       expect(byId.get(third.id)).toBe(2);
+      // «هو اللي قبله اتثبت ولا لأ؟» — the same two, by status.
+      expect(list.rows.find((row) => row.id === first.id)?.previousOrderStatuses).toEqual([
+        { status: 'address_only', count: 2 },
+      ]);
+      expect(list.rows.find((row) => row.id === only.id)?.previousOrderStatuses).toEqual([]);
     });
 
     /** «طلب قبل كده» is a claim about a real history, and a row the admin hid
