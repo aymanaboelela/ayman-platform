@@ -1,5 +1,5 @@
 import type { BacklogItem } from '@ayman/contracts/backlog';
-import { buildPlan, interleave } from './plan-schedule';
+import { buildPlan, interleave, planQueue } from './plan-schedule';
 
 function item(courseId: string, n: number): BacklogItem {
   return {
@@ -104,5 +104,59 @@ describe('buildPlan', () => {
       buildPlan({ today: '2026-10-27', settings: { examDate: '2026-10-20', daysOff: [] }, items: twenty, doneToday: 0 })
         .status,
     ).toBe('past');
+  });
+});
+
+describe('the student\'s picks', () => {
+  const settings = { examDate: '2026-11-16', daysOff: [] };
+
+  it('leaves a row taken out of the plan out of every day', () => {
+    const plan = buildPlan({
+      today: '2026-10-27',
+      settings,
+      items: twenty,
+      picks: { skipped: ['a-0', 'a-1', 'a-2', 'a-3'], first: [] },
+      doneToday: 0,
+    });
+    expect(plan.remaining).toBe(16);
+    expect(plan.total).toBe(20);
+    expect(plan.perDay).toBe(1);
+    expect(plan.days[0]?.items.map((entry) => entry.id)).toEqual(['a-4']);
+  });
+
+  it('plans the starred rows first, in the order they were starred', () => {
+    const queue = planQueue([item('a', 1), item('a', 2), item('b', 1), item('b', 2)], {
+      skipped: [],
+      first: ['b-2', 'a-2'],
+    });
+    expect(queue.map((entry) => entry.id)).toEqual(['b-2', 'a-2', 'a-1', 'b-1']);
+  });
+
+  it('never plans a row that is both starred and taken out', () => {
+    const queue = planQueue([item('a', 1), item('a', 2)], { skipped: ['a-2'], first: ['a-2'] });
+    expect(queue.map((entry) => entry.id)).toEqual(['a-1']);
+  });
+
+  it('forgets picks for rows that have left the backlog', () => {
+    const plan = buildPlan({
+      today: '2026-10-27',
+      settings,
+      items: twenty.slice(5),
+      picks: { skipped: ['a-0', 'a-9'], first: ['a-1', 'a-6'] },
+      doneToday: 0,
+    });
+    expect(plan.picks).toEqual({ skipped: ['a-9'], first: ['a-6'] });
+  });
+
+  it('is clear when everything was taken out', () => {
+    const plan = buildPlan({
+      today: '2026-10-27',
+      settings,
+      items: twenty.slice(0, 2),
+      picks: { skipped: ['a-0', 'a-1'], first: [] },
+      doneToday: 0,
+    });
+    expect(plan.status).toBe('clear');
+    expect(plan.total).toBe(2);
   });
 });

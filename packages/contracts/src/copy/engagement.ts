@@ -109,6 +109,53 @@ export const engagementCopy = {
     },
     remaining: { one: 'حاجة متبقية', two: 'حاجتين متبقيين', few: '{count} حاجات متبقية', many: '{count} حاجة متبقية' },
     revisionFrom: 'المراجعة من {date}',
+    /** The two steps of making a plan — the date, then the backlog. */
+    steps: {
+      label: 'خطوات الخطة',
+      when: 'الميعاد',
+      what: 'المتراكم',
+      next: 'التالي: المتراكم',
+      back: 'رجوع للميعاد',
+    },
+    /**
+     * «المتراكم اللي في الخطة» — the platform's backlog, ticked in or out by the
+     * student, with a star for what comes first. Nouns and passives only: the
+     * rows are what is «في الخطة»، never the reader.
+     */
+    picker: {
+      title: 'المتراكم اللي في الخطة',
+      body: 'المنصة جمعت كل محاضرة وكويز وواجب مفتوح ولسه متعملش. اللي اتذاكر برّه المنصة أو مش مطلوب يتشال من الخطة، واللي محتاج يخلص بدري ياخد نجمة ويطلع الأول.',
+      newNote: 'أي حاجة جديدة تنزل بتدخل الخطة لوحدها.',
+      inPlan: 'في الخطة',
+      outOfPlan: 'برّه الخطة',
+      /** `{n}` of `{total}`, both drawn as isolated numbers beside it. */
+      of: 'من',
+      perDay: 'في اليوم',
+      perDayNone: 'مفيش حمل',
+      load: { light: 'حمل خفيف', ok: 'حمل مظبوط', tight: 'الحمل تقيل' },
+      bulk: 'كله مرة واحدة',
+      all: 'الكل في الخطة',
+      kindsIn: 'في الخطة',
+      course: 'الكورس كله في الخطة',
+      first: 'الأول',
+      firstOn: 'نجمة: يطلع الأول في الخطة',
+      firstOff: 'من غير نجمة',
+      toggleIn: 'يدخل الخطة',
+      toggleOut: 'يتشال من الخطة',
+      save: 'حفظ الخطة',
+      saving: 'بنحفظ…',
+      cancel: 'إلغاء',
+      empty: 'مفيش متراكم دلوقتي — أول ما ينزل جديد هيدخل الخطة لوحده.',
+      failed: 'الاختيار ماتحفظش. محاولة تانية؟',
+    },
+    /** The card in the plan that sums up the picks. */
+    picks: {
+      title: 'المتراكم في الخطة',
+      edit: 'تعديل المتراكم',
+      skipped: { one: 'حاجة برّه الخطة', two: 'حاجتين برّه الخطة', few: '{count} حاجات برّه الخطة', many: '{count} حاجة برّه الخطة' },
+      starred: { one: 'حاجة بنجمة', two: 'حاجتين بنجمة', few: '{count} حاجات بنجمة', many: '{count} حاجة بنجمة' },
+      all: 'كل المتراكم في الخطة',
+    },
     edit: 'تعديل الخطة',
     remove: 'مسح الخطة',
     removeConfirm: 'الخطة هتتمسح، والمتراكم زي ما هو.',
