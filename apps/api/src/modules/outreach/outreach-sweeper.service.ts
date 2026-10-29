@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { OutreachFacts, OutreachTopic } from '@ayman/contracts/outreach/compose';
+import { resultRoute } from '@ayman/contracts/outreach/guardian-result';
+import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import { isFeatureEnabled } from '../../common/entitlements';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   OutreachService,
@@ -147,6 +150,10 @@ export class OutreachSweeper {
         scaledScore: true,
         gradeOutOf: true,
         quiz: { select: { lesson: { select: { title: true } } } },
+        // Only for «نتيجة الامتحان تتبعت لمين»: in `guardian` mode the
+        // student's own message is skipped exactly when the guardian can be
+        // reached, and this is how the two sweepers agree on "can".
+        user: { select: { studentProfile: { select: { fatherPhone: true } } } },
         questions: {
           orderBy: { slotPosition: 'asc' },
           select: {
@@ -162,17 +169,29 @@ export class OutreachSweeper {
     if (attempts.length === 0) return 0;
 
     const pending = await this.unsent('quiz_result', attempts.map((a) => ({ userId: a.userId, dedupeKey: a.id })));
+    const guardianChannel = guardianChannelEnabled();
 
     let sent = 0;
     for (const attempt of attempts) {
       if (!pending.has(`${attempt.userId}:${attempt.id}`)) continue;
 
-      const outOf = Number(attempt.gradeOutOf);
+      /*
+       * `quizResultTo: 'guardian'` — the parent is told INSTEAD, by
+       * `GuardianResultSweeper` over WhatsApp. Skipping here writes nothing,
+       * so flipping the setting back to `student`/`both` inside the window
+       * still delivers this paper's message on the next pass.
+       */
+      const route = resultRoute({
+        setting: context.settings.quizResultTo,
+        guardianChannel,
+        guardianPhone: normalizeEgyptianPhone(attempt.user.studentProfile?.fatherPhone ?? ''),
+      });
+      if (!route.student) continue;
+
       const facts: OutreachFacts = {
         kind: 'quiz_result',
         quizTitle: attempt.quiz.lesson.title,
-        scorePercent:
-          outOf > 0 ? clampPercent(Math.round((Number(attempt.scaledScore ?? 0) / outOf) * 100)) : 0,
+        scorePercent: scorePercentOf(attempt.scaledScore, attempt.gradeOutOf),
         ...topicsFor(attempt.questions),
       };
 
@@ -547,6 +566,16 @@ export class OutreachSweeper {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Whether this stack can reach a guardian at all: the guardian's result goes
+ * out over WhatsApp from the linked device, which needs both entitlements.
+ * Without them `resultRoute` reads every setting as `student`. Exported so
+ * `GuardianResultSweeper` asks the identical question.
+ */
+export function guardianChannelEnabled(): boolean {
+  return isFeatureEnabled('outreach.whatsapp') && isFeatureEnabled('marketing.whatsapp');
+}
+
+/**
  * The start of a lookback window, never reaching past the activation floor.
  *
  * Whichever of the two is LATER wins: the window bounds how far back it is
@@ -559,6 +588,20 @@ function notBefore(windowMs: number, floor: Date): Date {
 
 function clampPercent(value: number): number {
   return Math.min(Math.max(value, 0), 100);
+}
+
+/**
+ * The score a result message quotes, 0–100. Exported so the guardian's
+ * WhatsApp (`GuardianResultSweeper`) prints the same number the student's
+ * message does — two roundings of one paper would be a contradiction a parent
+ * and a student can compare.
+ */
+export function scorePercentOf(
+  scaledScore: { toString(): string } | number | null,
+  gradeOutOf: { toString(): string } | number,
+): number {
+  const outOf = Number(gradeOutOf);
+  return outOf > 0 ? clampPercent(Math.round((Number(scaledScore ?? 0) / outOf) * 100)) : 0;
 }
 
 /**
