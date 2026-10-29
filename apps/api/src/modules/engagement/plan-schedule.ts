@@ -1,11 +1,10 @@
 import type { BacklogItem } from '@ayman/contracts/backlog';
 import {
-  PLAN_REVISION_MAX_DAYS,
   PLAN_TIGHT_PER_DAY,
-  daysBetween,
-  shiftDayKey,
-  weekdayOf,
+  planCalendar,
+  planPerDay,
   type PlanDay,
+  type PlanPicks,
   type StudyPlanPayload,
   type StudyPlanSettings,
 } from '@ayman/contracts/engagement';
@@ -33,20 +32,34 @@ export function interleave(items: readonly BacklogItem[]): BacklogItem[] {
 }
 
 /**
+ * The plan's queue: the starred rows first, in the order they were starred,
+ * then the rest interleaved — minus everything taken out of the plan.
+ *
+ * Starring cannot break a course's order in a way that locks anything: every
+ * row here already passed the gate, so «الأول» only changes which open door
+ * comes up first, never opens a closed one.
+ */
+export function planQueue(items: readonly BacklogItem[], picks: PlanPicks): BacklogItem[] {
+  const skipped = new Set(picks.skipped);
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const first = picks.first.flatMap((id) => {
+    const item = byId.get(id);
+    return item && !skipped.has(id) ? [item] : [];
+  });
+  const starred = new Set(first.map((item) => item.id));
+  return [...first, ...interleave(items.filter((item) => !skipped.has(item.id) && !starred.has(item.id)))];
+}
+
+/**
  * The backlog spread over the days left to the exam.
  *
  * Nothing here is stored. It is re-run on every read from the LIVE backlog, so
  * a lecture finished at noon leaves the plan at noon and the share of every
  * later day shrinks by itself — a stored schedule would go stale the first
- * evening a student did more (or less) than planned.
+ * evening a student did more (or less) than planned. Only the student's picks
+ * are stored, and they are ids, not a schedule.
  *
- * ## The shape of the days
- *
- *   · the exam day itself — `exam`, nothing on it.
- *   · the last stretch before it — `revision`: 15% of the time left, at most
- *     `PLAN_REVISION_MAX_DAYS`. Nothing new is taught in the last week.
- *   · a weekday the student took off — `off`.
- *   · everything else — `study`, sharing the backlog equally.
+ * The days' shape is `planCalendar`'s; `planPerDay` is the share.
  *
  * ## Today's share counts what was already done today
  *
@@ -59,50 +72,35 @@ export function buildPlan(input: {
   today: string;
   settings: StudyPlanSettings | null;
   items: readonly BacklogItem[];
+  picks?: PlanPicks;
   doneToday: number;
-}): StudyPlanPayload {
+}): Omit<StudyPlanPayload, 'pool'> {
   const { today, settings, items, doneToday } = input;
-  const base = { settings, today, remaining: items.length, doneToday };
+  const ids = new Set(items.map((item) => item.id));
+  // Picks for rows that left the backlog are dropped from what is reported,
+  // so «٣ برّه الخطة» never counts a lecture finished since.
+  const picks: PlanPicks = {
+    skipped: (input.picks?.skipped ?? []).filter((id) => ids.has(id)),
+    first: (input.picks?.first ?? []).filter((id) => ids.has(id)),
+  };
+  const queue = planQueue(items, picks);
+  const base = { settings, today, remaining: queue.length, total: items.length, doneToday, picks };
 
   if (!settings) {
-    return { ...base, daysLeft: null, perDay: 0, revisionFrom: null, status: 'none', days: [] };
+    return { ...base, daysLeft: null, studyDays: 0, perDay: 0, revisionFrom: null, status: 'none', days: [] };
   }
 
-  const daysLeft = daysBetween(today, settings.examDate);
+  const { daysLeft, revisionFrom, days: calendar } = planCalendar(today, settings);
   if (daysLeft < 0) {
-    return { ...base, daysLeft, perDay: 0, revisionFrom: null, status: 'past', days: [] };
+    return { ...base, daysLeft, studyDays: 0, perDay: 0, revisionFrom: null, status: 'past', days: [] };
   }
 
-  const revisionDays = Math.min(PLAN_REVISION_MAX_DAYS, Math.floor(daysLeft * 0.15));
-  const revisionFrom = revisionDays > 0 ? shiftDayKey(settings.examDate, -revisionDays) : null;
-  const studyEnd = revisionFrom ?? settings.examDate;
-  const off = new Set(settings.daysOff);
-
-  const calendar: { date: string; kind: PlanDay['kind'] }[] = [];
-  for (let offset = 0; offset <= daysLeft; offset += 1) {
-    const date = shiftDayKey(today, offset);
-    const kind: PlanDay['kind'] =
-      date === settings.examDate
-        ? 'exam'
-        : date >= studyEnd
-          ? 'revision'
-          : off.has(weekdayOf(date))
-            ? 'off'
-            : 'study';
-    calendar.push({ date, kind });
-  }
-
+  const studyDayCount = calendar.filter((day) => day.kind === 'study').length;
   // Every day off or under revision, and still something owed: today becomes
-  // a study day. Telling a student «nothing to do» with lectures unwatched
-  // would be the plan lying to make itself fit.
-  let studyDays = calendar.filter((day) => day.kind === 'study');
-  if (studyDays.length === 0 && items.length > 0 && calendar[0]) {
-    calendar[0].kind = 'study';
-    studyDays = [calendar[0]];
-  }
+  // a study day (see `planPerDay`).
+  if (studyDayCount === 0 && queue.length > 0 && calendar[0]) calendar[0].kind = 'study';
 
-  const perDay = studyDays.length === 0 ? 0 : Math.ceil((items.length + doneToday) / studyDays.length);
-  const queue = interleave(items);
+  const perDay = planPerDay(queue.length, doneToday, studyDayCount);
   const days: PlanDay[] = calendar.slice(0, VISIBLE_DAYS).map((day) => ({ ...day, items: [] }));
 
   let cursor = 0;
@@ -115,7 +113,7 @@ export function buildPlan(input: {
   }
 
   const status: StudyPlanPayload['status'] =
-    items.length === 0 ? 'clear' : perDay > PLAN_TIGHT_PER_DAY ? 'tight' : 'onTrack';
+    queue.length === 0 ? 'clear' : perDay > PLAN_TIGHT_PER_DAY ? 'tight' : 'onTrack';
 
-  return { ...base, daysLeft, perDay, revisionFrom, status, days };
+  return { ...base, daysLeft, studyDays: studyDayCount, perDay, revisionFrom, status, days };
 }

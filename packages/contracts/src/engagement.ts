@@ -1,5 +1,5 @@
 import { z } from '@ayman/contracts/zod';
-import { BacklogItemSchema } from '@ayman/contracts/backlog';
+import { BacklogCourseSchema, BacklogItemSchema } from '@ayman/contracts/backlog';
 
 /**
  * Student engagement — five features that answer «what makes a student open
@@ -164,6 +164,43 @@ export const StudyPlanSettingsSchema = z.object({
 });
 export type StudyPlanSettings = z.infer<typeof StudyPlanSettingsSchema>;
 
+/** Far above any real backlog (a full year is ~200 rows); only a bound on the body. */
+export const PLAN_PICKS_MAX = 1000;
+/** A backlog row's own `BacklogItem.id` — a lesson or quiz id, or `hw:<lessonId>`. */
+const PlanItemIdSchema = z.string().min(1).max(80);
+
+/**
+ * What the student decided about the backlog the platform found.
+ *
+ * The backlog is computed — every open lecture, quiz and homework the gate
+ * lets through — and it is right about what is OPEN, not about what this
+ * student still owes: a lecture studied at the centre, a quiz on a chapter the
+ * school dropped. So the plan takes the platform's list and lets the student
+ * say «مش في الخطة» or «الأول».
+ *
+ * Exclusions, never inclusions: a lecture published tomorrow lands IN the plan
+ * by itself, the same as before this existed. A list of what to include would
+ * silently leave every new lecture out of a plan made last week.
+ *
+ * `first` is in the order it was starred, and that is the order it is planned.
+ * Only the plan reads these. «المتراكم», the guardian report and the
+ * follow-up lists stay the platform's own count — a student cannot hide a
+ * lecture from a parent by taking it out of their own plan.
+ */
+export const PlanPicksSchema = z.object({
+  skipped: z.array(PlanItemIdSchema).max(PLAN_PICKS_MAX),
+  first: z.array(PlanItemIdSchema).max(PLAN_PICKS_MAX),
+});
+export type PlanPicks = z.infer<typeof PlanPicksSchema>;
+
+/**
+ * The PUT body. `picks` absent leaves the stored ones alone — a tab opened
+ * before picks existed saves a date without wiping them (and a `.default([])`
+ * here would have done exactly that).
+ */
+export const StudyPlanSaveSchema = StudyPlanSettingsSchema.extend({ picks: PlanPicksSchema.optional() });
+export type StudyPlanSave = z.infer<typeof StudyPlanSaveSchema>;
+
 export const PlanDaySchema = z.object({
   date: DayKeySchema,
   kind: z.enum(['study', 'off', 'revision', 'exam']),
@@ -176,8 +213,16 @@ export const StudyPlanPayloadSchema = z.object({
   today: DayKeySchema,
   /** Whole days from today to the exam; 0 on the day itself. `null` without a plan. */
   daysLeft: z.number().int().nullable(),
-  /** Everything still owed, today's included. */
+  /** Everything still owed AND in the plan, today's included. */
   remaining: z.number().int().min(0),
+  /** The whole backlog, in the plan or not — `remaining` of `total`. */
+  total: z.number().int().min(0),
+  /**
+   * Study days from today to the revision stretch, before the «today is a
+   * study day anyway» rule. The picker re-derives `perDay` from it as boxes
+   * are ticked, without a round trip per tap.
+   */
+  studyDays: z.number().int().min(0),
   /** Lessons, quizzes and homework finished today — counted against today's share. */
   doneToday: z.number().int().min(0),
   perDay: z.number().int().min(0),
@@ -189,6 +234,11 @@ export const StudyPlanPayloadSchema = z.object({
   status: z.enum(['none', 'onTrack', 'tight', 'clear', 'past']),
   /** Today first, up to seven days. */
   days: z.array(PlanDaySchema),
+  /** The stored picks, cut to rows still in `pool` — a finished lecture's
+   *  «الأول» is not a pick any more. */
+  picks: PlanPicksSchema,
+  /** The whole backlog by course, in path order: what the picker lists. */
+  pool: z.array(BacklogCourseSchema),
 });
 export type StudyPlanPayload = z.infer<typeof StudyPlanPayloadSchema>;
 
@@ -488,6 +538,46 @@ function utcOf(day: string): Date {
 }
 
 /** `day` moved by `days` calendar days. */
+/**
+ * The days from today to the exam, each with what it is for — the shape
+ * `buildPlan` fills, here so the picker can count study days for a date the
+ * student has typed and not saved yet.
+ *
+ *   · the exam day itself — `exam`.
+ *   · the last stretch before it — `revision`: 15% of the time left, at most
+ *     `PLAN_REVISION_MAX_DAYS`. Nothing new is taught in the last week.
+ *   · a weekday the student took off — `off`.
+ *   · everything else — `study`.
+ */
+export function planCalendar(
+  today: string,
+  settings: StudyPlanSettings,
+): { daysLeft: number; revisionFrom: string | null; days: Array<{ date: string; kind: PlanDay['kind'] }> } {
+  const daysLeft = daysBetween(today, settings.examDate);
+  const revisionDays = Math.min(PLAN_REVISION_MAX_DAYS, Math.floor(Math.max(daysLeft, 0) * 0.15));
+  const revisionFrom = revisionDays > 0 ? shiftDayKey(settings.examDate, -revisionDays) : null;
+  const studyEnd = revisionFrom ?? settings.examDate;
+  const off = new Set(settings.daysOff);
+  const days: Array<{ date: string; kind: PlanDay['kind'] }> = [];
+  for (let offset = 0; offset <= daysLeft; offset += 1) {
+    const date = shiftDayKey(today, offset);
+    const kind: PlanDay['kind'] =
+      date === settings.examDate ? 'exam' : date >= studyEnd ? 'revision' : off.has(weekdayOf(date)) ? 'off' : 'study';
+    days.push({ date, kind });
+  }
+  return { daysLeft, revisionFrom, days };
+}
+
+/**
+ * Items a day: what is owed plus what was already done today, over the study
+ * days. With something owed and no study day left, today is one anyway —
+ * «nothing to do» with lectures unwatched would be the plan lying to fit.
+ */
+export function planPerDay(owed: number, doneToday: number, studyDays: number): number {
+  const days = studyDays === 0 && owed > 0 ? 1 : studyDays;
+  return days === 0 ? 0 : Math.ceil((owed + doneToday) / days);
+}
+
 export function shiftDayKey(day: string, days: number): string {
   const date = utcOf(day);
   date.setUTCDate(date.getUTCDate() + days);

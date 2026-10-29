@@ -11,9 +11,12 @@ import {
   ClipboardPen,
   Coffee,
   GraduationCap,
+  Layers,
   ListChecks,
   Pencil,
   RotateCcw,
+  SlidersHorizontal,
+  Star,
   Trash2,
   Trophy,
   type LucideProps,
@@ -26,12 +29,16 @@ import {
   StudyPlanPayloadSchema,
   shiftDayKey,
   type PlanDay,
+  type PlanPicks,
   type StudyPlanPayload,
+  type StudyPlanSettings,
 } from '@ayman/contracts/engagement';
 import { engagementCopy } from '@ayman/contracts/copy/engagement';
 import { formatCopy } from '@ayman/contracts/format';
+import { SubjectMark } from '@/components/course-art';
 import { CountUp } from '@/components/rank/count-up';
 import { apiDelete, apiPutTyped } from '@/lib/api';
+import { PlanPicker } from './plan-picker';
 
 const c = engagementCopy.plan;
 
@@ -66,33 +73,107 @@ function actionLabel(item: BacklogItem): string {
   }
 }
 
+/** One PUT for both halves — the date and the picks are one row. */
+function savePlan(settings: StudyPlanSettings, picks?: PlanPicks): Promise<StudyPlanPayload> {
+  return apiPutTyped('/api/me/plan', StudyPlanPayloadSchema, { ...settings, picks });
+}
+
+type Mode = 'view' | 'setup' | 'pick';
+
 export function PlanBoard({ initial }: { initial: StudyPlanPayload }) {
   const [plan, setPlan] = useState(initial);
-  const [editing, setEditing] = useState(initial.settings === null);
+  const [mode, setMode] = useState<Mode>(initial.settings === null ? 'setup' : 'view');
+  const done = (next: StudyPlanPayload) => {
+    setPlan(next);
+    setMode('view');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  if (editing || plan.settings === null) {
-    return (
-      <PlanForm
-        plan={plan}
-        onSaved={(next) => {
-          setPlan(next);
-          setEditing(false);
-        }}
-        onCancel={plan.settings ? () => setEditing(false) : undefined}
-      />
-    );
+  if (mode === 'setup' || plan.settings === null) {
+    return <PlanForm plan={plan} onSaved={done} onCancel={plan.settings ? () => setMode('view') : undefined} />;
   }
 
-  return <PlanView plan={plan} onEdit={() => setEditing(true)} onCleared={(next) => setPlan(next)} />;
+  if (mode === 'pick') {
+    return <PickStep plan={plan} settings={plan.settings} onSaved={done} onCancel={() => setMode('view')} />;
+  }
+
+  return (
+    <PlanView
+      plan={plan}
+      onEdit={() => setMode('setup')}
+      onPick={() => setMode('pick')}
+      onCleared={(next) => setPlan(next)}
+    />
+  );
+}
+
+/** The picker wired to a save — for «تعديل المتراكم» and step two of setup. */
+function PickStep({
+  plan,
+  settings,
+  onSaved,
+  onCancel,
+  onBack,
+}: {
+  plan: StudyPlanPayload;
+  settings: StudyPlanSettings;
+  onSaved: (plan: StudyPlanPayload) => void;
+  onCancel?: () => void;
+  onBack?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(picks: PlanPicks): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await savePlan(settings, picks));
+    } catch {
+      setError(c.picker.failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PlanPicker
+      pool={plan.pool}
+      picks={plan.picks}
+      today={plan.today}
+      settings={settings}
+      doneToday={plan.doneToday}
+      busy={busy}
+      error={error}
+      onSave={(picks) => void save(picks)}
+      footer={
+        <>
+          {onBack ? (
+            <button type="button" className="eg-btn" onClick={onBack}>
+              {c.steps.back}
+            </button>
+          ) : null}
+          {onCancel ? (
+            <button type="button" className="eg-btn eg-btn--quiet" onClick={onCancel}>
+              {c.picker.cancel}
+            </button>
+          ) : null}
+        </>
+      }
+    />
+  );
 }
 
 function PlanView({
   plan,
   onEdit,
+  onPick,
   onCleared,
 }: {
   plan: StudyPlanPayload;
   onEdit: () => void;
+  onPick: () => void;
   onCleared: (plan: StudyPlanPayload) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -158,6 +239,8 @@ function PlanView({
       </section>
 
       {today ? <TodayCard day={today} plan={plan} /> : null}
+
+      {plan.total > 0 ? <PicksCard plan={plan} onPick={onPick} /> : null}
 
       {ahead.length > 0 ? (
         <section className="eg-section" aria-labelledby="plan-week">
@@ -235,7 +318,7 @@ function TodayCard({ day, plan }: { day: PlanDay; plan: StudyPlanPayload }) {
       ) : (
         <ul className="eg-rows">
           {day.items.map((item) => (
-            <ItemRow key={item.id} item={item} />
+            <ItemRow key={item.id} item={item} starred={plan.picks.first.includes(item.id)} />
           ))}
         </ul>
       )}
@@ -243,7 +326,7 @@ function TodayCard({ day, plan }: { day: PlanDay; plan: StudyPlanPayload }) {
   );
 }
 
-function ItemRow({ item }: { item: BacklogItem }) {
+function ItemRow({ item, starred }: { item: BacklogItem; starred: boolean }) {
   const Icon = KIND_ICON[item.kind];
   return (
     <li className="eg-row" data-kind={item.kind}>
@@ -251,7 +334,15 @@ function ItemRow({ item }: { item: BacklogItem }) {
         <Icon className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="eg-row__title">{item.title}</p>
+        <p className="eg-row__title">
+          {starred ? (
+            <span className="pk-first-tag">
+              <Star className="size-3" aria-hidden="true" />
+              {c.picker.first}
+            </span>
+          ) : null}
+          {item.title}
+        </p>
         <p className="eg-row__meta">
           {backlogCopy.kind[item.kind]} · {item.courseTitle}
         </p>
@@ -261,6 +352,68 @@ function ItemRow({ item }: { item: BacklogItem }) {
         <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
       </Link>
     </li>
+  );
+}
+
+/**
+ * What the plan carries out of «المتراكم», course by course — and the door to
+ * change it. The bars are in-plan over found, so a course the student took
+ * out reads as an empty bar, not as a missing row.
+ */
+function PicksCard({ plan, onPick }: { plan: StudyPlanPayload; onPick: () => void }) {
+  const skipped = new Set(plan.picks.skipped);
+  const out = plan.picks.skipped.length;
+  const starred = plan.picks.first.length;
+  return (
+    <section className="eg-card pk-summary" aria-labelledby="plan-picks">
+      <header className="eg-card__head">
+        <span className="eg-panel__icon" data-hue="violet" aria-hidden="true">
+          <Layers className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 id="plan-picks" className="eg-card__title">
+            {c.picks.title}
+          </h2>
+          <p className="eg-card__meta">
+            <span className="eg-ltr-num">{plan.remaining}</span> {c.picker.of}{' '}
+            <span className="eg-ltr-num">{plan.total}</span> {c.picker.inPlan}
+          </p>
+        </div>
+        <button type="button" className="eg-btn" onClick={onPick}>
+          <SlidersHorizontal className="size-4" aria-hidden="true" />
+          {c.picks.edit}
+        </button>
+      </header>
+      <ul className="pk-summary__courses">
+        {plan.pool.map((course) => {
+          const inCount = course.items.filter((item) => !skipped.has(item.id)).length;
+          return (
+            <li key={course.id} className="pk-summary__course">
+              <SubjectMark subjectNameAr={course.subjectNameAr} className="size-9 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="pk-summary__title">{course.title}</p>
+                <span className="pk-bar" aria-hidden="true">
+                  <span className="pk-bar__fill" style={{ inlineSize: `${(inCount / course.items.length) * 100}%` }} />
+                </span>
+              </div>
+              <span className="pk-summary__n eg-ltr-num">
+                {inCount}/{course.items.length}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="eg-hero__chips pk-summary__chips">
+        {out === 0 && starred === 0 ? <span className="eg-chip">{c.picks.all}</span> : null}
+        {out > 0 ? <span className="eg-chip">{arabicCount(out, c.picks.skipped)}</span> : null}
+        {starred > 0 ? (
+          <span className="eg-chip" data-tone="amber">
+            <Star className="size-3.5" aria-hidden="true" />
+            {arabicCount(starred, c.picks.starred)}
+          </span>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -317,8 +470,12 @@ function PlanForm({
   const [daysOff, setDaysOff] = useState<number[]>(plan.settings?.daysOff ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'when' | 'what'>('when');
   const min = plan.today;
   const max = shiftDayKey(plan.today, PLAN_HORIZON_DAYS);
+  // Nothing open to pick from: the second step would be an empty page, so
+  // there is one step and «حفظ» on it.
+  const twoSteps = plan.total > 0;
 
   function toggle(day: number): void {
     setDaysOff((current) =>
@@ -332,10 +489,16 @@ function PlanForm({
       setError(c.setup.badDate);
       return;
     }
+    if (twoSteps) {
+      setError(null);
+      setStep('what');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      onSaved(await apiPutTyped('/api/me/plan', StudyPlanPayloadSchema, { examDate, daysOff }));
+      onSaved(await savePlan({ examDate, daysOff }));
     } catch {
       setError(c.setup.failed);
     } finally {
@@ -343,8 +506,29 @@ function PlanForm({
     }
   }
 
+  const stepper = twoSteps ? <Stepper step={step} /> : null;
+
+  if (step === 'what') {
+    return (
+      <>
+        {stepper}
+        <div className="pk-step">
+          <PickStep
+            plan={plan}
+            settings={{ examDate, daysOff }}
+            onSaved={onSaved}
+            onBack={() => setStep('when')}
+            onCancel={onCancel}
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
-    <section className="eg-card eg-form" aria-labelledby="plan-setup">
+    <>
+    {stepper}
+    <section className="eg-card eg-form pk-step" aria-labelledby="plan-setup">
       <header className="eg-card__head">
         <span className="eg-panel__icon" data-hue="blue" aria-hidden="true">
           <CalendarClock className="size-5" />
@@ -399,8 +583,8 @@ function PlanForm({
         ) : null}
         <div className="eg-note__actions">
           <button type="submit" className="eg-btn eg-btn--solid eg-btn--lg" disabled={busy}>
-            <CalendarCheck className="size-4" aria-hidden="true" />
-            {busy ? c.setup.saving : c.setup.save}
+            {twoSteps ? <ArrowLeft className="size-4" aria-hidden="true" /> : <CalendarCheck className="size-4" aria-hidden="true" />}
+            {twoSteps ? c.steps.next : busy ? c.setup.saving : c.setup.save}
           </button>
           {onCancel ? (
             <button type="button" className="eg-btn" onClick={onCancel}>
@@ -410,5 +594,29 @@ function PlanForm({
         </div>
       </form>
     </section>
+    </>
+  );
+}
+
+/** «الميعاد ← المتراكم» — where setup stands, the line filling as it moves. */
+function Stepper({ step }: { step: 'when' | 'what' }) {
+  return (
+    <ol className="pk-stepper" data-step={step} aria-label={c.steps.label}>
+      <li className="pk-stepper__step" data-state={step === 'when' ? 'current' : 'done'} aria-current={step === 'when' ? 'step' : undefined}>
+        <span className="pk-stepper__dot" aria-hidden="true">
+          {step === 'when' ? <span className="eg-ltr-num">1</span> : <CheckCheck className="size-4" />}
+        </span>
+        <span className="pk-stepper__label">{c.steps.when}</span>
+      </li>
+      <li className="pk-stepper__line" aria-hidden="true">
+        <span />
+      </li>
+      <li className="pk-stepper__step" data-state={step === 'what' ? 'current' : 'next'} aria-current={step === 'what' ? 'step' : undefined}>
+        <span className="pk-stepper__dot" aria-hidden="true">
+          <span className="eg-ltr-num">2</span>
+        </span>
+        <span className="pk-stepper__label">{c.steps.what}</span>
+      </li>
+    </ol>
   );
 }

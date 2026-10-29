@@ -4,7 +4,7 @@ import type { StudyPlanPayload } from '@ayman/contracts/engagement';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
-import { StudyPlanSettingsDto } from './engagement.dto';
+import { StudyPlanSaveDto } from './engagement.dto';
 import { PlanService } from './plan.service';
 
 /** «خطة المذاكرة» — `enrollment:read` like the backlog it is built on, behind `studyPlan`. */
@@ -21,7 +21,7 @@ export class PlanController {
 
   @Put()
   @UsePipes(ZodValidationPipe)
-  save(@CurrentUser() user: AuthenticatedUser, @Body() dto: StudyPlanSettingsDto): Promise<StudyPlanPayload> {
+  save(@CurrentUser() user: AuthenticatedUser, @Body() dto: StudyPlanSaveDto): Promise<StudyPlanPayload> {
     return this.plan.save(user.id, dto);
   }
 
