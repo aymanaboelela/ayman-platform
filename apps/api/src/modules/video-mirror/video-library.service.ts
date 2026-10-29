@@ -15,6 +15,7 @@ import {
 } from '@ayman/contracts/admin/video-upload';
 import { UPLOAD_ID_RE, isVideoExternalId, mirrorPrefix, uploadSourceKey } from '@ayman/contracts/video';
 import { AuditService } from '../../audit/audit.service';
+import { IS_AYMAN } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -28,6 +29,13 @@ import { VideoUploadService } from './video-upload.service';
  * and the rest still appear — with a size of zero until the first ones go.
  */
 const ORPHANS_SIZED = 60;
+
+/**
+ * How long one whole-bucket listing stands in for the next. A listing is a
+ * page per thousand objects (an HLS ladder is thousands of segments), so it
+ * is not repeated on every open; a delete from this screen clears it.
+ */
+const BUCKET_TOTAL_TTL_MS = 10 * 60_000;
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -44,6 +52,7 @@ const ORPHANS_SIZED = 60;
 @Injectable()
 export class VideoLibraryService {
   private readonly logger = new Logger(VideoLibraryService.name);
+  private bucketTotal: { bytes: number; at: number } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -235,14 +244,42 @@ export class VideoLibraryService {
       return null;
     });
 
+    const rowsTotal = listed + (orphans ?? []).reduce((sum, orphan) => sum + orphan.sizeBytes, 0);
+
     return {
       items,
       archived,
       targets,
       orphans: orphans ?? [],
-      totalBytes: listed + (orphans ?? []).reduce((sum, orphan) => sum + orphan.sizeBytes, 0),
+      totalBytes: (await this.wholeBucketBytes()) ?? rowsTotal,
       storageRead: orphans !== null,
     };
+  }
+
+  /**
+   * The total a teacher is CHARGED on: the bucket itself, not our rows.
+   *
+   * The rows miss a material's video, the montage's sources and every
+   * leftover past `ORPHANS_SIZED`, so a teacher was shown less than the owner
+   * pays Cloudflare for. The owner's own figure comes from Cloudflare's
+   * analytics on the web side instead (his bucket holds the YouTube copies —
+   * too many objects to list per open), so his stack skips this: `null`, and
+   * the row sum stays the fallback for a stack where neither is readable.
+   */
+  private async wholeBucketBytes(): Promise<number | null> {
+    const storage = this.mirror.objectStorage;
+    if (IS_AYMAN || storage === null) return null;
+    if (this.bucketTotal !== null && Date.now() - this.bucketTotal.at < BUCKET_TOTAL_TTL_MS) {
+      return this.bucketTotal.bytes;
+    }
+    try {
+      const bytes = await storage.bucketBytes();
+      this.bucketTotal = { bytes, at: Date.now() };
+      return bytes;
+    } catch (error) {
+      this.logger.warn({ err: error }, 'video library could not total the bucket');
+      return null;
+    }
   }
 
   /**
@@ -585,6 +622,8 @@ export class VideoLibraryService {
     await this.prisma.archivedVideo.deleteMany({ where: { externalId: videoId } });
     await storage.deletePrefix(mirrorPrefix(videoId));
     if (UPLOAD_ID_RE.test(videoId)) await storage.deleteObject(uploadSourceKey(videoId));
+    // The screen this delete returns to must show the bucket lighter.
+    this.bucketTotal = null;
 
     await this.audit.record({
       action: 'video:delete',

@@ -6237,7 +6237,7 @@ const admin = {
     statTotal: 'المساحة كلها',
     statCount: 'فيديو في محاضرات',
     statCost: 'تكلفة التخزين في الشهر تقريبًا',
-    statCostHint: 'التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    statCostHint: 'المساحة من كلاودفلير نفسه، والتخزين بـ٠٫٠١٥ دولار للجيجا في الشهر. المشاهدة ببلاش.',
     /**
      * The same card on a teacher's stack — what HE pays, every month, at the
      * price the owner charges (`TENANT_USD_PER_GB_MONTH`), not Cloudflare's.

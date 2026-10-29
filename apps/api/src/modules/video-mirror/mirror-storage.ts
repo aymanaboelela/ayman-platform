@@ -342,6 +342,27 @@ export class MirrorStorage {
   }
 
   /**
+   * Every byte in the bucket, under every root — lecture ladders, a
+   * material's video, the montage's sources, half-finished uploads. This is
+   * what R2 bills, so it is the number a teacher is charged on: a sum of our
+   * own rows misses whatever no lecture row describes.
+   */
+  async bucketBytes(): Promise<number> {
+    let bytes = 0;
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({ Bucket: this.config.bucket, ContinuationToken: token }),
+      );
+      for (const object of listed.Contents ?? []) bytes += object.Size ?? 0;
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    return bytes;
+  }
+
+  /**
    * What the bucket ALREADY holds for one video, or `null`.
    *
    * This exists because the worker cannot always be the thing that fills the

@@ -134,3 +134,16 @@ export async function tenantVideoUsage(
     return { ok: false, reason: 'failed', detail: error instanceof Error ? error.message : String(error) };
   }
 }
+
+/**
+ * This stack's own bucket, from the same analytics — what the owner's
+ * «الفيديوهات» card quotes. `null` when it cannot be read (no token, as on
+ * every teacher's stack and in development) or Cloudflare has no sample for
+ * the bucket: an empty answer is a wrong bucket name far more often than an
+ * empty bucket, and the caller's own total is the better guess then.
+ */
+export async function ownBucketBytes(tenantKey: string): Promise<number | null> {
+  const result = await tenantVideoUsage([{ key: tenantKey, name: tenantKey }]);
+  const row = result.ok ? result.rows[0] : undefined;
+  return row === undefined || row.objectCount === 0 ? null : row.storedBytes;
+}
