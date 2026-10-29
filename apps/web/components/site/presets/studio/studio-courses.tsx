@@ -71,7 +71,20 @@ export async function StudioCourses({
   return (
     <section className="st-section" id="courses">
       <div className="st-shell">
-        <StudioHeading chip={studioCopy.chipCourses} title={title} lead={lead} level={level} />
+        {/*
+          «كل الكورسات» sits beside the heading, not under the list. Under the
+          list it was the last thing on the section — on a phone that is four
+          tall cards below the heading, so the one link to the whole catalogue
+          was a long scroll away from the title that introduces it.
+        */}
+        <div className="st-head-row">
+          <StudioHeading chip={studioCopy.chipCourses} title={title} lead={lead} level={level} />
+          {ctaLabel && featured.length > 0 ? (
+            <Link className="st-btn st-btn--quiet st-head-row__link" href="/courses">
+              {ctaLabel}
+            </Link>
+          ) : null}
+        </div>
 
         {featured.length === 0 ? (
           <p className="st-empty">{studioCopy.empty}</p>
@@ -111,13 +124,6 @@ export async function StudioCourses({
               })}
             </ul>
 
-            {ctaLabel ? (
-              <div className="st-section__foot">
-                <Link className="st-btn st-btn--quiet" href="/courses">
-                  {ctaLabel}
-                </Link>
-              </div>
-            ) : null}
           </>
         )}
       </div>

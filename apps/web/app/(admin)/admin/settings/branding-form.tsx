@@ -11,6 +11,7 @@ import {
   BrandingSchema,
   LANDING_LAYOUTS,
   LANDING_PRESETS,
+  PORTRAIT_MOTIONS,
   RADIUS_SLOTS,
   type Branding,
 } from '@ayman/contracts/admin/settings';
@@ -464,6 +465,38 @@ export function BrandingForm({ defaultValues, assets, builtIn, offered }: Brandi
                       <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
                         {LAYOUT_LABEL[layout].hint}
                       </span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            )}
+          />
+
+          <SettingsField
+            name="portraitMotion"
+            label={copy.admin.settings.portraitMotion}
+            description={copy.admin.settings.portraitMotionHint}
+            issues={issues}
+            render={(controlProps) => (
+              <RadioGroup
+                {...controlProps}
+                value={form.watch('portraitMotion') ?? defaultValues.portraitMotion}
+                onValueChange={(value) =>
+                  form.setValue('portraitMotion', value as Branding['portraitMotion'], {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                aria-label={copy.admin.settings.portraitMotion}
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                {PORTRAIT_MOTIONS.map((motion) => (
+                  <label key={motion} className={`${CHOICE_CARD} py-3`}>
+                    <RadioGroupItem value={motion} />
+                    <span className="text-fg">
+                      {motion === 'float'
+                        ? copy.admin.settings.portraitMotionFloat
+                        : copy.admin.settings.portraitMotionStill}
                     </span>
                   </label>
                 ))}

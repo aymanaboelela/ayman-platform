@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import {
+  RESERVED_HUES,
+  RESERVED_HUE_RADIUS,
+  reservedHueConflict,
+} from '@ayman/contracts/admin/settings';
 import { contrastRatio, isInGamut, oklchToRgb, readableInk } from './oklch';
 import {
   EMBER_STEPS,
@@ -412,5 +417,32 @@ describe('the warm literals follow the tenant too', () => {
     near(light.get('--print-gold-wash')!, { r: 0xfd, g: 0xf4, b: 0xe3 });
     expect(light.get('--ink-key-rgb')).toBe('255 138 25');
     expect(light.get('--ink-bounce-rgb')).toBe('252 191 38');
+  });
+});
+
+describe('the warm literals never take a reserved hue', () => {
+  /*
+   * The CTA is rotated −27° from the brand, so a brand at 48° used to paint
+   * every «اشترك» button at 21° — inside the «إجابة غلط» band. Every hue a
+   * tenant is allowed to pick, both themes, every rotated oklch literal.
+   */
+  const allowed = Array.from({ length: 360 }, (_, hue) => hue).filter(
+    (hue) => reservedHueConflict(hue) === null,
+  );
+
+  it.each(['light', 'dark'] as const)('stays outside both bands (%s)', (theme) => {
+    for (const hue of allowed) {
+      for (const [token, value] of literalDeclarations(hue, 1, theme)) {
+        if (!value.startsWith('oklch(')) continue;
+        const h = parse(value).h;
+        for (const { center } of RESERVED_HUES) {
+          const raw = Math.abs(((h - center) % 360) + 360) % 360;
+          const distance = raw > 180 ? 360 - raw : raw;
+          expect(distance, `${token} at brand ${hue}° landed on ${h}°`).toBeGreaterThanOrEqual(
+            RESERVED_HUE_RADIUS - 0.5,
+          );
+        }
+      }
+    }
   });
 });
