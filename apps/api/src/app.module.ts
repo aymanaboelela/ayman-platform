@@ -64,6 +64,7 @@ import { MistakesModule } from './modules/mistakes/mistakes.module';
 import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { PromoBannersModule } from './modules/promo-banners/promo-banners.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { SocialPostsModule } from './modules/social-posts/social-posts.module';
 import { YoutubeStudioModule } from './modules/youtube-studio/youtube-studio.module';
@@ -210,6 +211,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     ReferralsModule,
     // «البانرات الترويجية» — pictures on top of the student dashboard.
     PromoBannersModule,
+    CouponsModule,
     AdminMobileModule,
     SocialPostsModule,
     YoutubeStudioModule,

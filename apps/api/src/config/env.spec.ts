@@ -96,6 +96,16 @@ describe('loadEnv', () => {
     expect(env.APPLE_CLIENT_ID).toBeUndefined();
   });
 
+  it('treats an empty YOUTUBE_API_KEY as unset (the follower-count sync is off, the API boots)', () => {
+    expect(loadEnv({ ...VALID, YOUTUBE_API_KEY: '' }).YOUTUBE_API_KEY).toBeUndefined();
+    expect(loadEnv({ ...VALID, YOUTUBE_API_KEY: 'test-youtube-key' }).YOUTUBE_API_KEY).toBe('test-youtube-key');
+  });
+
+  it('treats an empty META_PAGE_TOKEN as unset (the Facebook/Instagram sync is off, the API boots)', () => {
+    expect(loadEnv({ ...VALID, META_PAGE_TOKEN: '' }).META_PAGE_TOKEN).toBeUndefined();
+    expect(loadEnv({ ...VALID, META_PAGE_TOKEN: 'test-page-token' }).META_PAGE_TOKEN).toBe('test-page-token');
+  });
+
   it('reads empty YouTube OAuth vars as unset, and half a pair still boots', () => {
     const env = loadEnv({ ...VALID, YOUTUBE_OAUTH_CLIENT_ID: '', YOUTUBE_OAUTH_CLIENT_SECRET: '' });
     expect(env.YOUTUBE_OAUTH_CLIENT_ID).toBeUndefined();

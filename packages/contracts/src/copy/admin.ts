@@ -86,6 +86,7 @@ const admin = {
     /** «أكواد الفتح» — a six-character code that opens a lecture, a unit, a
      *  term or the whole course for the one student who types it. */
     unlockCodes: 'أكواد الفتح',
+    coupons: 'كوبونات الخصم',
     /** «المحفظة» — the desk (find a student, credit or debit) and the live
      *  queue of InstaPay / Vodafone Cash top-up requests. */
     wallet: 'شحن المحفظة',
@@ -5086,6 +5087,9 @@ const admin = {
      *  unlinked rows and the number is the only thing they share. `{n}` is
      *  how many OTHER live orders that number has. */
     repeatCustomer: 'طلب قبل كده {n} مرة',
+    /** One status inside that badge when more than one earlier order shares
+     *  it, e.g. «مرفوضة (2)». A single order shows the status alone. */
+    repeatCustomerStatusCount: '{status} ({n})',
     /**
      * The badge's `title`, and the whole reason it is a link.
      *

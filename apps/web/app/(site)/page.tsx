@@ -14,6 +14,7 @@ import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { IS_AYMAN } from '@/lib/tenant';
 import { PracticeInvite } from '@/components/practice/practice-invite';
 import { SiteHero } from '@/components/site/site-hero';
+import { SocialProofBand } from '@/components/site/social-proof-band';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
 import { BooksStrip } from '@/components/site/books-strip';
@@ -249,22 +250,31 @@ function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], branding: 
 
   switch (props.type) {
     case 'hero':
+      /*
+       * «عدد السوشيال ميديا» rides on the hero — the first thing under the
+       * fold, where social proof is read at all. Here rather than in the
+       * return above for the same reason as `PracticeInvite` below, and it is
+       * `null` until the feature is on and a figure is typed, so the page is
+       * unchanged until then. See `<SocialProofBand>`.
+       */
       return (
-        <SiteHero
-          heroKey={branding.heroKey}
-          heroDarkKey={branding.heroDarkKey}
-          key={block.id}
-          eyebrow={props.eyebrowAr}
-          headline={props.headlineAr}
-          subheadline={props.subheadlineAr}
-          rotating={props.rotatingAr}
-          lead={props.leadAr}
-          ctaLabel={props.ctaLabelAr}
-          ctaHref={props.ctaHref}
-          secondaryCtaLabel={props.secondaryCtaLabelAr}
-          secondaryCtaHref={props.secondaryCtaHref}
-          stats={props.stats}
-        />
+        <Fragment key={block.id}>
+          <SiteHero
+            heroKey={branding.heroKey}
+            heroDarkKey={branding.heroDarkKey}
+            eyebrow={props.eyebrowAr}
+            headline={props.headlineAr}
+            subheadline={props.subheadlineAr}
+            rotating={props.rotatingAr}
+            lead={props.leadAr}
+            ctaLabel={props.ctaLabelAr}
+            ctaHref={props.ctaHref}
+            secondaryCtaLabel={props.secondaryCtaLabelAr}
+            secondaryCtaHref={props.secondaryCtaHref}
+            stats={props.stats}
+          />
+          <SocialProofBand />
+        </Fragment>
       );
 
     case 'whyRail':

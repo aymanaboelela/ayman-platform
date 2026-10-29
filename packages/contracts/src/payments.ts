@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
+import { OptionalCouponCodeSchema } from '@ayman/contracts/coupon-code';
 
 /**
  * A student's course subscription claim over Vodafone Cash, and its review.
@@ -78,6 +79,11 @@ export const SubmitPaymentSchema = z
      *  Normalised to E.164, same rule as every other phone field. */
     senderPhone: egyptianPhone('اكتب رقم الموبايل اللي حوّلت منه'),
     screenshotKey: z.string().min(1).max(255),
+    /** «كود الخصم» — the code only; the discount is the server's to compute
+     *  (see `coupons.ts`). Refused with a 422 `coupon_*` code when it does not
+     *  apply, and never silently dropped: the student transferred the
+     *  discounted amount on the strength of it. */
+    couponCode: OptionalCouponCodeSchema,
   })
   .strict()
   .refine((value) => (value.plan === 'term') === (value.termId !== null), {

@@ -1507,3 +1507,52 @@
 .bco-done__cta {
   margin-top: 0.5rem;
 }
+
+/* «كود الخصم» on the course checkout — a quiet link until it is wanted, then
+   one row: the code (typed left to right) and «تطبيق» beside it. */
+.bco-coupon {
+  padding-block: 0.75rem;
+}
+
+.bco-coupon__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.bco-coupon__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bco-coupon__apply {
+  flex: none;
+  height: auto;
+  min-block-size: 2.875rem;
+  border-radius: 0.75rem;
+}
+
+.bco-coupon__applied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.bco-coupon__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+/* A Latin code inside an Arabic sentence. */
+.bco-coupon__code {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+}

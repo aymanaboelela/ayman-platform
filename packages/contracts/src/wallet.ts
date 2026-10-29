@@ -4,6 +4,7 @@ import {
   PaymentSubmissionSchema,
   PaymentSubmissionStatusSchema,
 } from '@ayman/contracts/payments';
+import { OptionalCouponCodeSchema } from '@ayman/contracts/coupon-code';
 
 /**
  * «المحفظة» — the student's half.
@@ -142,6 +143,8 @@ export const WalletPurchaseSchema = z
     termId: z.uuid().nullable().default(null),
     monthIds: z.uuid().array().max(12).default([]),
     idempotencyKey: z.uuid(),
+    /** «كود الخصم» — see `SubmitPaymentSchema.couponCode`. */
+    couponCode: OptionalCouponCodeSchema,
   })
   .strict()
   .refine((value) => (value.plan === 'term') === (value.termId !== null), {

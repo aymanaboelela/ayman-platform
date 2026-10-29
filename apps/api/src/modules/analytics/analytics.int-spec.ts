@@ -556,7 +556,19 @@ describe('analytics (integration)', () => {
 
   it('emits one daily point per day with no holes', async () => {
     const result = await overview.build({ days: 30, courseId });
-    expect(result.daily).toHaveLength(31);
+
+    /*
+     * 30×24 hours normally touch 31 Cairo dates — but not for the hour before
+     * midnight in the month after a clock change: the window then starts an
+     * hour later on the wall clock, past midnight, and touches 30. It failed
+     * exactly that way at 23:39 Cairo on 2026-10-29, the night DST ended, on a
+     * branch that touches nothing in analytics. "No holes" is consecutive
+     * dates, whichever count the clock gives.
+     */
+    expect(result.daily.length).toBeGreaterThanOrEqual(30);
+    expect(result.daily.length).toBeLessThanOrEqual(31);
+    const steps = result.daily.slice(1).map((point, i) => Date.parse(point.date) - Date.parse(result.daily[i]!.date));
+    expect(new Set(steps)).toEqual(new Set([24 * 60 * 60 * 1000]));
 
     /*
      * The WINDOW carries the watch time, not specifically its last bucket.

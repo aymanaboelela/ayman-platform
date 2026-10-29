@@ -14,6 +14,11 @@ import {
   type Seo,
   type StoreSettings,
 } from '@ayman/contracts/admin/settings';
+import {
+  SocialCountsInputSchema,
+  SocialCountsSchema,
+  type SocialCountsInput,
+} from '@ayman/contracts/admin/social-counts';
 import { adminSend } from '@/lib/admin-api';
 import { TAG_BOOKS, tags } from '@/lib/cache-tags';
 
@@ -113,6 +118,26 @@ export async function updateOutreachAction(input: OutreachSettings): Promise<Set
   try {
     const body = OutreachSettingsSchema.parse(input);
     await adminSend('PATCH', '/api/admin/settings/outreach', body, SiteSettingsSchema);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * «عدد السوشيال ميديا». Its own route (`/api/admin/social-counts`), not the
+ * generic section PATCH — that one has no entitlement gate; see
+ * `SocialCountsSchema`.
+ *
+ * `settings('socialCounts')` is the tag `getSocialCounts()` carries, and the
+ * landing page's `'use cache'` entry inherits it from the profile section that
+ * reads it — so the new figures are on the page as soon as this returns.
+ */
+export async function updateSocialCountsAction(input: SocialCountsInput): Promise<SettingsActionResult> {
+  try {
+    const body = SocialCountsInputSchema.parse(input);
+    await adminSend('PATCH', '/api/admin/social-counts', body, SocialCountsSchema);
+    updateTag(tags.settings('socialCounts'));
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };

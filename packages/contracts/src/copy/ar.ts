@@ -3054,6 +3054,39 @@ export const copy = {
     walletInsufficient: 'الرصيد مابقاش يكفي — ممكن يكون اتصرف في اشتراك تاني.',
     walletOwned: 'الاشتراك ده موجود على الحساب خلاص.',
     walletGeneric: 'الدفع من المحفظة ماتمّش — نجرّب تاني.',
+    /*
+     * «كود الخصم» — the field on the payment step, only where the coupons
+     * feature is on. Nouns and «نـ» forms, like the rest of this object: the
+     * voice tripwire (`checkout-voice.spec.ts`) walks these too.
+     */
+    couponToggle: 'عندك كود خصم؟',
+    couponLabel: 'كود الخصم',
+    couponApply: 'تطبيق',
+    couponApplying: 'بنتأكد من الكود…',
+    couponRemove: 'إلغاء الكود',
+    /** «الكود ‹CODE› اتطبّق…» — the code sits between the two in its own
+     *  isolated LTR run (a «-» inside a Latin code flips in an RTL line). */
+    couponAppliedLead: 'الكود',
+    couponApplied: 'اتطبّق — خصم {amount} جنيه',
+    couponOriginal: 'السعر قبل الخصم',
+    couponDiscount: 'الخصم',
+    /** One sentence per `CouponRefusal`, plus a fallback for anything else. */
+    couponRefused: {
+      not_found: 'الكود ده مش موجود — الحروف والأرقام محتاجة مراجعة.',
+      inactive: 'الكود ده متوقف دلوقتي.',
+      not_started: 'الكود ده لسه مابدأش.',
+      expired: 'مدة الكود ده انتهت.',
+      exhausted: 'الكود ده اتستخدم لآخر مرة متاحة.',
+      per_student_limit: 'الكود ده اتستخدم على الحساب ده قبل كده.',
+      not_for_course: 'الكود ده مش على الكورس ده.',
+      exceeds_price: 'الكود ده مابينفعش على الاختيار ده.',
+      unavailable: 'أكواد الخصم مش متاحة دلوقتي.',
+      generic: 'الكود ماتأكدش دلوقتي — نجرّب تاني.',
+    },
+    /** The code stopped applying between «تطبيق» and the final press — the
+     *  amount on screen is back to the full price. `{reason}` is one of
+     *  `couponRefused`. */
+    couponLost: '{reason} المبلغ رجع للسعر الأصلي.',
     /** Brief, while the panel checks for an existing submission on open. */
     checking: 'لحظة واحدة…',
     /** My own past claims for this course — shown above the plan picker. */
