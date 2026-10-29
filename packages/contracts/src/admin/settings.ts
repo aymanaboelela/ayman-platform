@@ -123,6 +123,22 @@ export const AccentHueSchema = z
  */
 export const LANDING_LAYOUTS = ['classic', 'editorial', 'compact'] as const;
 export const LandingLayoutSchema = z.enum(LANDING_LAYOUTS);
+
+/**
+ * Whether the opener's portrait drifts once it has arrived.
+ *
+ * `still` is the default and what every stored row means, because the
+ * `studio` opener was designed still on purpose (`presets.css`, the caret
+ * note: an indefinite motion on an otherwise still page is a thing the eye
+ * keeps returning to). `float` exists for the teacher whose portrait is a
+ * cut-out composition — a figure, a crown, a wordmark — where a slow drift
+ * reads as the picture being alive rather than as a page that will not settle.
+ *
+ * Off unless a teacher turns it on, so switching it on for one stack cannot
+ * change another stack's page.
+ */
+export const PORTRAIT_MOTIONS = ['still', 'float'] as const;
+export const PortraitMotionSchema = z.enum(PORTRAIT_MOTIONS);
 export type LandingLayout = z.infer<typeof LandingLayoutSchema>;
 
 /**
@@ -209,6 +225,8 @@ export const BrandingSchema = z
     landingPreset: LandingPresetSchema.default('classic'),
     /** The shape of the `classic` page. See `LandingLayoutSchema`. */
     landingLayout: LandingLayoutSchema.default('classic'),
+    /** The opener portrait's idle motion. See `PortraitMotionSchema`. */
+    portraitMotion: PortraitMotionSchema.default('still'),
     radius: RadiusSlotSchema.default('default'),
     logoLightAssetId: assetId,
     logoDarkAssetId: assetId,

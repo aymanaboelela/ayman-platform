@@ -51,7 +51,12 @@ export const studioCopy = {
   chipWhy: 'ليه هنا',
   chipYears: 'الصفوف',
   yearsTitle: 'ابدأ من صفّك',
-  yearsLead: 'اختار سنتك وادخل على كورساتها على طول.',
+  /* «اختار سنتك» was a masculine imperative (CLAUDE.md §7); this says the
+     same thing without addressing anyone. */
+  yearsLead: 'كل صف وكورساته في مكان واحد — دوسة وتبدأ.',
+  /** A tile's course count, said in words — a bare «1» beside the grade read as a second grade number. */
+  yearsCount: (n: number): string =>
+    n === 1 ? 'كورس واحد' : n === 2 ? 'كورسين' : n <= 10 ? `${n} كورسات` : `${n} كورس`,
   chipBooks: 'الكتب',
   chipFaq: 'أسئلة',
   chipHonors: 'لوحة الشرف',

@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
+
 import type { FooterContent } from '@/components/site/footer-content';
 
 /**
@@ -38,13 +40,22 @@ export default function StudioFooter({ content }: { content: FooterContent }) {
             <ul className="st-foot__social" aria-label={content.follow}>
               {content.social.map((link) => (
                 <li key={link.href}>
+                  {/*
+                    Icons, the same marks the other footers draw. A row of
+                    bare words beside the name read as a second menu, and the
+                    label stays as the accessible name and the tooltip.
+                    `mark.hex`, not `inkBrand`: this footer follows the theme.
+                  */}
                   <a
                     className="st-foot__s"
                     href={link.href}
                     target="_blank"
                     rel="noreferrer noopener"
+                    aria-label={link.label}
+                    title={link.label}
+                    style={{ ['--brand' as string]: SOCIAL_MARKS[link.key].hex }}
                   >
-                    {link.label}
+                    <SocialIcon mark={SOCIAL_MARKS[link.key]} size={19} />
                   </a>
                 </li>
               ))}
