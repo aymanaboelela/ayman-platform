@@ -95,6 +95,8 @@ export const AUDIT_RESOURCES = {
   /// «دعوة الصحاب» — one friend attributed to one share link; and the program row.
   referral: 'referrals',
   referralProgram: 'referral_program',
+  /// «كوبونات الخصم» — see `Coupon`.
+  coupon: 'coupons',
   /// «السناتر» — see `CentersService`.
   center: 'centers',
   centerSlot: 'center_slots',

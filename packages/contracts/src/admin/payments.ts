@@ -81,6 +81,13 @@ export const AdminPaymentRowSchema = z.object({
    *  transfer and no screenshot behind it. `.default(false)` so a response
    *  from a build that predates the wallet still parses. */
   paidFromWallet: z.boolean().default(false),
+  /** «كود الخصم» this claim was priced with — `amountCents` above is already
+   *  the discounted figure, and this says why it is lower than the plan's
+   *  price. `.default(null)` for the same older-build reason as above. */
+  coupon: z
+    .object({ code: z.string(), discountCents: z.number().int() })
+    .nullable()
+    .default(null),
   /** Whether there is a screenshot to open — the student-facing flow always
    *  has one, `adminManualSubscribe` usually does not. Lets the UI skip
    *  requesting `GET .../screenshot` for a row that has none, rather than

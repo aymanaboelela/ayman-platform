@@ -554,6 +554,15 @@ export const AUDIT_ACTIONS = [
   'referral:void',
   'referral:settings',
   /*
+   * «كوبونات الخصم». The admin's three acts on a code. A student's USE of one
+   * is not its own action: it rides on the `payment:submit` / `wallet:purchase`
+   * row of the claim it priced (`metadata.coupon`), and a release on the
+   * `payment:reject` that caused it.
+   */
+  'coupon:create',
+  'coupon:update',
+  'coupon:delete',
+  /*
    * «ستوديو التصميم». Every act on the designer's folders is audited, the
    * designer's own included: the account belongs to someone outside the
    * teaching team, and «مين مسح التصميم ده» has to have an answer that does not

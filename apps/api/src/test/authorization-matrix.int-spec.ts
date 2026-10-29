@@ -127,6 +127,8 @@ import { EngagementModule } from '../modules/engagement/engagement.module';
 import { ReferralsController } from '../modules/referrals/referrals.controller';
 import { AdminReferralsController } from '../modules/referrals/admin-referrals.controller';
 import { ReferralsService } from '../modules/referrals/referrals.service';
+import { AdminCouponsController } from '../modules/coupons/admin-coupons.controller';
+import { CouponsService } from '../modules/coupons/coupons.service';
 import { AdminAttemptsOverviewController } from '../modules/quiz/admin-attempts-overview.controller';
 import { AttemptsOverviewService } from '../modules/quiz/attempts-overview.service';
 
@@ -333,6 +335,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `CampaignRunner` and the global Redis (see «التسويق» below).
         ReferralsController,
         AdminReferralsController,
+        // «كوبونات الخصم» — the admin screen. Its only dependencies (Prisma,
+        // audit) are already here; the student's quote route is on
+        // `PaymentsController`.
+        AdminCouponsController,
       ],
       imports: [
         DiscoveryModule,
@@ -524,6 +530,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // notifications are all already here). The sweeper and the WhatsApp
         // notice are crons with no route, so they stay out.
         ReferralsService,
+        CouponsService,
       ],
     })
     class FixtureModule {}
@@ -2567,6 +2574,33 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'payment my months: anonymous', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'anonymous', status: 401 },
     { label: 'payment my months: student', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'student', status: 200 },
     { label: 'payment my months: admin', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'admin', status: 200 },
+    // «كود الخصم ← تطبيق» — `payment:submit` + feature `coupons` (open here:
+    // no TENANT_KEY is the instructor's own stack). Through the gate, then 404
+    // on a course that does not exist — before any coupon is even looked up.
+    { label: 'coupon quote: anonymous', method: 'post', path: () => '/api/payments/coupon-quote', actor: 'anonymous', status: 401 },
+    {
+      label: 'coupon quote: student, unknown course',
+      method: 'post',
+      path: () => '/api/payments/coupon-quote',
+      actor: 'student',
+      body: () => ({ code: 'MATRIX10', courseId: randomUUID(), plan: 'monthly' }),
+      status: 404,
+    },
+    // «كوبونات الخصم» — `payment:read` to look, `payment:review` to write.
+    { label: 'admin coupons list: anonymous', method: 'get', path: () => '/api/admin/coupons', actor: 'anonymous', status: 401 },
+    { label: 'admin coupons list: student', method: 'get', path: () => '/api/admin/coupons', actor: 'student', status: 403 },
+    { label: 'admin coupons list: admin', method: 'get', path: () => '/api/admin/coupons?status=active&perPage=10', actor: 'admin', status: 200 },
+    { label: 'admin coupon create: anonymous', method: 'post', path: () => '/api/admin/coupons', actor: 'anonymous', status: 401 },
+    { label: 'admin coupon create: student', method: 'post', path: () => '/api/admin/coupons', actor: 'student', status: 403, body: () => ({ code: 'MATRIXSTUDENT', kind: 'percent', percentOff: 10 }) },
+    { label: 'admin coupon redemptions: anonymous', method: 'get', path: () => `/api/admin/coupons/${randomUUID()}/redemptions`, actor: 'anonymous', status: 401 },
+    { label: 'admin coupon redemptions: student', method: 'get', path: () => `/api/admin/coupons/${randomUUID()}/redemptions`, actor: 'student', status: 403 },
+    { label: 'admin coupon redemptions: admin, unknown', method: 'get', path: () => `/api/admin/coupons/${randomUUID()}/redemptions`, actor: 'admin', status: 404 },
+    { label: 'admin coupon update: anonymous', method: 'patch', path: () => `/api/admin/coupons/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin coupon update: student', method: 'patch', path: () => `/api/admin/coupons/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ isActive: false }) },
+    { label: 'admin coupon update: admin, unknown', method: 'patch', path: () => `/api/admin/coupons/${randomUUID()}`, actor: 'admin', status: 404, body: () => ({ isActive: false }) },
+    { label: 'admin coupon delete: anonymous', method: 'delete', path: () => `/api/admin/coupons/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin coupon delete: student', method: 'delete', path: () => `/api/admin/coupons/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin coupon delete: admin, unknown', method: 'delete', path: () => `/api/admin/coupons/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'admin transfers list: anonymous', method: 'get', path: () => '/api/admin/transfers', actor: 'anonymous', status: 401 },
     { label: 'admin transfers list: student', method: 'get', path: () => '/api/admin/transfers', actor: 'student', status: 403 },
     { label: 'admin transfers list: admin', method: 'get', path: () => '/api/admin/transfers', actor: 'admin', status: 200 },

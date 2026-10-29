@@ -86,6 +86,7 @@ const admin = {
     /** «أكواد الفتح» — a six-character code that opens a lecture, a unit, a
      *  term or the whole course for the one student who types it. */
     unlockCodes: 'أكواد الفتح',
+    coupons: 'كوبونات الخصم',
     /** «المحفظة» — the desk (find a student, credit or debit) and the live
      *  queue of InstaPay / Vodafone Cash top-up requests. */
     wallet: 'شحن المحفظة',

@@ -114,7 +114,10 @@ function respondWith({
   ownedMonthIds,
   coversAll = false,
   walletBalanceCents,
+  couponsOn = false,
 }: {
+  /** The `coupons` feature on this stack — off unless a case says so. */
+  couponsOn?: boolean;
   course?: unknown;
   settings?: unknown;
   submissions?: unknown[];
@@ -133,6 +136,7 @@ function respondWith({
         : Promise.resolve({ ownedMonthIds, coversAll });
     }
     if (path === '/api/payments/submissions/me') return Promise.resolve(submissions);
+    if (path === '/api/entitlements') return Promise.resolve({ features: { coupons: couponsOn } });
     if (path === '/api/wallet/balance') {
       return walletBalanceCents === undefined
         ? Promise.reject(new Error('unauthorized'))
@@ -246,6 +250,7 @@ describe('SubscribePanel', () => {
       if (path === '/api/payments/submissions/me') return Promise.reject(new Error('429'));
       if (path.startsWith('/api/catalog/courses/')) return Promise.resolve(liveCourse());
       if (path === OWNED_MONTHS_PATH) return Promise.resolve({ ownedMonthIds: [] });
+      if (path === '/api/entitlements') return Promise.resolve({ features: {} });
       return Promise.resolve(liveSettings());
     });
 
@@ -727,5 +732,70 @@ describe('paying from the wallet', () => {
 
     await openCheckout(undefined);
     expect(screen.queryByText(copy.subscribe.walletTitle)).toBeNull();
+  });
+});
+
+/**
+ * «كود الخصم». The field only exists where the feature is on, the discount on
+ * screen is the SERVER's quote, and the claim carries the code — never a
+ * figure the student could edit.
+ */
+describe('coupon code', () => {
+  async function openMonthlyForm(couponsOn: boolean) {
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn });
+    render(<Panel />);
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) }));
+    await screen.findByText(copy.subscribe.railQuestion);
+  }
+
+  it('is not offered on a stack where coupons are off', async () => {
+    await openMonthlyForm(false);
+    expect(screen.queryByText(copy.subscribe.couponToggle)).toBeNull();
+  });
+
+  it('shows the server\'s discounted price and sends only the code with the claim', async () => {
+    await openMonthlyForm(true);
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.couponToggle) }));
+    fireEvent.change(screen.getByLabelText(copy.subscribe.couponLabel), { target: { value: 'save25' } });
+    apiPost.mockResolvedValueOnce({ code: 'SAVE25', originalCents: 20000, discountCents: 5000, finalCents: 15000 });
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.couponApply }));
+
+    expect((await screen.findAllByText('SAVE25')).length).toBeGreaterThan(0);
+    const [quotePath, , quoteBody] = apiPost.mock.calls[0]! as [string, unknown, Record<string, unknown>];
+    expect(quotePath).toBe('/api/payments/coupon-quote');
+    expect(quoteBody).toMatchObject({ code: 'save25', courseId: COURSE_ID, plan: 'monthly' });
+    // The amount to transfer is the quote's, not the plan's.
+    expect(screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: '150' })).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railInstapay) }));
+    fireEvent.change(await screen.findByLabelText(copy.subscribe.senderPhoneLabel), {
+      target: { value: '01021196367' },
+    });
+    fireEvent.change(screen.getByLabelText(copy.subscribe.screenshotLabel), {
+      target: { files: [new File(['x'], 'transfer.jpg', { type: 'image/jpeg' })] },
+    });
+    vi.mocked(uploadPaymentScreenshot).mockResolvedValue({ ok: true, value: { screenshotKey: 'payment-proof/t.jpg' } });
+    apiPost.mockResolvedValueOnce({});
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.submit }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(2));
+    const body = apiPost.mock.calls[1]![2] as Record<string, unknown>;
+    expect(body.couponCode).toBe('SAVE25');
+    expect(Object.keys(body)).not.toContain('amountCents');
+  });
+
+  it('names why a code was refused', async () => {
+    await openMonthlyForm(true);
+    const { ApiRequestError } = await import('@/lib/api');
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.couponToggle) }));
+    fireEvent.change(screen.getByLabelText(copy.subscribe.couponLabel), { target: { value: 'OLDCODE' } });
+    apiPost.mockRejectedValueOnce(
+      new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_expired', message: 'expired' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.couponApply }));
+
+    expect(await screen.findByText(copy.subscribe.couponRefused.expired)).toBeTruthy();
   });
 });
