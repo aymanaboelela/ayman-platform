@@ -78,6 +78,17 @@ export const adminAutoOutreach = {
   autoWhatsappDailyCap: 'أقصى عدد في اليوم',
   autoWhatsappDailyCapHint: 'للرسالتين دول مع بعض، على واتساب.',
 
+  // «نتيجة الامتحان تتبعت لمين» — `outreach.quizResultTo`.
+  quizResultTo: 'نتيجة الامتحان تتبعت لمين',
+  quizResultToHint:
+    'رسالة ولي الأمر بتتبعت على واتساب من الرقم المربوط، على رقم ولي الأمر اللي في ملف الطالب، وفي وقت الإرسال بس. لو الرقم مش موجود أو مش صالح، الطالب بتوصله رسالته هو.',
+  quizResultToStudent: 'الطالب',
+  quizResultToStudentHint: 'في شات المنصة، زي ما هو دلوقتي.',
+  quizResultToGuardian: 'ولي الأمر',
+  quizResultToGuardianHint: 'على واتساب، بدل رسالة الطالب.',
+  quizResultToBoth: 'الاتنين',
+  quizResultToBothHint: 'الطالب في الشات، وولي الأمر على واتساب.',
+
   // ── the log ────────────────────────────────────────────────────────
   kindCheckoutRecovery: 'كمّل الدفع',
   kindSignupNudge: 'الحساب جاهز',

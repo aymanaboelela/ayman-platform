@@ -104,6 +104,8 @@ export const tags = {
    *  event from an admin rearranging the home page, and sharing a tag would
    *  drop the whole landing cache on every rating. */
   honorBoard: (): string => tag('honor-board'),
+  /** «البانرات الترويجية» — the dashboard strip; `updateTag`ged by every admin write. */
+  promoBanners: (): string => tag('promo-banners'),
   /** إيه اللي الستاك ده مسموح له يعرضه. ⚠️ مافيش `updateTag` بيمسحه في أي
    *  مكان، وده مقصود: القيمة بتيجي من متغيّر بيئة على الحاوية، فهي ما
    *  بتتغيرش غير مع إعادة نشر — وإعادة النشر بتمسح الكاش أصلًا. التاج

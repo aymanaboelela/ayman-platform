@@ -258,6 +258,18 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like everything new: on for him, off on any other stack
+     * until the owner opens it. Nothing in it carries his identity — the
+     * pictures and links are whatever the teacher uploads — so an opened
+     * stack works at once.
+     */
+    key: 'promoBanners',
+    nameAr: 'البانرات الترويجية',
+    descriptionAr: 'صور ترويجية فوق لوحة الطالب — عرض، كورس جديد، كتاب نزل — بلينك ومدة وسنة دراسية.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first": on for him, off on every other stack until the owner
      * opens it. Nothing in it is his — the numbers are typed by each stack's
      * own admin and the links are that stack's own `contact` — so an opened

@@ -7,6 +7,7 @@ import { AutoOutreachOverviewService } from './auto-outreach-overview.service';
 import { AutoOutreachSweeper } from './auto-outreach.sweeper';
 import { CheckoutIntentsController } from './checkout-intents.controller';
 import { CheckoutIntentsService } from './checkout-intents.service';
+import { GuardianResultSweeper } from './guardian-result.sweeper';
 
 /**
  * «رسايل الواتساب التلقائية» — checkout recovery and the signup nudge.
@@ -24,6 +25,9 @@ import { CheckoutIntentsService } from './checkout-intents.service';
     AutoOutreachCandidates,
     AutoOutreachOverviewService,
     AutoOutreachSweeper,
+    // «نتيجة الامتحان لولي الأمر» — lives here for the device, the sender
+    // lock and the pacing rules, which are this module's.
+    GuardianResultSweeper,
     WhatsappDeviceService,
   ],
 })

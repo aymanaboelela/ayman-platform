@@ -4123,6 +4123,8 @@ model QuizAttempt {
   questions AttemptQuestion[]
   events    AttemptEvent[]
   honorPin  HonorBoardPin?
+  /// «نتيجة الامتحان لولي الأمر» — the WhatsApp to the guardian, once per paper.
+  guardianResult GuardianResultMessage?
 
   @@unique([quizId, userId, attemptNo])
   @@index([quizId, state])
@@ -4918,6 +4920,35 @@ model HomeBlock {
   @@schema("app")
 }
 
+/// «البانرات الترويجية» — pictures on top of the student dashboard, managed
+/// from `/admin/promo-banners` behind the `promoBanners` entitlement.
+///
+/// Not a `home_blocks` type: those are the PUBLIC landing page, these are for
+/// students already signed in, and they are dated where a landing section is
+/// standing copy. See `packages/contracts/src/admin/promo-banners.ts`.
+///
+/// `image_key` is a storage key (like `courses.cover_key`), not a media asset
+/// id: the upload field hands back a key and every reader renders a key.
+/// `starts_on`/`ends_on` are Cairo calendar days, both inclusive, either open.
+/// `years` empty = every student.
+model PromoBanner {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  title     String?
+  imageKey  String    @map("image_key")
+  linkUrl   String?   @map("link_url")
+  years     Int[]     @default([])
+  isActive  Boolean   @default(true) @map("is_active")
+  startsOn  DateTime? @map("starts_on") @db.Date
+  endsOn    DateTime? @map("ends_on") @db.Date
+  position  Int
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([position])
+  @@map("promo_banners")
+  @@schema("app")
+}
+
 enum NewsStatus {
   draft
   published
@@ -5697,6 +5728,47 @@ model OutreachMessage {
   /// The receipt relay's lookup. Partial in SQL (`WHERE … IS NOT NULL`).
   @@index([whatsappMessageId])
   @@map("outreach_messages")
+  @@schema("app")
+}
+
+/// «نتيجة الامتحان لولي الأمر» — one WhatsApp message to the guardian's number
+/// about one graded paper, sent from the linked device by
+/// `GuardianResultSweeper` when `outreach.quizResultTo` is `guardian` or `both`.
+///
+/// ## Why not a row in `outreach_messages`
+///
+/// That ledger is one-to-one with a CHAT message in the student's own thread
+/// (`messageId` is NOT NULL and UNIQUE) — it records what the STUDENT was
+/// told. A parent has no thread, no account and no variant history; a row
+/// there would need a fake bubble in the student's chat to exist at all.
+///
+/// ## Idempotency is the unique `attemptId`, claimed BEFORE the send
+///
+/// A WhatsApp message cannot be rolled back, so this row is inserted as
+/// `sending` first and the unique index is what turns a retried or
+/// overlapping tick into a no-op. A crash between the claim and the send
+/// leaves `sending` forever — at most once, on purpose: a parent receiving
+/// the same score twice is worse than not receiving it. A fault of the DEVICE
+/// (dropped, ceiling, WhatsApp restriction) deletes the claim so the next tick
+/// tries again.
+model GuardianResultMessage {
+  id        String @id @default(uuid(7)) @db.Uuid
+  attemptId String @unique @map("attempt_id") @db.Uuid
+  /// E.164 as it was sent to, or the raw value when it could not be read as a
+  /// number (`no_phone`). A snapshot: the profile's number may change later.
+  phone     String @db.VarChar(40)
+  /// `sending` · `sent` (WhatsApp TOOK it — one grey tick, not delivery; the
+  /// arrival is on `whatsapp_sends.delivered_at` by `whatsappMessageId`) ·
+  /// `no_phone` · `opted_out` · `not_on_whatsapp`. CHECK-constrained in SQL.
+  status    String @db.VarChar(16)
+  whatsappMessageId String? @map("whatsapp_message_id") @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  attempt QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  /// The pacing gap and the cold-start floor both read the newest/oldest row.
+  @@index([createdAt(sort: Desc)])
+  @@map("guardian_result_messages")
   @@schema("app")
 }
 
