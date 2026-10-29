@@ -14,10 +14,10 @@ import { Prisma } from '../../generated/prisma/client';
 import {
   cairoDay,
   clampFraction,
-  dayKeys,
   durationBucketsFrom,
   rate,
   studentJoins,
+  trailingDayKeys,
 } from './analytics-shared';
 
 export interface OverviewQuery {
@@ -144,7 +144,7 @@ export class OverviewService {
       this.quiz(byLesson),
       this.distributions(byLesson),
       this.engagement(byEnrollment, byLesson),
-      this.daily(since, byEnrollment, byLesson),
+      this.daily(since, query.days, byEnrollment, byLesson),
       this.byYear(byEnrollment, byLesson),
       this.byGovernorate(byEnrollment, byLesson),
     ]);
@@ -602,6 +602,7 @@ export class OverviewService {
 
   private async daily(
     since: Date,
+    days: number,
     byEnrollment: Prisma.Sql,
     byLesson: Prisma.Sql,
   ): Promise<DailyPoint[]> {
@@ -631,7 +632,7 @@ export class OverviewService {
     const watchByDay = new Map(watchRows.map((row) => [row.day, row]));
     const attemptByDay = new Map(attemptRows.map((row) => [row.day, row]));
 
-    return dayKeys(since, new Date()).map((date) => {
+    return trailingDayKeys(new Date(), days).map((date) => {
       const watch = watchByDay.get(date);
       const attempt = attemptByDay.get(date);
       return {
