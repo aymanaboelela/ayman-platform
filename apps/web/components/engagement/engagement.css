@@ -749,9 +749,8 @@
   z-index: 5;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  padding: 0.65rem 1rem;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--r-lg);
   border: 1.5px solid color-mix(in oklab, var(--k) 35%, var(--color-line));
   background: color-mix(in oklab, var(--k) 8%, var(--color-surface-1));
@@ -761,7 +760,11 @@
 .pk-meter[data-load='light'] { --k: var(--viz-2); }
 .pk-meter[data-load='ok'] { --k: var(--viz-5); }
 .pk-meter[data-load='tight'] { --k: var(--viz-4); }
-.pk-ring { inline-size: 3.25rem; block-size: 3.25rem; flex-shrink: 0; transform: rotate(-90deg); }
+.pk-ring { inline-size: 2.6rem; block-size: 2.6rem; flex-shrink: 0; transform: rotate(-90deg); }
+@media (min-width: 640px) {
+  .pk-meter { gap: 1rem; padding: 0.65rem 1rem; }
+  .pk-ring { inline-size: 3.25rem; block-size: 3.25rem; }
+}
 .pk-ring__track { fill: none; stroke: var(--color-line); stroke-width: 10; }
 .pk-ring__fill {
   fill: none;
@@ -770,8 +773,8 @@
   stroke-linecap: round;
   transition: stroke-dashoffset var(--d-modal) var(--ease-out), stroke var(--d-modal) var(--ease-out);
 }
-.pk-meter__count { display: flex; align-items: baseline; gap: 0.35rem; flex-wrap: wrap; }
-.pk-meter__num { font-family: var(--font-mono); font-size: 1.75rem; font-weight: var(--fw-bold); line-height: 1; }
+.pk-meter__count { display: flex; align-items: baseline; gap: 0.3rem; min-width: 0; white-space: nowrap; }
+.pk-meter__num { font-family: var(--font-mono); font-size: 1.5rem; font-weight: var(--fw-bold); line-height: 1; }
 .pk-meter__of { color: var(--color-fg-muted); font-weight: var(--fw-semibold); }
 .pk-meter__label { font-weight: var(--fw-bold); }
 .pk-meter__load {
@@ -779,14 +782,21 @@
   align-items: baseline;
   gap: 0.35rem;
   margin-inline-start: auto;
-  padding: 0.35rem 0.85rem;
+  padding: 0.3rem 0.75rem;
   border-radius: var(--r-full);
+  white-space: nowrap;
+  font-size: var(--fs-text-sm);
   background: color-mix(in oklab, var(--k) 16%, var(--color-surface-1));
   color: color-mix(in oklab, var(--k) 75%, var(--color-fg));
   font-weight: var(--fw-semibold);
 }
 .pk-meter__perday { font-family: var(--font-mono); font-size: var(--fs-text-lg); font-weight: var(--fw-bold); }
 .pk-meter__tone::before { content: '·'; margin-inline-end: 0.35rem; }
+/* Under ~26rem the tone word is what gives way: the number and «في اليوم»
+   carry the meaning, and the chip's colour already says light / tight. */
+@media (max-width: 419px) {
+  .pk-meter__tone { display: none; }
+}
 .pk-pop { display: inline-block; animation: pk-pop 360ms var(--ease-pop); }
 
 /* Bulk: all in, or a whole kind in or out. */
@@ -1045,7 +1055,9 @@
 
 .pk-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 
-/* The summary card in the plan. */
+/* The summary card in the plan. The title keeps a readable width and the
+   button drops under it on a phone, instead of «المتراكم في / الخطة». */
+.pk-summary .eg-card__head > div { min-inline-size: 11rem; }
 .pk-summary__courses { display: grid; gap: 0.65rem; }
 .pk-summary__course { display: flex; align-items: center; gap: 0.75rem; }
 .pk-summary__title { margin-block-end: 0.3rem; font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
