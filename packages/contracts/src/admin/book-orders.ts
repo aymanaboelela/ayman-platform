@@ -248,6 +248,14 @@ export const AdminBookOrderRowSchema = z.object({
    * `0` is the common case and is what the badge is absent for.
    */
   previousOrdersFromPhone: z.number().int().min(0),
+  /**
+   * The same orders as `previousOrdersFromPhone`, split by status — because
+   * the count alone raised «هو الطلب اللي قبله اتثبت ولا لأ؟» and sent the
+   * admin to a second screen to answer it. Empty when the count is `0`.
+   */
+  previousOrderStatuses: z.array(
+    z.object({ status: BookOrderStatusSchema, count: z.number().int().min(1) }),
+  ),
 });
 export type AdminBookOrderRow = z.infer<typeof AdminBookOrderRowSchema>;
 

@@ -5086,6 +5086,9 @@ const admin = {
      *  unlinked rows and the number is the only thing they share. `{n}` is
      *  how many OTHER live orders that number has. */
     repeatCustomer: 'طلب قبل كده {n} مرة',
+    /** One status inside that badge when more than one earlier order shares
+     *  it, e.g. «مرفوضة (2)». A single order shows the status alone. */
+    repeatCustomerStatusCount: '{status} ({n})',
     /**
      * The badge's `title`, and the whole reason it is a link.
      *

@@ -2112,11 +2112,29 @@ export class BookOrdersService {
       phones.length === 0
         ? []
         : await this.prisma.bookOrder.groupBy({
-            by: ['phone'],
+            by: ['phone', 'status'],
             where: { phone: { in: phones }, deletedAt: null },
             _count: { _all: true },
           });
-    const ordersByPhone = new Map(grouped.map((entry) => [entry.phone, entry._count._all]));
+    /* Keyed by status too, because the count alone left the real question
+       open: «هو الطلب اللي قبله اتثبت ولا لأ؟» — a number with one rejected
+       order is a different call from one with a delivered box. */
+    const ordersByPhone = new Map<string, Map<BookOrderStatus, number>>();
+    for (const entry of grouped) {
+      const byStatus = ordersByPhone.get(entry.phone) ?? new Map<BookOrderStatus, number>();
+      byStatus.set(entry.status, entry._count._all);
+      ordersByPhone.set(entry.phone, byStatus);
+    }
+    /* The OTHER live orders on this row's number, by status — the row itself
+       is taken off its own status. The subtraction is conditional because a
+       row on the «المحذوفة» tab was never in the grouped count above. */
+    const previousFor = (row: { phone: string; status: BookOrderStatus; deletedAt: Date | null }) =>
+      [...(ordersByPhone.get(row.phone) ?? new Map<BookOrderStatus, number>())]
+        .map(([status, count]) => ({
+          status,
+          count: count - (row.deletedAt === null && status === row.status ? 1 : 0),
+        }))
+        .filter((entry) => entry.count > 0);
 
     return {
       rowCount,
@@ -2176,16 +2194,10 @@ export class BookOrdersService {
         rejectionReason: row.rejectionReason,
         deletedAt: row.deletedAt?.toISOString() ?? null,
         deletionReason: row.deletionReason,
-        /* «كام طلب TANI» — the row itself is subtracted, so `0` is the common
-           case and the badge is simply absent for it. The subtraction is
-           conditional because a row on the «المحذوفة» tab was never in the
-           grouped count above, and taking one off anyway would report `-1`
-           worth of history as `0` on the very screen that shows deleted rows
-           beside live ones. */
-        previousOrdersFromPhone: Math.max(
-          (ordersByPhone.get(row.phone) ?? 0) - (row.deletedAt === null ? 1 : 0),
-          0,
-        ),
+        /* «كام طلب TANI» — the row itself is subtracted (see `previousFor`),
+           so `0` is the common case and the badge is simply absent for it. */
+        previousOrdersFromPhone: previousFor(row).reduce((sum, entry) => sum + entry.count, 0),
+        previousOrderStatuses: previousFor(row),
       })),
     };
   }
