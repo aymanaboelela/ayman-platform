@@ -268,6 +268,18 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'صور ترويجية فوق لوحة الطالب — عرض، كورس جديد، كتاب نزل — بلينك ومدة وسنة دراسية.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first": on for him, off on every other stack until the owner
+     * opens it. Nothing in it is his — the numbers are typed by each stack's
+     * own admin and the links are that stack's own `contact` — so an opened
+     * stack shows its own counts, or nothing until it types some.
+     */
+    key: 'socialCounts',
+    nameAr: 'عدد السوشيال ميديا',
+    descriptionAr: 'عدد المتابعين على يوتيوب وفيسبوك وإنستجرام وتيك توك، بيتكتب من الإعدادات ويظهر في الصفحة الرئيسية.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

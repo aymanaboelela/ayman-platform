@@ -8,6 +8,8 @@ import {
 import { bound, resolve } from './api';
 import { tags } from './cache-tags';
 import { tenantBrandingDefaults } from '@ayman/contracts/admin/tenant-branding';
+import { SocialCountsSchema, type SocialCounts } from '@ayman/contracts/admin/social-counts';
+import { featureEnabled } from './entitlements';
 
 /**
  * The public site's cached configuration reads.
@@ -170,5 +172,37 @@ export async function getPublicSettingsOrDefaults(): Promise<PublicSettingsRead>
   } catch {
     cacheLife('minutes');
     return PublicSettingsReadSchema.parse({ seo: {}, contact: {} });
+  }
+}
+
+/**
+ * «عدد السوشيال ميديا» for the landing page — empty whenever there is nothing
+ * to show, never a throw.
+ *
+ * The entitlement is asked FIRST so a stack where the feature is off never
+ * spends a request on a route that can only answer 404. Both reads are
+ * cached; `updateSocialCountsAction` expires `settings('socialCounts')`.
+ *
+ * Fails soft to empty under `cacheLife('minutes')`, like `getBranding`: the
+ * section is decoration on the landing page, so an unreachable API (or
+ * `next build`, which has none) costs the row, not the page — and the window
+ * closes by itself minutes after the API answers.
+ */
+export async function getSocialCounts(): Promise<SocialCounts> {
+  'use cache';
+  cacheTag(tags.settings('socialCounts'));
+
+  if (!(await featureEnabled('socialCounts'))) {
+    cacheLife('minutes');
+    return SocialCountsSchema.parse({});
+  }
+
+  try {
+    const counts = SocialCountsSchema.parse(await publicJson('/api/settings/social-counts'));
+    cacheLife('hours');
+    return counts;
+  } catch {
+    cacheLife('minutes');
+    return SocialCountsSchema.parse({});
   }
 }

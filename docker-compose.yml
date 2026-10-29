@@ -255,6 +255,11 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # Follower-count auto-sync for the landing's social stats. Both optional:
+      # without them the counts stay typed by hand. Same `${VAR:-}` trap as
+      # above — `env.ts` reads the empty string as unset.
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      META_PAGE_TOKEN: ${META_PAGE_TOKEN:-}
       # بوت حساب الأدمن الأول. `docker-entrypoint.sh` بيشغّله بس لو الاتنين
       # موجودين، وبـ`ADMIN_ONLY_IF_MISSING=true` — يعني مبيلمسش أدمن موجود.
       #

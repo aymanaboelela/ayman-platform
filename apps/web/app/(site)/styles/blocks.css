@@ -166,3 +166,309 @@
 .closer__panel .site-btn {
   margin-top: 0.5rem;
 }
+
+/* ------------------------------------------------------------ social-proof */
+
+/* «عدد السوشيال ميديا» — `<SocialProofBand>`, directly under the hero on the
+   classic landing. Absent from the DOM until the feature is on and a figure is
+   typed, so nothing here applies to a page without it.
+
+   Colour is the brands' own and nothing else: each card carries `--brand` /
+   `--brand-ink` inline, each icon plate `--plate` (and TikTok `--plate-fx`),
+   all from `SOCIAL_MARKS`. The panel is the page's tint and the combined
+   figure its accent, so the band reads as part of THIS site wearing four
+   logos, not as four embedded widgets. */
+
+.social-proof {
+  /* The card fill: white on the light tint, a step above the dark one. Under
+     the dark theme `--site-nav-card` is the same step as the panel, so the
+     cards would vanish into it — same three-selector dance as `theme.css`. */
+  --sp-card: var(--site-nav-card);
+  --sp-shadow: var(--site-shadow-sm);
+  --sp-shadow-hover: var(--site-shadow-md);
+  position: relative;
+  padding-block: clamp(1.5rem, 4vw, 3rem);
+  background: var(--site-bg);
+  transition: background-color 0.4s var(--ease);
+}
+
+:root[data-theme='dark'] .social-proof,
+:root:not([data-theme='light']) .social-proof {
+  --sp-card: var(--site-card-2);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .social-proof {
+    --sp-card: var(--site-nav-card);
+  }
+}
+
+.social-proof__panel {
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2rem);
+  padding: clamp(1.125rem, 3vw, 2rem);
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-lg);
+  /* A glow from the start corner, in the page's accent: the panel is lit
+     from the side its heading sits on. */
+  background:
+    radial-gradient(70% 140% at 100% 0%, color-mix(in oklch, var(--p-500), transparent 86%), transparent 70%),
+    var(--site-bg-tint);
+}
+
+@media (min-width: 64rem) {
+  .social-proof__panel {
+    /* The figure sizes its own column: «+193 ألف» must never break between
+       the number and its unit. */
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: clamp(2rem, 3.5vw, 3.5rem);
+  }
+
+}
+
+/* One network: no combined figure, and one card stretched across a 1,300px
+   panel is a banner with a logo lost in its corner. The panel closes around
+   the card instead. */
+.social-proof__panel[data-count='1'] {
+  grid-template-columns: minmax(0, 20rem);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.social-proof__panel[data-count='1'] .social-proof__list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---- the combined figure ---- */
+
+.social-proof__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+@media (min-width: 64rem) {
+  .social-proof__head {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+  }
+}
+
+.social-proof__total {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+}
+
+.social-proof__total-n {
+  font-size: clamp(2.75rem, 5.2vw, 4.25rem);
+  line-height: 1;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--site-accent-text);
+}
+
+.social-proof__total-l {
+  font-size: var(--fs-title-3);
+  line-height: var(--lh-title-3);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+}
+
+/* The four marks, overlapping like faces in a crowd. */
+.social-proof__stack {
+  display: inline-flex;
+}
+
+.social-proof__dot {
+  display: grid;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: var(--r-full);
+  background: var(--plate);
+  color: var(--ink-fg);
+  box-shadow: 0 0 0 3px var(--site-bg-tint);
+}
+
+.social-proof__dot + .social-proof__dot {
+  margin-inline-start: -0.5rem;
+}
+
+/* ---- the cards ---- */
+
+.social-proof__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.625rem, 1.5vw, 1rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* An odd card out on two columns takes the whole last row rather than
+   leaving a hole beside it. */
+.social-proof__card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 48rem) {
+  /* One row, however many networks have a figure. */
+  .social-proof__list {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .social-proof__card:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+.social-proof__card {
+  /* The brand, toned toward the text colour so it clears contrast as TEXT
+     on the card — YouTube's and Instagram's raw reds are ~4:1 on white. */
+  --sp-tone: color-mix(in oklch, var(--brand, var(--site-accent-solid)), var(--site-fg) 25%);
+  min-width: 0;
+}
+
+:root[data-theme='dark'] .social-proof__card,
+:root:not([data-theme='light']) .social-proof__card {
+  /* Toward the (light) text colour here: Facebook's blue as-is is 3.9:1 on
+     the dark card, under the bar for the 13px «زيارة الصفحة» it colours. */
+  --sp-tone: color-mix(in oklch, var(--brand-ink, var(--brand, var(--site-accent-solid))), var(--site-fg) 30%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .social-proof__card {
+    --sp-tone: color-mix(in oklch, var(--brand, var(--site-accent-solid)), var(--site-fg) 25%);
+  }
+}
+
+.social-proof__link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  height: 100%;
+  padding: clamp(0.875rem, 1.6vw, 1.25rem);
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(to bottom, color-mix(in oklch, var(--sp-tone), transparent 93%), transparent 55%),
+    var(--sp-card);
+  box-shadow: var(--sp-shadow);
+  color: var(--site-fg);
+  text-align: start;
+  text-decoration: none;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease);
+}
+
+a.social-proof__link:hover {
+  border-color: color-mix(in oklch, var(--sp-tone), transparent 45%);
+  box-shadow: var(--sp-shadow-hover);
+  transform: translateY(-2px);
+}
+
+a.social-proof__link:focus-visible {
+  outline: 2px solid var(--sp-tone);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.social-proof__link:hover {
+    transform: none;
+  }
+}
+
+/* The app-icon plate, with a shadow in its own colour under it. */
+.social-proof__icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-lg);
+  background: var(--plate);
+  color: var(--ink-fg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--ink-fg), transparent 88%),
+    0 8px 18px -8px color-mix(in oklch, var(--brand), transparent 30%);
+}
+
+.social-proof__icon svg,
+.social-proof__dot svg {
+  filter: var(--plate-fx, none);
+}
+
+.social-proof__n {
+  margin-top: clamp(0.75rem, 1.4vw, 1rem);
+  font-size: clamp(1.5rem, 2.3vw, 2rem);
+  line-height: 1.15;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.social-proof__l {
+  margin-top: 0.25rem;
+  margin-bottom: 0.875rem;
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--site-fg-2);
+}
+
+/* «زيارة القناة» — a pill in the card's own colour; filled on hover. */
+.social-proof__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: auto;
+  padding: 0.3125rem 0.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--sp-tone), transparent 89%);
+  color: var(--sp-tone);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.5;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+a.social-proof__link:hover .social-proof__go,
+a.social-proof__link:focus-visible .social-proof__go {
+  background: var(--sp-tone);
+  color: var(--sp-card);
+}
+
+/* ↗ points the way the text runs: up and toward the END, which is left. */
+.social-proof__ext {
+  transform: scaleX(-1);
+}
+
+/* ---- `<SocialFigure>`: the count-up, stacked over the final figure ---- */
+
+.sp-fig {
+  display: inline-grid;
+}
+
+.sp-fig > * {
+  grid-area: 1 / 1;
+}
+
+/* Transparent, not hidden: the server's figure keeps the width AND stays the
+   text a screen reader reads while the count runs over it. */
+.sp-fig[data-run] .sp-fig__final {
+  color: transparent;
+}
+
+.sp-fig__run {
+  justify-self: start;
+}

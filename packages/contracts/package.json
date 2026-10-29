@@ -142,6 +142,8 @@
     "./admin/video-analytics": "./src/admin/video-analytics.ts",
     "./admin/audit": "./src/admin/audit.ts",
     "./admin/settings": "./src/admin/settings.ts",
+    "./admin/social-counts": "./src/admin/social-counts.ts",
+    "./copy/social-counts": "./src/copy/social-counts.ts",
     "./admin/brand-images": "./src/admin/brand-images.ts",
     "./admin/seo-pages": "./src/admin/seo-pages.ts",
     "./admin/tenant-branding": "./src/admin/tenant-branding.ts",

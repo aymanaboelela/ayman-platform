@@ -21,7 +21,7 @@ import { SettingsService } from './settings.service';
  * config with no auth and no write; rate-limiting them at the login/write
  * budget protects nothing.
  */
-const PUBLIC_CONFIG_THROTTLE = {
+export const PUBLIC_CONFIG_THROTTLE = {
   short: { limit: 300, ttl: seconds(1) },
   medium: { limit: 3000, ttl: seconds(60) },
   long: { limit: 30_000, ttl: seconds(3600) },
