@@ -21,6 +21,8 @@ export interface StudioHeroProps {
   portraitKey: string | null;
   /** The dark-mode portrait, when a different one was uploaded. */
   portraitDarkKey?: string | null;
+  /** `branding.portraitMotion` — `float` lets the portrait drift once it has arrived. */
+  portraitMotion?: 'still' | 'float';
   level: 1 | 2;
 }
 
@@ -72,6 +74,7 @@ export function StudioHero({
   stats,
   portraitKey,
   portraitDarkKey = null,
+  portraitMotion = 'still',
   level,
 }: StudioHeroProps) {
   const Title = level === 1 ? 'h1' : 'h2';
@@ -92,6 +95,7 @@ export function StudioHero({
       className="st-hero"
       data-site-hero
       data-has-portrait={portraitKey ? 'true' : undefined}
+      data-portrait-motion={portraitKey && portraitMotion === 'float' ? 'float' : undefined}
       data-stage-empty={hasStage ? undefined : 'true'}
     >
       <div className="st-shell st-hero__grid">

@@ -32,6 +32,7 @@ export async function StudioTracks({ level }: { level: 1 | 2 }) {
     key: page.segment,
     year: page.n,
     label: page.title,
+    stage: page.stageAr,
     count: courses.filter(page.matches).length,
   }));
 
@@ -55,8 +56,17 @@ export async function StudioTracks({ level }: { level: 1 | 2 }) {
                   <span className="st-year__n tabular-nums" aria-hidden="true">
                     {entry.year}
                   </span>
-                  <span className="st-year__t">{entry.label}</span>
-                  {count > 0 ? <span className="st-year__c">{count}</span> : null}
+                  <span className="st-year__body">
+                    {entry.stage ? <span className="st-year__stage">{entry.stage}</span> : null}
+                    <span className="st-year__t">{entry.label}</span>
+                    {count > 0 ? (
+                      <span className="st-year__c">{studioCopy.yearsCount(count)}</span>
+                    ) : null}
+                  </span>
+                  {/* ← is «forward» in RTL; arrows are not mirrored by bidi, so the glyph is already the right way round. */}
+                  <span className="st-year__go" aria-hidden="true">
+                    ←
+                  </span>
                 </Link>
               </li>
             );

@@ -1,3 +1,4 @@
+import { RESERVED_HUES, RESERVED_HUE_RADIUS } from '@ayman/contracts/admin/settings';
 import {
   contrastRatio,
   formatOklch,
@@ -447,7 +448,37 @@ const WARM_LITERALS: readonly WarmLiteral[] = [
 /** The shipped literal moved to `hue`, keeping the lightness every measurement depends on. */
 function rotate({ l, c, h }: Oklch, hue: number, chromaScale: number): Oklch {
   const rotated = (((hue + (h - AMBER_ACCENT_HUE)) % 360) + 360) % 360;
-  return atLightness({ l, c: c * chromaScale, h }, l, rotated);
+  return atLightness({ l, c: c * chromaScale, h }, l, outOfReservedBands(rotated, hue));
+}
+
+/** Signed shortest turn from `from` to `to`, in -180..180. */
+function hueDelta(from: number, to: number): number {
+  return ((((to - from) % 360) + 540) % 360) - 180;
+}
+
+/**
+ * Keep a rotated literal out of «إجابة صح» / «إجابة غلط».
+ *
+ * The brand hue itself can never sit in a reserved band (`AccentHueSchema`
+ * refuses it), but the literals are rotated by a fixed OFFSET from it, and the
+ * CTA's offset is −27°. So every brand between 32° and 72° pushed the solid
+ * buttons into the red band: measured on a tenant at 48°, `--accent-cta` came
+ * out at 21° — a «اشترك» button in the exact colour that tells a student an
+ * answer was wrong, next to brick-brown everything else.
+ *
+ * A literal landing strictly inside a band is moved to that band's edge on
+ * the BRAND's side, which is the closest it can get to its designed offset
+ * while staying a brand colour. Strictly: Ayman's amber (72°) puts the CTA at
+ * 45°, exactly on the red band's edge, and that shipped colour must not move.
+ */
+function outOfReservedBands(rotated: number, brandHue: number): number {
+  for (const { center } of RESERVED_HUES) {
+    const fromCenter = hueDelta(center, rotated);
+    if (Math.abs(fromCenter) >= RESERVED_HUE_RADIUS) continue;
+    const side = Math.sign(hueDelta(center, brandHue)) || 1;
+    return (((center + side * RESERVED_HUE_RADIUS) % 360) + 360) % 360;
+  }
+  return rotated;
 }
 
 /**

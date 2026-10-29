@@ -6745,6 +6745,12 @@ model StudyPlan {
   examDate  DateTime @map("exam_date") @db.Date
   /// Weekdays off, 0 = Sunday … 6 = Saturday.
   daysOff   Int[]    @default([]) @map("days_off")
+  /// Backlog rows (`BacklogItem.id`) the student took out of the plan. Ids,
+  /// not foreign keys: a row is a lesson, a quiz or `hw:<lessonId>`, and one
+  /// that leaves the backlog is simply not matched any more — see `PlanPicksSchema`.
+  skipped   String[] @default([]) @map("skipped_items")
+  /// Rows starred «الأول», in the order they were starred.
+  first     String[] @default([]) @map("first_items")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

@@ -44,7 +44,7 @@ export const boardCopy = {
   years: {
     chip: 'الصفوف',
     title: 'ابدأ من صفّك',
-    lead: 'اختار سنتك وادخل على كورساتها على طول.',
+    lead: 'كل صف وكورساته في مكان واحد — دوسة وتبدأ.',
     /** The mono eyebrow above the big numeral on each tile. */
     tileEyebrow: 'الصف',
     /** The pill at the foot of each tile. */

@@ -2,8 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   PLAN_HORIZON_DAYS,
   daysBetween,
+  type PlanPicks,
   type StudyPlanPayload,
-  type StudyPlanSettings,
+  type StudyPlanSave,
 } from '@ayman/contracts/engagement';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -17,7 +18,8 @@ function dateOf(day: string): Date {
 
 /**
  * «خطة المذاكرة» — the exam date a student plans toward, and the backlog
- * («المتراكم») spread over the days left. See `buildPlan` for the shape.
+ * («المتراكم») spread over the days left, minus what the student took out of
+ * it (`PlanPicksSchema`). See `buildPlan` for the shape.
  *
  * The items are `BacklogService.forUser`'s — the same lectures, quizzes and
  * homework the backlog screen lists, decided by the same gate the lesson
@@ -33,27 +35,48 @@ export class PlanService {
   async forUser(userId: string, now: Date = new Date()): Promise<StudyPlanPayload> {
     const today = cairoDayKey(now);
     const [row, backlog, doneToday] = await Promise.all([
-      this.prisma.studyPlan.findUnique({ where: { userId }, select: { examDate: true, daysOff: true } }),
+      this.prisma.studyPlan.findUnique({
+        where: { userId },
+        select: { examDate: true, daysOff: true, skipped: true, first: true },
+      }),
       this.backlog.forUser(userId),
       this.doneOn(userId, today),
     ]);
     const settings = row
       ? { examDate: row.examDate.toISOString().slice(0, 10), daysOff: [...row.daysOff].sort((a, b) => a - b) }
       : null;
-    return buildPlan({ today, settings, items: backlog.courses.flatMap((course) => course.items), doneToday });
+    const items = backlog.courses.flatMap((course) => course.items);
+    const picks = row ? { skipped: row.skipped, first: row.first } : undefined;
+    return { ...buildPlan({ today, settings, items, picks, doneToday }), pool: backlog.courses };
   }
 
-  async save(userId: string, input: StudyPlanSettings, now: Date = new Date()): Promise<StudyPlanPayload> {
+  async save(userId: string, input: StudyPlanSave, now: Date = new Date()): Promise<StudyPlanPayload> {
     const ahead = daysBetween(cairoDayKey(now), input.examDate);
     // Today is allowed (the exam IS today); yesterday and next decade are not.
     if (ahead < 0 || ahead > PLAN_HORIZON_DAYS) throw new BadRequestException({ code: 'plan_date_out_of_range' });
     const daysOff = [...new Set(input.daysOff)];
+    const picks = input.picks ? await this.cleanPicks(userId, input.picks) : undefined;
     await this.prisma.studyPlan.upsert({
       where: { userId },
-      create: { userId, examDate: dateOf(input.examDate), daysOff },
-      update: { examDate: dateOf(input.examDate), daysOff },
+      create: { userId, examDate: dateOf(input.examDate), daysOff, ...picks },
+      update: { examDate: dateOf(input.examDate), daysOff, ...picks },
     });
     return this.forUser(userId, now);
+  }
+
+  /**
+   * Only ids that are rows of THIS student's backlog right now, each once, and
+   * never both out of the plan and first in it. The client is trusted with
+   * nothing here: an id it invented would sit in the row for ever, matching
+   * nothing — harmless, but the column is the student's, not a scratchpad.
+   */
+  private async cleanPicks(userId: string, picks: PlanPicks): Promise<PlanPicks> {
+    const backlog = await this.backlog.forUser(userId);
+    const ids = new Set(backlog.courses.flatMap((course) => course.items.map((item) => item.id)));
+    const skipped = [...new Set(picks.skipped)].filter((id) => ids.has(id));
+    const out = new Set(skipped);
+    const first = [...new Set(picks.first)].filter((id) => ids.has(id) && !out.has(id));
+    return { skipped, first };
   }
 
   async clear(userId: string): Promise<void> {
