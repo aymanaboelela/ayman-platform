@@ -268,7 +268,11 @@ export const VideoLibrarySchema = z.object({
   archived: z.array(VideoLibraryArchivedSchema),
   targets: z.array(VideoLibraryTargetSchema),
   orphans: z.array(VideoLibraryOrphanSchema),
-  /** Every byte under `v/` and `raw/` — what the bill is computed from. */
+  /**
+   * What the bill is computed from. On a teacher's stack, every byte in the
+   * bucket (listed); on the owner's, the rows — his page reads Cloudflare's
+   * own figure instead and this is only its fallback.
+   */
   totalBytes: z.number().int().nonnegative(),
   /**
    * `false` when the bucket could not be listed: the lesson rows are still
