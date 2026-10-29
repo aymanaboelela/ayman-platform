@@ -40,6 +40,16 @@ import { courseAccessScopes } from '../entitlement/grant-liveness';
 import { monthSliceOf } from '../entitlement/month-access';
 import type { WalletPurchaseInput, WalletPurchaseResult } from '@ayman/contracts/wallet';
 import { debitWallet } from '../wallet/wallet-ledger';
+import type { CouponQuote, CouponQuoteRequest } from '@ayman/contracts/coupons';
+import { isFeatureEnabled } from '../../common/entitlements';
+import {
+  CouponRefusedError,
+  claimCoupon,
+  quoteCoupon,
+  recordRedemption,
+  releaseCouponRedemption,
+  type CouponPrice,
+} from '../coupons/coupon-ledger';
 
 /** The prefix `POST /payments/screenshot` stores under — see the model note
  *  on `PaymentSubmission.screenshotKey` in schema.prisma for why this must
@@ -57,6 +67,29 @@ class AlreadySettled extends Error {}
  *  (`WalletInsufficientError`), with the live balance attached. */
 function walletRefusal(reason: 'already_owned'): ConflictException {
   return new ConflictException({ code: `wallet_${reason}`, message: reason });
+}
+
+/**
+ * «كود الخصم» on a claim — refused outright on a stack where the feature is
+ * off. The quote route is closed by `@RequireFeature('coupons')`; these two
+ * doors are shared with every purchase, so the gate is here, on the field.
+ */
+function assertCouponsOn(code: string | null | undefined): code is string {
+  if (code === null || code === undefined) return false;
+  if (!isFeatureEnabled('coupons')) throw new CouponRefusedError('unavailable');
+  return true;
+}
+
+/** The coupon facts a claim's audit row carries — `null` without a code. */
+function couponAudit(price: CouponPrice | null) {
+  return price
+    ? {
+        couponId: price.couponId,
+        couponCode: price.code,
+        originalCents: price.originalCents,
+        discountCents: price.discountCents,
+      }
+    : null;
 }
 
 /** Just what `courseAccessScopes` and the month picker need off a course —
@@ -301,6 +334,30 @@ export class PaymentsService {
     };
   }
 
+  /**
+   * «تطبيق» — what this purchase costs with this code, for the checkout to
+   * show before any money moves. The same `resolvePurchase` the claim runs,
+   * so the quoted price and the charged price come from one derivation; and
+   * nothing is reserved — `submit` / `purchaseFromWallet` claim the use for
+   * real, under the lock, and may still refuse.
+   */
+  async quoteCoupon(userId: string, input: CouponQuoteRequest): Promise<CouponQuote> {
+    const { course, amountCents } = await this.resolvePurchase(userId, input);
+    const price = await quoteCoupon(this.prisma, {
+      code: input.code,
+      userId,
+      courseId: course.id,
+      originalCents: amountCents,
+      now: new Date(),
+    });
+    return {
+      code: price.code,
+      originalCents: price.originalCents,
+      discountCents: price.discountCents,
+      finalCents: price.finalCents,
+    };
+  }
+
   /** Step two — the actual claim, referencing the key from step one. */
   async submit(userId: string, input: SubmitPaymentInput): Promise<PaymentSubmission> {
     if (!input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
@@ -312,8 +369,10 @@ export class PaymentsService {
       throw new BadRequestException('screenshotKey was not issued by POST /payments/screenshot');
     }
 
-    const { course, term, amountCents, isMonthPurchase, requestedMonthIds } =
+    const { course, term, amountCents: priceCents, isMonthPurchase, requestedMonthIds } =
       await this.resolvePurchase(userId, input);
+    const withCoupon = assertCouponsOn(input.couponCode);
+    const now = new Date();
 
     /*
       The submission and the alert about it are ONE transaction.
@@ -323,7 +382,24 @@ export class PaymentsService {
       notification separately, after the create, would leave exactly that state
       behind whenever the second write failed.
     */
-    const { submission, admins } = await this.prisma.$transaction(async (tx) => {
+    const { submission, admins, coupon } = await this.prisma.$transaction(async (tx) => {
+      /*
+        «كود الخصم» — the use is spent HERE, in the claim's own transaction,
+        under the coupon's row lock (see `coupon-ledger.ts`). A refusal rolls
+        the whole claim back: the student transferred the discounted amount on
+        the strength of this code, so a claim quietly filed at full price would
+        be a claim no transfer matches.
+      */
+      const coupon = withCoupon
+        ? await claimCoupon(tx, {
+            code: input.couponCode as string,
+            userId,
+            courseId: input.courseId,
+            originalCents: priceCents,
+            now,
+          })
+        : null;
+
       const created = await tx.paymentSubmission.create({
         data: {
           userId,
@@ -331,12 +407,19 @@ export class PaymentsService {
           plan: input.plan,
           termId: term?.id ?? null,
           // Derived above, never anything the student typed — see the model
-          // note on `amountCents` for why this stopped being input.
-          amountCents,
+          // note on `amountCents` for why this stopped being input. With a
+          // coupon it is the DISCOUNTED price, computed from the locked row:
+          // what the student was asked to send, what InstaPay matches on, and
+          // what every revenue sum reads.
+          amountCents: coupon ? coupon.finalCents : priceCents,
           senderPhone: input.senderPhone,
           screenshotKey: input.screenshotKey,
         },
       });
+
+      if (coupon) {
+        await recordRedemption(tx, { price: coupon, userId, submissionId: created.id, courseId: input.courseId });
+      }
 
       if (isMonthPurchase) {
         // Inside the SAME transaction as the submission, for a sharper reason
@@ -364,7 +447,7 @@ export class PaymentsService {
         { submissionId: created.id, courseId: input.courseId },
       );
 
-      return { submission: created, admins: recipients };
+      return { submission: created, admins: recipients, coupon };
     });
 
     // AFTER the commit, never inside it. See `NotificationsService.announce`.
@@ -386,7 +469,8 @@ export class PaymentsService {
         // the only place the CHOICE survives an admin later editing the
         // amount on the finance screen.
         monthIds: requestedMonthIds,
-        amountCents,
+        amountCents: submission.amountCents,
+        coupon: couponAudit(coupon),
       },
     });
 
@@ -423,8 +507,9 @@ export class PaymentsService {
    *
    * ## Why nothing can be charged twice
    *
-   * The debit is the FIRST write in the transaction, and it takes the wallet's
-   * row lock. A second purchase by the same student — a double press with a
+   * The debit is the first write to the WALLET in the transaction (only a
+   * coupon's use, when a code was given, comes before it — see the note at the
+   * claim), and it takes the wallet's row lock. A second purchase by the same student — a double press with a
    * fresh key, a second tab — waits on that lock, and everything after it
    * (whether the term or the months are already held, the current expiry to
    * extend) is read AFTER the lock, inside the transaction, so it sees what the
@@ -435,8 +520,9 @@ export class PaymentsService {
     const replay = await this.walletPurchaseReplay(userId, input.idempotencyKey);
     if (replay) return replay;
 
-    const { course, offering, term, amountCents, isMonthPurchase, requestedMonthIds } =
+    const { course, offering, term, amountCents: priceCents, isMonthPurchase, requestedMonthIds } =
       await this.resolvePurchase(userId, input);
+    const withCoupon = assertCouponsOn(input.couponCode);
 
     // Ordered by `monthIndex`, so the grant stamped on the submission is the
     // same one `approve()` would stamp — see `writeMonthGrants`.
@@ -453,9 +539,27 @@ export class PaymentsService {
     const now = new Date();
     const note = `wallet: purchase`;
 
-    let result: { submissionId: string; validUntil: Date | null; balanceCents: number };
+    let result: { submissionId: string; validUntil: Date | null; balanceCents: number; amountCents: number };
     try {
       result = await this.prisma.$transaction(async (tx) => {
+        /*
+          «كود الخصم» — spent BEFORE the debit, because the debit's amount is
+          the discounted price and that price comes off the locked coupon row.
+          Lock order is therefore coupon → wallet on this path, and nothing
+          anywhere takes them the other way round. A refusal of either rolls
+          back both.
+        */
+        const coupon = withCoupon
+          ? await claimCoupon(tx, {
+              code: input.couponCode as string,
+              userId,
+              courseId: course.id,
+              originalCents: priceCents,
+              now,
+            })
+          : null;
+        const amountCents = coupon ? coupon.finalCents : priceCents;
+
         const debit = await debitWallet(tx, {
           userId,
           kind: 'course_purchase',
@@ -548,6 +652,10 @@ export class PaymentsService {
           select: { id: true },
         });
 
+        if (coupon) {
+          await recordRedemption(tx, { price: coupon, userId, submissionId: submission.id, courseId: course.id });
+        }
+
         await this.notifications.emit(tx, {
           userId,
           kind: 'payment_approved',
@@ -567,6 +675,7 @@ export class PaymentsService {
             termId: term?.id ?? null,
             monthIds,
             amountCents,
+            coupon: couponAudit(coupon),
             walletTransactionId: debit.id,
             balanceAfterCents: debit.balanceAfterCents,
             grantId,
@@ -574,7 +683,7 @@ export class PaymentsService {
           },
         });
 
-        return { submissionId: submission.id, validUntil, balanceCents: debit.balanceAfterCents };
+        return { submissionId: submission.id, validUntil, balanceCents: debit.balanceAfterCents, amountCents };
       });
     } catch (error) {
       /*
@@ -600,7 +709,7 @@ export class PaymentsService {
         plan: input.plan,
         termId: term?.id ?? null,
         termTitle: term?.title ?? null,
-        amountCents,
+        amountCents: result.amountCents,
         senderPhone: null,
         status: 'approved',
         rejectionReason: null,
@@ -832,6 +941,7 @@ export class PaymentsService {
             select: { month: { select: { id: true, title: true } } },
           },
           user: { select: { name: true, email: true, phoneNumber: true } },
+          couponRedemption: { select: { discountCents: true, coupon: { select: { code: true } } } },
         },
       }),
     ]);
@@ -866,6 +976,9 @@ export class PaymentsService {
         senderPhone: row.senderPhone,
         isFree: row.isFree,
         paidFromWallet: row.walletTransactionId !== null,
+        coupon: row.couponRedemption
+          ? { code: row.couponRedemption.coupon.code, discountCents: row.couponRedemption.discountCents }
+          : null,
         hasScreenshot: row.screenshotKey !== null,
         status: row.status,
         rejectionReason: row.rejectionReason,
@@ -1870,15 +1983,22 @@ export class PaymentsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
       await tx.paymentSubmission.update({
         where: { id: submission.id },
         data: {
           status: 'rejected',
           rejectionReason: input.reason,
           reviewedByUserId: adminId,
-          reviewedAt: new Date(),
+          reviewedAt: now,
         },
       });
+
+      // «كود الخصم» — a rejected claim bought nothing, so its use goes back to
+      // the coupon (a student whose screenshot was unreadable may file again
+      // with the same code). Same transaction: the count and the status
+      // cannot disagree.
+      await releaseCouponRedemption(tx, submission.id, now);
 
       await this.notifications.emit(tx, {
         userId: submission.userId,

@@ -63,6 +63,7 @@ import { ArenaModule } from './modules/arena/arena.module';
 import { MistakesModule } from './modules/mistakes/mistakes.module';
 import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { SocialPostsModule } from './modules/social-posts/social-posts.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
@@ -206,6 +207,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     ShareCardsModule,
     // «دعوة الصحاب» — share links, and the wallet reward on a friend's first real payment.
     ReferralsModule,
+    CouponsModule,
     AdminMobileModule,
     SocialPostsModule,
     EngagementModule,

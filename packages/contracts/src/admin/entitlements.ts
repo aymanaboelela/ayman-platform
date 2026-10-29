@@ -256,6 +256,18 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'نقط على شغل الأسبوع وترتيب مع طلاب نفس السنة، بيبدأ من جديد كل سبت.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new: on for him, off on every other stack
+     * until the owner opens it. It changes what a student PAYS, so a teacher
+     * must decide to offer discounts — and nothing in it carries his identity,
+     * so an opened stack works at once.
+     */
+    key: 'coupons',
+    nameAr: 'كوبونات الخصم',
+    descriptionAr: 'أكواد خصم بنسبة أو بمبلغ على الاشتراكات، بمدة وعدد مرات، والطالب يكتب الكود وهو بيدفع.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

@@ -275,6 +275,9 @@ model User {
   referralsMade              Referral[]              @relation("ReferralReferrer")
   referredBy                 Referral?               @relation("ReferralReferred")
   referralsVoided            Referral[]              @relation("ReferralVoidedBy")
+  /// «كوبونات الخصم» — the codes this admin made, and the ones this student used.
+  couponsCreated             Coupon[]                @relation("CouponCreatedBy")
+  couponRedemptions          CouponRedemption[]
 
   @@unique([email])
   @@map("users")
@@ -1064,6 +1067,9 @@ model Course {
   newsPosts          NewsPost[]
   paymentSubmissions PaymentSubmission[]
   bookOrders         BookOrder[]
+  /// «كوبونات الخصم» limited to this course, and every use of one on it.
+  couponCourses      CouponCourse[]
+  couponRedemptions  CouponRedemption[]
   /// The catalogue entry for this course's printed textbook, if the shop
   /// carries it. At most one — `books.course_id` is UNIQUE, so a course can
   /// never end up with two entries quoting two prices.
@@ -2590,6 +2596,10 @@ model PaymentSubmission {
   walletRefunds     WalletTransaction[] @relation("WalletRefund")
   /// The referral this payment earned its reward on — see `Referral.triggerSubmissionId`.
   referralTrigger   Referral?
+  /// «كود الخصم» this claim was priced with — see `CouponRedemption`. When
+  /// set, `amountCents` above is ALREADY the discounted price: every revenue
+  /// sum and the InstaPay matcher read the money that was actually asked for.
+  couponRedemption  CouponRedemption?
 
   /// Anchors `payment_submission_months_submission_in_course`. Prisma cannot
   /// see that composite FK and will offer to drop this unique with it.
@@ -6915,5 +6925,117 @@ model MontageVideo {
 
   @@index([createdAt])
   @@map("montage_videos")
+  @@schema("app")
+}
+
+/// «كوبونات الخصم» — percent or fixed.
+enum CouponKind {
+  percent
+  fixed
+
+  @@map("coupon_kind")
+  @@schema("app")
+}
+
+/// «كوبونات الخصم» — a code a student types on the checkout for money off a
+/// course subscription (transfer claim or wallet purchase).
+///
+/// ## The use count is a COLUMN, and the database holds the ceiling
+///
+/// `usesCount` is moved only by `coupon-ledger.ts`, inside the same
+/// transaction that writes the claim: `UPDATE … SET uses_count = uses_count + 1
+/// WHERE … AND (max_uses IS NULL OR uses_count < max_uses)`. That statement
+/// takes the row lock, so two students racing for the last use are serialised
+/// on it and the second one's WHERE is re-evaluated against the first one's
+/// commit — and `coupons_uses_within_max` is the CHECK under that, so even a
+/// write that forgot the WHERE cannot push a coupon past its ceiling. The
+/// per-student count is read AFTER the lock is held, so it is serialised too.
+///
+/// A REJECTED claim gives its use back (`releasedAt` on the redemption, and
+/// the column comes down by one in the same transaction as the rejection).
+/// A refund or a cancellation after approval does not: the coupon was used.
+///
+/// ## What is fixed at creation
+///
+/// `code`, `kind`, the amount and the course list. A redemption is a snapshot
+/// of «X off Y»; see `admin/coupons.ts` in the contracts.
+model Coupon {
+  id                String     @id @default(uuid(7)) @db.Uuid
+  /// Upper-case by CHECK — the comparison is case-insensitive by storing one
+  /// case, so a plain UNIQUE is the case-insensitive UNIQUE.
+  code              String     @unique @db.VarChar(32)
+  kind              CouponKind
+  /// 1..99, set exactly when `kind = percent`.
+  percentOff        Int?       @map("percent_off")
+  /// Whole pounds in piastres, set exactly when `kind = fixed`.
+  amountOffCents    Int?       @map("amount_off_cents")
+  /// `false` ⇒ only the courses in `courses`.
+  allCourses        Boolean    @default(true) @map("all_courses")
+  startsAt          DateTime?  @map("starts_at")
+  endsAt            DateTime?  @map("ends_at")
+  maxUses           Int?       @map("max_uses")
+  maxUsesPerStudent Int?       @map("max_uses_per_student")
+  /// Live (unreleased) redemptions — see the model note.
+  usesCount         Int        @default(0) @map("uses_count")
+  isActive          Boolean    @default(true) @map("is_active")
+  note              String?    @db.VarChar(300)
+  createdByUserId   String?    @map("created_by_user_id")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  createdBy   User?              @relation("CouponCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  courses     CouponCourse[]
+  redemptions CouponRedemption[]
+
+  @@index([createdAt])
+  @@map("coupons")
+  @@schema("app")
+}
+
+/// The courses a scoped coupon (`allCourses = false`) applies to.
+model CouponCourse {
+  couponId String @map("coupon_id") @db.Uuid
+  courseId String @map("course_id") @db.Uuid
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, courseId])
+  @@index([courseId])
+  @@map("coupon_courses")
+  @@schema("app")
+}
+
+/// One use of one coupon, written in the SAME transaction as the claim it
+/// priced. `submissionId` is UNIQUE: one coupon per payment.
+///
+/// `onDelete: Restrict` on the coupon — a code with money history cannot be
+/// deleted, only switched off.
+model CouponRedemption {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  couponId      String    @map("coupon_id") @db.Uuid
+  userId        String    @map("user_id")
+  submissionId  String    @unique @map("submission_id") @db.Uuid
+  courseId      String    @map("course_id") @db.Uuid
+  /// The price before the discount, and what came off it. The claim's own
+  /// `amountCents` is the difference.
+  originalCents Int       @map("original_cents")
+  discountCents Int       @map("discount_cents")
+  /// The claim was rejected and the use went back to the coupon.
+  releasedAt    DateTime? @map("released_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  coupon     Coupon            @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submission PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  course     Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  /// The per-student ceiling's count, read under the coupon's row lock.
+  @@index([couponId, userId])
+  /// The coupon's own history, newest first.
+  @@index([couponId, createdAt])
+  @@index([userId])
+  @@index([courseId])
+  @@map("coupon_redemptions")
   @@schema("app")
 }

@@ -24,6 +24,7 @@ import {
   Settings,
   SquarePen,
   TicketCheck,
+  TicketPercent,
   Trophy,
   Users,
   UserRoundSearch,
@@ -237,6 +238,19 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.unlockCodes,
     icon: TicketCheck,
     permission: 'payment:read',
+    group: 'money',
+  },
+  {
+    // «كوبونات الخصم» — beside the codes: both decide what a student pays
+    // (or does not) for a subscription. `payment:read` to look, like the
+    // rows around it; making and stopping a code is `payment:review`, checked
+    // by the API and by the page before it draws the form. Gated like its
+    // controller (`@RequireFeature('coupons')`).
+    href: '/admin/coupons',
+    labelAr: copy.admin.nav.coupons,
+    icon: TicketPercent,
+    permission: 'payment:read',
+    feature: 'coupons',
     group: 'money',
   },
   {
