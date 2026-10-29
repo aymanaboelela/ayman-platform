@@ -6,6 +6,7 @@ import {
   clampFraction,
   cairoDayKey,
   dayKeys,
+  trailingDayKeys,
   durationBucketsFrom,
   gradeBandsFrom,
   mean,
@@ -213,6 +214,26 @@ describe('dayKeys', () => {
       const now = new Date(`2026-08-16T${hour}:00Z`);
       const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       expect(dayKeys(since, now).at(-1)).toBe(cairoDayKey(now));
+    }
+  });
+});
+
+describe('trailingDayKeys', () => {
+  it('is days + 1 calendar days at every hour, the night Egypt leaves summer time included', () => {
+    // 2026-10-29 is the last Thursday of October: the clocks go back at
+    // midnight Cairo, 21:00 UTC. `now - 30 × 24h` taken in the next hour lands
+    // on the NEXT Cairo date, which is how main went red with 30 points.
+    for (const instant of [
+      '2026-10-29T20:59:00Z',
+      '2026-10-29T21:16:00Z',
+      '2026-10-29T21:59:00Z',
+      '2026-04-24T00:30:00Z',
+      '2026-08-16T12:00:00Z',
+    ]) {
+      const now = new Date(instant);
+      const keys = trailingDayKeys(now, 30);
+      expect(keys).toHaveLength(31);
+      expect(keys.at(-1)).toBe(cairoDayKey(now));
     }
   });
 });
