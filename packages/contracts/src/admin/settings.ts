@@ -509,9 +509,31 @@ export type Contact = z.infer<typeof ContactSchema>;
  * teacher who is nagging, and where that line falls is his judgement about his
  * own students — not a number a developer should be choosing in a file.
  */
+/**
+ * «نتيجة الامتحان تتبعت لمين» — who hears about a graded paper.
+ *
+ *   · `student`  — the chat message in the student's own thread. What the
+ *     platform has always done, and the default, so a stored row that predates
+ *     this key (and every stack that never opens the screen) changes nothing.
+ *   · `guardian` — a WhatsApp message to the guardian's number INSTEAD. A
+ *     student with no usable guardian number still gets their own message:
+ *     telling nobody is never what this switch means.
+ *   · `both`     — the two of them.
+ *
+ * The guardian leg goes out from the linked WhatsApp device, so it only exists
+ * where the stack holds `outreach.whatsapp` and `marketing.whatsapp`. Anywhere
+ * else the value is read as `student` (`resultRoute` in
+ * `outreach/guardian-result.ts`), so a stored `guardian` can never silence a
+ * stack that has no way to reach a parent.
+ */
+export const QUIZ_RESULT_RECIPIENTS = ['student', 'guardian', 'both'] as const;
+export type QuizResultRecipient = (typeof QUIZ_RESULT_RECIPIENTS)[number];
+
 export const OutreachSettingsSchema = z
   .object({
     quizResult: z.boolean().default(true),
+    /** See `QUIZ_RESULT_RECIPIENTS`. A NEW key with a default — safe on a stored row. */
+    quizResultTo: z.enum(QUIZ_RESULT_RECIPIENTS).default('student'),
     quizNudge: z.boolean().default(true),
     lessonPraise: z.boolean().default(true),
     whatsappInvite: z.boolean().default(true),
