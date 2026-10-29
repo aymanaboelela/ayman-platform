@@ -32,7 +32,7 @@ export const RESERVED_HUES = [
   { center: 25, meaning: 'إجابة غلط' },
 ] as const;
 
-const RESERVED_HUE_RADIUS = 20;
+export const RESERVED_HUE_RADIUS = 20;
 
 /** Angular distance between two hues, 0–180. */
 function hueDistance(a: number, b: number): number {
