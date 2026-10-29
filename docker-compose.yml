@@ -255,6 +255,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # «يوتيوب» admin screen: Google OAuth client for connecting the teacher's channel (optional; empty = the screen says it is not available).
+      YOUTUBE_OAUTH_CLIENT_ID: ${YOUTUBE_OAUTH_CLIENT_ID:-}
+      YOUTUBE_OAUTH_CLIENT_SECRET: ${YOUTUBE_OAUTH_CLIENT_SECRET:-}
       # بوت حساب الأدمن الأول. `docker-entrypoint.sh` بيشغّله بس لو الاتنين
       # موجودين، وبـ`ADMIN_ONLY_IF_MISSING=true` — يعني مبيلمسش أدمن موجود.
       #

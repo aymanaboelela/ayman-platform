@@ -43,6 +43,13 @@ export interface ProviderRequest {
   readonly question: string;
   /** The reader left, or pressed «إيقاف». */
   readonly signal?: AbortSignal;
+  /**
+   * Output ceiling. Absent = each provider's own 1,024, which is what المساعد
+   * has always sent, so its request bodies are byte-identical. «اقترح لي» in
+   * the YouTube studio writes a whole description plus chapters and needs
+   * more room than a chat reply.
+   */
+  readonly maxOutputTokens?: number;
 }
 
 export interface AnswerProvider {

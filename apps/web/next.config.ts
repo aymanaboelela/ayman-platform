@@ -351,6 +351,12 @@ const nextConfig: NextConfig = {
        */
       { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/a/**', search: '' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/a-/**', search: '' },
+      /**
+       * The connected YouTube channel's avatar on `/admin/youtube`, through
+       * the optimizer for the same reason as the Google photos above: the CSP
+       * `img-src` stays untouched. `yt3.ggpht.com` serves channel art only.
+       */
+      { protocol: 'https', hostname: 'yt3.ggpht.com', pathname: '/**' },
     ],
   },
 

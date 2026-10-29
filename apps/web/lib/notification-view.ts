@@ -454,6 +454,15 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: entry.stemText,
         href: `/admin/questions/${entry.bankEntryId}`,
       };
+
+    // «يوتيوب» — straight to the studio with that video's editor open.
+    case 'youtube_new_video':
+      return {
+        title: entry.title ? formatCopy(c.youtubeNewVideo, { title: entry.title }) : c.youtubeNewVideoNoTitle,
+        detail: null,
+        subtitle: c.youtubeNewVideoSubtitle,
+        href: `/admin/youtube?video=${encodeURIComponent(entry.videoId)}`,
+      };
   }
 }
 

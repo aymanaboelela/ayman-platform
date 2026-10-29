@@ -13,6 +13,7 @@ import {
   Truck,
   Wallet,
   NotebookPen,
+  MonitorPlay,
 } from 'lucide-react';
 import type { StudentNotification } from '@ayman/contracts/notifications';
 
@@ -113,6 +114,8 @@ export function iconFor(entry: StudentNotification) {
     // item-analysis chip draws for the same verdict.
     case 'suspect_key':
       return CircleAlert;
+    case 'youtube_new_video':
+      return MonitorPlay;
   }
 }
 
@@ -129,6 +132,7 @@ export function toneFor(entry: StudentNotification): NotificationTone {
   switch (entry.kind) {
     case 'assistant_question_received':
     case 'homework_submitted':
+    case 'youtube_new_video':
       return 'answer';
     case 'quiz_graded':
     case 'homework_reviewed':

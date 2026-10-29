@@ -49,7 +49,7 @@ export class AnthropicProvider implements AnswerProvider {
     const stream = this.client.messages.stream(
       {
         model: MODEL,
-        max_tokens: MAX_TOKENS,
+        max_tokens: request.maxOutputTokens ?? MAX_TOKENS,
         /*
          * `low`, and thinking left adaptive rather than disabled. Answering a
          * grounded FAQ is not a reasoning task, and effort is the supported

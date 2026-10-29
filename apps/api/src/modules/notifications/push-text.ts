@@ -307,6 +307,16 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: `ayman-honor-${entry.pinId}`,
       };
 
+    // «يوتيوب» — one admin, one video; the tag per video so two uploads in a
+    // row stay two lines in the tray.
+    case 'youtube_new_video':
+      return {
+        title: entry.title ? formatCopy(c.youtubeNewVideo, { title: entry.title }) : c.youtubeNewVideoNoTitle,
+        body: c.youtubeNewVideoSubtitle,
+        url: `/admin/youtube?video=${encodeURIComponent(entry.videoId)}`,
+        tag: `youtube-new-${entry.videoId}`,
+      };
+
     default:
       return null;
   }

@@ -111,7 +111,7 @@ export class GroqProvider implements AnswerProvider {
           ...request.history.map((turn) => ({ role: turn.role, content: turn.text })),
           { role: 'user', content: request.question },
         ],
-        max_completion_tokens: 1024,
+        max_completion_tokens: request.maxOutputTokens ?? 1024,
         /*
          * ⚠️ TOKEN ECONOMY, and on this tier it is the binding constraint.
          *

@@ -49,6 +49,7 @@ import {
   Share2,
   Clapperboard,
   GalleryHorizontalEnd,
+  MonitorPlay,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -56,6 +57,7 @@ import { adminPractice } from '@ayman/contracts/copy/admin-practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 import { designsCopy } from '@ayman/contracts/copy/designs';
 import { socialPostsCopy } from '@ayman/contracts/copy/social-posts';
+import { youtubeStudioCopy } from '@ayman/contracts/copy/youtube-studio';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 import { promoBannersCopy } from '@ayman/contracts/copy/promo-banners';
 /*
@@ -546,6 +548,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Share2,
     permission: 'social:read',
     feature: 'socialPosts',
+    group: 'messages',
+  },
+  {
+    // «يوتيوب» — the teacher's channel, beside the social studio: the same
+    // permission family, its own entitlement.
+    href: '/admin/youtube',
+    labelAr: youtubeStudioCopy.nav,
+    icon: MonitorPlay,
+    permission: 'social:read',
+    feature: 'youtubeStudio',
     group: 'messages',
   },
 

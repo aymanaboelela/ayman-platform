@@ -48,6 +48,7 @@ import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
 import { DesignsModule } from '../modules/designs/designs.module';
 import { SocialPostsModule } from '../modules/social-posts/social-posts.module';
+import { YoutubeStudioModule } from '../modules/youtube-studio/youtube-studio.module';
 import { MontageModule } from '../modules/montage/montage.module';
 import { PracticeModule } from '../modules/practice/practice.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
@@ -399,6 +400,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // already here. Its crons are inert without `ScheduleModule`, and the
         // Graph client is never called by a 401/403 row.
         SocialPostsModule,
+        // «يوتيوب» — Prisma, `AuditService` and `NotificationsModule`, all
+        // already here. The watcher's cron is inert without `ScheduleModule`,
+        // and no 401/403 row reaches Google.
+        YoutubeStudioModule,
         // «سؤال اليوم» / «ملاحظاتي» / «خطة المذاكرة» / «أوسمتي» / «ملخص الشهر» —
         // all five entitlements open here (no TENANT_KEY = Ayman's stack).
         EngagementModule,
@@ -2252,6 +2257,35 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'social connection read: admin', method: 'get', path: () => '/api/admin/social/connection', actor: 'admin', status: 200 },
     { label: 'social post detail: admin, unknown', method: 'get', path: () => `/api/admin/social/posts/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'social post detail: admin, not a uuid', method: 'get', path: () => '/api/admin/social/posts/not-a-uuid', actor: 'admin', status: 404 },
+    // «يوتيوب» — `youtubeStudio` is open here (no TENANT_KEY = Ayman's stack).
+    // The OAuth callback is NOT public: Google's redirect back is a top-level
+    // GET that carries the SameSite=Lax session cookie, and the state is
+    // bound to that session's user (`oauth-state.ts`).
+    { label: 'youtube state: anonymous', method: 'get', path: () => '/api/admin/youtube', actor: 'anonymous', status: 401 },
+    { label: 'youtube state: student', method: 'get', path: () => '/api/admin/youtube', actor: 'student', status: 403 },
+    { label: 'youtube oauth start: anonymous', method: 'post', path: () => '/api/admin/youtube/oauth/start', actor: 'anonymous', status: 401 },
+    { label: 'youtube oauth start: student', method: 'post', path: () => '/api/admin/youtube/oauth/start', actor: 'student', status: 403 },
+    { label: 'youtube oauth callback: anonymous', method: 'get', path: () => '/api/admin/youtube/oauth/callback?code=x&state=y', actor: 'anonymous', status: 401 },
+    { label: 'youtube oauth callback: student', method: 'get', path: () => '/api/admin/youtube/oauth/callback?code=x&state=y', actor: 'student', status: 403 },
+    { label: 'youtube disconnect: anonymous', method: 'delete', path: () => '/api/admin/youtube/connection', actor: 'anonymous', status: 401 },
+    { label: 'youtube disconnect: student', method: 'delete', path: () => '/api/admin/youtube/connection', actor: 'student', status: 403 },
+    { label: 'youtube videos: anonymous', method: 'get', path: () => '/api/admin/youtube/videos', actor: 'anonymous', status: 401 },
+    { label: 'youtube videos: student', method: 'get', path: () => '/api/admin/youtube/videos', actor: 'student', status: 403 },
+    { label: 'youtube video detail: anonymous', method: 'get', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ', actor: 'anonymous', status: 401 },
+    { label: 'youtube video detail: student', method: 'get', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ', actor: 'student', status: 403 },
+    { label: 'youtube video update: anonymous', method: 'patch', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ', actor: 'anonymous', status: 401 },
+    { label: 'youtube video update: student', method: 'patch', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ', actor: 'student', status: 403 },
+    { label: 'youtube video thumbnail: anonymous', method: 'post', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ/thumbnail', actor: 'anonymous', status: 401 },
+    { label: 'youtube video thumbnail: student', method: 'post', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ/thumbnail', actor: 'student', status: 403 },
+    { label: 'youtube video handled: anonymous', method: 'post', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ/handled', actor: 'anonymous', status: 401 },
+    { label: 'youtube video handled: student', method: 'post', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ/handled', actor: 'student', status: 403 },
+    { label: 'youtube video suggest: anonymous', method: 'post', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ/suggest', actor: 'anonymous', status: 401 },
+    { label: 'youtube video suggest: student', method: 'post', path: () => '/api/admin/youtube/videos/dQw4w9WgXcQ/suggest', actor: 'student', status: 403 },
+    // No channel on a fresh fixture: the read answers «not connected», and a
+    // callback with a forged state goes back to the screen, never to Google.
+    { label: 'youtube state: admin', method: 'get', path: () => '/api/admin/youtube', actor: 'admin', status: 200 },
+    { label: 'youtube oauth callback: admin, forged state', method: 'get', path: () => '/api/admin/youtube/oauth/callback?code=x&state=forged', actor: 'admin', status: 303 },
+    { label: 'youtube video detail: admin, malformed id', method: 'get', path: () => '/api/admin/youtube/videos/not-an-id', actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, unknown', method: 'get', path: () => `/api/designs/folders/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'designs folder detail: admin, not a uuid', method: 'get', path: () => '/api/designs/folders/not-a-uuid', actor: 'admin', status: 404 },
     { label: 'designs download: admin, unknown', method: 'get', path: () => `/api/designs/assets/${randomUUID()}/download`, actor: 'admin', status: 404 },

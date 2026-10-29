@@ -156,7 +156,7 @@ export class GeminiProvider implements AnswerProvider {
             { role: 'user', parts: [{ text: request.question }] },
           ],
           generationConfig: {
-            maxOutputTokens: 1024,
+            maxOutputTokens: request.maxOutputTokens ?? 1024,
             /*
              * Below the default. This is a support desk reading facts back to
              * a student, not a writing task — and a lower temperature is what
