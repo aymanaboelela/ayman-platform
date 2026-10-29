@@ -79,6 +79,12 @@ export interface ProvisionSpec {
   features: Readonly<Record<string, boolean>>;
   shareKeys: boolean;
   socials: NewTenantSpec['socials'];
+  /**
+   * The hosts sit one label under the OWNER's apex, because the instructor has
+   * no domain yet (the action decides, and only for hosts it vetted). Lets the
+   * preflight accept them; everything else about the run is unchanged.
+   */
+  stagingUnderOwner?: boolean;
 }
 
 export interface ProvisionResult {
@@ -317,7 +323,7 @@ async function provisionOnce(spec: ProvisionSpec): Promise<ProvisionResult> {
         secrets,
       );
       envText = renderEnvText(env);
-      const report = checkEnvText(envText, { firstDeploy: true });
+      const report = checkEnvText(envText, { firstDeploy: true, stagingUnderOwner: spec.stagingUnderOwner === true });
       if (report.errors.length > 0) return fail('env', new Error(report.errors[0]));
       result.credentials = { email: env.ADMIN_EMAIL, password: secrets.adminPassword };
       steps.push({ id: 'env', state: 'done' });

@@ -74,6 +74,25 @@ const AYMANS = {
 };
 
 /**
+ * Labels under his zone that are already HIS — the site, its media and video
+ * hosts, the Dokploy panel — or plausibly will be. A staging stack may never
+ * take one: the DNS step would find his record and the stack would answer for
+ * a host that is serving his platform.
+ */
+const OWNER_LABELS = new Set(['www', 'media', 'video', 'panel', 'api', 'mail', 'backup', 'backups', 'status', 'cdn', 'assets', 'admin']);
+
+/**
+ * A host `stagingUnderOwner` may use: exactly ONE label under his apex (the
+ * free certificate covers one label deep, and HSTS's includeSubDomains is then
+ * satisfied, not violated), and not one of his own labels.
+ */
+function isStagingHost(host) {
+  if (!host.endsWith(`.${AYMANS.DOMAIN}`)) return false;
+  const label = host.slice(0, -(AYMANS.DOMAIN.length + 1));
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) && !OWNER_LABELS.has(label);
+}
+
+/**
  * The placeholder `deploy/tenant.env.example` ships on every value that has to
  * be replaced. A constant because it is matched against EVERY key below rather
  * than against a list of names — see the sweep.
@@ -238,15 +257,19 @@ const URL_HOSTILE = /[/?#@[\]\s:]/;
 
 /**
  * @param {Record<string, string | undefined>} env
- * @param {{ firstDeploy?: boolean }} [options] `firstDeploy` promotes "no
+ * @param {{ firstDeploy?: boolean, stagingUnderOwner?: boolean }} [options] `firstDeploy` promotes "no
  *   admin account will be created" from a warning to an error. See the ADMIN_*
- *   block for why that is a flag rather than the default.
+ *   block for why that is a flag rather than the default. `stagingUnderOwner`
+ *   lets APP_URL / MEDIA_ORIGIN sit one label under Ayman's apex while an
+ *   instructor has no domain yet — the control plane passes it only when the
+ *   owner asked for exactly that; the CLI never does.
  */
 export function checkTenantEnv(env, options = {}) {
   errors.length = 0;
   warnings.length = 0;
 
   const firstDeploy = options.firstDeploy === true;
+  const stagingUnderOwner = options.stagingUnderOwner === true;
 
   const key = get(env, 'TENANT_KEY');
 
@@ -458,7 +481,31 @@ export function checkTenantEnv(env, options = {}) {
         `it and the API requires an http(s) URL there, so a bare hostname stops the boot.`,
     );
   }
-  if (appOrigin !== null && appOrigin.endsWith(AYMANS.DOMAIN)) {
+  /*
+   * The hosts a staging stack was ALLOWED to take under his zone. They are
+   * stripped from every value before the identity sweep below, so the sweep
+   * still catches his own domain anywhere else in the env.
+   */
+  const stagingHosts = [];
+  if (stagingUnderOwner) {
+    for (const [name, origin] of [
+      ['APP_URL', appOrigin],
+      ['MEDIA_ORIGIN', mediaOriginParsed],
+    ]) {
+      if (origin === null) continue;
+      const host = new URL(origin).hostname;
+      if (!host.endsWith(AYMANS.DOMAIN)) continue;
+      if (isStagingHost(host)) stagingHosts.push(host);
+      else fail(`${name} (${host}) is not a staging host: one label under ${AYMANS.DOMAIN}, and not one of his (www, media, video, panel…).`);
+    }
+    if (stagingHosts.length > 0) {
+      warn(
+        `Staging on ${stagingHosts.join(' + ')} — under ${AYMANS.DOMAIN} until this instructor has a domain. ` +
+          `Students see his domain in the address bar; move APP_URL/MEDIA_ORIGIN to the instructor's own domain and rebuild.`,
+      );
+    }
+  }
+  if (appOrigin !== null && appOrigin.endsWith(AYMANS.DOMAIN) && !stagingHosts.includes(new URL(appOrigin).hostname)) {
     fail(
       `APP_URL is under ${AYMANS.DOMAIN}. Each instructor needs their own apex domain: HSTS ships ` +
         `includeSubDomains;preload and Cloudflare's free certificate covers only one label deep, ` +
@@ -473,7 +520,8 @@ export function checkTenantEnv(env, options = {}) {
     if (text.includes(AYMANS.WHATSAPP) || text.includes(AYMANS.WHATSAPP.slice(1))) {
       fail(`${name} contains Ayman's personal WhatsApp number.`);
     }
-    if (text.includes(AYMANS.DOMAIN) && name !== 'APP_URL') {
+    const swept = stagingHosts.reduce((rest, host) => rest.split(host).join(''), text);
+    if (swept.includes(AYMANS.DOMAIN) && name !== 'APP_URL') {
       fail(`${name} points at ${AYMANS.DOMAIN}.`);
     }
     if (text === AYMANS.CLARITY_PROJECT_ID) {

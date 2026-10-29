@@ -314,7 +314,10 @@ export function renderEnvText(env: Record<string, string>): string {
 }
 
 /** The preflight, over the exact text Dokploy will be handed. */
-export function checkEnvText(text: string, options: { firstDeploy?: boolean } = {}): TenantEnvReport {
+export function checkEnvText(
+  text: string,
+  options: { firstDeploy?: boolean; stagingUnderOwner?: boolean } = {},
+): TenantEnvReport {
   return checkTenantEnv(parseEnvText(text), options);
 }
 
