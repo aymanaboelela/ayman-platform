@@ -556,7 +556,20 @@ describe('analytics (integration)', () => {
 
   it('emits one daily point per day with no holes', async () => {
     const result = await overview.build({ days: 30, courseId });
-    expect(result.daily).toHaveLength(31);
+
+    /*
+     * 30 × 24 h back from now covers 31 Cairo dates — except in the hour
+     * before Cairo midnight for a month after the clocks go back (the
+     * window's start lands just past the earlier midnight), when it covers
+     * 30. It failed exactly so on 2026-10-29 at 21:25 UTC, the night Egypt
+     * left summer time. What matters is a point per date with no holes.
+     */
+    expect([30, 31]).toContain(result.daily.length);
+    result.daily.slice(1).forEach((point, index) => {
+      const previous = new Date(`${result.daily[index]!.date}T00:00:00Z`);
+      previous.setUTCDate(previous.getUTCDate() + 1);
+      expect(point.date).toBe(previous.toISOString().slice(0, 10));
+    });
 
     /*
      * The WINDOW carries the watch time, not specifically its last bucket.
