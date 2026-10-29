@@ -30,10 +30,10 @@ export interface SocialCountsFormProps {
   /** Whether the landing page has a profile to link each count to. */
   linked: Record<SocialCountNetwork, boolean>;
   /**
-   * When the API keeps the YouTube figure itself (`isAutoSynced`): the last
-   * sync, formatted. `null` = YouTube is typed like the rest.
+   * The networks the API keeps itself (`isAutoSynced`), each with its last
+   * sync, formatted. A network absent here is typed like the rest.
    */
-  youtubeSyncedAt?: string | null;
+  autoSyncedAt?: Partial<Record<SocialCountNetwork, string>>;
 }
 
 /** See `shipping-form.tsx`: `.default()` fields make the Zod INPUT optional. */
@@ -50,7 +50,7 @@ type SocialCountsFormValues = z.input<typeof SocialCountsInputSchema>;
  * the rounding is deliberate (always down, «+» when it did) and the admin
  * should see it before a visitor does.
  */
-export function SocialCountsForm({ defaultValues, lastUpdated, linked, youtubeSyncedAt = null }: SocialCountsFormProps) {
+export function SocialCountsForm({ defaultValues, lastUpdated, linked, autoSyncedAt = {} }: SocialCountsFormProps) {
   const router = useRouter();
   const [saveError, setSaveError] = useState<string | null>(null);
   const form = useForm<SocialCountsFormValues, unknown, SocialCountsInput>({
@@ -95,9 +95,10 @@ export function SocialCountsForm({ defaultValues, lastUpdated, linked, youtubeSy
          * whatever is sent (`SettingsService.updateSocialCounts`). The field
          * becomes typable again by itself once the sync goes quiet.
          */
-        const auto = network === 'youtube' && youtubeSyncedAt !== null;
+        const syncedAt = autoSyncedAt[network];
+        const auto = syncedAt !== undefined;
         const hints = [
-          auto ? formatCopy(c.admin.autoSynced, { date: youtubeSyncedAt }) : null,
+          auto ? formatCopy(c.admin.autoSynced, { network: c.networks[network].name, date: syncedAt }) : null,
           typeof value === 'number' && Number.isInteger(value) && value > 0
             ? formatCopy(c.admin.preview, { preview: `${shortFollowerCount(value)} ${c.networks[network].unit}` })
             : null,

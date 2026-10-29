@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShut
 import { Cron } from '@nestjs/schedule';
 import { isFeatureEnabled } from '../../../common/entitlements';
 import { loadEnv } from '../../../config/env';
+import { fetchMetaFollowers, MetaSyncError } from './meta-followers';
 import { SettingsService } from './settings.service';
 import { channelLookups, fetchSubscriberCount } from './youtube-subscribers';
 
@@ -20,7 +21,7 @@ export type YoutubeSyncOutcome =
 export interface YoutubeSyncDeps {
   apiKey: string | undefined;
   featureEnabled: () => boolean;
-  settings: Pick<SettingsService, 'read' | 'applyYoutubeSync'>;
+  settings: Pick<SettingsService, 'read' | 'applyAutoCounts'>;
   fetchImpl?: typeof fetch;
   logger?: Pick<Logger, 'log' | 'warn'>;
 }
@@ -45,27 +46,89 @@ export async function syncYoutubeSubscribers(deps: YoutubeSyncDeps): Promise<You
     if (lookups.length === 0) return 'no-channel';
 
     const result = await fetchSubscriberCount(deps.apiKey, lookups, deps.fetchImpl);
-    const { changed } = await deps.settings.applyYoutubeSync(result);
+    const { changed } = await deps.settings.applyAutoCounts('youtube-sync', {
+      youtube: result.kind === 'count' ? result.count : null,
+    });
     if (result.kind === 'hidden') {
       logger.warn(`YouTube channel ${result.channelId} hides its subscriber count — not publishing it`);
       return 'hidden';
     }
-    if (changed) logger.log(`YouTube subscribers synced: ${result.count}`);
-    return changed ? 'synced' : 'unchanged';
+    if (changed.length > 0) logger.log(`YouTube subscribers synced: ${result.count}`);
+    return changed.length > 0 ? 'synced' : 'unchanged';
   } catch (error) {
     logger.warn(`YouTube subscriber sync failed, keeping the last saved figure: ${(error as Error).message}`);
     return 'failed';
   }
 }
 
+export type MetaSyncOutcome = 'disabled' | 'no-token' | 'failed' | 'reauthorize' | 'synced' | 'unchanged';
+
+export interface MetaSyncDeps {
+  token: string | undefined;
+  featureEnabled: () => boolean;
+  settings: Pick<SettingsService, 'applyAutoCounts'>;
+  fetchImpl?: typeof fetch;
+  logger?: Pick<Logger, 'log' | 'warn'>;
+}
+
 /**
- * «عدد السوشيال ميديا» — keeps the YouTube subscriber figure current where the
- * stack has `YOUTUBE_API_KEY` and the `socialCounts` feature open. Facebook,
- * Instagram and TikTok stay typed (see `admin/social-counts.ts`).
+ * The Facebook Page + linked Instagram sync — same contract as
+ * `syncYoutubeSubscribers`: NEVER throws, and every failure leaves the stored
+ * figures exactly as they were.
+ *
+ * A Page with no Instagram business account linked writes Facebook only; an
+ * Instagram figure already stored (typed, or synced while the link existed)
+ * is left alone, and if it was synced it turns typable again once its stamp
+ * ages past `AUTO_SYNC_FRESH_MS`.
+ *
+ * A dead token (`MetaSyncError.reauthorize`) gets its own warning, worded for
+ * whoever reads the log: no retry fixes it, a person has to issue a new one.
+ */
+export async function syncMetaFollowers(deps: MetaSyncDeps): Promise<MetaSyncOutcome> {
+  const logger = deps.logger ?? new Logger('SocialCountsSync');
+  if (!deps.featureEnabled()) return 'disabled';
+  if (!deps.token) return 'no-token';
+
+  try {
+    const result = await fetchMetaFollowers(deps.token, deps.fetchImpl);
+    const { changed } = await deps.settings.applyAutoCounts('meta-sync', {
+      facebook: result.facebook,
+      ...(result.instagram !== null ? { instagram: result.instagram } : {}),
+    });
+    if (changed.length > 0) {
+      logger.log(
+        `Meta followers synced: facebook ${result.facebook}` +
+          (result.instagram !== null ? `, instagram ${result.instagram}` : ' (no Instagram account linked to the Page)'),
+      );
+    }
+    return changed.length > 0 ? 'synced' : 'unchanged';
+  } catch (error) {
+    if (error instanceof MetaSyncError && error.reauthorize) {
+      logger.warn(
+        `The Meta page token needs re-authorizing (${error.message}). Issue a new Page access token, set ` +
+          'META_PAGE_TOKEN and redeploy; until then the Facebook/Instagram figures stay as last saved and turn ' +
+          'editable by hand in the admin after 3 days.',
+      );
+      return 'reauthorize';
+    }
+    logger.warn(`Meta follower sync failed, keeping the last saved figures: ${(error as Error).message}`);
+    return 'failed';
+  }
+}
+
+/**
+ * «عدد السوشيال ميديا» — keeps the follower figures current where the stack
+ * holds a credential and has the `socialCounts` feature open: YouTube with
+ * `YOUTUBE_API_KEY`, the Facebook Page and its linked Instagram account with
+ * `META_PAGE_TOKEN`. TikTok stays typed (see `admin/social-counts.ts`).
  *
  * Once a day, plus once a minute after boot so a fresh deploy (or a key just
- * added) does not wait until tomorrow. 1 quota unit per run against a free
- * daily allowance of 10,000.
+ * added) does not wait until tomorrow. YouTube: 1 quota unit per run against
+ * a free daily allowance of 10,000. Meta: one Graph call per run.
+ *
+ * The two run one after the other, never together: each is a
+ * read-modify-write of the same settings row, and two at once could each
+ * write back the other's stale half.
  *
  * ## The landing page catches up on its own clock
  *
@@ -80,7 +143,7 @@ export async function syncYoutubeSubscribers(deps: YoutubeSyncDeps): Promise<You
 @Injectable()
 export class SocialCountsSyncService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(SocialCountsSyncService.name);
-  private readonly apiKey = loadEnv(process.env).YOUTUBE_API_KEY;
+  private readonly env = loadEnv(process.env);
   private bootTimer: NodeJS.Timeout | null = null;
   private running = false;
 
@@ -99,16 +162,25 @@ export class SocialCountsSyncService implements OnApplicationBootstrap, OnApplic
 
   /** 05:17 Cairo — off the hour, away from the other daily jobs at 03:00 and 10:00. */
   @Cron('17 5 * * *', { timeZone: 'Africa/Cairo' })
-  async sync(): Promise<YoutubeSyncOutcome> {
-    if (this.running) return 'unchanged';
+  async sync(): Promise<{ youtube: YoutubeSyncOutcome; meta: MetaSyncOutcome } | 'busy'> {
+    if (this.running) return 'busy';
     this.running = true;
     try {
-      return await syncYoutubeSubscribers({
-        apiKey: this.apiKey,
-        featureEnabled: () => isFeatureEnabled('socialCounts'),
+      const featureEnabled = () => isFeatureEnabled('socialCounts');
+      // Both never throw, so a YouTube failure cannot cost the Meta run.
+      const youtube = await syncYoutubeSubscribers({
+        apiKey: this.env.YOUTUBE_API_KEY,
+        featureEnabled,
         settings: this.settings,
         logger: this.logger,
       });
+      const meta = await syncMetaFollowers({
+        token: this.env.META_PAGE_TOKEN,
+        featureEnabled,
+        settings: this.settings,
+        logger: this.logger,
+      });
+      return { youtube, meta };
     } finally {
       this.running = false;
     }

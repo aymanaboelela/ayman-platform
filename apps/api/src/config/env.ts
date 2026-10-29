@@ -401,6 +401,20 @@ const schema = z
     YOUTUBE_API_KEY: optionalSecret,
 
     /**
+     * «عدد السوشيال ميديا» — a never-expiring Facebook PAGE access token (a
+     * Page token issued from a long-lived user token carries no expiry). With
+     * it, and with the `socialCounts` feature open, `SocialCountsSyncService`
+     * refreshes the Facebook Page's follower figure, and the linked Instagram
+     * business account's, once a day from the Graph API. A user token will
+     * not do: its `me` is a person, who has no `followers_count`.
+     *
+     * Revoked or lapsed (password change, data-access expiry) it fails with
+     * Graph code 190; the job then logs that the token needs re-authorizing
+     * and the figures fall back to typed after `AUTO_SYNC_FRESH_MS`.
+     */
+    META_PAGE_TOKEN: optionalSecret,
+
+    /**
      * Web Push — the leg of the notification system that reaches a browser
      * with no tab open. ALL THREE OPTIONAL, same discipline as the assistant
      * chat keys above: the platform is whole without them, `PushService`

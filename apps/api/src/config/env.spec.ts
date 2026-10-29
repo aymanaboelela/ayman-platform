@@ -101,6 +101,11 @@ describe('loadEnv', () => {
     expect(loadEnv({ ...VALID, YOUTUBE_API_KEY: 'test-youtube-key' }).YOUTUBE_API_KEY).toBe('test-youtube-key');
   });
 
+  it('treats an empty META_PAGE_TOKEN as unset (the Facebook/Instagram sync is off, the API boots)', () => {
+    expect(loadEnv({ ...VALID, META_PAGE_TOKEN: '' }).META_PAGE_TOKEN).toBeUndefined();
+    expect(loadEnv({ ...VALID, META_PAGE_TOKEN: 'test-page-token' }).META_PAGE_TOKEN).toBe('test-page-token');
+  });
+
   // The pairing rule still has to bite on a half-filled pair — normalising ""
   // to "absent" must not turn a real misconfiguration into a silent no-op.
   it('still rejects a real client id paired with an empty secret', () => {

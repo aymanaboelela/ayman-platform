@@ -65,8 +65,11 @@ export default async function SettingsPage() {
   const { youtube, facebook, instagram, tiktok, updatedAt, syncedAt } = settings.socialCounts;
   // The same rule the API's save enforces, so the read-only field and the
   // figure the server keeps cannot disagree.
-  const youtubeSyncedAt =
-    syncedAt && isAutoSynced(settings.socialCounts, 'youtube') ? formatArticleDate(syncedAt) : null;
+  const autoSyncedAt: Partial<Record<SocialCountNetwork, string>> = {};
+  for (const network of SOCIAL_COUNT_NETWORKS) {
+    const stamp = syncedAt?.[network];
+    if (stamp && isAutoSynced(settings.socialCounts, network)) autoSyncedAt[network] = formatArticleDate(stamp);
+  }
   const linked = Object.fromEntries(
     SOCIAL_COUNT_NETWORKS.map((network) => [
       network,
@@ -146,7 +149,7 @@ export default async function SettingsPage() {
                 <SocialCountsForm
                   defaultValues={{ youtube, facebook, instagram, tiktok }}
                   lastUpdated={updatedAt ? formatArticleDate(updatedAt) : null}
-                  youtubeSyncedAt={youtubeSyncedAt}
+                  autoSyncedAt={autoSyncedAt}
                   linked={linked}
                 />
               </CardBody>

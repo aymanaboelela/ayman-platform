@@ -97,16 +97,35 @@ describe('automatic counts', () => {
 
   it('still refuses `sources` and `syncedAt` from the form', () => {
     expect(SocialCountsInputSchema.safeParse({ sources: { youtube: 'auto' } }).success).toBe(false);
-    expect(SocialCountsInputSchema.safeParse({ syncedAt: '2026-10-29T00:00:00.000Z' }).success).toBe(false);
+    expect(SocialCountsInputSchema.safeParse({ syncedAt: { youtube: '2026-10-29T00:00:00.000Z' } }).success).toBe(false);
+  });
+
+  it('reads a single stored stamp (an early build of the sync) as never synced, not as a broken row', () => {
+    const counts = SocialCountsSchema.parse({ youtube: 5, sources: { youtube: 'auto' }, syncedAt: '2026-10-29T00:00:00.000Z' });
+    expect(counts.syncedAt).toBeUndefined();
+    expect(isAutoSynced(counts, 'youtube')).toBe(false);
   });
 
   it('is auto only while the last sync is fresh', () => {
-    const syncedAt = '2026-10-29T00:00:00.000Z';
-    const at = Date.parse(syncedAt);
-    const counts = { sources: { youtube: 'auto' as const }, syncedAt };
+    const stamp = '2026-10-29T00:00:00.000Z';
+    const at = Date.parse(stamp);
+    const counts = { sources: { youtube: 'auto' as const }, syncedAt: { youtube: stamp } };
     expect(isAutoSynced(counts, 'youtube', at + 1000)).toBe(true);
     expect(isAutoSynced(counts, 'youtube', at + AUTO_SYNC_FRESH_MS)).toBe(false);
     expect(isAutoSynced(counts, 'facebook', at + 1000)).toBe(false);
-    expect(isAutoSynced({ sources: { youtube: 'auto' }, syncedAt: null }, 'youtube', at)).toBe(false);
+    expect(isAutoSynced({ sources: { youtube: 'auto' } }, 'youtube', at)).toBe(false);
+  });
+
+  // The syncs fail independently: YouTube's daily stamp must not keep a
+  // Facebook figure read-only behind an expired Meta token.
+  it('ages each network on its own stamp', () => {
+    const fresh = '2026-10-29T00:00:00.000Z';
+    const at = Date.parse(fresh);
+    const counts = {
+      sources: { youtube: 'auto' as const, facebook: 'auto' as const },
+      syncedAt: { youtube: fresh, facebook: new Date(at - AUTO_SYNC_FRESH_MS).toISOString() },
+    };
+    expect(isAutoSynced(counts, 'youtube', at)).toBe(true);
+    expect(isAutoSynced(counts, 'facebook', at)).toBe(false);
   });
 });

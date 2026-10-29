@@ -13,8 +13,10 @@ import {
   type SiteSettings,
 } from '@ayman/contracts/admin/settings';
 import {
+  SOCIAL_COUNT_NETWORKS,
   SocialCountsInputSchema,
   isAutoSynced,
+  type SocialCountNetwork,
   type SocialCounts,
 } from '@ayman/contracts/admin/social-counts';
 import { currentActor } from '../../../audit/audit-context';
@@ -182,11 +184,12 @@ export class SettingsService {
    * `updatedAt` is stamped HERE, on every save, so «آخر تحديث» on the admin
    * card is when the numbers were last confirmed rather than something typed.
    *
-   * While YouTube is kept by the automatic sync (`isAutoSynced`), the stored
-   * figure wins over whatever the form sent for it: the admin card shows that
-   * field read-only, and this is the same rule enforced where it cannot be
-   * bypassed. Once the sync has gone quiet past `AUTO_SYNC_FRESH_MS` the
-   * field is the admin's again, and saving it marks it manual.
+   * While a network is kept by the automatic sync (`isAutoSynced`), the
+   * stored figure wins over whatever the form sent for it: the admin card
+   * shows that field read-only, and this is the same rule enforced where it
+   * cannot be bypassed. Once its sync has gone quiet past
+   * `AUTO_SYNC_FRESH_MS` the field is the admin's again, and saving it marks
+   * it manual.
    */
   async updateSocialCounts(payload: unknown): Promise<SocialCounts> {
     const result = SocialCountsInputSchema.safeParse(payload);
@@ -200,15 +203,13 @@ export class SettingsService {
 
     const next = await this.persist('socialCounts', (current: SiteSettings): SocialCounts => {
       const stored = current.socialCounts;
-      const keepYoutube = isAutoSynced(stored, 'youtube');
-      return {
-        ...input,
-        youtube: keepYoutube ? stored.youtube : input.youtube,
-        updatedAt: new Date().toISOString(),
-        // Every network the admin just saved is manual; only a live sync keeps YouTube.
-        ...(keepYoutube ? { sources: { youtube: 'auto' as const } } : {}),
-        ...(stored.syncedAt !== undefined ? { syncedAt: stored.syncedAt } : {}),
-      };
+      const kept = SOCIAL_COUNT_NETWORKS.filter((network) => isAutoSynced(stored, network));
+      const merged: SocialCounts = { ...input, updatedAt: new Date().toISOString() };
+      for (const network of kept) merged[network] = stored[network];
+      // Every network the admin just saved is manual; only a live sync keeps its own.
+      if (kept.length > 0) merged.sources = Object.fromEntries(kept.map((network) => [network, 'auto' as const]));
+      if (stored.syncedAt !== undefined) merged.syncedAt = stored.syncedAt;
+      return merged;
     });
 
     await this.audit.record({
@@ -223,42 +224,58 @@ export class SettingsService {
   }
 
   /**
-   * The automatic sync's write (`SocialCountsSyncService`): one network's
-   * figure from the network itself. Only YouTube has one.
+   * An automatic sync's write (`SocialCountsSyncService`): figures read from
+   * the networks themselves — YouTube from the Data API, Facebook and
+   * Instagram from the Meta Graph API. Networks absent from `figures` are not
+   * touched at all.
    *
-   * `count` — the figure, marked `auto`, with `syncedAt` and `updatedAt` now.
-   * `hidden` — the channel owner hid the count on YouTube, so this site must
-   * not publish it either: a figure the sync itself wrote is cleared, and the
-   * field is handed back to the admin. A figure the admin typed is left alone
-   * — showing it is their call, not the sync's.
+   * A number — the figure, marked `auto`, with that network's `syncedAt` and
+   * `updatedAt` now.
+   * `null` — the network withholds the figure (a YouTube owner hid the count),
+   * so this site must not publish it either: a figure a sync wrote is
+   * cleared and the field handed back to the admin. A figure the admin typed
+   * is left alone — showing it is their call, not the sync's.
    *
-   * Audited only when the figure or its source changed; a daily "still
-   * 120,000" is not a settings change anybody needs a trail of. Returns
-   * whether anything was written that the landing page would show.
+   * Audited only when a figure or its source changed; a daily "still
+   * 120,000" is not a settings change anybody needs a trail of. Returns the
+   * networks whose shown figure (or source) actually moved.
    */
-  async applyYoutubeSync(
-    result: { kind: 'count'; count: number } | { kind: 'hidden' },
-  ): Promise<{ changed: boolean; counts: SocialCounts }> {
+  async applyAutoCounts(
+    by: 'youtube-sync' | 'meta-sync',
+    figures: Partial<Record<SocialCountNetwork, number | null>>,
+  ): Promise<{ changed: SocialCountNetwork[]; counts: SocialCounts }> {
     const now = new Date().toISOString();
+    const networks = SOCIAL_COUNT_NETWORKS.filter((network) => figures[network] !== undefined);
     // Filled inside the transaction; an object so the closure's writes are visible here.
     const seen: { before?: SocialCounts } = {};
 
     const next = await this.persist('socialCounts', (current: SiteSettings): SocialCounts => {
       const before = current.socialCounts;
       seen.before = before;
-      if (result.kind === 'count') {
-        return { ...before, youtube: result.count, sources: { ...before.sources, youtube: 'auto' }, syncedAt: now, updatedAt: now };
+      let after = before;
+      for (const network of networks) {
+        const figure = figures[network];
+        if (typeof figure === 'number') {
+          after = {
+            ...after,
+            [network]: figure,
+            sources: { ...after.sources, [network]: 'auto' },
+            syncedAt: { ...after.syncedAt, [network]: now },
+            updatedAt: now,
+          };
+        } else if (after.sources?.[network] === 'auto') {
+          after = { ...after, [network]: null, sources: { ...after.sources, [network]: 'manual' }, updatedAt: now };
+        }
       }
-      if (before.sources?.youtube === 'auto') {
-        return { ...before, youtube: null, sources: { ...before.sources, youtube: 'manual' }, updatedAt: now };
-      }
-      return before;
+      return after;
     });
 
     const before = seen.before!;
     const after = next.socialCounts;
-    const changed = before.youtube !== after.youtube || before.sources?.youtube !== after.sources?.youtube;
-    if (changed) {
+    const changed = networks.filter(
+      (network) => before[network] !== after[network] || before.sources?.[network] !== after.sources?.[network],
+    );
+    if (changed.length > 0) {
       await this.audit.record({
         action: 'settings:update',
         resourceType: AUDIT_RESOURCES.siteSettings,
@@ -268,8 +285,13 @@ export class SettingsService {
         // does not read as a write with its actor missing.
         metadata: {
           section: 'socialCounts',
-          by: 'youtube-sync',
-          youtube: { from: before.youtube, to: after.youtube, hidden: result.kind === 'hidden' },
+          by,
+          ...Object.fromEntries(
+            changed.map((network) => [
+              network,
+              { from: before[network], to: after[network], withheld: figures[network] === null },
+            ]),
+          ),
         },
       });
     }

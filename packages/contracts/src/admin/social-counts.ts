@@ -7,13 +7,14 @@ import { socialCountsCopy as c } from '@ayman/contracts/copy/social-counts';
  * «عدد السوشيال ميديا» — follower counts typed in by the admin, shown on the
  * landing page as social proof.
  *
- * Typed, not fetched — except YouTube. Facebook, Instagram and TikTok give a
- * follower count to a site only after an app review and a token per account,
- * and a number that is a week old is still the right order of magnitude for
- * «+120 ألف». YouTube's Data API answers a public channel's subscriber count
- * to a plain API key, so where the stack has `YOUTUBE_API_KEY` the API keeps
- * that one figure current itself (`SocialCountsSyncService`) and marks it
- * `sources.youtube = 'auto'`.
+ * Typed by default, fetched where the stack holds a credential. YouTube's
+ * Data API answers a public channel's subscriber count to a plain API key
+ * (`YOUTUBE_API_KEY`); Meta's Graph API answers a Page's follower count, and
+ * that of the Instagram business account linked to it, to the Page's own
+ * access token (`META_PAGE_TOKEN`). Where either is set, the API keeps those
+ * figures current itself (`SocialCountsSyncService`) and marks each one
+ * `sources.<network> = 'auto'`. TikTok has no such door and stays typed — a
+ * number a week old is still the right order of magnitude for «+120 ألف».
  *
  * `null` is "not entered" and renders nothing — distinct from `0`, which is a
  * real count nobody would want shown either, so the landing filters both. The
@@ -49,6 +50,7 @@ export const SOCIAL_COUNT_SOURCES = ['manual', 'auto'] as const;
 export type SocialCountSource = (typeof SOCIAL_COUNT_SOURCES)[number];
 
 const source = z.enum(SOCIAL_COUNT_SOURCES).optional();
+const syncStamp = z.iso.datetime().optional();
 
 /**
  * What is stored and returned: the input plus when it was last saved.
@@ -73,8 +75,20 @@ export const SocialCountsSchema = z.object({
   sources: z
     .object({ youtube: source, facebook: source, instagram: source, tiktok: source })
     .optional(),
-  /** Last SUCCESSFUL automatic refresh — what «آخر مزامنة» on the admin card says. */
-  syncedAt: z.iso.datetime().nullable().optional(),
+  /**
+   * Last SUCCESSFUL automatic refresh, PER NETWORK — what «آخر مزامنة» under
+   * each field says. Per network because the syncs fail independently: one
+   * shared stamp, refreshed daily by YouTube, would keep Facebook read-only
+   * forever behind an expired Meta token.
+   *
+   * Anything that is not an object (an early build of this branch stored one
+   * ISO string here) reads as "never synced" rather than failing the parse —
+   * this shape is re-parsed on every settings read, see above.
+   */
+  syncedAt: z.preprocess(
+    (value) => (typeof value === 'object' && value !== null ? value : undefined),
+    z.object({ youtube: syncStamp, facebook: syncStamp, instagram: syncStamp, tiktok: syncStamp }).optional(),
+  ),
 });
 
 export type SocialCounts = z.infer<typeof SocialCountsSchema>;
@@ -82,10 +96,10 @@ export type SocialCounts = z.infer<typeof SocialCountsSchema>;
 /**
  * How long an automatic figure stays the API's to keep after its last
  * successful sync. The job runs daily; three days absorbs a couple of failed
- * runs (quota, a YouTube outage) without the admin card flapping, and past it
- * the figure is handed back to the admin — a sync that stopped (key removed,
- * feature closed, channel link deleted) must not leave a read-only field
- * nobody can correct.
+ * runs (quota, an outage) without the admin card flapping, and past it the
+ * figure is handed back to the admin — a sync that stopped (key removed, Meta
+ * token expired, feature closed, channel link deleted) must not leave a
+ * read-only field nobody can correct.
  */
 export const AUTO_SYNC_FRESH_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -99,8 +113,9 @@ export function isAutoSynced(
   network: SocialCountNetwork,
   now: number = Date.now(),
 ): boolean {
-  if (counts.sources?.[network] !== 'auto' || !counts.syncedAt) return false;
-  const syncedAt = Date.parse(counts.syncedAt);
+  const stamp = counts.syncedAt?.[network];
+  if (counts.sources?.[network] !== 'auto' || !stamp) return false;
+  const syncedAt = Date.parse(stamp);
   return Number.isFinite(syncedAt) && now - syncedAt < AUTO_SYNC_FRESH_MS;
 }
 
