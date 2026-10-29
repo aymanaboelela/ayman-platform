@@ -17,10 +17,27 @@ export const socialCountsCopy = {
    * is what YouTube itself calls them; the other three say «متابع».
    */
   networks: {
-    youtube: { name: 'يوتيوب', label: 'مشترك على يوتيوب', unit: 'مشترك' },
-    facebook: { name: 'فيسبوك', label: 'متابع على فيسبوك', unit: 'متابع' },
-    instagram: { name: 'إنستجرام', label: 'متابع على إنستجرام', unit: 'متابع' },
-    tiktok: { name: 'تيك توك', label: 'متابع على تيك توك', unit: 'متابع' },
+    youtube: { name: 'يوتيوب', label: 'مشترك على يوتيوب', unit: 'مشترك', visit: 'زيارة القناة' },
+    facebook: { name: 'فيسبوك', label: 'متابع على فيسبوك', unit: 'متابع', visit: 'زيارة الصفحة' },
+    instagram: { name: 'إنستجرام', label: 'متابع على إنستجرام', unit: 'متابع', visit: 'زيارة الحساب' },
+    tiktok: { name: 'تيك توك', label: 'متابع على تيك توك', unit: 'متابع', visit: 'زيارة الحساب' },
+  },
+
+  /**
+   * The band under the landing hero (`<SocialProofBand>`).
+   *
+   * `visit` above is a verbal noun on purpose: «اشترك» / «تابع» are the
+   * imperatives every platform uses and both are masculine-only (CLAUDE.md
+   * §7) — «زيارة القناة» says where the link goes without addressing anyone.
+   */
+  band: {
+    /**
+     * Under the combined figure. The figure only shows with two or more
+     * networks: with one, it would repeat that network's card beside it.
+     */
+    totalLabel: 'متابع على السوشيال ميديا',
+    /** Appended to each link's accessible name: it leaves the site. */
+    newTab: '(بيفتح في صفحة جديدة)',
   },
 
   /** `{n}` — a figure that was rounded DOWN, so the real number is higher. */

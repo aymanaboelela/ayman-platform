@@ -35,14 +35,14 @@ beforeEach(() => {
 describe('<SocialCounts>', () => {
   it('renders nothing when no count was entered (or the feature is off)', async () => {
     getSocialCounts.mockResolvedValue(SocialCountsSchema.parse({}));
-    expect(await SocialCounts({ block: 'profile-social' })).toBeNull();
+    expect(await SocialCounts({ block: 'pk-social' })).toBeNull();
     // Not even asked for the links — nothing to link.
     expect(getPublicSettingsOrDefaults).not.toHaveBeenCalled();
   });
 
   it('renders nothing for zeros', async () => {
     getSocialCounts.mockResolvedValue(SocialCountsSchema.parse({ youtube: 0, tiktok: 0 }));
-    expect(await SocialCounts({ block: 'profile-social' })).toBeNull();
+    expect(await SocialCounts({ block: 'pk-social' })).toBeNull();
   });
 
   it('shows each entered count in short form, linked to the stored profile', async () => {
@@ -51,7 +51,7 @@ describe('<SocialCounts>', () => {
       contact: ContactSchema.parse({ youtube: 'https://www.youtube.com/@example' }),
     });
 
-    render((await SocialCounts({ block: 'profile-social' }))!);
+    render((await SocialCounts({ block: 'pk-social' }))!);
 
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(2);

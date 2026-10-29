@@ -10,6 +10,8 @@ import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
 export interface SocialCountItem {
   network: SocialCountNetwork;
+  /** The raw figure — what the band's combined total is summed from. */
+  count: number;
   /** «+120 ألف» — see `shortFollowerCount`. */
   figure: string;
   /** «مشترك على يوتيوب». */
@@ -36,6 +38,7 @@ export async function loadSocialCountItems(): Promise<readonly SocialCountItem[]
   const { contact } = await getPublicSettingsOrDefaults();
   return visible.map(({ network, count }) => ({
     network,
+    count,
     figure: shortFollowerCount(count),
     label: c.networks[network].label,
     href: contact[network] ?? TENANT_CONTACT_FALLBACK[network],
@@ -46,9 +49,10 @@ export async function loadSocialCountItems(): Promise<readonly SocialCountItem[]
  * «عدد السوشيال ميديا» — one tile per network: the brand mark, the figure, and
  * what it counts.
  *
- * `block` is the BEM root the caller's stylesheet answers to (`profile-social`
- * on the classic page, `pk-social` in the preset kit): the markup is shared,
- * the look belongs to the page it sits in.
+ * `block` is the BEM root the caller's stylesheet answers to (`pk-social` in
+ * the preset kit): the markup is shared, the look belongs to the page it sits
+ * in. The classic page does not use this row — it has its own band under the
+ * hero, `<SocialProofBand>`, over the same `loadSocialCountItems`.
  *
  * Renders `null` — not an empty list, not a heading — when there is nothing to
  * show, so a stack with the feature off or no numbers typed serves exactly the
