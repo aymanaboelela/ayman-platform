@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { BookShippingRatesSchema } from '@ayman/contracts/books';
+import { SocialCountsSchema } from '@ayman/contracts/admin/social-counts';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a
@@ -32,7 +33,7 @@ export const RESERVED_HUES = [
   { center: 25, meaning: 'إجابة غلط' },
 ] as const;
 
-const RESERVED_HUE_RADIUS = 20;
+export const RESERVED_HUE_RADIUS = 20;
 
 /** Angular distance between two hues, 0–180. */
 function hueDistance(a: number, b: number): number {
@@ -123,6 +124,22 @@ export const AccentHueSchema = z
  */
 export const LANDING_LAYOUTS = ['classic', 'editorial', 'compact'] as const;
 export const LandingLayoutSchema = z.enum(LANDING_LAYOUTS);
+
+/**
+ * Whether the opener's portrait drifts once it has arrived.
+ *
+ * `still` is the default and what every stored row means, because the
+ * `studio` opener was designed still on purpose (`presets.css`, the caret
+ * note: an indefinite motion on an otherwise still page is a thing the eye
+ * keeps returning to). `float` exists for the teacher whose portrait is a
+ * cut-out composition — a figure, a crown, a wordmark — where a slow drift
+ * reads as the picture being alive rather than as a page that will not settle.
+ *
+ * Off unless a teacher turns it on, so switching it on for one stack cannot
+ * change another stack's page.
+ */
+export const PORTRAIT_MOTIONS = ['still', 'float'] as const;
+export const PortraitMotionSchema = z.enum(PORTRAIT_MOTIONS);
 export type LandingLayout = z.infer<typeof LandingLayoutSchema>;
 
 /**
@@ -209,6 +226,8 @@ export const BrandingSchema = z
     landingPreset: LandingPresetSchema.default('classic'),
     /** The shape of the `classic` page. See `LandingLayoutSchema`. */
     landingLayout: LandingLayoutSchema.default('classic'),
+    /** The opener portrait's idle motion. See `PortraitMotionSchema`. */
+    portraitMotion: PortraitMotionSchema.default('still'),
     radius: RadiusSlotSchema.default('default'),
     logoLightAssetId: assetId,
     logoDarkAssetId: assetId,
@@ -509,9 +528,31 @@ export type Contact = z.infer<typeof ContactSchema>;
  * teacher who is nagging, and where that line falls is his judgement about his
  * own students — not a number a developer should be choosing in a file.
  */
+/**
+ * «نتيجة الامتحان تتبعت لمين» — who hears about a graded paper.
+ *
+ *   · `student`  — the chat message in the student's own thread. What the
+ *     platform has always done, and the default, so a stored row that predates
+ *     this key (and every stack that never opens the screen) changes nothing.
+ *   · `guardian` — a WhatsApp message to the guardian's number INSTEAD. A
+ *     student with no usable guardian number still gets their own message:
+ *     telling nobody is never what this switch means.
+ *   · `both`     — the two of them.
+ *
+ * The guardian leg goes out from the linked WhatsApp device, so it only exists
+ * where the stack holds `outreach.whatsapp` and `marketing.whatsapp`. Anywhere
+ * else the value is read as `student` (`resultRoute` in
+ * `outreach/guardian-result.ts`), so a stored `guardian` can never silence a
+ * stack that has no way to reach a parent.
+ */
+export const QUIZ_RESULT_RECIPIENTS = ['student', 'guardian', 'both'] as const;
+export type QuizResultRecipient = (typeof QUIZ_RESULT_RECIPIENTS)[number];
+
 export const OutreachSettingsSchema = z
   .object({
     quizResult: z.boolean().default(true),
+    /** See `QUIZ_RESULT_RECIPIENTS`. A NEW key with a default — safe on a stored row. */
+    quizResultTo: z.enum(QUIZ_RESULT_RECIPIENTS).default('student'),
     quizNudge: z.boolean().default(true),
     lessonPraise: z.boolean().default(true),
     whatsappInvite: z.boolean().default(true),
@@ -710,6 +751,9 @@ export const SiteSettingsSchema = z
     outreach: OutreachSettingsSchema.prefault({}),
     store: StoreSettingsSchema.prefault({}),
     about: AboutSettingsSchema.prefault({}),
+    /** «عدد السوشيال ميديا» — see `admin/social-counts.ts`, and why it is
+     *  stored here but is NOT one of `SETTINGS_SECTIONS`. */
+    socialCounts: SocialCountsSchema.prefault({}),
   })
   .strict();
 

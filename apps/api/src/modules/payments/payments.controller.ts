@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { memoryStorage } from 'multer';
 import { MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
@@ -7,7 +8,9 @@ import type { PaymentSubmission } from '@ayman/contracts/payments';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import type { WalletPurchaseResult } from '@ayman/contracts/wallet';
-import { SubmitPaymentDto } from './payments.dto';
+import type { CouponQuote } from '@ayman/contracts/coupons';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
+import { CouponQuoteDto, SubmitPaymentDto } from './payments.dto';
 import { WalletPurchaseDto } from '../wallet/wallet.dto';
 import { PaymentsService } from './payments.service';
 
@@ -64,6 +67,28 @@ export class PaymentsController {
     @Body() body: WalletPurchaseDto,
   ): Promise<WalletPurchaseResult> {
     return this.payments.purchaseFromWallet(user.id, body);
+  }
+
+  /**
+   * «كود الخصم ← تطبيق» — the price with this code, before any money moves.
+   * Writes nothing and reserves nothing; the claim decides again under the
+   * coupon's lock (`coupon-ledger.ts`).
+   *
+   * Throttled because a code is a guessable string: a student applying the
+   * one code they were given is far under this, a script walking the
+   * alphabet is not. A guess wins a discount, never access, so the route
+   * ceiling is the whole defence and is enough.
+   */
+  @RequirePermission('payment:submit')
+  @RequireFeature('coupons')
+  @Throttle({ short: { limit: 5, ttl: seconds(10) }, medium: { limit: 30, ttl: seconds(600) } })
+  @UsePipes(ZodValidationPipe)
+  @Post('coupon-quote')
+  quoteCoupon(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: CouponQuoteDto,
+  ): Promise<CouponQuote> {
+    return this.payments.quoteCoupon(user.id, body);
   }
 
   @RequirePermission('payment:submit')

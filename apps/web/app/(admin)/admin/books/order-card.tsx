@@ -258,6 +258,18 @@ export function BookOrderCard({
                   className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-accent-text transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20"
                 >
                   {formatCopy(c.repeatCustomer, { n: row.previousOrdersFromPhone })}
+                  {/* «هو الطلب اللي قبله اتثبت ولا لأ؟» — answered on the badge
+                      itself, each status in its own stripe colour, so a
+                      rejected history reads differently from a delivered one
+                      without opening the list. */}
+                  {row.previousOrderStatuses.map((entry) => (
+                    <span key={entry.status} className="ms-1.5 font-semibold" style={{ color: STATUS_TONE[entry.status] }}>
+                      {'· '}
+                      {entry.count > 1
+                        ? formatCopy(c.repeatCustomerStatusCount, { status: STATUS_LABEL[entry.status], n: entry.count })
+                        : STATUS_LABEL[entry.status]}
+                    </span>
+                  ))}
                 </Link>
               ) : null}
 

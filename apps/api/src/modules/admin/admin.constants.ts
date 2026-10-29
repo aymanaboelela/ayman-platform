@@ -25,6 +25,8 @@ export const AUDIT_RESOURCES = {
   featureFlag: 'feature_flags',
   navigationItem: 'navigation_items',
   homeBlock: 'home_blocks',
+  /// «البانرات الترويجية» — the pictures on top of the student dashboard.
+  promoBanner: 'promo_banners',
   /// «نيوز» — the public articles section.
   newsPost: 'news_posts',
   pdfFile: 'pdf_files',
@@ -93,6 +95,8 @@ export const AUDIT_RESOURCES = {
   /// «دعوة الصحاب» — one friend attributed to one share link; and the program row.
   referral: 'referrals',
   referralProgram: 'referral_program',
+  /// «كوبونات الخصم» — see `Coupon`.
+  coupon: 'coupons',
   /// «السناتر» — see `CentersService`.
   center: 'centers',
   centerSlot: 'center_slots',

@@ -23,7 +23,9 @@ import { adminGet } from '@/lib/admin-api';
 import { hours, num, pct } from '@/components/admin/charts/format';
 import { getEntitlements } from '@/lib/entitlements';
 import { can, getSession } from '@/lib/session';
-import { IS_AYMAN } from '@/lib/tenant';
+import { IS_AYMAN, TENANT_KEY } from '@/lib/tenant';
+import { ownBucketBytes } from '@/lib/video-usage';
+import { monthlyAtCurrentStorage } from '@/lib/video-usage-math';
 import { DeleteVideoButton } from './delete-video-button';
 import { RestoreVideoButton } from './restore-video-button';
 import { LibraryUploadButton } from './library-upload-button';
@@ -103,11 +105,20 @@ const STATUS_TONE: Record<VideoLibraryItem['status'], string> = {
 export default async function AdminVideosPage() {
   if (!(await getEntitlements())['video.upload']) notFound();
 
-  const [{ items, archived, targets, orphans, totalBytes, storageRead }, stats] = await Promise.all([
-    adminGet('/api/admin/videos', VideoLibrarySchema),
-    videoStats(),
-  ]);
-  const monthly = (totalBytes / 1e9) * USD_PER_GB_MONTH;
+  const [{ items, archived, targets, orphans, totalBytes: listedBytes, storageRead }, stats, cloudflareBytes] =
+    await Promise.all([
+      adminGet('/api/admin/videos', VideoLibrarySchema),
+      videoStats(),
+      IS_AYMAN ? ownBucketBytes(TENANT_KEY) : null,
+    ]);
+  // The owner's figure is Cloudflare's own (the invoice's data); a teacher's
+  // stack holds no account token, so the API lists his bucket instead — see
+  // `VideoLibraryService.wholeBucketBytes`. Either way, every byte billed.
+  const totalBytes = cloudflareBytes ?? listedBytes;
+  // The same function «منصات المدرّسين» bills with, so the two screens agree.
+  const monthly = monthlyAtCurrentStorage(totalBytes, TENANT_KEY);
+  // Library uploads not yet on a lecture are listed too, but are not «في محاضرات».
+  const onLectures = items.filter((item) => !item.library).length;
   const statsByVideo = new Map(stats?.videos.map((row) => [row.key, row]));
 
   return (
@@ -129,7 +140,7 @@ export default async function AdminVideosPage() {
           <Size bytes={totalBytes} />
         </Stat>
         <Stat icon={Film} label={c.statCount} tone="info">
-          <span className="mono tabular">{items.length}</span>
+          <span className="mono tabular">{onLectures}</span>
         </Stat>
         <Stat
           icon={Wallet}

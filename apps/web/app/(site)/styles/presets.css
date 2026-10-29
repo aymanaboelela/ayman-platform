@@ -3769,6 +3769,29 @@
   margin-block-start: 2.5rem;
 }
 
+/* A section heading with its one link beside it — «كل الكورسات» on the
+   courses section. `flex: 1 1 20rem` on the heading is what decides the
+   phone: narrower than that, the link wraps to its own line UNDER the
+   heading and above the list, which is still the top of the section. */
+[data-preset='studio'] .st-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin-block-end: 2.5rem;
+}
+
+[data-preset='studio'] .st-head-row > .st-head {
+  flex: 1 1 20rem;
+  min-inline-size: 0;
+  margin-block-end: 0;
+}
+
+[data-preset='studio'] .st-head-row__link {
+  flex: none;
+}
+
 /* ── the opener ────────────────────────────────────────────────────────────
 
    The photograph is the design. Two columns: the promise on one, the
@@ -3821,6 +3844,29 @@
      the stage. */
   [data-preset='studio'] .st-hero[data-stage-empty] .st-hero__grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* On a phone the photograph comes FIRST.
+
+   One column puts the stage after the copy, so the first screen was a
+   headline, a paragraph, two buttons and three figures — and the person the
+   preset is built around started below the fold. Only with a portrait: on a
+   programming stack without one the stage is the code panel, and code above
+   the promise reads as the wrong way round. The height cap keeps the headline
+   on the same first screen as the photograph. */
+@media (max-width: 59.98rem) {
+  [data-preset='studio'] .st-hero[data-has-portrait] .st-hero__grid {
+    gap: 1.5rem;
+    min-block-size: 0;
+  }
+
+  [data-preset='studio'] .st-hero[data-has-portrait] .st-hero__stage {
+    order: -1;
+  }
+
+  [data-preset='studio'] .st-hero[data-has-portrait] .st-hero__portrait {
+    max-block-size: min(24rem, 46svh);
   }
 }
 
@@ -3913,6 +3959,28 @@
    keeps the whole subject on screen at every viewport, and `object-position:
    bottom` spends the slack at the top, where the background is, rather than
    on his chin. */
+/* A warm pool of the brand colour behind the photograph. A cut-out portrait
+   with a dark composition (a suit, a dark backdrop shape) vanished into the
+   dark theme's ground — the subject's outline was the only edge left. The
+   glow gives it a ground of its own in both themes without framing it. */
+[data-preset='studio'] .st-hero[data-has-portrait] .st-hero__stage::before {
+  content: '';
+  position: absolute;
+  inset: 8% 4% 0;
+  z-index: 0;
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--p-200), transparent 30%), transparent);
+  pointer-events: none;
+}
+
+:root:not([data-theme='light']) [data-preset='studio'] .st-hero[data-has-portrait] .st-hero__stage::before {
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--p-500), transparent 40%), transparent 92%);
+}
+
+[data-preset='studio'] .st-hero[data-has-portrait] .st-hero__portrait {
+  position: relative;
+  z-index: 1;
+}
+
 [data-preset='studio'] .st-hero__portrait {
   display: block;
   inline-size: 100%;
@@ -4151,36 +4219,115 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
+/* A tile, not a row: the numeral sits in its own tinted medallion, the stage
+   («إعدادي» / «ثانوي») over the grade name, the count in words under it, and
+   an arrow that moves on hover. The bare count used to sit alone at the far
+   edge as «1», which next to «الصف الأول» read as a second grade number. */
 [data-preset='studio'] .st-year__link {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1.5rem;
+  block-size: 100%;
+  padding: 1.25rem 1.25rem 1.25rem 1.5rem;
   border: 1px solid var(--st-rule);
   border-radius: var(--radius-lg);
-  transition: border-color 160ms ease, background-color 160ms ease;
+  background: linear-gradient(160deg, var(--st-paper), var(--st-wash));
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    translate 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 [data-preset='studio'] .st-year__link:hover {
   border-color: var(--st-accent);
-  background: var(--st-wash);
+  translate: 0 -2px;
+}
+
+[data-preset='studio'] .st-year__link:focus-visible {
+  outline: 2px solid var(--st-accent);
+  outline-offset: 3px;
 }
 
 [data-preset='studio'] .st-year__n {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  border: 1px solid var(--st-rule);
+  border-radius: 1rem;
+  background: var(--st-paper);
   color: var(--st-accent);
-  font-size: var(--fs-title-1);
+  font-size: var(--fs-title-2);
   font-weight: 700;
   line-height: 1;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
-[data-preset='studio'] .st-year__t {
+[data-preset='studio'] .st-year__link:hover .st-year__n {
+  border-color: var(--st-accent);
+  background: var(--st-accent);
+  color: var(--st-paper);
+}
+
+[data-preset='studio'] .st-year__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-inline-size: 0;
+}
+
+[data-preset='studio'] .st-year__stage {
+  color: var(--st-accent);
+  font-size: var(--fs-text-sm);
   font-weight: 600;
 }
 
+[data-preset='studio'] .st-year__t {
+  font-size: var(--fs-text-lg);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 [data-preset='studio'] .st-year__c {
-  margin-inline-start: auto;
   color: var(--st-ink-2);
   font-size: var(--fs-text-sm);
+}
+
+/* Wide grids: four tiles a row leave ~10rem for the name once the medallion
+   and the arrow take theirs, and «الصف الأول الإعدادي» broke over two lines
+   in every tile. Stacked, the name gets the tile's whole width. A phone keeps
+   the row — one tile per line has the width already. */
+@media (min-width: 44rem) {
+  [data-preset='studio'] .st-year__link {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 1rem;
+    padding: 1.375rem 1.5rem;
+  }
+
+  [data-preset='studio'] .st-year__body {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  [data-preset='studio'] .st-year__go {
+    margin-inline-start: auto;
+    align-self: center;
+  }
+}
+
+[data-preset='studio'] .st-year__go {
+  flex: none;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-lg);
+  transition: translate 200ms cubic-bezier(0.22, 0.61, 0.36, 1), color 160ms ease;
+}
+
+[data-preset='studio'] .st-year__link:hover .st-year__go {
+  color: var(--st-accent);
+  translate: -0.3rem 0;
 }
 
 /* ── faq ───────────────────────────────────────────────────────────────── */
@@ -4410,10 +4557,33 @@
 [data-preset='studio'] .st-foot__social {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.625rem;
 }
 
-[data-preset='studio'] .st-foot__s:hover,
+/* 2.75rem: the phone touch target, at every width — these are icon-only. */
+[data-preset='studio'] .st-foot__s {
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border: 1px solid var(--st-rule);
+  border-radius: 999px;
+  background: var(--st-paper);
+  color: var(--st-ink-2);
+  transition: color 160ms ease, border-color 160ms ease, translate 200ms ease;
+}
+
+[data-preset='studio'] .st-foot__s:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  translate: 0 -2px;
+}
+
+[data-preset='studio'] .st-foot__s:focus-visible {
+  outline: 2px solid var(--st-accent);
+  outline-offset: 3px;
+}
+
 [data-preset='studio'] .st-foot__l:hover {
   color: var(--st-accent);
 }
@@ -4537,6 +4707,38 @@
   animation: st-portrait-in 860ms cubic-bezier(0.22, 0.61, 0.36, 1) 380ms backwards;
 }
 
+/* `branding.portraitMotion = 'float'`: after the entrance, the portrait drifts
+   up and back with a hair of tilt. `translate`/`rotate` and not `transform`,
+   so it composes with `st-portrait-in` instead of fighting it for one
+   property, and both stay on the compositor.
+
+   Ten cycles and then still — about seventy seconds. That covers anyone
+   actually looking at the opener, and it keeps the rule this preset holds
+   everywhere else (`never loops an animation forever`): a page left open in
+   a tab stops spending a phone's battery on it. Ends on its rest frame, so
+   stopping is invisible. Reduced motion: no drift at all. */
+@keyframes st-portrait-float {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+
+  50% {
+    translate: 0 -0.85rem;
+    rotate: -0.6deg;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-preset='studio'] .st-hero[data-portrait-motion='float'] .st-hero__portrait {
+    transform-origin: 50% 100%;
+    animation:
+      st-portrait-in 860ms cubic-bezier(0.22, 0.61, 0.36, 1) 380ms backwards,
+      st-portrait-float 7s ease-in-out 1240ms 10 backwards;
+  }
+}
+
 [data-preset='studio'] .st-code {
   animation: st-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) 420ms backwards;
 }
@@ -4619,6 +4821,30 @@
   --site-line-strong: var(--p-200);
   --site-fg: var(--p-950);
   --site-fg-2: color-mix(in oklch, var(--p-950), transparent 32%);
+  /* The header's «حساب جديد» is the same button as the opener's «يلا نبدأ».
+     It was `--accent-cta`, a FIXED orange-red in `@ayman/ui` that does not
+     follow the brand hue — so on any tenant hue the header CTA and the page's
+     own CTA were two different colours one row apart. Same step and hover as
+     `.st-btn--solid`. */
+  --site-accent-solid: var(--p-700);
+  --site-accent-solid-hover: var(--p-950);
+  --site-on-accent: var(--n-1);
+}
+
+/* The dark half of the same fix: the step `--st-accent` takes in dark. */
+:root:root:not([data-theme='light']) .site:has(main[data-preset='studio']) {
+  --site-accent-solid: var(--p-400);
+  --site-accent-solid-hover: var(--p-300);
+  --site-on-accent: var(--p-950);
+}
+
+/* «لغات» paints itself in the `--e-*` ramp, a fixed rose. Beside a brand
+   accent that is a second red on the card — read as a warning rather than as
+   a school type. On this page it takes the brand's own wash. */
+[data-preset='studio'] .stream-chip--languages {
+  border-color: var(--st-rule);
+  background: var(--st-wash);
+  color: var(--st-accent);
 }
 
 /* ⚠️ `.site-nav--over` is set from `[data-site-hero]`'s scroll position alone
@@ -5587,6 +5813,55 @@ body:has(main[data-preset='board']) .site-nav--pinned .site-btn--outline {
   margin: 0;
   color: var(--pk-ink-2);
   line-height: 1.8;
+}
+
+/* «عدد السوشيال ميديا» — `<SocialCounts block="pk-social">` under the
+   teacher's figures. Ink comes from the band (`currentColor`), so it reads on
+   every kit surface; only the mark takes the brand's colour, and the two
+   night pages take its dark-surface variant (`SocialMark.inkHex`). */
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--pk-radius);
+  border: 1px solid color-mix(in oklab, currentColor, transparent 78%);
+  color: inherit;
+  text-decoration: none;
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) a.pk-social__link:hover,
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) a.pk-social__link:focus-visible {
+  border-color: var(--brand);
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__icon {
+  display: inline-flex;
+  color: var(--brand);
+}
+
+:is([data-preset='sabboora'], [data-preset='nujoom']) .pk-social__icon {
+  color: var(--brand-ink, var(--brand));
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__n {
+  font-family: var(--pk-display);
+  font-weight: 700;
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__l {
+  font-size: 0.875rem;
+  opacity: 0.8;
 }
 
 :is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-about {

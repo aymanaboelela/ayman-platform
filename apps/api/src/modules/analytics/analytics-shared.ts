@@ -237,3 +237,22 @@ export function dayKeys(from: Date, to: Date): string[] {
   }
   return keys;
 }
+
+/**
+ * The trailing window as CALENDAR days: today in Cairo and the `days` dates
+ * before it — `days + 1` keys, always.
+ *
+ * Callers used to build the window's start as `now - days × 24h` and hand that
+ * instant to `dayKeys`. A day is not always 24 hours: on the night Egypt leaves
+ * summer time (the last Thursday of October) the hour after the clocks go back
+ * puts `now - 30 × 24h` on the NEXT Cairo date, and the 30-day chart came back
+ * with 30 points instead of 31 — caught by `analytics.int-spec.ts` on main at
+ * 21:16 UTC on 2026-10-29, the hour it happened.
+ */
+export function trailingDayKeys(now: Date, days: number): string[] {
+  const start = new Date(`${cairoDayKey(now)}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - days);
+  // A UTC midnight is already that same date in Cairo (east of UTC), so
+  // `dayKeys` reads `start` as the intended calendar day.
+  return dayKeys(start, now);
+}

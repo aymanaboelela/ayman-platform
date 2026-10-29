@@ -205,6 +205,52 @@ describe('QuizBuilderService', () => {
       await prisma.user.delete({ where: { id: student.id } });
     });
 
+    it('carries an earlier sitting onto the new lesson, so it does not reappear as open', async () => {
+      const fromLessonId = await createLesson();
+      const quizId = await service.upsertForLesson(fromLessonId, defaultSettings());
+      extraQuizIds.push(quizId);
+
+      const student = await prisma.user.create({
+        data: { id: randomUUID(), name: 'Student', email: `${randomUUID()}@example.test`, role: 'student' },
+      });
+      const enrollment = await prisma.enrollment.create({ data: { userId: student.id, courseId } });
+      const submittedAt = new Date('2026-10-23T15:57:10Z');
+      await prisma.quizAttempt.create({
+        data: {
+          quizId,
+          userId: student.id,
+          attemptNo: 1,
+          state: 'submitted',
+          submittedAt,
+          sumMarks: 1,
+          gradeOutOf: 100,
+          passPercent: 70,
+          scaledScore: 100,
+          passed: true,
+        },
+      });
+
+      const toLessonId = await createLesson();
+      // The student opened the new quiz lesson before the fix — the row the
+      // backlog read as «مفتوح ومتسلّمش».
+      await prisma.lessonProgress.create({
+        data: { enrollmentId: enrollment.id, lessonId: toLessonId, state: 'in_progress', openCount: 1 },
+      });
+
+      await service.moveToLesson(quizId, toLessonId);
+
+      const row = await prisma.lessonProgress.findUniqueOrThrow({
+        where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId: toLessonId } },
+      });
+      expect(row.state).toBe('passed');
+      expect(Number(row.completion)).toBe(1);
+      expect(row.completedAt).toEqual(submittedAt);
+      expect(row.completedVia).toBe('auto');
+      expect(row.openCount).toBe(1);
+
+      await prisma.user.delete({ where: { id: student.id } });
+    });
+
     it('is a no-op when the quiz already sits on that lesson', async () => {
       const lessonId = await createLesson();
       const quizId = await service.upsertForLesson(lessonId, defaultSettings());

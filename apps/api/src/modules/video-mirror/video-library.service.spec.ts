@@ -12,6 +12,15 @@ import type { VideoMirrorService } from './video-mirror.service';
 import type { VideoArchiveService } from './video-archive.service';
 import type { VideoUploadService } from './video-upload.service';
 
+// Read per access, so one test can be a teacher's stack and the rest his.
+let mockTeacherStack = false;
+jest.mock('../../common/tenant', () => ({
+  ...jest.requireActual('../../common/tenant'),
+  get IS_AYMAN() {
+    return !mockTeacherStack;
+  },
+}));
+
 const UP = (c: string): string => c.repeat(32);
 
 interface Row {
@@ -31,6 +40,8 @@ function build(options: {
   kept?: string[];
   /** Upload ids a lesson MATERIAL («رفع فيديو» in مواد الدرس) plays from. */
   materials?: string[];
+  /** What a whole-bucket listing totals — every root, not just `v/`/`raw/`. */
+  bucket?: number;
 }) {
   const rows = [...options.rows];
   const ladders = { ...(options.ladders ?? {}) };
@@ -145,7 +156,12 @@ function build(options: {
   const usage = (map: Record<string, number>, id: string) =>
     id in map ? { bytes: map[id]!, lastModified: new Date('2026-09-01T00:00:00Z') } : { bytes: 0, lastModified: null };
 
+  let bucketListings = 0;
   const storage = {
+    bucketBytes: async () => {
+      bucketListings += 1;
+      return options.bucket ?? 0;
+    },
     listMirroredIds: async () => new Set(Object.keys(ladders)),
     listSourceIds: async () => new Set(Object.keys(sources)),
     prefixUsage: async (prefix: string) =>
@@ -170,7 +186,7 @@ function build(options: {
       },
     } as unknown as VideoArchiveService,
   );
-  return { service, log, audits, rows, released, upserts, upserted: () => lastUpsert };
+  return { service, log, audits, rows, released, upserts, upserted: () => lastUpsert, listings: () => bucketListings };
 }
 
 const row = (lessonId: string, externalId: string, extra: Partial<Row> = {}): Row => ({
@@ -223,6 +239,42 @@ describe('VideoLibraryService.list', () => {
     expect(library.orphans.map((orphan) => orphan.videoId)).toEqual([UP('c')]);
     await expect(service.remove(UP('9'))).rejects.toBeInstanceOf(ConflictException);
     expect(log).toEqual([]);
+  });
+});
+
+/*
+ * A teacher is charged on what the bucket holds, and our rows never saw a
+ * material's video or the montage's sources — so on his stack the total is
+ * the bucket's own, and a delete shows on the next open.
+ */
+describe('the total a teacher is charged on', () => {
+  beforeEach(() => {
+    mockTeacherStack = true;
+  });
+  afterEach(() => {
+    mockTeacherStack = false;
+  });
+
+  it('is every byte in the bucket, not the sum of the rows', async () => {
+    const { service } = build({ rows: [row('l1', UP('a'))], ladders: { [UP('a')]: 1 }, bucket: 9_000_000_000 });
+    expect((await service.list()).totalBytes).toBe(9_000_000_000);
+  });
+
+  it('lists the bucket once per window, and again after a delete', async () => {
+    const { service, listings } = build({ rows: [row('l1', UP('a'))], bucket: 5 });
+    await service.list();
+    await service.list();
+    expect(listings()).toBe(1);
+    await service.remove(UP('a'));
+    await service.list();
+    expect(listings()).toBe(2);
+  });
+
+  it('is never listed on the owner\'s stack — his figure is Cloudflare\'s', async () => {
+    mockTeacherStack = false;
+    const { service, listings } = build({ rows: [row('l1', UP('a'))], bucket: 9 });
+    expect((await service.list()).totalBytes).toBe(1_500_000_000);
+    expect(listings()).toBe(0);
   });
 });
 

@@ -24,6 +24,7 @@ import {
   Settings,
   SquarePen,
   TicketCheck,
+  TicketPercent,
   Trophy,
   Users,
   UserRoundSearch,
@@ -48,6 +49,7 @@ import {
   Brush,
   Share2,
   Clapperboard,
+  GalleryHorizontalEnd,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -56,6 +58,7 @@ import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 import { designsCopy } from '@ayman/contracts/copy/designs';
 import { socialPostsCopy } from '@ayman/contracts/copy/social-posts';
 import { montageCopy } from '@ayman/contracts/copy/montage';
+import { promoBannersCopy } from '@ayman/contracts/copy/promo-banners';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -237,6 +240,19 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.unlockCodes,
     icon: TicketCheck,
     permission: 'payment:read',
+    group: 'money',
+  },
+  {
+    // «كوبونات الخصم» — beside the codes: both decide what a student pays
+    // (or does not) for a subscription. `payment:read` to look, like the
+    // rows around it; making and stopping a code is `payment:review`, checked
+    // by the API and by the page before it draws the form. Gated like its
+    // controller (`@RequireFeature('coupons')`).
+    href: '/admin/coupons',
+    labelAr: copy.admin.nav.coupons,
+    icon: TicketPercent,
+    permission: 'payment:read',
+    feature: 'coupons',
     group: 'money',
   },
   {
@@ -552,6 +568,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.home,
     icon: Home,
     permission: 'home:read',
+    group: 'site',
+  },
+  {
+    // «البانرات الترويجية» — under «الصفحة الرئيسية» and on its permissions:
+    // both decide what a reader sees first on a page. `feature` like the
+    // routes, so a stack without the strip has no screen feeding it.
+    href: '/admin/promo-banners',
+    labelAr: promoBannersCopy.admin.nav,
+    icon: GalleryHorizontalEnd,
+    permission: 'home:read',
+    feature: 'promoBanners',
     group: 'site',
   },
   {

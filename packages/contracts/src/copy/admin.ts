@@ -86,6 +86,7 @@ const admin = {
     /** «أكواد الفتح» — a six-character code that opens a lecture, a unit, a
      *  term or the whole course for the one student who types it. */
     unlockCodes: 'أكواد الفتح',
+    coupons: 'كوبونات الخصم',
     /** «المحفظة» — the desk (find a student, credit or debit) and the live
      *  queue of InstaPay / Vodafone Cash top-up requests. */
     wallet: 'شحن المحفظة',
@@ -2292,6 +2293,10 @@ const admin = {
     landingLayoutEditorialHint: 'من غير شاشة غامقة. عناوين كبيرة في النص، وأقسام مفصولة بخطوط رفيعة بدل الكروت.',
     landingLayoutCompact: 'مضغوط',
     landingLayoutCompactHint: 'شاشة أولى قصيرة والكلام في النص، وأقسام أكتف وكروت بحدود واضحة.',
+    portraitMotion: 'حركة صورة المدرّس',
+    portraitMotionHint: 'في شكل «الاستوديو»: الصورة اللي في أول الصفحة تفضل ثابتة، ولا تتحرك حركة هادية طالعة نازلة.',
+    portraitMotionStill: 'ثابتة',
+    portraitMotionFloat: 'بتتحرك',
     accentHue: 'درجة اللون',
     accentHueHint:
       'حرّك الشريط لحد ما توصل للون بتاعك. السكيمة كلها بتتولّد منه — الأزرار والخلفيات والنص — والدرجات القريبة من لون «إجابة صح» أو «إجابة غلط» مرفوضة عشان الطالب مايتلخبطش.',
@@ -5082,6 +5087,9 @@ const admin = {
      *  unlinked rows and the number is the only thing they share. `{n}` is
      *  how many OTHER live orders that number has. */
     repeatCustomer: 'طلب قبل كده {n} مرة',
+    /** One status inside that badge when more than one earlier order shares
+     *  it, e.g. «مرفوضة (2)». A single order shows the status alone. */
+    repeatCustomerStatusCount: '{status} ({n})',
     /**
      * The badge's `title`, and the whole reason it is a link.
      *
@@ -6233,7 +6241,7 @@ const admin = {
     statTotal: 'المساحة كلها',
     statCount: 'فيديو في محاضرات',
     statCost: 'تكلفة التخزين في الشهر تقريبًا',
-    statCostHint: 'التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    statCostHint: 'المساحة من كلاودفلير نفسه، والتخزين بـ٠٫٠١٥ دولار للجيجا في الشهر. المشاهدة ببلاش.',
     /**
      * The same card on a teacher's stack — what HE pays, every month, at the
      * price the owner charges (`TENANT_USD_PER_GB_MONTH`), not Cloudflare's.

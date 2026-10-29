@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { adminCouponsCopy as couponCopy } from '@ayman/contracts/copy/admin-coupons';
 import {
   AdminPaymentListSchema,
   type AdminPaymentList,
@@ -157,6 +158,18 @@ function PaymentRow({ row, fresh }: { row: AdminPaymentRow; fresh: boolean }) {
               `/admin/finance`. See the model note on
               `PaymentSubmission.isFree`. */}
           {row.isFree ? <Badge tone="accent">{c.freeBadge}</Badge> : null}
+          {/* «كود الخصم» — the amount below is already the discounted
+              figure; this says why it is lower than the plan's price. */}
+          {row.coupon ? (
+            <Badge tone="accent">
+              {couponCopy.paymentCoupon}{' '}
+              <bdi dir="ltr" className="mono">
+                {row.coupon.code}
+              </bdi>
+              {' · '}
+              {formatCopy(couponCopy.paymentCouponOff, { amount: formatEGP(row.coupon.discountCents) })}
+            </Badge>
+          ) : null}
         </div>
         <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{row.courseTitle}</p>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">

@@ -28,6 +28,8 @@ import '../exam-band.css';
 // فيه شهر تاني مفتوح. نفس الحجة بالحرف: كومبوننت واحد، شاشة واحدة، فملف لوحده
 // بيتحمّل من هنا.
 import '../month-news.css';
+// `.promo-strip` — «البانرات الترويجية» on the dashboard. Same argument again.
+import '../promo-banners.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
 import { DrawerAccount } from '@/components/app/drawer-account';
 import {

@@ -45,6 +45,12 @@ import {
   SIGNUP_OPENERS,
   SIGNUP_SECOND_OPENERS,
 } from '@ayman/contracts/copy/outreach-auto';
+import {
+  GUARDIAN_RESULT_CLOSERS,
+  GUARDIAN_RESULT_GREETINGS,
+  GUARDIAN_RESULT_INTROS,
+  GUARDIAN_RESULT_SCORE_LINES,
+} from '@ayman/contracts/copy/outreach-guardian';
 import { OUTREACH_KINDS } from '@ayman/contracts/outreach/kinds';
 import {
   bandFor,
@@ -139,6 +145,11 @@ const EVERY_LINE: readonly string[] = [
   ...SIGNUP_BODIES,
   ...SIGNUP_BODIES_UNKNOWN,
   ...SIGNUP_CLOSERS,
+  // Said to a parent ABOUT the student — the same two rules apply to both.
+  ...GUARDIAN_RESULT_GREETINGS,
+  ...GUARDIAN_RESULT_INTROS,
+  ...Object.values(GUARDIAN_RESULT_SCORE_LINES).flat(),
+  ...GUARDIAN_RESULT_CLOSERS,
 ];
 
 describe('composeOutreach — variety', () => {
@@ -628,6 +639,10 @@ describe('the voice — one message, written for either reader', () => {
     ...SIGNUP_BODIES,
     ...SIGNUP_BODIES_UNKNOWN,
     ...SIGNUP_CLOSERS,
+    ...GUARDIAN_RESULT_GREETINGS,
+    ...GUARDIAN_RESULT_INTROS,
+    ...Object.values(GUARDIAN_RESULT_SCORE_LINES).flat(),
+    ...GUARDIAN_RESULT_CLOSERS,
   ];
 
   it('never addresses the student as a boy', () => {

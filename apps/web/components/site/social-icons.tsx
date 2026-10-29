@@ -39,16 +39,36 @@ export type SocialMark = {
    * property of the SURFACE, so only always-dark consumers read it.
    */
   inkHex?: string;
+  /**
+   * The fill of a solid app-icon plate that carries the mark in white, where
+   * that is NOT simply `hex` — the landing's follower band
+   * (`<SocialProofBand>`). Instagram's flat `#E4405F` on a plate reads as "a
+   * pink square"; its app icon is the gradient, and the gradient is what a
+   * visitor recognises at a glance.
+   */
+  plate?: string;
+  /**
+   * A CSS `filter` for the white mark on that plate. TikTok only: its app
+   * icon is a white note with the cyan and red offsets beside it, and a bare
+   * white note on black is just a note.
+   */
+  plateGlyphFx?: string;
 };
 
 export const SOCIAL_MARKS = {
   youtube: { path: siYoutube.path, title: siYoutube.title, hex: `#${siYoutube.hex}` },
-  instagram: { path: siInstagram.path, title: siInstagram.title, hex: `#${siInstagram.hex}` },
+  instagram: {
+    path: siInstagram.path,
+    title: siInstagram.title,
+    hex: `#${siInstagram.hex}`,
+    plate: 'radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%)',
+  },
   tiktok: {
     path: siTiktok.path,
     title: siTiktok.title,
     hex: `#${siTiktok.hex}`,
     inkHex: '#25F4EE',
+    plateGlyphFx: 'drop-shadow(-1.5px -1px 0 #25f4ee) drop-shadow(1.5px 1px 0 #fe2c55)',
   },
   facebook: { path: siFacebook.path, title: siFacebook.title, hex: `#${siFacebook.hex}` },
   whatsapp: { path: siWhatsapp.path, title: siWhatsapp.title, hex: `#${siWhatsapp.hex}` },

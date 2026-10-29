@@ -12,6 +12,7 @@ import {
   ImagePlus,
   LoaderCircle,
   Lock,
+  TicketPercent,
   TriangleAlert,
   Wallet,
 } from 'lucide-react';
@@ -23,6 +24,8 @@ import { CatalogCourseDetailSchema, type CatalogCourseTerm } from '@ayman/contra
 import { PublicSettingsReadSchema } from '@ayman/contracts/admin/settings';
 import { PaymentSubmissionSchema, type PaymentSubmission } from '@ayman/contracts/payments';
 import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contracts/wallet';
+import { EntitlementsResponseSchema } from '@ayman/contracts/admin/entitlements';
+import { CouponQuoteSchema, CouponRefusalSchema, type CouponQuote } from '@ayman/contracts/coupons';
 // The SUBPATH, never the root barrel — `lib/client-barrel.test.ts` fails the
 // build on a root-barrel import from a `'use client'` file.
 import type { CourseMonth, SellablePaymentPlan } from '@ayman/contracts/months';
@@ -66,6 +69,24 @@ function localEgyptianDigits(e164: string): string {
 }
 
 const MY_SUBMISSIONS_SCHEMA = z.array(PaymentSubmissionSchema);
+
+/**
+ * «الكود ده مابينفعش» — the sentence for a refused code, from the 4xx body's
+ * `code` (`coupon_<reason>`). Anything that is not a coupon refusal (a 409 for
+ * a claim already in review, a dropped connection) is `null`, so the caller
+ * keeps its own wording for it.
+ */
+function couponRefusalSentence(caught: unknown): string | null {
+  if (!(caught instanceof ApiRequestError)) return null;
+  const raw = (caught.payload as { code?: unknown } | undefined)?.code;
+  if (typeof raw !== 'string' || !raw.startsWith('coupon_')) {
+    // A code the schema refused before the service saw it (`ZodValidationPipe`
+    // 400) can only be one that does not exist — same sentence.
+    return caught.status === 400 ? copy.subscribe.couponRefused.not_found : null;
+  }
+  const reason = CouponRefusalSchema.safeParse(raw.slice('coupon_'.length));
+  return reason.success ? copy.subscribe.couponRefused[reason.data] : copy.subscribe.couponRefused.generic;
+}
 
 /**
  * `GET /api/payments/courses/:courseId/months/mine` — the months this student
@@ -434,6 +455,20 @@ export function SubscribePanel({
    * (the response was lost) is then answered with its own result.
    */
   const [walletKey] = useState(newIdempotencyKey);
+  /**
+   * «كود الخصم» — only on a stack where the feature is open (read live with
+   * everything else; a failed read hides the field, and the API refuses a
+   * code there anyway). `coupon` is the SERVER's quote for exactly the plan,
+   * term and months on screen: every handler that changes any of those clears
+   * it, so a quote can never be shown against a purchase it was not made for.
+   * The price is never ours — the claim sends the code, not the figure.
+   */
+  const [couponsOn, setCouponsOn] = useState(false);
+  const [couponOpen, setCouponOpen] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState<CouponQuote | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
   // The native file input is visually hidden (`sr-only`) — this is what the
   // styled dropzone button actually clicks, since a plain browser "Choose
   // File" control reads as nothing selectable on the smaller, older devices
@@ -483,7 +518,7 @@ export function SubscribePanel({
     let cancelled = false;
 
     async function load() {
-      const [mineResult, courseResult, settingsResult, ownedMonthsResult, walletResult] =
+      const [mineResult, courseResult, settingsResult, ownedMonthsResult, walletResult, featuresResult] =
         await Promise.allSettled([
           apiGet('/api/payments/submissions/me', MY_SUBMISSIONS_SCHEMA),
           apiGet(`/api/catalog/courses/${encodeURIComponent(slug)}`, CatalogCourseDetailSchema),
@@ -493,8 +528,11 @@ export function SubscribePanel({
             OWNED_MONTHS_SCHEMA,
           ),
           apiGet('/api/wallet/balance', WalletBalanceSchema),
+          apiGet('/api/entitlements', EntitlementsResponseSchema),
         ]);
       if (cancelled) return;
+
+      setCouponsOn(featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true);
 
       setWalletBalance(walletResult.status === 'fulfilled' ? walletResult.value.balanceCents : null);
 
@@ -828,9 +866,17 @@ export function SubscribePanel({
     return requestedMonthIds(months, ownedMonthIds);
   }
 
+  /** The quote belonged to the previous selection — see `coupon`. The typed
+   *  code stays, so re-applying it is one press. */
+  function dropCoupon() {
+    setCoupon(null);
+    setCouponError(null);
+  }
+
   function choosePlan(next: SellablePaymentPlan) {
     setPlan(next);
     setError(null);
+    dropCoupon();
     /*
      * «شهر» is two different products, and `months` is the only thing that
      * says which.
@@ -875,6 +921,7 @@ export function SubscribePanel({
   function chooseTerm(next: CatalogCourseTerm) {
     setTermId(next.id);
     setError(null);
+    dropCoupon();
     setStep('form');
   }
 
@@ -883,6 +930,7 @@ export function SubscribePanel({
    *  list of «اشترك» buttons that would each want their own screenshot. */
   function toggleMonth(monthId: string) {
     setError(null);
+    dropCoupon();
     setSelectedMonthIds((current) =>
       current.includes(monthId) ? current.filter((id) => id !== monthId) : [...current, monthId],
     );
@@ -905,6 +953,44 @@ export function SubscribePanel({
    * carry, and no transfer. The server re-derives the price and re-checks
    * everything `submit` is checked for; this only says what was picked.
    */
+  /** «تطبيق» — asks the server what this exact purchase costs with the code. */
+  async function applyCoupon() {
+    if (!plan || !couponInput.trim()) return;
+    setCouponBusy(true);
+    setCouponError(null);
+    try {
+      const quote = await apiPost('/api/payments/coupon-quote', CouponQuoteSchema, {
+        code: couponInput.trim(),
+        courseId,
+        plan,
+        termId,
+        monthIds: selectedMonthIds,
+      });
+      setCoupon(quote);
+    } catch (caught) {
+      setCoupon(null);
+      setCouponError(
+        couponRefusalSentence(caught) ??
+          (caught instanceof ApiRequestError && caught.status === 409
+            ? copy.subscribe.alreadyPending
+            : copy.subscribe.couponRefused.generic),
+      );
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  /**
+   * The code stopped applying between «تطبيق» and the final press — used up,
+   * switched off, past its end. Nothing was filed or charged (the claim rolls
+   * back with the refusal); the quote goes, the amount on screen returns to
+   * the full price, and the sentence says why.
+   */
+  function loseCoupon(sentence: string) {
+    setCoupon(null);
+    setError(formatCopy(copy.subscribe.couponLost, { reason: sentence }));
+  }
+
   async function payFromWallet() {
     if (!plan) return;
     setError(null);
@@ -916,6 +1002,7 @@ export function SubscribePanel({
         termId,
         monthIds: selectedMonthIds,
         idempotencyKey: walletKey,
+        couponCode: coupon?.code ?? null,
       });
       setWalletBalance(result.balanceCents);
       setStep('walletSuccess');
@@ -924,7 +1011,10 @@ export function SubscribePanel({
         caught instanceof ApiRequestError
           ? ((caught.payload ?? {}) as { code?: unknown; details?: { balanceCents?: unknown } })
           : {};
-      if (payload.code === 'wallet_insufficient') {
+      const couponSentence = coupon ? couponRefusalSentence(caught) : null;
+      if (couponSentence) {
+        loseCoupon(couponSentence);
+      } else if (payload.code === 'wallet_insufficient') {
         // The balance moved since the panel opened — show the live one, and
         // the card redraws as «ناقص كام» with the top-up link.
         const live = Number(payload.details?.balanceCents);
@@ -981,10 +1071,16 @@ export function SubscribePanel({
         monthIds: selectedMonthIds,
         senderPhone: normalizedPhone,
         screenshotKey: uploaded.value.screenshotKey,
+        // The code, never the discounted figure — the server prices it again
+        // under the coupon's lock.
+        couponCode: coupon?.code ?? null,
       });
       setStep('success');
     } catch (caught) {
-      if (caught instanceof ApiRequestError && caught.status === 409) {
+      const couponSentence = coupon ? couponRefusalSentence(caught) : null;
+      if (couponSentence) {
+        loseCoupon(couponSentence);
+      } else if (caught instanceof ApiRequestError && caught.status === 409) {
         setError(copy.subscribe.alreadyPending);
       } else {
         setError(copy.subscribe.genericError);
@@ -1014,7 +1110,9 @@ export function SubscribePanel({
           : null;
   const chosenMonths = months.filter((month) => selectedMonthIds.includes(month.id));
 
-  function summaryCard(amount: number | null) {
+  /** `withCoupon` on the payment step only — the one step whose figure the
+   *  quote is for. */
+  function summaryCard(amount: number | null, withCoupon = false) {
     return (
       <CheckoutSummary
         title={copy.subscribe.summaryTitle}
@@ -1044,6 +1142,27 @@ export function SubscribePanel({
                 </ul>
               </dd>
             </div>
+          ) : null}
+          {withCoupon && coupon ? (
+            <>
+              <div className="bco-sum__row">
+                <dt>{copy.subscribe.couponOriginal}</dt>
+                <dd>
+                  <Money cents={coupon.originalCents} />
+                </dd>
+              </div>
+              <div className="bco-sum__row bco-sum__row--discount">
+                <dt>
+                  {copy.subscribe.couponDiscount}{' '}
+                  <bdi dir="ltr" className="bco-coupon__code">
+                    {coupon.code}
+                  </bdi>
+                </dt>
+                <dd>
+                  −<Money cents={coupon.discountCents} />
+                </dd>
+              </div>
+            </>
           ) : null}
           {amount !== null && amount > 0 ? (
             <div className="bco-sum__row bco-sum__row--total">
@@ -1297,16 +1416,105 @@ export function SubscribePanel({
         : plan === 'term'
           ? (terms.find((term) => term.id === termId)?.priceCents ?? null)
           : null;
+  /**
+   * What is actually asked for — the server's discounted figure when a code
+   * applies. Display only, like `amountCents` above: the claim sends the CODE,
+   * and the server prices it again.
+   */
+  const payableCents = amountCents !== null && coupon ? coupon.finalCents : amountCents;
 
   return frame(
     2,
     <div className="bco-stack">
-      {amountCents !== null ? (
+      {couponsOn && amountCents !== null ? (
+        <div className="bco-card bco-coupon">
+          {coupon ? (
+            <div className="bco-coupon__applied">
+              <p className="bco-note bco-note--ok bco-coupon__note" role="status">
+                <TicketPercent size={18} aria-hidden="true" />
+                <span>
+                  {copy.subscribe.couponAppliedLead}{' '}
+                  <bdi dir="ltr" className="bco-coupon__code">
+                    {coupon.code}
+                  </bdi>{' '}
+                  {formatCopy(copy.subscribe.couponApplied, { amount: formatEGP(coupon.discountCents) })}
+                </span>
+              </p>
+              <button
+                type="button"
+                className="bco-link"
+                onClick={() => {
+                  setCoupon(null);
+                  setCouponInput('');
+                }}
+                disabled={submitting}
+              >
+                {copy.subscribe.couponRemove}
+              </button>
+            </div>
+          ) : !couponOpen ? (
+            <button
+              type="button"
+              className="bco-link"
+              onClick={() => setCouponOpen(true)}
+              disabled={submitting}
+            >
+              <TicketPercent size={16} aria-hidden="true" />
+              {copy.subscribe.couponToggle}
+            </button>
+          ) : (
+            <CheckoutField id="subscribe-coupon" label={copy.subscribe.couponLabel} error={couponError ?? undefined}>
+              <div className="bco-coupon__row">
+                <Input
+                  id="subscribe-coupon"
+                  className="bco-input bco-input--ltr bco-coupon__input"
+                  dir="ltr"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={32}
+                  invalid={Boolean(couponError)}
+                  aria-describedby={couponError ? 'subscribe-coupon-error' : undefined}
+                  value={couponInput}
+                  onChange={(event) => {
+                    setCouponInput(event.target.value);
+                    setCouponError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void applyCoupon();
+                    }
+                  }}
+                  disabled={couponBusy || submitting}
+                />
+                <Button
+                  type="button"
+                  className="bco-coupon__apply"
+                  onClick={() => void applyCoupon()}
+                  disabled={couponBusy || submitting || !couponInput.trim()}
+                >
+                  {couponBusy ? (
+                    <>
+                      <LoaderCircle className="bco-loading__spin" size={16} aria-hidden="true" />
+                      {copy.subscribe.couponApplying}
+                    </>
+                  ) : (
+                    copy.subscribe.couponApply
+                  )}
+                </Button>
+              </div>
+            </CheckoutField>
+          )}
+        </div>
+      ) : null}
+
+      {payableCents !== null ? (
         <AmountCard
           icon={<Wallet size={22} />}
           label={copy.subscribe.payAmountLabel}
-          value={formatCopy(copy.subscribe.priceLine, { price: formatEGP(amountCents) })}
-          digits={String(Math.round(amountCents / 100))}
+          value={formatCopy(copy.subscribe.priceLine, { price: formatEGP(payableCents) })}
+          digits={String(Math.round(payableCents / 100))}
           copyLabel={copy.subscribe.copyAmount}
           copiedLabel={copy.subscribe.copied}
         />
@@ -1318,13 +1526,13 @@ export function SubscribePanel({
         it always was. Hidden once a rail is picked — the student has answered
         «بالتحويل» by then.
       */}
-      {!railConfirmed && walletBalance !== null && walletBalance > 0 && amountCents !== null ? (
+      {!railConfirmed && walletBalance !== null && walletBalance > 0 && payableCents !== null ? (
         <WalletPayCard
           balanceCents={walletBalance}
-          priceCents={amountCents}
+          priceCents={payableCents}
           paying={submitting}
           onPay={payFromWallet}
-          topupHref={`/wallet?amount=${Math.max(0, amountCents - walletBalance)}&back=${encodeURIComponent(
+          topupHref={`/wallet?amount=${Math.max(0, payableCents - walletBalance)}&back=${encodeURIComponent(
             `/courses/${slug}/subscribe`,
           )}`}
         />
@@ -1467,8 +1675,8 @@ export function SubscribePanel({
     <CheckoutFooter
       error={error}
       total={
-        amountCents !== null ? (
-          <FooterTotal label={copy.subscribe.totalLabel} value={<Money cents={amountCents} />} />
+        payableCents !== null ? (
+          <FooterTotal label={copy.subscribe.totalLabel} value={<Money cents={payableCents} />} />
         ) : undefined
       }
       secondary={
@@ -1501,6 +1709,6 @@ export function SubscribePanel({
         ) : null
       }
     />,
-    summaryCard(amountCents),
+    summaryCard(payableCents, true),
   );
 }

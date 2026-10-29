@@ -158,6 +158,7 @@ function renderStudioBlock(
           stats={props.stats}
           portraitKey={branding.portraitKey}
           portraitDarkKey={branding.portraitDarkKey}
+          portraitMotion={branding.portraitMotion}
           level={level}
         />
       );
