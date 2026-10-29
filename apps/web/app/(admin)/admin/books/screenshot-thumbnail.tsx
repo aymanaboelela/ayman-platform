@@ -45,13 +45,13 @@ export function BookOrderScreenshotThumbnail({ id, alt }: { id: string; alt: str
               aria-modal="true"
               aria-label={alt}
               onClick={() => setOpen(false)}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black p-6"
             >
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label={copy.admin.common.close}
-                className="absolute end-4 top-4 grid size-10 place-items-center rounded-full bg-white/10 text-white transition-colors duration-[160ms] ease-out hover:bg-white/20"
+                className="absolute end-4 top-4 z-10 grid size-10 place-items-center rounded-full bg-accent text-[#1A1206] shadow-lg transition-colors duration-[160ms] ease-out hover:bg-accent/85"
               >
                 <X className="size-5" aria-hidden="true" />
               </button>
