@@ -133,7 +133,7 @@ export class QuizBuilderService {
 
     const target = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
-      select: { courseId: true, quiz: { select: { id: true } } },
+      select: { courseId: true, kind: true, quiz: { select: { id: true } } },
     });
     if (!target) throw new NotFoundException();
     if (target.courseId !== quiz.lesson.courseId) {
@@ -151,7 +151,10 @@ export class QuizBuilderService {
     });
     if (inFlight > 0) throw new BadRequestException({ code: 'attempt_in_progress' });
 
-    await this.prisma.quiz.update({ where: { id: quizId }, data: { lessonId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.quiz.update({ where: { id: quizId }, data: { lessonId } });
+      if (target.kind === 'quiz') await this.carryResultsTx(tx, quizId, lessonId, target.courseId);
+    });
 
     await this.audit.record({
       action: 'quiz:move',
@@ -160,6 +163,63 @@ export class QuizBuilderService {
       outcome: 'success',
       metadata: { fromLessonId: quiz.lessonId, toLessonId: lessonId },
     });
+  }
+
+  /**
+   * Writes every earlier sitting's result onto the quiz's NEW lesson.
+   *
+   * A sitting's result lives in two places: the attempt (which travels with
+   * the quiz) and `lesson_progress` on whatever lesson the quiz sat on at
+   * submit (which does not). A quiz-kind lesson's stop on the path, the
+   * backlog and the plan read the second, so every student who had already
+   * sat a moved quiz found it back in «المتراكم» as «مفتوح ومتسلّمش» — a 100%
+   * sitting of «Ethical Issues with AI» did exactly that after its move.
+   *
+   * Same rule as `recordQuizResultTx`: a pass wins, the completion is the
+   * best, and an existing pass/completion is never taken away. Only onto a
+   * `quiz` lesson — a pass written into a video lecture's row would read as
+   * the lecture being cleared. The old lesson's row is left alone: it is
+   * that lesson's own history.
+   *
+   * Migration `20261030120000_moved_quiz_progress` runs the same statement
+   * over every quiz, for the moves made before this existed.
+   */
+  private async carryResultsTx(
+    tx: TransactionClient,
+    quizId: string,
+    lessonId: string,
+    courseId: string,
+  ): Promise<void> {
+    await tx.$executeRaw`
+      INSERT INTO app.lesson_progress
+        (enrollment_id, lesson_id, completion, state, completed_at, completed_via, updated_at)
+      SELECT e.id, ${lessonId}::uuid, best.completion,
+             (CASE WHEN best.passed THEN 'passed' ELSE 'failed' END)::app.lesson_progress_state,
+             CASE WHEN best.passed THEN best.passed_at END,
+             CASE WHEN best.passed THEN 'auto'::app.completion_source END,
+             now()
+        FROM (
+          SELECT a.user_id,
+                 bool_or(a.passed IS TRUE) AS passed,
+                 LEAST(GREATEST(COALESCE(max(a.scaled_score / NULLIF(a.grade_out_of, 0)), 0), 0), 1) AS completion,
+                 min(a.submitted_at) FILTER (WHERE a.passed IS TRUE) AS passed_at
+            FROM app.quiz_attempts a
+           WHERE a.quiz_id = ${quizId}::uuid AND a.submitted_at IS NOT NULL
+           GROUP BY a.user_id
+        ) best
+        JOIN app.enrollments e ON e.user_id = best.user_id AND e.course_id = ${courseId}::uuid
+      ON CONFLICT (enrollment_id, lesson_id) DO UPDATE SET
+        completion = GREATEST(lesson_progress.completion, EXCLUDED.completion),
+        state = CASE WHEN lesson_progress.state IN ('passed', 'completed') THEN lesson_progress.state
+                     ELSE EXCLUDED.state END,
+        completed_at = CASE WHEN lesson_progress.state IN ('passed', 'completed') THEN lesson_progress.completed_at
+                            ELSE EXCLUDED.completed_at END,
+        completed_via = CASE WHEN lesson_progress.state IN ('passed', 'completed') THEN lesson_progress.completed_via
+                             ELSE EXCLUDED.completed_via END,
+        updated_at = now()
+      WHERE (lesson_progress.state NOT IN ('passed', 'completed') AND lesson_progress.state <> EXCLUDED.state)
+         OR lesson_progress.completion < EXCLUDED.completion
+    `;
   }
 
   /** Existence check ONLY — never mutates. The builder's lesson entry point
