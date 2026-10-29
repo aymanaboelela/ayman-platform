@@ -141,7 +141,6 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
                         if (event.target.value !== 'programming_cs' && form.getValues('landingPreset') === 'neon') {
                           form.setValue('landingPreset', 'board');
                         }
-                        if (event.target.value === 'programming_cs') form.setValue('grades', []);
                       },
                     })}
                   >
@@ -156,7 +155,9 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
                   </Select>
                 )}
               />
-              {values.subject && values.subject !== 'programming_cs' ? (
+              {/* Programming too: a programming teacher may add «تالتة
+                  إعدادي» beside البكالوريا (`lib/code-section.ts`). */}
+              {values.subject ? (
                 <SettingsField
                   name="grades"
                   label={c.grades}

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { tenantName } from '@/lib/tenant';
@@ -10,7 +10,7 @@ import { isFreeCourse } from '@/lib/price';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { JsonLd } from '@/components/seo/json-ld';
 import { PERSON_ID, SITE_URL, WEBSITE_ID, breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
-import { isYearPageIndexable, yearPageOf } from '@/lib/grade-pages';
+import { isYearPageIndexable, legacyGradeSegment, yearPageOf } from '@/lib/grade-pages';
 import { CourseCard } from '@/components/site/course-card';
 import { courseCountLabel, groupBySubject } from '@/lib/course-groups';
 
@@ -128,8 +128,13 @@ export default async function YearPage({
   params: Promise<{ year: string }>;
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const page = yearPageOf((await params).year);
-  if (!page) notFound();
+  const segment = (await params).year;
+  const page = yearPageOf(segment);
+  if (!page) {
+    const moved = legacyGradeSegment(segment);
+    if (moved) permanentRedirect(`/years/${moved}`);
+    notFound();
+  }
   const year = page.segment;
 
   const filter: Filter = (await searchParams).filter === 'free' ? 'free' : 'all';

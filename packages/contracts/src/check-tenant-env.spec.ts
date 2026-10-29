@@ -257,8 +257,8 @@ describe('checkTenantEnv', () => {
       expect(check({ TENANT_SUBJECT: 'arabic', TENANT_GRADES: 'prep1,prpe3' }).errors.join(' ')).toContain('prpe3');
     });
 
-    it('rejects grades on a programming stack', () => {
-      expect(check({ TENANT_GRADES: 'sec1' }).errors.join(' ')).toContain('TENANT_GRADES');
+    it('accepts grades on a programming stack — one that teaches «تالتة إعدادي» too', () => {
+      expect(check({ TENANT_GRADES: 'prep3,bac1,bac2' }).errors).toEqual([]);
     });
 
     it('knows exactly the grades in contracts', () => {

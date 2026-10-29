@@ -201,7 +201,9 @@ function findYearLabel(
 ): string {
   const systems = taxonomy?.systems ?? [];
   const platform = systems.find((system) => system.slug === FIXED_SYSTEM_SLUG);
-  const preferred = TEACHES_CODE
+  // A programming stack with grades is the student's system again: its
+  // «تالتة إعدادي» is not «تالتة بكالوريا» (`lib/code-section.ts`).
+  const preferred = TEACHES_CODE && !ASKS_GRADE
     ? platform
     : (systems.find((system) => system.id === studentSystemId) ?? platform);
   for (const system of preferred ? [preferred, ...systems] : systems) {

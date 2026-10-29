@@ -10,7 +10,8 @@ import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
 import { apiPatch, ApiRequestError } from '@/lib/api';
-import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import { offeredYearOptions } from '@/lib/section-defaults';
+import { CODE_ASKS_GRADE, codeSectionFor } from '@/lib/code-section';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { sectionFieldErrors, subjectSectionFor } from '@/lib/subject-section';
 import { SectionPickers } from '@/components/onboarding/section-pickers';
@@ -149,7 +150,11 @@ export function ProfileForm({
       schoolStream: defaults.schoolStream ?? undefined,
       year: defaults.year ?? undefined,
       ...(TEACHES_CODE
-        ? {}
+        ? // The grade card reads the system (`lib/code-section.ts`); the track
+          // stays out for the reason `system` above gives.
+          CODE_ASKS_GRADE
+          ? { system: defaults.system }
+          : {}
         : { system: defaults.system, trackId: defaults.trackId ?? undefined }),
       fatherPhone: defaults.fatherPhone ?? undefined,
       // Null for every profile saved before these were asked — the cards
@@ -191,6 +196,12 @@ export function ProfileForm({
 
   /** The system and the track, where they are asked — see the wizard's twin. */
   function checkSectionFields(): boolean {
+    if (CODE_ASKS_GRADE) {
+      const message = sectionFieldErrors(getValues(), taxonomy).system;
+      if (message === undefined) return true;
+      setError('system', { type: 'required', message });
+      return false;
+    }
     if (TEACHES_CODE) return true;
     const issues = sectionFieldErrors(getValues(), taxonomy);
     for (const [field, message] of Object.entries(issues)) {
@@ -212,7 +223,7 @@ export function ProfileForm({
       // pair likewise, so a hidden question sends what `whenHidden` says.
       await apiPatch('/api/profile/onboarding', {
         ...values,
-        ...(TEACHES_CODE ? fixedSectionFor(taxonomy, values.year) : subjectSectionFor(taxonomy, values)),
+        ...(TEACHES_CODE ? codeSectionFor(taxonomy, values) : subjectSectionFor(taxonomy, values)),
         ...attendancePayload(values, { attendanceVisible, whenHidden }),
       });
     } catch (error) {
@@ -344,7 +355,7 @@ export function ProfileForm({
       <Group title={c.groupSection}>
         {/* Where the subject is code, the year and a note stating the rest;
             anywhere else the three questions the wizard asked there. */}
-        {TEACHES_CODE ? (
+        {TEACHES_CODE && !CODE_ASKS_GRADE ? (
           <SelectField
             label={copy.onboarding.year}
             placeholder={copy.onboarding.yearPlaceholder}
@@ -364,7 +375,7 @@ export function ProfileForm({
         )}
         {/* «الباقي إحنا عارفينه» states the programming platform's one
             system, track and subject — true only where they are not asked. */}
-        {TEACHES_CODE ? <FixedSectionNote /> : null}
+        {TEACHES_CODE && !CODE_ASKS_GRADE ? <FixedSectionNote /> : null}
         <p className="rounded-lg border border-line bg-surface-2 px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
           {c.keepsProgress}
         </p>

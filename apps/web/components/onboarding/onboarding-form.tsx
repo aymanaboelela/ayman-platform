@@ -24,7 +24,8 @@ import { Card, CardBody } from '@ayman/ui/components/card';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { tenantSentence } from '@/lib/tenant-copy';
-import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import { offeredYearOptions } from '@/lib/section-defaults';
+import { CODE_ASKS_GRADE, codeSectionFor } from '@/lib/code-section';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { sectionFieldErrors, subjectSectionFor } from '@/lib/subject-section';
 import { SectionPickers } from './section-pickers';
@@ -63,9 +64,11 @@ const PARENT_PHONE_NOTE_ID = 'father-phone-why';
  * code, the system, the year and the track on any other — see
  * `lib/subject-section.ts` for why the three come back there.
  */
-const SECTION_FIELDS: ReadonlyArray<keyof Onboarding> = TEACHES_CODE
-  ? ['year']
-  : ['system', 'year', 'trackId'];
+const SECTION_FIELDS: ReadonlyArray<keyof Onboarding> = CODE_ASKS_GRADE
+  ? ['system', 'year']
+  : TEACHES_CODE
+    ? ['year']
+    : ['system', 'year', 'trackId'];
 
 /**
  * Which fields each step owns, so "can I move forward" can be answered by
@@ -272,6 +275,14 @@ export function OnboardingForm({
    * runs exactly the checks it always ran.
    */
   function checkSectionFields(): boolean {
+    // A programming stack with grades asks the grade, which IS the system —
+    // the track is never asked there (`lib/code-section.ts`).
+    if (CODE_ASKS_GRADE) {
+      const message = sectionFieldErrors(getValues(), taxonomy).system;
+      if (message === undefined) return true;
+      setError('system', { type: 'required', message });
+      return false;
+    }
     if (TEACHES_CODE) return true;
     const issues = sectionFieldErrors(getValues(), taxonomy);
     for (const [field, message] of Object.entries(issues)) {
@@ -329,7 +340,7 @@ export function OnboardingForm({
         ...values,
         // On a stack that does not teach code the section is what the student
         // CHOSE, cleaned against the taxonomy — see `subjectSectionFor`.
-        ...(TEACHES_CODE ? fixedSectionFor(taxonomy, values.year) : subjectSectionFor(taxonomy, values)),
+        ...(TEACHES_CODE ? codeSectionFor(taxonomy, values) : subjectSectionFor(taxonomy, values)),
         ...attendancePayload(values, { attendanceVisible, whenHidden: 'online' }),
       });
     } catch (error) {
@@ -591,7 +602,7 @@ export function OnboardingForm({
           <div hidden={stepIndex !== 2} className="space-y-5">
             {/* The year alone where the subject is code; the system, the year
                 and the track anywhere else — `<SectionPickers>`. */}
-            {TEACHES_CODE ? (
+            {TEACHES_CODE && !CODE_ASKS_GRADE ? (
               <SelectField
                 variant="pill"
                 icon={GraduationCap}
