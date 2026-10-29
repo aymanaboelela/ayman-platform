@@ -47,10 +47,12 @@ const ASPECT: Record<MediaKeyShape, number> = {
   cover: COVER_ASPECT,
   round: 1,
   book: 3 / 4,
+  /** «البانرات الترويجية» — the dashboard strip draws every banner at 3:1. */
+  banner: 3,
 };
 
 /** How a picked picture will be shown — which is what it is cropped to. */
-export type MediaKeyShape = 'cover' | 'round' | 'book';
+export type MediaKeyShape = 'cover' | 'round' | 'book' | 'banner';
 
 /** The closed set of upload failures, in Arabic an instructor can act on. */
 function uploadReason(reason: UploadFailure): string {
@@ -245,6 +247,7 @@ export function MediaKeyField({
             'media-key__preview',
             shape === 'round' && 'media-key__preview--round',
             shape === 'book' && 'media-key__preview--book',
+            shape === 'banner' && 'media-key__preview--banner',
           )}
         >
           {storageKey ? (
@@ -279,7 +282,9 @@ export function MediaKeyField({
           </Button>
           {canUseDesigns ? (
             <DesignPicker
-              shape={shape}
+              /* A banner is drawn by the designer at the size it is shown, so
+                 it is published as drawn — the studio has no 3:1 frame. */
+              shape={shape === 'banner' ? 'original' : shape}
               disabled={pending}
               onPicked={(asset) => {
                 setReason(null);

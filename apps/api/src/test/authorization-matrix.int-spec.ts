@@ -42,6 +42,7 @@ import { TenantEntitlementsModule } from '../modules/tenant-entitlements/tenant-
 import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
+import { PromoBannersModule } from '../modules/promo-banners/promo-banners.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
@@ -366,6 +367,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         RolesModule,
         NavigationModule,
         HomeBlocksModule,
+        // «البانرات الترويجية» — Prisma and `AuditService` only, both already here.
+        PromoBannersModule,
         // لوحة الشرف بالإيد. بيجرّ `NotificationsModule` معاه (الصف بيبعت
         // إشعار للطالب)، وهو موجود هنا أصلاً من `OutreachModule` تحت.
         AdminHonorBoardModule,
@@ -2118,6 +2121,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'home-blocks order: anonymous', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'anonymous', status: 401 },
     { label: 'home-blocks order: student', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'student', status: 403 },
 
+    // ── «البانرات الترويجية» — one public read, admin-only on `home:*` ──
+    // Behind `promoBanners`, open here because the fixture runs as Ayman's stack.
+    { label: 'promo-banners public: anonymous', method: 'get', path: () => '/api/promo-banners', actor: 'anonymous', status: 200 },
+    { label: 'promo-banners admin read: anonymous', method: 'get', path: () => '/api/admin/promo-banners', actor: 'anonymous', status: 401 },
+    { label: 'promo-banners admin read: student', method: 'get', path: () => '/api/admin/promo-banners', actor: 'student', status: 403 },
+    { label: 'promo-banners admin read: admin', method: 'get', path: () => '/api/admin/promo-banners', actor: 'admin', status: 200 },
+    { label: 'promo-banners create: anonymous', method: 'post', path: () => '/api/admin/promo-banners', actor: 'anonymous', status: 401 },
+    { label: 'promo-banners create: student', method: 'post', path: () => '/api/admin/promo-banners', actor: 'student', status: 403 },
+    { label: 'promo-banners patch: anonymous', method: 'patch', path: () => `/api/admin/promo-banners/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'promo-banners patch: student', method: 'patch', path: () => `/api/admin/promo-banners/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'promo-banners delete: anonymous', method: 'delete', path: () => `/api/admin/promo-banners/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'promo-banners delete: student', method: 'delete', path: () => `/api/admin/promo-banners/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'promo-banners order: anonymous', method: 'post', path: () => '/api/admin/promo-banners/order', actor: 'anonymous', status: 401 },
+    { label: 'promo-banners order: student', method: 'post', path: () => '/api/admin/promo-banners/order', actor: 'student', status: 403 },
+
     /*
      * ── لوحة الشرف بالإيد ──────────────────────────────────────────────
      *
@@ -3444,6 +3462,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/entitlements',
           'GET /api/navigation',
           'GET /api/home-blocks',
+          // «البانرات الترويجية». Read only, shared by every student so the web
+          // can cache it once; inactive and ended rows are filtered in SQL.
+          'GET /api/promo-banners',
           // «نيوز». Reads only, and the service filters `status: 'published'`
           // in SQL, so a draft is unreachable rather than merely unlinked.
           'GET /api/news',

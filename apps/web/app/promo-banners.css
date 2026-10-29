@@ -1,0 +1,216 @@
+/* ===========================================================================
+   .promo-strip — «البانرات الترويجية» on the student dashboard.
+
+   ## Why a file of its own
+
+   The rule `exam-band.css` and `month-news.css` state at their heads:
+   `study.css` is the SHARED vocabulary of the signed-in surface, and a class
+   gets in there by being used on more than one page. This is one component on
+   one screen. Loaded from `(app)/layout.tsx` beside them, because the layout
+   is the only road a stylesheet has onto the page.
+
+   ## The frame is the colour, the picture is the content
+
+   The instructor's picture is drawn edge to edge and never tinted — it is
+   artwork somebody designed, and a wash over it would change their colours.
+   What makes the strip read as part of THIS dashboard is the frame around it:
+   the same ember ramp `.dash-hero` is painted in, as a 3px gradient ring, with
+   a soft ember glow under it. It reads as «something from the platform», not
+   as an advert pasted onto the page.
+
+   ## Amber only where it is pressed
+
+   The current dot is `--a-9`, because a dot is a button. Nothing else here is
+   amber — `study.css`'s «الأمبر هو اللي بيتدوس».
+
+   ## RTL
+
+   Logical properties only. The arrows are placed with `inset-inline-*`, so
+   «اللي قبله» is on the right in Arabic without a `[dir]` branch.
+   =========================================================================== */
+
+.promo-strip {
+  margin-block-end: var(--s-24);
+  display: grid;
+  /* `minmax(0, …)`: a grid track's default minimum is the content's
+     min-content width, and a row of 1500px pictures would push the whole
+     dashboard sideways on a phone. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-8);
+}
+
+.promo-strip__frame {
+  position: relative;
+  border-radius: var(--r-lg);
+  padding: 3px;
+  background: linear-gradient(
+    120deg,
+    var(--e-300) 0%,
+    var(--e-stage) 45%,
+    var(--a-9) 100%
+  );
+  box-shadow: 0 10px 28px -14px color-mix(in oklch, var(--e-stage-deep), transparent 30%);
+}
+
+.promo-strip__track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: inline mandatory;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  border-radius: calc(var(--r-lg) - 3px);
+  background: var(--n-2);
+}
+
+.promo-strip__track::-webkit-scrollbar {
+  display: none;
+}
+
+.promo-strip__slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* 3:1 — the frame the admin's crop dialog cuts to, so nothing the
+   instructor approved is trimmed here. */
+.promo-strip__face {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 1;
+  overflow: hidden;
+  color: var(--ink-fg);
+  text-decoration: none;
+}
+
+.promo-strip__img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  user-select: none;
+  transition: transform var(--d-popover) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .promo-strip__face--link:hover .promo-strip__img {
+    transform: scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promo-strip__img {
+    transition: none;
+  }
+}
+
+.promo-strip__face--link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: calc(-1 * var(--focus-ring-width) - 2px);
+}
+
+/* The title, on a scrim that only darkens the bottom third — enough for white
+   text to read over a bright photo, without dimming the picture itself. */
+.promo-strip__caption {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding: var(--s-24) var(--s-16) var(--s-12);
+  background: linear-gradient(to top, rgb(0 0 0 / 0.62), transparent);
+  font-size: var(--fs-text-base);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-fg);
+  text-wrap: balance;
+}
+
+@media (min-width: 48rem) {
+  .promo-strip__caption {
+    padding: var(--s-32) var(--s-24) var(--s-16);
+    font-size: var(--fs-text-lg);
+  }
+}
+
+/* Round glass buttons on the two edges. Hidden on a phone, where the row is
+   swiped and two discs would cover a third of a 120px-tall picture. */
+.promo-strip__arrow {
+  position: absolute;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  display: none;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-full);
+  border: 0;
+  background: rgb(255 255 255 / 0.86);
+  /* White glass in BOTH themes, so the ink is the fixed dark one —
+     `--n-12` flips to near-white in dark mode. */
+  color: var(--on-light-ink);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.promo-strip__arrow:hover {
+  background: rgb(255 255 255 / 1);
+}
+
+.promo-strip__arrow:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: 2px;
+}
+
+.promo-strip__arrow--prev {
+  inset-inline-start: var(--s-12);
+}
+
+.promo-strip__arrow--next {
+  inset-inline-end: var(--s-12);
+}
+
+@media (min-width: 48rem) {
+  .promo-strip__arrow {
+    display: grid;
+  }
+}
+
+.promo-strip__dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--s-8);
+}
+
+/* A tap target taller than the dot it draws: the visible pill is the
+   `::before`, the button around it is 24px for a thumb. */
+.promo-strip__dot {
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.promo-strip__dot::before {
+  content: '';
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--n-9);
+  transition:
+    inline-size var(--d-popover) var(--ease-out),
+    background var(--d-popover) var(--ease-out);
+}
+
+.promo-strip__dot[data-active]::before {
+  inline-size: 1.25rem;
+  background: var(--a-9);
+}
+
+.promo-strip__dot:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: -2px;
+  border-radius: var(--r-full);
+}
