@@ -391,6 +391,32 @@ export const engagementCopy = {
       week: 'آخر ٧ أيام',
     },
     errors: { failed: 'حصلت مشكلة. محاولة تانية؟' },
+    /** The sound panel. The choice is kept per browser, so it is never asked twice. */
+    sound: {
+      title: 'الصوت',
+      alarm: 'صوت آخر الجلسة',
+      alarmHint: 'بيرن لما الوقت يخلص — حتى لو التابة في الخلفية.',
+      ambient: 'صوت الأوضة',
+      ambientHint: 'خلفية هادية طول الجلسة، بتعزل الدوشة اللي حوالين المكتب.',
+      volume: 'مستوى الصوت',
+      mute: 'كتم صوت الأوضة',
+      unmute: 'تشغيل صوت الأوضة',
+      alarms: {
+        bell: 'جرس',
+        crystal: 'كريستال',
+        marimba: 'ماريمبا',
+        digital: 'منبّه',
+        calm: 'هادي',
+        none: 'من غير صوت',
+      },
+      ambients: {
+        none: 'سكوت',
+        rain: 'مطر',
+        waves: 'موج',
+        brown: 'هوا',
+        clock: 'ساعة',
+      },
+    },
   },
 
   league: {

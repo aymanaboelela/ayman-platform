@@ -424,6 +424,13 @@ export const FocusSessionSchema = z.object({
   startedAt: z.string(),
   endsAt: z.string(),
   minutes: z.number().int(),
+  /**
+   * Time left by the SERVER's clock. The countdown runs from this, not from
+   * `endsAt`: a phone set an hour off (a manual time zone is common) read
+   * `endsAt` as already past and closed every sitting the second it opened.
+   * Optional only for the minute a deploy has the new web before the new API.
+   */
+  remainingMs: z.number().int().min(0).optional(),
 });
 export type FocusSession = z.infer<typeof FocusSessionSchema>;
 
