@@ -11,7 +11,7 @@ import type {
 import { STUDENT_ANALYTICS_SORTS } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
-import { bucketsFrom, cairoDay, clampFraction, dayKeys, gradeBandsFrom, rate } from './analytics-shared';
+import { bucketsFrom, cairoDay, clampFraction, gradeBandsFrom, rate, trailingDayKeys } from './analytics-shared';
 
 export interface StudentAnalyticsQuery {
   page: number;
@@ -586,7 +586,7 @@ export class StudentAnalyticsService {
     const watchByDay = new Map(watchRows.map((row) => [row.day, row.seconds]));
     const attemptByDay = new Map(attemptRows.map((row) => [row.day, row.attempts]));
 
-    return dayKeys(since, new Date()).map((date) => {
+    return trailingDayKeys(new Date(), 90).map((date) => {
       const seconds = watchByDay.get(date) ?? 0;
       const attempts = attemptByDay.get(date) ?? 0;
       return {

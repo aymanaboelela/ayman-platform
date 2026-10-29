@@ -258,6 +258,18 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like everything new: on for him, off on any other stack
+     * until the owner opens it. Nothing in it carries his identity — the
+     * pictures and links are whatever the teacher uploads — so an opened
+     * stack works at once.
+     */
+    key: 'promoBanners',
+    nameAr: 'البانرات الترويجية',
+    descriptionAr: 'صور ترويجية فوق لوحة الطالب — عرض، كورس جديد، كتاب نزل — بلينك ومدة وسنة دراسية.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first", like everything new: on for him, off on every other stack
      * until the owner opens it. It changes what a student PAYS, so a teacher
      * must decide to offer discounts — and nothing in it carries his identity,

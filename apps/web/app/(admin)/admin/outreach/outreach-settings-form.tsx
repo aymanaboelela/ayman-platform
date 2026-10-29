@@ -8,12 +8,15 @@ import { toast } from 'sonner';
 import type { z } from 'zod';
 import {
   OutreachSettingsSchema,
+  QUIZ_RESULT_RECIPIENTS,
   type OutreachSettings,
+  type QuizResultRecipient,
 } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminAutoOutreach as auto } from '@ayman/contracts/copy/admin-auto-outreach';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
+import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Switch } from '@ayman/ui/components/switch';
 import { cn } from '@ayman/ui/lib/cn';
 import { SettingsField, issuesFromErrors } from '../settings/settings-field';
@@ -68,6 +71,21 @@ const AUTO_TOGGLES: readonly { name: ToggleName; label: string; hint: string }[]
   { name: 'checkoutRecovery', label: auto.checkoutRecovery, hint: auto.checkoutRecoveryHint },
   { name: 'signupNudge', label: auto.signupNudge, hint: auto.signupNudgeHint },
 ];
+
+/**
+ * «نتيجة الامتحان تتبعت لمين». Inside the WhatsApp block, because the
+ * guardian leg goes out from the linked device: on a stack without
+ * `outreach.whatsapp` the API reads every value as `student`, and a choice
+ * drawn there would be a control that does nothing.
+ */
+const RESULT_RECIPIENT_LABEL: Record<QuizResultRecipient, { name: string; hint: string }> = {
+  student: { name: auto.quizResultToStudent, hint: auto.quizResultToStudentHint },
+  guardian: { name: auto.quizResultToGuardian, hint: auto.quizResultToGuardianHint },
+  both: { name: auto.quizResultToBoth, hint: auto.quizResultToBothHint },
+};
+
+const CHOICE_CARD =
+  'flex items-start gap-3 rounded-[var(--r-md)] border border-line px-3 py-2.5 has-[[data-state=checked]]:border-accent has-[[data-state=checked]]:bg-accent/10';
 
 const AUTO_NUMBERS: readonly { name: NumberName; label: string; hint: string }[] = [
   { name: 'checkoutRecoveryAfterHours', label: auto.checkoutRecoveryAfterHours, hint: auto.checkoutRecoveryAfterHoursHint },
@@ -201,6 +219,40 @@ export function OutreachSettingsForm({
           <legend className="px-1 text-[length:var(--fs-text-sm)] font-semibold text-accent-text">
             {auto.settingsHeading}
           </legend>
+
+          <div role="group" aria-labelledby="outreach-quizResultTo-label" className="flex flex-col gap-2">
+            <span
+              id="outreach-quizResultTo-label"
+              className="block text-[length:var(--fs-text-sm)] font-medium text-fg"
+            >
+              {auto.quizResultTo}
+            </span>
+            <span className="block text-[length:var(--fs-text-xs)] text-fg-muted">
+              {auto.quizResultToHint}
+            </span>
+            <RadioGroup
+              aria-labelledby="outreach-quizResultTo-label"
+              value={form.watch('quizResultTo') ?? 'student'}
+              onValueChange={(value) =>
+                form.setValue('quizResultTo', value as QuizResultRecipient, { shouldDirty: true })
+              }
+              className="grid gap-2 sm:grid-cols-3"
+            >
+              {QUIZ_RESULT_RECIPIENTS.map((value) => (
+                <label key={value} className={CHOICE_CARD}>
+                  <RadioGroupItem value={value} className="mt-0.5" />
+                  <span className="min-w-0">
+                    <span className="block text-[length:var(--fs-text-sm)] text-fg">
+                      {RESULT_RECIPIENT_LABEL[value].name}
+                    </span>
+                    <span className="mt-0.5 block text-[length:var(--fs-text-xs)] text-fg-muted">
+                      {RESULT_RECIPIENT_LABEL[value].hint}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </RadioGroup>
+          </div>
           <ul className="flex flex-col divide-y divide-line-subtle">
             {AUTO_TOGGLES.map((toggle) => (
               <li key={toggle.name} className="flex items-start justify-between gap-4 py-3.5 first:pt-0">
