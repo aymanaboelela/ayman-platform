@@ -1,4 +1,5 @@
 import 'server-only';
+import { connection } from 'next/server';
 import { summarise, type OperationGroup, type StorageSample, type UsagePeriod } from './video-usage-math';
 
 /**
@@ -143,6 +144,9 @@ export async function tenantVideoUsage(
  * empty bucket, and the caller's own total is the better guess then.
  */
 export async function ownBucketBytes(tenantKey: string): Promise<number | null> {
+  // Request time, not build time: `tenantVideoUsage` reads the clock, and a
+  // prerender that does fails the build («unstable value `new Date()`»).
+  await connection();
   const result = await tenantVideoUsage([{ key: tenantKey, name: tenantKey }]);
   const row = result.ok ? result.rows[0] : undefined;
   return row === undefined || row.objectCount === 0 ? null : row.storedBytes;
