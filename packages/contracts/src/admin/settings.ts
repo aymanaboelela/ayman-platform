@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { BookShippingRatesSchema } from '@ayman/contracts/books';
+import { SocialCountsSchema } from '@ayman/contracts/admin/social-counts';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a
@@ -710,6 +711,9 @@ export const SiteSettingsSchema = z
     outreach: OutreachSettingsSchema.prefault({}),
     store: StoreSettingsSchema.prefault({}),
     about: AboutSettingsSchema.prefault({}),
+    /** «عدد السوشيال ميديا» — see `admin/social-counts.ts`, and why it is
+     *  stored here but is NOT one of `SETTINGS_SECTIONS`. */
+    socialCounts: SocialCountsSchema.prefault({}),
   })
   .strict();
 

@@ -34,6 +34,7 @@ import { yearPages } from '@/lib/grade-pages';
 import { CourseArt } from '@/components/course-art';
 import { StreamBadge } from '@/components/stream-badge';
 import { initials } from '@/components/app/user-avatar';
+import { SocialCounts } from '@/components/site/social-counts';
 import { HeroOrnament, KurrasaCheck, RuqaaArch, RuqaaDivider } from './kit-ornaments';
 import { kitCopy } from './kit-copy';
 import type { KitPreset } from './kit-preset';
@@ -487,6 +488,8 @@ export async function KitInstructor({ preset, level }: { preset: KitPreset; leve
           ) : (
             <p className="pk-id__starting">{kitCopy.instructor.starting}</p>
           )}
+          {/* Nothing at all unless the feature is on and a count was typed. */}
+          <SocialCounts block="pk-social" />
         </div>
       </div>
     </section>

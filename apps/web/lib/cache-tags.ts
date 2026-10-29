@@ -86,7 +86,7 @@ export const TAG_BOOKS = tag('books');
  * rather than a bare `string` so `tags.settings('brading')` is a compile error
  * rather than a cache entry nothing ever invalidates.
  */
-export type SettingsKey = 'branding' | 'seo' | 'contact' | 'features';
+export type SettingsKey = 'branding' | 'seo' | 'contact' | 'features' | 'socialCounts';
 
 /**
  * Plan 6's tag vocabulary, layered on `tag()` above. One object, imported by

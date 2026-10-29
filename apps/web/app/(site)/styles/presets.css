@@ -5589,6 +5589,55 @@ body:has(main[data-preset='board']) .site-nav--pinned .site-btn--outline {
   line-height: 1.8;
 }
 
+/* «عدد السوشيال ميديا» — `<SocialCounts block="pk-social">` under the
+   teacher's figures. Ink comes from the band (`currentColor`), so it reads on
+   every kit surface; only the mark takes the brand's colour, and the two
+   night pages take its dark-surface variant (`SocialMark.inkHex`). */
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--pk-radius);
+  border: 1px solid color-mix(in oklab, currentColor, transparent 78%);
+  color: inherit;
+  text-decoration: none;
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) a.pk-social__link:hover,
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) a.pk-social__link:focus-visible {
+  border-color: var(--brand);
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__icon {
+  display: inline-flex;
+  color: var(--brand);
+}
+
+:is([data-preset='sabboora'], [data-preset='nujoom']) .pk-social__icon {
+  color: var(--brand-ink, var(--brand));
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__n {
+  font-family: var(--pk-display);
+  font-weight: 700;
+}
+
+:is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-social__l {
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
 :is([data-preset='ruqaa'], [data-preset='kurrasa'], [data-preset='taif'], [data-preset='sabboora'], [data-preset='rihla'], [data-preset='nujoom']) .pk-about {
   display: grid;
   gap: 2.5rem;

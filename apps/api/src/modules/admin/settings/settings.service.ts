@@ -12,6 +12,7 @@ import {
   type SettingsSection,
   type SiteSettings,
 } from '@ayman/contracts/admin/settings';
+import { SocialCountsInputSchema, type SocialCounts } from '@ayman/contracts/admin/social-counts';
 import { currentActor } from '../../../audit/audit-context';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -146,25 +147,7 @@ export class SettingsService {
     }
     const parsed = result.data;
 
-    const next = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.siteSetting.findUniqueOrThrow({
-        where: { id: SITE_SETTINGS_ID },
-        select: { data: true },
-      });
-
-      const current = SiteSettingsSchema.parse(row.data ?? {});
-      const merged = SiteSettingsSchema.parse({ ...current, [section]: parsed });
-
-      await tx.siteSetting.update({
-        where: { id: SITE_SETTINGS_ID },
-        // `updated_by` is a convenience for the settings screen ("last edited
-        // by"). It is NOT the audit trail — that is the hash-chained log, and
-        // a column an admin's own UPDATE could overwrite is not evidence.
-        data: { data: merged as never, updatedBy: currentActor().actorUserId },
-      });
-
-      return merged;
-    });
+    const next = await this.persist(section, parsed);
 
     // Issued after the transaction commits, not inside it: `AuditService.record`
     // opens its own transaction to take the advisory lock, and nesting would
@@ -180,5 +163,68 @@ export class SettingsService {
     });
 
     return next;
+  }
+
+  /** «عدد السوشيال ميديا» for the landing page. Public; the route carries the gate. */
+  async readSocialCounts(): Promise<SocialCounts> {
+    return (await this.read()).socialCounts;
+  }
+
+  /**
+   * Same write path as `updateSection` — validated, merged in one
+   * transaction, audited as `settings:update` — but on its own route, because the
+   * generic one has no entitlement gate (see `SocialCountsSchema`).
+   *
+   * `updatedAt` is stamped HERE, on every save, so «آخر تحديث» on the admin
+   * card is when the numbers were last confirmed rather than something typed.
+   */
+  async updateSocialCounts(payload: unknown): Promise<SocialCounts> {
+    const result = SocialCountsInputSchema.safeParse(payload);
+    if (!result.success) {
+      throw new BadRequestException({
+        message: 'invalid social counts payload',
+        issues: result.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+      });
+    }
+    const value: SocialCounts = { ...result.data, updatedAt: new Date().toISOString() };
+
+    const next = await this.persist('socialCounts', value);
+
+    await this.audit.record({
+      action: 'settings:update',
+      resourceType: AUDIT_RESOURCES.siteSettings,
+      resourceId: String(SITE_SETTINGS_ID),
+      outcome: 'success',
+      metadata: { section: 'socialCounts', value },
+    });
+
+    return next.socialCounts;
+  }
+
+  /**
+   * Replace one top-level key of the singleton and leave the rest untouched.
+   * Callers validate first; this re-parses the whole blob so a stored row can
+   * never hold a shape `read()` would refuse.
+   */
+  private async persist(key: keyof SiteSettings, value: unknown): Promise<SiteSettings> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.siteSetting.findUniqueOrThrow({
+        where: { id: SITE_SETTINGS_ID },
+        select: { data: true },
+      });
+
+      const current = SiteSettingsSchema.parse(row.data ?? {});
+      const merged = SiteSettingsSchema.parse({ ...current, [key]: value });
+
+      await tx.siteSetting.update({
+        where: { id: SITE_SETTINGS_ID },
+        // `updated_by` is a convenience for the settings screen ("last edited
+        // by"). It is NOT the audit trail — that is the hash-chained log, and
+        // a column an admin's own UPDATE could overwrite is not evidence.
+        data: { data: merged as never, updatedBy: currentActor().actorUserId },
+      });
+
+      return merged;
+    });
   }
 }

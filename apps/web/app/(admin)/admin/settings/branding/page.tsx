@@ -10,6 +10,11 @@ import { BrandingForm } from '../branding-form';
 import { SeoForm } from '../seo-form';
 import { ContactForm } from '../contact-form';
 import { ShippingForm } from '../shipping-form';
+import { SocialCountsForm } from '../social-counts-form';
+import { SOCIAL_COUNT_NETWORKS, type SocialCountNetwork } from '@ayman/contracts/admin/social-counts';
+import { socialCountsCopy } from '@ayman/contracts/copy/social-counts';
+import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
+import { formatArticleDate } from '@/lib/format';
 import { builtInBrandImages, offeredBrandImages } from '../brand-image-defaults';
 
 export const metadata = { title: copy.admin.settings.title };
@@ -49,7 +54,21 @@ export default async function SettingsPage() {
     { id: 'seo', label: copy.admin.settings.navSeo },
     { id: 'contact', label: copy.admin.settings.navContact },
     ...(features.books ? [{ id: 'shipping', label: copy.admin.settings.navShipping }] : []),
+    ...(features.socialCounts ? [{ id: 'social-counts', label: socialCountsCopy.admin.nav }] : []),
   ];
+
+  /*
+   * Which counts the landing page can link — read through the SAME fallback
+   * `loadSocialCountItems` uses, so «مفيش لينك» is said exactly when the
+   * figure will really render without one.
+   */
+  const { youtube, facebook, instagram, tiktok, updatedAt } = settings.socialCounts;
+  const linked = Object.fromEntries(
+    SOCIAL_COUNT_NETWORKS.map((network) => [
+      network,
+      Boolean(settings.contact[network] ?? TENANT_CONTACT_FALLBACK[network]),
+    ]),
+  ) as Record<SocialCountNetwork, boolean>;
 
   return (
     <>
@@ -108,6 +127,23 @@ export default async function SettingsPage() {
               </CardHeader>
               <CardBody>
                 <ShippingForm defaultValues={settings.store} />
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {/* «عدد السوشيال ميديا» — behind its entitlement, like the API route
+              it saves to; a stack without it has nothing here to fill in. */}
+          {features.socialCounts ? (
+            <Card id="social-counts" className="scroll-mt-24">
+              <CardHeader>
+                <CardTitle>{socialCountsCopy.admin.title}</CardTitle>
+              </CardHeader>
+              <CardBody>
+                <SocialCountsForm
+                  defaultValues={{ youtube, facebook, instagram, tiktok }}
+                  lastUpdated={updatedAt ? formatArticleDate(updatedAt) : null}
+                  linked={linked}
+                />
               </CardBody>
             </Card>
           ) : null}

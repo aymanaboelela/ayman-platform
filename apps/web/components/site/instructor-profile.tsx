@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { MediaSlot } from '@/components/site/media-slot';
+import { SocialCounts } from '@/components/site/social-counts';
 import { ProfileCourses } from '@/components/site/instructor-profile-courses';
 import { DEMO_COURSES } from '@/lib/demo-courses';
 import { IS_AYMAN, tenantName } from '@/lib/tenant';
@@ -48,9 +49,16 @@ const INSTRUCTOR_NAME = tenantName(copy.site.instructor);
  *
  * ## What it is NOT
  *
- * There are no posts, followers or following, because there is no social layer
- * on this platform and putting the words there would promise one. The row keeps
- * the borrowed layout and fills it with what an education platform actually has.
+ * There are no posts or following, because there is no social layer ON this
+ * platform and putting the words there would promise one. The row keeps the
+ * borrowed layout and fills it with what an education platform actually has.
+ *
+ * Followers are the one exception, and they are not this platform's: the
+ * instructor's audience on YouTube, Facebook, Instagram and TikTok, typed in by
+ * the admin («عدد السوشيال ميديا», `<SocialCounts>`), each figure linking to
+ * the profile it counts. That row renders nothing at all unless the
+ * `socialCounts` feature is on AND a number has been entered, so a card with
+ * neither is byte-for-byte the card this was before.
  *
  * ## It renders on an empty catalogue, and that is deliberate
  *
@@ -128,6 +136,8 @@ export async function InstructorProfile() {
               <dd className="profile__stat-l">{c.profileHoursLabel}</dd>
             </div>
           </dl>
+
+          <SocialCounts block="profile-social" />
 
           <div className="profile__actions">
             <Link className="site-btn site-btn--solid profile__action" href="/courses">

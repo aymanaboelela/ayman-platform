@@ -1933,6 +1933,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'settings admin read: admin', method: 'get', path: () => '/api/admin/settings', actor: 'admin', status: 200 },
     { label: 'settings admin write: anonymous', method: 'patch', path: () => '/api/admin/settings/contact', actor: 'anonymous', status: 401 },
     { label: 'settings admin write: student', method: 'patch', path: () => '/api/admin/settings/contact', actor: 'student', status: 403 },
+    // «عدد السوشيال ميديا» — its own routes behind `@RequireFeature('socialCounts')`
+    // (open on this suite's stack). The read is public: the landing page draws it.
+    { label: 'social counts read: anonymous', method: 'get', path: () => '/api/settings/social-counts', actor: 'anonymous', status: 200 },
+    { label: 'social counts write: anonymous', method: 'patch', path: () => '/api/admin/social-counts', actor: 'anonymous', status: 401 },
+    { label: 'social counts write: student', method: 'patch', path: () => '/api/admin/social-counts', actor: 'student', status: 403 },
 
     // ── Admin Profile — self-service admin profile & credentials ──
     { label: 'admin profile: anonymous', method: 'get', path: () => '/api/admin/profile', actor: 'anonymous', status: 401 },
@@ -3432,6 +3437,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/catalog/honor-board',
           'GET /api/settings/branding',
           'GET /api/settings/public',
+          // «عدد السوشيال ميديا»: numbers the admin chose to publish on the
+          // landing page, and nothing else. 404 where the feature is off.
+          'GET /api/settings/social-counts',
           'GET /api/flags',
           /*
            * صلاحيات الستاك. عام لنفس سبب `GET /api/flags` فوقه: اللي بيقراه
