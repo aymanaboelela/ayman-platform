@@ -210,4 +210,56 @@ describe('SettingsService', () => {
     expect(prisma.mediaAsset.findMany).not.toHaveBeenCalled();
     expect(branding.faviconKey).toBeNull();
   });
+
+  describe('social counts', () => {
+    it('reads as empty on a row that never had them', async () => {
+      const { service } = makeService();
+      await expect(service.readSocialCounts()).resolves.toEqual({
+        youtube: null,
+        facebook: null,
+        instagram: null,
+        tiktok: null,
+        updatedAt: null,
+      });
+    });
+
+    it('stores the counts, stamps «last updated», and leaves the other sections alone', async () => {
+      const { service, stored, audit } = makeService();
+      await service.updateSection('contact', { youtube: 'https://www.youtube.com/@example' });
+
+      const saved = await service.updateSocialCounts({ youtube: 120_000, tiktok: 40_000 });
+
+      expect(saved).toMatchObject({ youtube: 120_000, tiktok: 40_000, facebook: null });
+      expect(saved.updatedAt).not.toBeNull();
+      expect(stored.data).toMatchObject({
+        contact: { youtube: 'https://www.youtube.com/@example' },
+        socialCounts: { youtube: 120_000, tiktok: 40_000 },
+      });
+      expect(audit.record).toHaveBeenLastCalledWith(
+        expect.objectContaining({ action: 'settings:update', metadata: expect.objectContaining({ section: 'socialCounts' }) }),
+      );
+    });
+
+    it('survives a later save of another section', async () => {
+      const { service } = makeService();
+      await service.updateSocialCounts({ facebook: 28_000 });
+      await service.updateSection('seo', { titleAr: 'عنوان' });
+      await expect(service.readSocialCounts()).resolves.toMatchObject({ facebook: 28_000 });
+    });
+
+    it('rejects a client-sent «last updated» and a negative count with a 400', async () => {
+      const { service, stored } = makeService();
+      await expect(service.updateSocialCounts({ updatedAt: '2020-01-01T00:00:00.000Z' })).rejects.toMatchObject({ status: 400 });
+      await expect(service.updateSocialCounts({ youtube: -5 })).rejects.toMatchObject({ status: 400 });
+      expect(stored.data).toEqual({});
+    });
+
+    // The public settings payload is an explicit projection; the counts have
+    // their own gated route and must not ride along on an ungated one.
+    it('stays off the public settings payload', async () => {
+      const { service } = makeService();
+      await service.updateSocialCounts({ youtube: 1 });
+      expect(Object.keys(await service.readPublic())).toEqual(['seo', 'contact', 'about']);
+    });
+  });
 });
