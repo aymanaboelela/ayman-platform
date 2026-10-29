@@ -128,6 +128,11 @@ export const AUDIT_ACTIONS = [
   'home-block:reorder',
   'home-block:publish',
   'home-block:unpublish',
+  /* «البانرات الترويجية» on the student dashboard. */
+  'promo-banner:create',
+  'promo-banner:update',
+  'promo-banner:delete',
+  'promo-banner:reorder',
   'media:upload',
   'media:archive',
   'media:restore',

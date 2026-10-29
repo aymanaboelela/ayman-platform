@@ -25,6 +25,7 @@ import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookCatalogForStudent } from '@/lib/books';
 import { getSession } from '@/lib/session';
+import { bannersFor, getPromoBanners } from '@/lib/promo-banners';
 import { canOpenDashboard, landingForStaff } from '@/lib/dashboard-access';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
@@ -42,6 +43,7 @@ import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { NextUpBlock } from '@/components/dashboard/next-up-block';
+import { PromoBannerStrip } from '@/components/dashboard/promo-banner-strip';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { HonorBoardCard } from '@/components/dashboard/honor-board-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
@@ -156,6 +158,7 @@ export default async function DashboardPage() {
     myBookOrders,
     studentExams,
     features,
+    promoBanners,
   ] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
@@ -272,6 +275,13 @@ export default async function DashboardPage() {
     /* مش طلب تامن: `'use cache'` على تاج واحد، ونص الحاجات اللي فوق
        بتقراها جوّاها أصلًا. الكلام ده كله في `lib/entitlements.ts`. */
     getEntitlements(),
+    /*
+     * «البانرات الترويجية». Not a per-view request either: `'use cache'` on
+     * one tag, shared by every student, and it checks the entitlement itself
+     * before asking (a stack without the feature never calls the route). It
+     * fails soft to `[]`, which renders nothing — see `lib/promo-banners.ts`.
+     */
+    getPromoBanners(),
   ]);
 
   /*
@@ -485,6 +495,30 @@ export default async function DashboardPage() {
       */}
       {features.honorBoard && dashboard.honorBoard ? (
         <HonorBoardCard standing={dashboard.honorBoard} />
+      ) : null}
+
+      {/*
+        «البانرات الترويجية» — the instructor's own pictures, full width, last
+        thing above the two columns.
+
+        Below everything addressed to THIS student (the exam, the open month,
+        «ناقصك كده وخلاص», the instructor's message, the honour board): those
+        are about their own work and outrank an offer. Above the columns,
+        because a banner is the instructor talking to everyone — it belongs to
+        neither the student's work in the main column nor the side matter.
+
+        Not to be confused with the «site banner» `DashboardHero`'s note
+        mentions: that is the `<header>` LANDMARK (role=banner) the shell owns,
+        a matter of document semantics. This is a `<section>` with its own
+        accessible name, so the two can never collide.
+
+        Gated twice and both are needed: `features` hides it on a stack where
+        the owner switched the feature off, and `bannersFor` keeps only what is
+        in its dated window today and aimed at this student's year. Nothing
+        renders at all when that leaves nothing.
+      */}
+      {features.promoBanners ? (
+        <PromoBannerStrip banners={bannersFor(promoBanners, me.profile?.year ?? null)} />
       ) : null}
 
       {/*

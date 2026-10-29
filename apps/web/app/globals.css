@@ -1839,6 +1839,14 @@ html[data-player-fullscreen] .route-fade {
   aspect-ratio: 3 / 4;
 }
 
+/* «البانرات الترويجية» — 3:1, the frame the dashboard strip draws. Full
+   width of the form: at 18rem a 3:1 strip is 6rem tall, too thin to judge a
+   line of text printed on the picture. */
+.media-key__preview--banner {
+  inline-size: 100%;
+  aspect-ratio: 3 / 1;
+}
+
 .media-key__empty {
   padding-inline: 1rem;
   font-size: var(--fs-text-sm);

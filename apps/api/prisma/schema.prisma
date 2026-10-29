@@ -4918,6 +4918,35 @@ model HomeBlock {
   @@schema("app")
 }
 
+/// «البانرات الترويجية» — pictures on top of the student dashboard, managed
+/// from `/admin/promo-banners` behind the `promoBanners` entitlement.
+///
+/// Not a `home_blocks` type: those are the PUBLIC landing page, these are for
+/// students already signed in, and they are dated where a landing section is
+/// standing copy. See `packages/contracts/src/admin/promo-banners.ts`.
+///
+/// `image_key` is a storage key (like `courses.cover_key`), not a media asset
+/// id: the upload field hands back a key and every reader renders a key.
+/// `starts_on`/`ends_on` are Cairo calendar days, both inclusive, either open.
+/// `years` empty = every student.
+model PromoBanner {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  title     String?
+  imageKey  String    @map("image_key")
+  linkUrl   String?   @map("link_url")
+  years     Int[]     @default([])
+  isActive  Boolean   @default(true) @map("is_active")
+  startsOn  DateTime? @map("starts_on") @db.Date
+  endsOn    DateTime? @map("ends_on") @db.Date
+  position  Int
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([position])
+  @@map("promo_banners")
+  @@schema("app")
+}
+
 enum NewsStatus {
   draft
   published
