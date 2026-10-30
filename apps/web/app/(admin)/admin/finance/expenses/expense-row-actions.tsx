@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AdminExpenseRow } from '@ayman/contracts/admin/expenses';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -58,14 +59,12 @@ export function ExpenseRowActions({
         </DialogContent>
       </Dialog>
 
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="text-[length:var(--fs-text-sm)] text-fg-muted hover:text-fg"
-      >
+      <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(true)}>
+        <Pencil aria-hidden="true" className="size-3.5" />
         {c.edit}
-      </button>
-      <Button type="button" variant="danger" onClick={remove} disabled={removing}>
+      </Button>
+      <Button type="button" variant="danger" size="sm" onClick={remove} disabled={removing}>
+        <Trash2 aria-hidden="true" className="size-3.5" />
         {c.remove}
       </Button>
     </div>

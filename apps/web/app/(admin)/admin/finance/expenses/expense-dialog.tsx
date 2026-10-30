@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Plus } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -23,7 +24,10 @@ export function ExpenseDialog({ books }: { books: readonly BookOption[] }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button">{c.add}</Button>
+        <Button type="button">
+          <Plus aria-hidden="true" className="size-4" />
+          {c.add}
+        </Button>
       </DialogTrigger>
       <DialogContent closeLabel={copy.admin.common.cancel}>
         <DialogHeader>

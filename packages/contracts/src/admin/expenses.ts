@@ -58,7 +58,37 @@ export const AdminExpenseRowSchema = z.object({
 });
 export type AdminExpenseRow = z.infer<typeof AdminExpenseRowSchema>;
 
-export const AdminExpenseListSchema = listResponse(AdminExpenseRowSchema);
+/**
+ * «صرفت كام» for whatever the screen is filtered to, computed over the WHOLE
+ * filter and not over the page of rows that came back — a total summed in the
+ * browser from `rows` is silently wrong the day the ledger passes `perPage`.
+ *
+ * Each breakdown drops the one filter it is a picker for: `byCategory` ignores
+ * `category` (so every chip still says what it holds while one is selected),
+ * and `byMonth` ignores `month` (so the month picker can list every month,
+ * with its total, while one is open). Both keep `q`.
+ */
+export const AdminExpenseSummarySchema = z.object({
+  totalCents: z.number().int(),
+  count: z.number().int(),
+  /** Largest first. Categories with nothing in them are omitted. */
+  byCategory: z.array(
+    z.object({
+      category: ExpenseCategorySchema,
+      amountCents: z.number().int(),
+      count: z.number().int(),
+    }),
+  ),
+  /** `YYYY-MM`, newest first, only months that have a spend. */
+  byMonth: z.array(
+    z.object({ month: z.string(), amountCents: z.number().int(), count: z.number().int() }),
+  ),
+});
+export type AdminExpenseSummary = z.infer<typeof AdminExpenseSummarySchema>;
+
+export const AdminExpenseListSchema = listResponse(AdminExpenseRowSchema).extend({
+  summary: AdminExpenseSummarySchema,
+});
 export type AdminExpenseList = z.infer<typeof AdminExpenseListSchema>;
 
 /**

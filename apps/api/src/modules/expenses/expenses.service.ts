@@ -5,7 +5,9 @@ import type {
   AdminExpensePatchInput,
   AdminExpenseQuery,
   AdminExpenseRow,
+  AdminExpenseSummary,
 } from '@ayman/contracts/admin/expenses';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -92,30 +94,84 @@ export class ExpensesService {
   ) {}
 
   async list(query: AdminExpenseQuery): Promise<AdminExpenseList> {
-    const where = {
-      ...(query.category ? { category: query.category } : {}),
-      ...(query.month ? { occurredOn: monthRange(query.month) } : {}),
-      ...(query.q ? { titleAr: { contains: query.q, mode: 'insensitive' as const } } : {}),
+    const byCategory: Prisma.ExpenseWhereInput = query.category
+      ? { category: query.category }
+      : {};
+    const byMonth: Prisma.ExpenseWhereInput = query.month
+      ? { occurredOn: monthRange(query.month) }
+      : {};
+    const bySearch: Prisma.ExpenseWhereInput = query.q
+      ? { titleAr: { contains: query.q, mode: 'insensitive' } }
+      : {};
+    const where: Prisma.ExpenseWhereInput = { ...byCategory, ...byMonth, ...bySearch };
+
+    // One transaction so the count, the page and the totals describe the same
+    // table — separate round trips can straddle a write and report 21 rows
+    // across 2 pages of 10, or a total that is not the sum of its categories.
+    // Interactive rather than the array form only because the array form
+    // erases `groupBy`'s result type.
+    const [rows, rowCount, totals, categoryGroups, dayGroups] = await this.prisma.$transaction(
+      (tx) =>
+        Promise.all([
+          tx.expense.findMany({
+            where,
+            // Newest SPEND first, tie-broken by id: `occurredOn` is a DATE, so a
+            // day with three receipts has no order of its own and would otherwise
+            // shuffle between requests — which makes pagination lose and repeat
+            // rows, not merely look untidy.
+            orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
+            skip: (query.page - 1) * query.perPage,
+            take: query.perPage,
+            select: EXPENSE_SELECT,
+          }),
+          tx.expense.count({ where }),
+          tx.expense.aggregate({ where, _sum: { amountCents: true } }),
+          tx.expense.groupBy({
+            by: ['category'],
+            where: { ...byMonth, ...bySearch },
+            _sum: { amountCents: true },
+            _count: { _all: true },
+            orderBy: { category: 'asc' },
+          }),
+          // By DAY and folded into months below, rather than a `date_trunc` in raw
+          // SQL: this way the month list is filtered by exactly the same `where`
+          // the rows are, `q` included, with no second spelling of it to drift.
+          // A ledger has a few hundred distinct days a year at most.
+          tx.expense.groupBy({
+            by: ['occurredOn'],
+            where: { ...byCategory, ...bySearch },
+            _sum: { amountCents: true },
+            _count: { _all: true },
+            orderBy: { occurredOn: 'desc' },
+          }),
+        ]),
+    );
+
+    const months = new Map<string, { amountCents: number; count: number }>();
+    for (const day of dayGroups) {
+      const month = isoDate(day.occurredOn).slice(0, 7);
+      const entry = months.get(month) ?? { amountCents: 0, count: 0 };
+      entry.amountCents += day._sum.amountCents ?? 0;
+      entry.count += day._count._all;
+      months.set(month, entry);
+    }
+
+    const summary: AdminExpenseSummary = {
+      totalCents: totals._sum.amountCents ?? 0,
+      count: rowCount,
+      byCategory: categoryGroups
+        .map((group) => ({
+          category: group.category,
+          amountCents: group._sum.amountCents ?? 0,
+          count: group._count._all,
+        }))
+        .sort((a, b) => b.amountCents - a.amountCents),
+      byMonth: [...months]
+        .map(([month, entry]) => ({ month, ...entry }))
+        .sort((a, b) => b.month.localeCompare(a.month)),
     };
 
-    // One transaction so the count and the page describe the same table — two
-    // round trips can straddle a write and report 21 rows across 2 pages of 10.
-    const [rows, rowCount] = await this.prisma.$transaction([
-      this.prisma.expense.findMany({
-        where,
-        // Newest SPEND first, tie-broken by id: `occurredOn` is a DATE, so a
-        // day with three receipts has no order of its own and would otherwise
-        // shuffle between requests — which makes pagination lose and repeat
-        // rows, not merely look untidy.
-        orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
-        skip: (query.page - 1) * query.perPage,
-        take: query.perPage,
-        select: EXPENSE_SELECT,
-      }),
-      this.prisma.expense.count({ where }),
-    ]);
-
-    return { rows: rows.map(toRow), rowCount };
+    return { rows: rows.map(toRow), rowCount, summary };
   }
 
   async create(adminId: string, input: AdminExpenseCreateInput): Promise<AdminExpenseRow> {
