@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
@@ -32,10 +33,15 @@ const ORPHANS_SIZED = 60;
 
 /**
  * How long one whole-bucket listing stands in for the next. A listing is a
- * page per thousand objects (an HLS ladder is thousands of segments), so it
- * is not repeated on every open; a delete from this screen clears it.
+ * page per 400 objects (an HLS ladder is thousands of segments): 20 GB was 43
+ * pages and 9 s on a teacher's bucket — most of the web's 15 s budget for the
+ * whole screen. So the screen never waits on one: it shows the last total and
+ * a stale one refreshes behind it.
  */
 const BUCKET_TOTAL_TTL_MS = 10 * 60_000;
+
+/** The one wait the screen does take: the first open after a boot, if the warm-up has not landed. */
+const BUCKET_FIRST_WAIT_MS = 4_000;
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -50,9 +56,10 @@ const BUCKET_TOTAL_TTL_MS = 10 * 60_000;
  * not just rows.
  */
 @Injectable()
-export class VideoLibraryService {
+export class VideoLibraryService implements OnApplicationBootstrap {
   private readonly logger = new Logger(VideoLibraryService.name);
   private bucketTotal: { bytes: number; at: number } | null = null;
+  private bucketRefresh: Promise<void> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -157,6 +164,8 @@ export class VideoLibraryService {
   }
 
   async list(): Promise<VideoLibrary> {
+    // Started first: on a cold total it is the slowest thing here.
+    const bucketBytes = this.wholeBucketBytes();
     await this.settleLibraryUploads();
     const rows = await this.prisma.lessonVideo.findMany({
       where: { provider: 'upload' },
@@ -251,7 +260,7 @@ export class VideoLibraryService {
       archived,
       targets,
       orphans: orphans ?? [],
-      totalBytes: (await this.wholeBucketBytes()) ?? rowsTotal,
+      totalBytes: (await bucketBytes) ?? rowsTotal,
       storageRead: orphans !== null,
     };
   }
@@ -267,20 +276,38 @@ export class VideoLibraryService {
    * the row sum stays the fallback for a stack where neither is readable.
    */
   private async wholeBucketBytes(): Promise<number | null> {
-    const storage = this.mirror.objectStorage;
-    if (IS_AYMAN || storage === null) return null;
-    if (this.bucketTotal !== null && Date.now() - this.bucketTotal.at < BUCKET_TOTAL_TTL_MS) {
-      return this.bucketTotal.bytes;
+    if (IS_AYMAN || this.mirror.objectStorage === null) return null;
+    const stale = this.bucketTotal === null || Date.now() - this.bucketTotal.at >= BUCKET_TOTAL_TTL_MS;
+    const refresh = stale ? this.refreshBucketTotal() : null;
+    if (this.bucketTotal === null && refresh !== null) {
+      await Promise.race([refresh, new Promise((resolve) => setTimeout(resolve, BUCKET_FIRST_WAIT_MS).unref())]);
     }
-    try {
-      const bytes = await storage.bucketBytes();
-      this.bucketTotal = { bytes, at: Date.now() };
-      return bytes;
-    } catch (error) {
-      this.logger.warn({ err: error }, 'video library could not total the bucket');
-      return null;
-    }
+    return this.bucketTotal?.bytes ?? null;
   }
+
+  /** Warm the total at boot, so the first open after a deploy is not the one that waits. */
+  onApplicationBootstrap(): void {
+    if (!IS_AYMAN) void this.refreshBucketTotal();
+  }
+
+  /** One listing at a time: a second caller joins the one in flight. */
+  private refreshBucketTotal(): Promise<void> {
+    const storage = this.mirror.objectStorage;
+    if (storage === null) return Promise.resolve();
+    this.bucketRefresh ??= storage
+      .bucketBytes()
+      .then((bytes) => {
+        this.bucketTotal = { bytes, at: Date.now() };
+      })
+      .catch((error: unknown) => {
+        this.logger.warn({ err: error }, 'video library could not total the bucket');
+      })
+      .finally(() => {
+        this.bucketRefresh = null;
+      });
+    return this.bucketRefresh;
+  }
+
 
   /**
    * «رجّعه لمحاضرة» — put a kept video on a video lesson.
@@ -623,7 +650,10 @@ export class VideoLibraryService {
     await storage.deletePrefix(mirrorPrefix(videoId));
     if (UPLOAD_ID_RE.test(videoId)) await storage.deleteObject(uploadSourceKey(videoId));
     // The screen this delete returns to must show the bucket lighter.
-    this.bucketTotal = null;
+    if (!IS_AYMAN && this.bucketTotal !== null) {
+      this.bucketTotal = { ...this.bucketTotal, at: 0 };
+      void this.refreshBucketTotal();
+    }
 
     await this.audit.record({
       action: 'video:delete',
