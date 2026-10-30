@@ -641,6 +641,122 @@ div.unit[data-open] > .unit__head:hover {
   color: var(--a-11);
 }
 
+/* ---------------------------------------------------------------------------
+   .course-card — the overview's courses as cards with their covers.
+
+   Ayman asked for cards (2026-10-30). The strip's argument against a grid —
+   bars on different baselines — is met by keeping the card bodies identical
+   in structure: cover, title, number, bar, buttons, in that order, so the
+   bars of one row of cards sit on one line.
+   --------------------------------------------------------------------------- */
+.course-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--s-16);
+}
+
+.course-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    translate var(--d-hover) var(--ease);
+}
+
+.course-card:hover {
+  border-color: color-mix(in oklch, var(--a-9), transparent 55%);
+  translate: 0 -2px;
+}
+
+.course-card__art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  max-inline-size: 100%;
+  overflow: hidden;
+  background: var(--n-3);
+}
+
+.course-card__art > * {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.course-card__art img {
+  object-fit: cover;
+}
+
+/* On the picture, so «مقفول» / «مفتوح للكل» is read with the course rather
+   than after its numbers. A solid ground: a translucent pill over a busy
+   poster is unreadable. */
+.course-card__badge {
+  position: absolute;
+  inset-block-start: var(--s-8);
+  inset-inline-start: var(--s-8);
+  inline-size: auto;
+  block-size: auto;
+  background: var(--n-1);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+}
+
+.course-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-8);
+  padding: var(--s-16);
+}
+
+.course-card__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  line-height: 1.5;
+  color: var(--n-12);
+  text-wrap: balance;
+}
+
+.course-card__title:hover {
+  color: var(--a-11);
+}
+
+.course-card__count {
+  font-size: var(--fs-text-sm);
+}
+
+.course-card__value {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.course-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  font-size: var(--fs-text-sm);
+  margin-block-start: auto;
+  padding-block-start: var(--s-8);
+}
+
+/* The teacher's round picture beside the overview title — the same mark the
+   top bar and the student pages use, at a size that reads as a face. */
+.admin-hero__mark {
+  flex-shrink: 0;
+  inline-size: 4rem;
+  block-size: 4rem;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid var(--n-1);
+  box-shadow: 0 0 0 1px var(--border), 0 4px 14px rgb(0 0 0 / 0.12);
+}
+
+/* Tighter than on the old strip so both buttons share one line on a card. */
+.course-card__actions .course-count__go {
+  padding: var(--s-8) var(--s-12);
+}
+
 /* One section of the admin, as a destination rather than as a menu row. */
 .section-tile {
   display: flex;

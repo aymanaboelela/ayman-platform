@@ -1982,6 +1982,9 @@ const admin = {
      *  eight times and never saying which course. */
     coursesOpen: 'تحليلات الكورس',
     coursesOpenFor: 'تحليلات كورس {title}',
+    /** The card's second button — straight into the course editor. */
+    coursesEdit: 'تعديل',
+    coursesEditFor: 'تعديل كورس {title}',
     /** The tail line when the strip is capped. */
     coursesMore: 'و{n} كورس كمان',
     coursesNone: 'مفيش كورسات لسه.',

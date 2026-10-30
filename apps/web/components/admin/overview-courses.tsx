@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { ChevronLeft, Users } from 'lucide-react';
+import { PencilLine, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { CourseHeadcountRow } from '@ayman/contracts/admin/analytics';
 import { formatCopy } from '@ayman/contracts/format';
+import { CourseArt } from '@/components/course-art';
 
 const c = copy.admin.overview;
 
@@ -66,86 +67,93 @@ export function OverviewCourses({ rows }: { rows: readonly CourseHeadcountRow[] 
         <span className="group-head__note">{c.coursesLead}</span>
       </div>
 
-      <ul className="flex flex-col gap-2">
+      {/*
+        Cards, each with the course's own cover (2026-10-30, «عاوز الكورسات
+        تبقى كاردس شكلها حلو وكبير وفيها صور»). The comparison the bars were
+        for survives: every bar is still scaled against the biggest course,
+        and the number sits on the same line of every card.
+      */}
+      <ul className="course-cards">
         {shown.map((row) => {
           const lead = row.requiresGrant ? row.subscribed : row.enrolled;
           return (
-            <li key={row.courseId} className="panel course-count">
-              <div className="min-w-0 flex-1">
-                {/* Name and number on ONE line, the number at the inline end —
-                    the order the question is asked in («الكورس ده فيه كام»).
-                    It used to sit under the bar, which put the answer third
-                    after a badge and a graphic. */}
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <span className="flex min-w-0 items-baseline gap-2">
-                    {/* `min-w-0` on the title and NOT on the row: a `truncate`
-                        whose parent can still grow makes the whole row wider
-                        than the phone rather than shortening the name. */}
-                    <span className="min-w-0 truncate text-[length:var(--fs-text-sm)] font-medium text-fg">
-                      {row.title}
-                    </span>
-                    <span
-                      className={
-                        row.requiresGrant
-                          ? 'course-count__badge course-count__badge--paid'
-                          : 'course-count__badge'
-                      }
-                    >
-                      {row.requiresGrant ? c.coursesPaid : c.coursesFree}
-                    </span>
-                  </span>
-
-                  <span className="shrink-0 text-[length:var(--fs-text-sm)]">
-                    {lead === 0 ? (
-                      <span className="text-fg-muted">{c.coursesEmpty}</span>
-                    ) : (
-                      <>
-                        <span className="course-count__value tabular">{lead}</span>{' '}
-                        <span className="text-fg-muted">
-                          {row.requiresGrant ? c.coursesSubscribed : c.coursesEnrolled}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                </div>
-
-                <div
-                  className="course-count__track"
-                  role="img"
-                  aria-label={`${row.title}: ${lead}`}
+            <li key={row.courseId} className="panel course-card">
+              <Link href={`/admin/courses/${row.courseId}`} className="course-card__art" tabIndex={-1} aria-hidden="true">
+                <CourseArt
+                  coverKey={row.coverKey}
+                  subjectNameAr={row.subjectNameAr}
+                  seed={row.courseId}
+                  sizes="(min-width: 80rem) 22rem, (min-width: 40rem) 45vw, 92vw"
+                />
+                <span
+                  className={
+                    row.requiresGrant
+                      ? 'course-count__badge course-count__badge--paid course-card__badge'
+                      : 'course-count__badge course-card__badge'
+                  }
                 >
+                  {row.requiresGrant ? c.coursesPaid : c.coursesFree}
+                </span>
+              </Link>
+
+              <div className="course-card__body">
+                <Link href={`/admin/courses/${row.courseId}`} className="course-card__title">
+                  {row.title}
+                </Link>
+
+                <p className="course-card__count">
+                  {lead === 0 ? (
+                    <span className="text-fg-muted">{c.coursesEmpty}</span>
+                  ) : (
+                    <>
+                      <span className="course-card__value tabular">{lead}</span>{' '}
+                      <span className="text-fg-muted">
+                        {row.requiresGrant ? c.coursesSubscribed : c.coursesEnrolled}
+                      </span>
+                    </>
+                  )}
+                </p>
+
+                <div className="course-count__track" role="img" aria-label={`${row.title}: ${lead}`}>
                   <span
                     className={
                       row.requiresGrant
                         ? 'course-count__fill course-count__fill--paid'
                         : 'course-count__fill'
                     }
-                    // A row with people in it always draws something — a 1-in-700
-                    // bar rounds to nothing and reads as zero.
+                    // A card with people in it always draws something — a
+                    // 1-in-700 bar rounds to nothing and reads as zero.
                     style={{ inlineSize: `${lead > 0 ? Math.max((lead / max) * 100, 3) : 0}%` }}
                   />
                 </div>
 
                 {/* Only on a closed course, and only when the two disagree: an
-                    enrollment outlives the grant that allowed it, so this is
-                    «دخلوا الكورس» against «لسه مشتركين» and the gap is the
-                    number worth seeing. */}
+                    enrollment outlives the grant that allowed it. */}
                 {row.requiresGrant && row.enrolled !== row.subscribed ? (
                   <p className="course-count__figures">
                     <span className="tabular">{row.enrolled}</span> {c.coursesEnrolled}
                   </p>
                 ) : null}
-              </div>
 
-              <Link
-                href={`/admin/analytics?courseId=${row.courseId}`}
-                className="course-count__go"
-                aria-label={formatCopy(c.coursesOpenFor, { title: row.title })}
-              >
-                <Users className="size-4 shrink-0" aria-hidden="true" />
-                <span className="hidden sm:inline">{c.coursesOpen}</span>
-                <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
-              </Link>
+                <div className="course-card__actions">
+                  <Link
+                    href={`/admin/analytics?courseId=${row.courseId}`}
+                    className="course-count__go"
+                    aria-label={formatCopy(c.coursesOpenFor, { title: row.title })}
+                  >
+                    <Users className="size-4 shrink-0" aria-hidden="true" />
+                    <span>{c.coursesOpen}</span>
+                  </Link>
+                  <Link
+                    href={`/admin/courses/${row.courseId}`}
+                    className="course-count__go"
+                    aria-label={formatCopy(c.coursesEditFor, { title: row.title })}
+                  >
+                    <PencilLine className="size-4 shrink-0" aria-hidden="true" />
+                    <span>{c.coursesEdit}</span>
+                  </Link>
+                </div>
+              </div>
             </li>
           );
         })}

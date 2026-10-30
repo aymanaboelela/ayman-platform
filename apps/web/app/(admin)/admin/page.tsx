@@ -16,6 +16,9 @@ import { getEntitlements } from '@/lib/entitlements';
 import { getAdminCourseHeadcount, getAdminOverviewStats } from '@/lib/admin-overview';
 import { ADMIN_NAV_GROUPS, visibleNavItems } from '@/components/admin/nav-items';
 import { IS_AYMAN } from '@/lib/tenant';
+import { getBranding } from '@/lib/settings';
+import { keyPair } from '@/lib/brand-image';
+import { ThemedImage } from '@/components/themed-image';
 import { OverviewQueues } from '@/components/admin/overview-queues';
 import { OverviewCourses } from '@/components/admin/overview-courses';
 import { SuspectKeysBand } from '@/components/admin/suspect-keys-band';
@@ -68,10 +71,14 @@ export default async function AdminOverviewPage() {
 
   // Two calls, not one, and in parallel: they need different permissions and
   // each degrades on its own — see `getAdminCourseHeadcount`'s own note.
-  const [stats, courses] = await Promise.all([
+  const [stats, courses, branding] = await Promise.all([
     getAdminOverviewStats(),
     permissions.includes('analytics:read') ? getAdminCourseHeadcount() : Promise.resolve(null),
+    // The teacher's own round picture beside the title. A failed read only
+    // costs the picture, never the page.
+    getBranding().catch(() => null),
   ]);
+  const markKey = branding?.markKey ?? null;
   const actions = QUICK_ACTIONS.filter((action) => permissions.includes(action.permission));
 
   return (
@@ -82,11 +89,21 @@ export default async function AdminOverviewPage() {
           links. Beside the title they read as what they are: the toolbar for
           this screen. */}
       <header className="admin-hero mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">
-            {copy.admin.title}
-          </h1>
-          <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.overviewLead}</p>
+        <div className="flex min-w-0 items-center gap-4">
+          {markKey ? (
+            <ThemedImage
+              className="admin-hero__mark"
+              image={keyPair(markKey, branding?.markDarkKey ?? null, 128, 128)}
+              alt=""
+              sizes="4rem"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">
+              {copy.admin.title}
+            </h1>
+            <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.overviewLead}</p>
+          </div>
         </div>
 
         {actions.length > 0 ? (

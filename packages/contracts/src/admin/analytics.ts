@@ -534,6 +534,14 @@ export const CourseHeadcountRowSchema = z.object({
   requiresGrant: z.boolean(),
   enrolled: z.number().int().min(0),
   subscribed: z.number().int().min(0),
+  /**
+   * The course's own cover, so the overview can show the course as a card
+   * rather than a line of text. Defaults keep a web build newer than its API
+   * (the deploy window) parsing.
+   */
+  coverKey: z.string().nullable().default(null),
+  /** For the generated artwork when there is no cover (`<CourseArt>`). */
+  subjectNameAr: z.string().default(''),
 });
 export type CourseHeadcountRow = z.infer<typeof CourseHeadcountRowSchema>;
 
