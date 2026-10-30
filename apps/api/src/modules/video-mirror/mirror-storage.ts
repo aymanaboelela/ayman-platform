@@ -42,6 +42,18 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.jpg': 'image/jpeg',
 };
 
+/**
+ * Objects per listing page — NOT S3's 1000.
+ *
+ * Every `<ETag>` in a ListObjectsV2 reply is `&quot;…&quot;`, two XML entities,
+ * and the SDK's parser (fast-xml-parser 4.5) refuses a document with more than
+ * 1000 of them: «Entity expansion limit exceeded: 1002 > 1000». So a full page
+ * of 1000 objects never parses, and any prefix past ~500 — every real ladder —
+ * threw: the bucket total, a leftover's size, a delete. 400 keeps a page at
+ * ~800 entities.
+ */
+const LIST_PAGE = 400;
+
 function contentTypeOf(path: string): string {
   const dot = path.lastIndexOf('.');
   return (dot === -1 ? undefined : CONTENT_TYPES[path.slice(dot)]) ?? 'application/octet-stream';
@@ -246,6 +258,7 @@ export class MirrorStorage {
         new ListObjectsV2Command({
           Bucket: this.config.bucket,
           Prefix: `${prefix}/`,
+          MaxKeys: LIST_PAGE,
           ContinuationToken: token,
         }),
       );
@@ -326,6 +339,7 @@ export class MirrorStorage {
         new ListObjectsV2Command({
           Bucket: this.config.bucket,
           Prefix: `${prefix}/`,
+          MaxKeys: LIST_PAGE,
           ContinuationToken: token,
         }),
       );
@@ -353,7 +367,7 @@ export class MirrorStorage {
 
     do {
       const listed = await this.s3.send(
-        new ListObjectsV2Command({ Bucket: this.config.bucket, ContinuationToken: token }),
+        new ListObjectsV2Command({ Bucket: this.config.bucket, MaxKeys: LIST_PAGE, ContinuationToken: token }),
       );
       for (const object of listed.Contents ?? []) bytes += object.Size ?? 0;
       token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
@@ -389,6 +403,7 @@ export class MirrorStorage {
         new ListObjectsV2Command({
           Bucket: this.config.bucket,
           Prefix: `${prefix}/`,
+          MaxKeys: LIST_PAGE,
           ContinuationToken: token,
         }),
       );
