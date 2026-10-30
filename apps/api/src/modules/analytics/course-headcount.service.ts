@@ -10,6 +10,8 @@ interface HeadcountRow {
   requires_grant: boolean;
   enrolled: number;
   subscribed: number;
+  cover_key: string | null;
+  subject_name_ar: string | null;
 }
 
 /**
@@ -106,11 +108,14 @@ export class CourseHeadcountService {
         c."id" AS course_id,
         c."title",
         c."requires_grant",
+        c."cover_key",
+        sj."name_ar" AS subject_name_ar,
         coalesce(e.n, 0) AS enrolled,
         coalesce(s.n, 0) AS subscribed
       FROM "app"."courses" c
       LEFT JOIN enrolled e ON e."course_id" = c."id"
       LEFT JOIN subscribed s ON s."course_id" = c."id"
+      LEFT JOIN "app"."subjects" sj ON sj."id" = c."subject_id"
       WHERE c."status" = 'published' OR coalesce(e.n, 0) > 0 OR coalesce(s.n, 0) > 0
       ORDER BY greatest(coalesce(e.n, 0), coalesce(s.n, 0)) DESC, c."title" ASC
     `);
@@ -121,6 +126,8 @@ export class CourseHeadcountService {
       requiresGrant: row.requires_grant,
       enrolled: row.enrolled,
       subscribed: row.subscribed,
+      coverKey: row.cover_key,
+      subjectNameAr: row.subject_name_ar ?? '',
     }));
   }
 }
