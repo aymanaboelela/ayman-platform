@@ -30,6 +30,10 @@
    =========================================================================== */
 
 .promo-strip {
+  /* The caption below asks how wide the STRIP is, not the window: on a
+     tablet the dashboard's rail eats a third of the viewport, and a strip
+     that is phone-width there has the same 120px-tall picture. */
+  container: promo-strip / inline-size;
   margin-block-end: var(--s-24);
   display: grid;
   /* `minmax(0, …)`: a grid track's default minimum is the content's
@@ -73,19 +77,21 @@
 }
 
 /* 3:1 — the frame the admin's crop dialog cuts to, so nothing the
-   instructor approved is trimmed here. */
+   instructor approved is trimmed here. The ratio is on the PICTURE, not the
+   face, so a caption set below it on a narrow strip adds a line instead of
+   being cut off by a 3:1 box. */
 .promo-strip__face {
   position: relative;
   display: block;
-  aspect-ratio: 3 / 1;
   overflow: hidden;
   color: var(--ink-fg);
   text-decoration: none;
 }
 
 .promo-strip__img {
+  display: block;
   inline-size: 100%;
-  block-size: 100%;
+  aspect-ratio: 3 / 1;
   object-fit: cover;
   user-select: none;
   transition: transform var(--d-popover) var(--ease-out);
@@ -108,25 +114,35 @@
   outline-offset: calc(-1 * var(--focus-ring-width) - 2px);
 }
 
-/* The title, on a scrim that only darkens the bottom third — enough for white
-   text to read over a bright photo, without dimming the picture itself. */
+/* The title. Below the picture on a narrow strip, as a plain line: at ~360px
+   the picture is ~120px tall, and a scrim over its bottom third hid the line
+   the instructor printed there («لحد الخميس») while repeating the headline
+   the picture already shows. The caption is `aria-hidden` either way — the
+   accessible name is the picture's alt — so this is purely where it sits. */
 .promo-strip__caption {
-  position: absolute;
-  inset-inline: 0;
-  inset-block-end: 0;
-  padding: var(--s-24) var(--s-16) var(--s-12);
-  background: linear-gradient(to top, rgb(0 0 0 / 0.62), transparent);
-  font-size: var(--fs-text-base);
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--ink-fg);
+  display: block;
+  padding: var(--s-8) var(--s-12);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--n-11);
   text-wrap: balance;
 }
 
-@media (min-width: 48rem) {
+/* A wide strip keeps the overlay, but low and thin: a scrim that starts at
+   the caption's own top instead of a third of the way up, so the artwork
+   above it is untouched. */
+@container promo-strip (min-width: 40rem) {
   .promo-strip__caption {
-    padding: var(--s-32) var(--s-24) var(--s-16);
-    font-size: var(--fs-text-lg);
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    padding: var(--s-16) var(--s-24) var(--s-8);
+    background: linear-gradient(to top, rgb(0 0 0 / 0.55), transparent);
+    font-size: var(--fs-text-base);
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--ink-fg);
   }
 }
 

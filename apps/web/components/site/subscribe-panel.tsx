@@ -1429,8 +1429,8 @@ export function SubscribePanel({
       {couponsOn && amountCents !== null ? (
         <div className="bco-card bco-coupon">
           {coupon ? (
-            <div className="bco-coupon__applied">
-              <p className="bco-note bco-note--ok bco-coupon__note" role="status">
+            <div className="bco-note bco-note--ok bco-coupon__applied">
+              <p className="bco-coupon__note" role="status">
                 <TicketPercent size={18} aria-hidden="true" />
                 <span>
                   {copy.subscribe.couponAppliedLead}{' '}
@@ -1442,7 +1442,7 @@ export function SubscribePanel({
               </p>
               <button
                 type="button"
-                className="bco-link"
+                className="bco-link bco-coupon__remove"
                 onClick={() => {
                   setCoupon(null);
                   setCouponInput('');
