@@ -1,4 +1,4 @@
-import { ACCENT_SLOTS, LANDING_PRESETS, type AccentSlot, type LandingPreset } from './settings';
+import { ACCENT_SLOTS, LANDING_PRESETS, type AccentSlot, type LandingPreset } from '@ayman/contracts/admin/settings';
 
 /**
  * The landing page's look, chosen when the control plane creates a stack.

@@ -1,5 +1,5 @@
 import { z } from '@ayman/contracts/zod';
-import { QuizPaperSchema } from './quiz-settings';
+import { QuizPaperSchema } from '@ayman/contracts/quiz/quiz-settings';
 
 /**
  * The learner's pre-attempt intro screen. Unlike every OTHER learner route in
