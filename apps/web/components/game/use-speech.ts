@@ -56,6 +56,8 @@ let pending: number | null = null;
 /** الصوت الحقيقي (Azure): قطعة بتشتغل، واللي بعدها مستنية. */
 let audio: HTMLAudioElement | null = null;
 let clips: string[] = [];
+/** Counts `read()` calls, so a callback can tell it belongs to an older one. */
+let reads = 0;
 /** مراقب «اتقالت ولا لأ» — بيتلغي مع أي `stop()`. */
 let watchdog: number | null = null;
 
@@ -110,6 +112,7 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
   );
 
   const stop = useCallback(() => {
+    reads += 1;
     if (watchdog !== null) window.clearTimeout(watchdog);
     watchdog = null;
     speaking(false);
@@ -202,6 +205,7 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
       }
       const base = `/api/me/game/voice/${encodeURIComponent(input.questionId)}`;
       clips = [
+        `${base}/intro-${input.n}`,
         `${base}/stem`,
         ...input.options.flatMap((option, i) => [`${base}/letter-${i}`, `${base}/${encodeURIComponent(option.id)}`]),
       ];
@@ -213,7 +217,11 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         return el;
       });
       clips = [];
+      const round = ++reads;
+      // A late `error` from an earlier question's clips must not stop the
+      // question that is on screen now and read the old one over it.
       const fallback = () => {
+        if (round !== reads) return;
         stop();
         speakBrowser(input.stemHtml, optionsHtml, input.n);
       };
@@ -223,6 +231,17 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         watchdog = null;
         fallback();
       }, 5000);
+      // Starts only once the QUESTION itself is playable. The intro is one of
+      // fifteen clips and is almost always there; a question nobody recorded
+      // yet 404s, and finding that out after the intro played meant the host
+      // said «السؤال الأول» in one voice and the browser repeated it in another.
+      const stem = elements[1];
+      let begun = false;
+      const begin = () => {
+        if (begun || round !== reads) return;
+        begun = true;
+        playNext();
+      };
       const playNext = () => {
         const el = elements.shift();
         if (!el) {
@@ -240,7 +259,12 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         el.onerror = fallback;
         el.play().catch(fallback);
       };
-      playNext();
+      if (stem) {
+        stem.addEventListener('canplay', begin, { once: true });
+        stem.addEventListener('error', fallback, { once: true });
+      } else {
+        begin();
+      }
     },
     [enabled, stop, speakBrowser],
   );

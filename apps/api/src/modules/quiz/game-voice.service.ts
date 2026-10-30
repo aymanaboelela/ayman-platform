@@ -4,25 +4,11 @@ import { Inject, Injectable, Logger, NotFoundException, ServiceUnavailableExcept
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GameService } from './game.service';
-import { azureSpeech } from './game-voice.config';
+import { azureSpeech, voiceLibrary } from './game-voice.config';
+import { LETTERS, introText, libraryKey, textOf } from './game-voice.text';
 
 /** «شاكر» — صوت Azure المصري. مذيع مسابقات، مش قارئ نشرة. */
 const VOICE = 'ar-EG-ShakirNeural';
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
-
-/** نص من HTML السؤال — لازم يبقى نظيف قبل ما يدخل SSML. */
-function textOf(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 function escapeXml(text: string): string {
   return text.replace(/[<>&'"]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[ch]!);
@@ -34,6 +20,12 @@ function escapeXml(text: string): string {
  *   · `stem`        — نص السؤال.
  *   · `<optionId>`  — نص الاختيار.
  *   · `letter-<n>`  — «أ»، «ب»… لوحدها.
+ *   · `intro-<n>`   — the host's line before question n («السؤال الأول.. ركّز معايا..»).
+ *
+ * Two sources, in order. The recorded library first (`voiceLibrary()` — his
+ * own voice, recorded offline and stored on our server, so playing it never
+ * calls a vendor); then Azure, recorded on first request. Neither → 404, and
+ * the browser reads that question itself.
  *
  * الاختيارات بتتلخبط كل جولة (`GameService.round`)، فالحرف مايتسجّلش مع
  * الاختيار — المتصفح بيشغّل «حرف مكانه» + «نص الاختيار»، فالقراية دايمًا
@@ -55,12 +47,16 @@ export class GameVoiceService {
 
   async clip(userId: string, questionId: string, part: string): Promise<Readable> {
     const azure = azureSpeech();
-    if (!azure) throw new NotFoundException();
+    const library = voiceLibrary();
+    if (!azure && !library) throw new NotFoundException();
 
     let text: string;
     const letter = /^letter-(\d)$/.exec(part);
+    const intro = /^intro-(\d{1,2})$/.exec(part);
     if (letter) {
       text = LETTERS[Number(letter[1])] ?? '';
+    } else if (intro) {
+      text = Number(intro[1]) > 0 ? introText(Number(intro[1])) : '';
     } else {
       await this.game.assertDealtOrInPool(userId, questionId);
       if (part === 'stem') {
@@ -78,6 +74,12 @@ export class GameVoiceService {
       }
     }
     if (!text) throw new NotFoundException();
+
+    if (library) {
+      const recorded = libraryKey(text);
+      if (await this.storage.stat(recorded)) return this.storage.getStream(recorded);
+    }
+    if (!azure) throw new NotFoundException();
 
     const key = `game-voice/${createHash('sha256').update(`${VOICE}|${text}`).digest('hex')}.mp3`;
     if (await this.storage.stat(key)) return this.storage.getStream(key);

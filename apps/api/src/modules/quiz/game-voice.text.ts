@@ -1,0 +1,72 @@
+import { createHash } from 'node:crypto';
+
+/**
+ * The text side of the Millionaire voice, shared by the API (`GameVoiceService`)
+ * and the offline recorder (`scripts/record-game-voice.ts`). Both MUST derive
+ * the same text and the same storage key from a question, or every recorded
+ * clip is a file nobody ever asks for — so the derivation lives here once.
+ *
+ * Kept free of Nest and Prisma so the recorder can import it on a laptop.
+ */
+
+/** The letters on the screen (`millionaire.tsx`), one clip each. */
+export const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
+
+/**
+ * How the recorder SAYS each letter. A lone «أ» sent to a TTS engine comes back
+ * as a grunt; the letter's name is what a quiz host actually says.
+ */
+export const LETTER_NAMES = ['ألِف', 'بَا', 'جِيم', 'دَال', 'هَا', 'وَاو'];
+
+/**
+ * The line before each question, in the host's Egyptian. Varied so fifteen
+ * questions in a row do not open on the same sentence; the last two say where
+ * the student is on the ladder because that is what the show does.
+ */
+export const INTROS = [
+  'السؤال الأول.. ركّز معايا..',
+  'السؤال التاني..',
+  'السؤال التالت.. يلا بينا..',
+  'السؤال الرابع..',
+  'السؤال الخامس.. ركّز كويس..',
+  'السؤال السادس..',
+  'السؤال السابع.. يلا..',
+  'السؤال التامن..',
+  'السؤال التاسع..',
+  'السؤال العاشر.. ركّز معايا..',
+  'السؤال الحداشر..',
+  'السؤال الاتناشر..',
+  'السؤال التلاتاشر.. قرّبنا..',
+  'السؤال الأربعتاشر.. فاضل سؤال..',
+  'السؤال الأخير.. سؤال المليون..',
+];
+
+/** The intro for question `n` (1-based); past the list, a plain number. */
+export function introText(n: number): string {
+  return INTROS[n - 1] ?? `السؤال رقم ${n}..`;
+}
+
+/** Plain text from question HTML — tags and entities never reach a voice. */
+export function textOf(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Where a pre-recorded clip of `text` lives in media storage. Keyed on the
+ * SCREEN text, not on what was spoken: an Arabic question may be recorded in
+ * an Egyptian rewording, and the server only knows the stored question. An
+ * edited question hashes to a new key, finds nothing, and falls back — it can
+ * never play the old wording.
+ */
+export function libraryKey(text: string): string {
+  return `game-voice/library/${createHash('sha256').update(`library|${text}`).digest('hex')}.mp3`;
+}
