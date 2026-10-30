@@ -4746,6 +4746,21 @@ const admin = {
     filterMonth: 'الشهر',
     filterMonthAll: 'كل الشهور',
     filterCategoryAll: 'كل الأنواع',
+    /* ── the summary band ─────────────────────────────────────────────── */
+    summaryTotal: 'إجمالي المصروفات',
+    /** `{n}` — entries behind the total, so a big figure says how it got big. */
+    summaryCount: '{n} مصروف',
+    /** `{category}` — the biggest bucket in what is on screen. */
+    summaryTop: 'أكبر بند: {category}',
+    /** `{n}` — share of the total, already rounded. */
+    categoryShare: '{n}٪ من الإجمالي',
+    categoriesTitle: 'راحت فين؟',
+    monthsTitle: 'الشهور',
+    ledgerTitle: 'كل المصروفات',
+    /** `{shown}` of `{total}` — the list is capped, the totals above are not. */
+    ledgerCapped: 'معروض أحدث {shown} من {total} — الإجماليات فوق محسوبة على الكل. اختار شهر عشان تشوف الباقي.',
+    ledgerTotal: 'الإجمالي',
+    clearFilters: 'شيل الفلتر',
     saveFailed: 'المصروف ماتسجّلش',
     removeFailed: 'الحذف مانفعش',
   },
