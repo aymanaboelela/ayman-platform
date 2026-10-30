@@ -206,7 +206,10 @@ export default async function AdminBooksCatalogPage() {
           tab, because it is a price and this is the prices screen — but UNDER
           the shelf: it changes a few times a year, the books change weekly. */}
       <div className="mt-8">
-        <ShippingFeeForm rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES} />
+        <ShippingFeeForm
+          rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES}
+          courierCostCents={settings.store?.courierCostCents ?? null}
+        />
       </div>
     </>
   );

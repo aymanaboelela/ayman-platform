@@ -49,7 +49,13 @@ const ZONES: { id: BookShippingZone; label: string; hint: string }[] = [
   { id: 'far', label: c.shippingZoneFar, hint: c.shippingZoneFarHint },
 ];
 
-export function ShippingFeeForm({ rates }: { rates: BookShippingRates }) {
+export function ShippingFeeForm({
+  rates,
+  courierCostCents,
+}: {
+  rates: BookShippingRates;
+  courierCostCents: number | null;
+}) {
   /* Pounds as STRINGS, because an `<input type="number">` bound to a number
      cannot hold "" while the admin clears it to retype — the field would snap
      back to 0 mid-keystroke and a saved 0 is free delivery to a whole zone. */
@@ -58,6 +64,8 @@ export function ShippingFeeForm({ rates }: { rates: BookShippingRates }) {
     delta: String(rates.delta / 100),
     far: String(rates.far / 100),
   });
+  /* Blank is «مش متحدد» (NULL), not ٠ — see `StoreSettingsSchema.courierCostCents`. */
+  const [courier, setCourier] = useState(courierCostCents === null ? '' : String(courierCostCents / 100));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -67,18 +75,26 @@ export function ShippingFeeForm({ rates }: { rates: BookShippingRates }) {
     /* All three validated BEFORE any of them is sent. A partial save would
        leave the country priced half one way and half the other, which is worse
        than a rejected form. */
-    if (parsed.some(([, amount]) => !Number.isFinite(amount) || amount < 0)) {
+    const courierTrimmed = courier.trim();
+    const courierAmount = courierTrimmed === '' ? null : Number(courierTrimmed);
+    if (
+      parsed.some(([, amount]) => !Number.isFinite(amount) || amount < 0) ||
+      (courierAmount !== null && (!Number.isFinite(courierAmount) || courierAmount < 0))
+    ) {
       setError(c.shippingSettingFailed);
       setSaved(false);
       return;
     }
     setError(null);
     startTransition(async () => {
-      const result = await setBookShippingAction({
-        cairo_giza: Math.round(parsed[0]![1] * 100),
-        delta: Math.round(parsed[1]![1] * 100),
-        far: Math.round(parsed[2]![1] * 100),
-      });
+      const result = await setBookShippingAction(
+        {
+          cairo_giza: Math.round(parsed[0]![1] * 100),
+          delta: Math.round(parsed[1]![1] * 100),
+          far: Math.round(parsed[2]![1] * 100),
+        },
+        courierAmount === null ? null : Math.round(courierAmount * 100),
+      );
       setError(result.ok ? null : result.message);
       setSaved(result.ok);
     });
@@ -118,6 +134,26 @@ export function ShippingFeeForm({ rates }: { rates: BookShippingRates }) {
             </p>
           </div>
         ))}
+      </div>
+
+      <div className="mt-3 max-w-xs">
+        <Label htmlFor="book-courier-cost">{c.courierCostLabel}</Label>
+        <Input
+          id="book-courier-cost"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          dir="ltr"
+          className="w-full"
+          value={courier}
+          onChange={(event) => {
+            setSaved(false);
+            setCourier(event.target.value);
+          }}
+        />
+        <p className="mt-1 text-[length:var(--fs-text-xs)] leading-snug text-fg-faint">
+          {c.courierCostHint}
+        </p>
       </div>
 
       <div className="mt-3 flex items-center gap-2">

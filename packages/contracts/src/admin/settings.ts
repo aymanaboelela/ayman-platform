@@ -685,6 +685,19 @@ export const StoreSettingsSchema = z
      * cart would quote `NaN`.
      */
     shippingRates: BookShippingRatesSchema.prefault({}),
+    /**
+     * What ONE parcel actually costs the owner at the courier — «الشحن كله
+     * ١٠٠» — whatever zone fee the student was charged.
+     *
+     * The zone fees above are what the STUDENT pays (٨٠ / ١٠٠ / ١٥٠), and the
+     * early orders had delivery folded into a ٢٥٠ cover price with no fee at
+     * all. Treating the collected fee as a pass-through therefore got «مكسب
+     * الكتب» wrong both ways. With this set, the profit is everything a book
+     * order brought in, minus the copies, minus this per parcel.
+     *
+     * NULL is «مش متحدد» and keeps the old pass-through reading, never «ببلاش».
+     */
+    courierCostCents: z.number().int().min(0).max(50_000).nullable().default(null),
   })
   .strict();
 

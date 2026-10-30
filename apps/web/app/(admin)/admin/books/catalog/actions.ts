@@ -138,6 +138,7 @@ export async function deleteBookAction(id: string): Promise<ActionResult> {
  */
 export async function setBookShippingAction(
   shippingRates: BookShippingRates,
+  courierCostCents: number | null,
 ): Promise<ActionResult> {
   try {
     /*
@@ -150,7 +151,10 @@ export async function setBookShippingAction(
      * stored jsonb is replaced wholesale, and a row that loses a key this
      * schema requires is a row that throws on every subsequent read.
      */
-    const body = StoreSettingsSchema.parse({ shippingRates });
+    /* `courierCostCents` rides in the same PATCH — the jsonb is replaced
+       wholesale, so leaving it out would reset it to «مش متحدد» on every
+       zone-fee save. */
+    const body = StoreSettingsSchema.parse({ shippingRates, courierCostCents });
     /* The route answers with the WHOLE settings object, not the section it was
        given — `SettingsController.update` returns `SiteSettings`. */
     await adminSend('PATCH', '/api/admin/settings/store', body, SiteSettingsSchema);
