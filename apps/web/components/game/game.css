@@ -353,8 +353,21 @@
    متختار بيبان من بعيد: إطار بلون اللعبة، علامة صح في الركن، ولمعة. اختيار
    أسئلته أقل من اللي اللعبة محتاجاه رمادي ومعاه السبب — بيتختار عادي عشان
    الطالب يشوف ليه، و«يلا نبدأ» هي اللي بتتقفل.
+
+   الألوان بقاعدة واحدة، عشان الصفحة كانت سبع ألوان مالهمش معنى (كل تحدّي
+   بلون، وكل رقم في «نتايجك» بلون، و«الأسئلة منين» بنفسجي، والمتختار بلون
+   اللعبة): المتختار في أي خطوة = `--ink-accent` (إطار، علامة، أو ملي)،
+   وكل لعبة ليها لون واحد على أيقونتها بس، والمستوى أخضر/أصفر/أحمر لأن ده
+   معناه. أي حاجة تانية أبيض على الغامق.
    ========================================================================== */
-.gm-stage--hub { place-items: start center; }
+.gm-stage--hub {
+  place-items: start center;
+  background:
+    radial-gradient(110% 80% at 100% 0%, color-mix(in oklab, var(--viz-5) 26%, transparent) 0%, transparent 55%),
+    radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--ink-accent) 10%, transparent) 0%, transparent 55%),
+    var(--ink);
+}
+.gm-stage--hub .gm-orb { opacity: 0.18; }
 .gm-hub { display: grid; gap: 1.35rem; width: min(100%, 58rem); min-width: 0; }
 .gm-hub__head { text-align: center; display: grid; gap: 0.5rem; justify-items: center; }
 .gm-hub__group { display: grid; gap: 0.7rem; border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -374,19 +387,18 @@
   width: 1.6rem;
   height: 1.6rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--viz-1), var(--viz-4));
-  color: #fff;
+  background: var(--ink-accent);
+  color: var(--on-light-ink);
   font-family: var(--font-mono);
   font-size: var(--fs-text-xs);
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--viz-4) 45%, transparent);
 }
 .gm-hub__hint { font-size: var(--fs-text-xs); color: var(--ink-fg-2); }
 .gm-hub__warn {
   max-width: 34rem;
   padding: 0.45rem 0.8rem;
   border-radius: var(--r-md);
-  background: color-mix(in oklab, var(--viz-1) 18%, transparent);
-  border: 1px solid color-mix(in oklab, var(--viz-1) 45%, transparent);
+  background: color-mix(in oklab, var(--ink-accent) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink-accent) 40%, transparent);
   font-size: var(--fs-text-sm);
   text-align: center;
 }
@@ -401,21 +413,18 @@
   border: 1px solid var(--ink-line);
 }
 .gm-me__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
-.gm-me__stat[data-tone='violet'] { --tone: var(--viz-5); }
-.gm-me__stat[data-tone='teal'] { --tone: var(--viz-2); }
-.gm-me__stat[data-tone='gold'] { --tone: var(--print-gold); }
 .gm-me__stat {
   display: grid;
   justify-items: center;
   gap: 0.1rem;
   padding: 0.55rem 0.35rem;
   border-radius: var(--r-md);
-  background: color-mix(in oklab, var(--tone) 16%, transparent);
-  border: 1px solid color-mix(in oklab, var(--tone) 38%, transparent);
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--ink-line);
   text-align: center;
   min-width: 0;
 }
-.gm-me__stat svg { color: var(--tone); }
+.gm-me__stat svg { color: var(--ink-accent); }
 .gm-me__n {
   font-family: var(--font-mono);
   font-size: var(--fs-text-lg);
@@ -439,8 +448,17 @@
   border: 1px solid var(--ink-line);
   font-size: var(--fs-text-xs);
 }
-.gm-me__round[data-outcome='won'] { border-color: color-mix(in oklab, var(--print-gold) 60%, transparent); }
-.gm-me__round[data-outcome='lost'] { border-color: color-mix(in oklab, var(--err) 50%, transparent); }
+/* النتيجة نقطة صغيرة، مش إطار ملوّن حوالين الشيب كلها. */
+.gm-me__round::before {
+  content: '';
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--ink-fg-2);
+}
+.gm-me__round[data-outcome='won']::before { background: var(--ink-accent); }
+.gm-me__round[data-outcome='lost']::before { background: var(--err); }
 .gm-me__mode { font-weight: var(--fw-bold); }
 .gm-me__result { color: var(--ink-fg-2); }
 
@@ -449,10 +467,10 @@
 /* أربع كروت (التلات ألعاب و«تدريب»): اتنين جنب بعض، والأربعة على شاشة عريضة. */
 @media (min-width: 720px) { .gm-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1100px) { .gm-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.gm-mode[data-tone='gold'] { --tone: var(--print-gold); --tone-2: var(--viz-3); }
-.gm-mode[data-tone='violet'] { --tone: var(--viz-5); --tone-2: var(--viz-2); }
-.gm-mode[data-tone='rose'] { --tone: var(--viz-4); --tone-2: var(--viz-1); }
-.gm-mode[data-tone='teal'] { --tone: var(--viz-2); --tone-2: var(--viz-6); }
+.gm-mode[data-tone='gold'] { --tone: var(--print-gold); }
+.gm-mode[data-tone='violet'] { --tone: var(--viz-5); }
+.gm-mode[data-tone='rose'] { --tone: var(--viz-4); }
+.gm-mode[data-tone='teal'] { --tone: var(--viz-2); }
 .gm-mode {
   position: relative;
   display: grid;
@@ -461,20 +479,16 @@
   min-width: 0;
   padding: 1.1rem;
   border-radius: var(--r-lg);
-  background:
-    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--tone) 28%, transparent) 0%, transparent 60%),
-    rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.05);
   border: 1px solid var(--ink-line);
   cursor: pointer;
   transition: transform var(--d-hover) var(--ease-out), border-color var(--d-hover), box-shadow var(--d-hover), opacity var(--d-hover);
 }
 .gm-mode:hover { transform: translateY(-2px); }
 .gm-mode[data-on] {
-  border-color: var(--tone);
-  background:
-    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--tone) 42%, transparent) 0%, transparent 65%),
-    rgb(255 255 255 / 0.08);
-  box-shadow: 0 0 0 2px var(--tone), 0 16px 38px color-mix(in oklab, var(--tone) 38%, transparent);
+  border-color: var(--ink-accent);
+  background: color-mix(in oklab, var(--ink-accent) 9%, rgb(255 255 255 / 0.04));
+  box-shadow: 0 0 0 1px var(--ink-accent), 0 14px 34px rgb(0 0 0 / 0.35);
 }
 .gm-mode[data-short]:not([data-on]) { opacity: 0.62; }
 .gm-mode:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 3px; }
@@ -491,16 +505,16 @@
   color: transparent;
   transition: background-color var(--d-hover), border-color var(--d-hover), color var(--d-hover), transform var(--d-hover) var(--ease-out);
 }
-.gm-mode[data-on] .gm-mode__check { background: var(--tone); border-color: var(--tone); color: var(--on-light-ink); transform: scale(1.08); }
+.gm-mode[data-on] .gm-mode__check { background: var(--ink-accent); border-color: var(--ink-accent); color: var(--on-light-ink); transform: scale(1.08); }
 .gm-mode__icon {
   display: grid;
   place-items: center;
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 1rem;
-  background: linear-gradient(135deg, var(--tone), var(--tone-2));
+  background: linear-gradient(160deg, color-mix(in oklab, var(--tone), #fff 12%), color-mix(in oklab, var(--tone), #000 12%));
   color: #fff;
-  box-shadow: 0 10px 24px color-mix(in oklab, var(--tone) 40%, transparent);
+  box-shadow: 0 8px 20px color-mix(in oklab, var(--tone) 30%, transparent);
 }
 .gm-mode__title { margin-top: 0.3rem; font-size: var(--fs-title-4); font-weight: var(--fw-bold); }
 .gm-mode__body { font-size: var(--fs-text-sm); color: var(--ink-fg-2); line-height: 1.7; }
@@ -515,7 +529,7 @@
   font-size: var(--fs-text-xs);
   color: var(--ink-fg);
 }
-.gm-rule svg { color: var(--tone); }
+.gm-rule svg { color: var(--ink-fg-2); }
 .gm-mode__note,
 .gm-mode__best {
   display: inline-flex;
@@ -583,11 +597,7 @@
   transition: background-color var(--d-hover), color var(--d-hover);
 }
 .gm-scope:hover:not(:disabled) { color: var(--ink-fg); }
-.gm-scope[data-on] {
-  background: linear-gradient(135deg, var(--viz-5), var(--viz-2));
-  color: #fff;
-  box-shadow: 0 6px 18px color-mix(in oklab, var(--viz-5) 45%, transparent);
-}
+.gm-scope[data-on] { background: var(--ink-accent); color: var(--on-light-ink); }
 .gm-scope:disabled { opacity: 0.4; cursor: default; }
 .gm-scope-list {
   display: grid;
@@ -612,23 +622,25 @@
 }
 .gm-scope-item:hover { background: rgb(255 255 255 / 0.09); }
 .gm-scope-item[data-on] {
-  border-color: var(--viz-2);
-  background: color-mix(in oklab, var(--viz-2) 18%, transparent);
-  box-shadow: 0 0 0 1px var(--viz-2);
+  border-color: var(--ink-accent);
+  background: color-mix(in oklab, var(--ink-accent) 10%, transparent);
+  box-shadow: 0 0 0 1px var(--ink-accent);
 }
 .gm-scope-item[data-short]:not([data-on]) { opacity: 0.55; }
 .gm-scope-item:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
 .gm-scope-item__text { display: grid; gap: 0.1rem; min-width: 0; flex: 1; }
 .gm-scope-item__title { font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
 .gm-scope-item__meta { font-size: var(--fs-text-xs); color: var(--ink-fg-2); overflow-wrap: anywhere; }
-.gm-scope-item__meta--warn { color: color-mix(in oklab, var(--viz-1), #fff 30%); }
+.gm-scope-item__meta--warn { color: var(--ink-accent); }
 
 /* ── «التحديات» ───────────────────────────────────────────────────────── */
-/* كارت لكل تحدّي بلونه (`--tone` من الكومبوننت)، والمتعلّم بيولّع بلونه — أكتر
-   من واحد ينفع يتعلّم، فده checkbox مش radio. */
+/* كارت لكل تحدّي، والمتعلّم بيولّع بالأكسنت زي أي اختيار تاني — أكتر من واحد
+   ينفع يتعلّم، فده checkbox مش radio. كان كل تحدّي بلون `--viz` حسب ترتيبه،
+   وده لون مالوش معنى بيتغيّر لو الأدمن رتّب التحديات. */
 .gm-topics { display: grid; gap: 0.55rem; }
 @media (min-width: 720px) { .gm-topics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .gm-topics__all { justify-self: start; padding-inline: 1rem; border: 1px solid var(--ink-line); }
+.gm-topics__all[data-on] { border-color: transparent; }
 .gm-topic {
   display: flex;
   align-items: center;
@@ -636,20 +648,16 @@
   min-width: 0;
   padding: 0.75rem 0.9rem;
   border-radius: var(--r-lg);
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--tone) 22%, transparent) 0%, transparent 65%),
-    rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.05);
   border: 1px solid var(--ink-line);
   cursor: pointer;
   transition: background-color var(--d-hover), border-color var(--d-hover), box-shadow var(--d-hover), transform var(--d-hover) var(--ease-out);
 }
-.gm-topic:hover { transform: translateY(-1px); }
+.gm-topic:hover { transform: translateY(-1px); background: rgb(255 255 255 / 0.08); }
 .gm-topic[data-on] {
-  border-color: var(--tone);
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--tone) 40%, transparent) 0%, transparent 70%),
-    color-mix(in oklab, var(--tone) 14%, transparent);
-  box-shadow: 0 0 0 1px var(--tone), 0 8px 22px color-mix(in oklab, var(--tone) 30%, transparent);
+  border-color: var(--ink-accent);
+  background: color-mix(in oklab, var(--ink-accent) 10%, transparent);
+  box-shadow: 0 0 0 1px var(--ink-accent);
 }
 .gm-topic[data-short]:not([data-on]) { opacity: 0.6; }
 .gm-topic:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
@@ -660,10 +668,10 @@
   width: 2.1rem;
   height: 2.1rem;
   border-radius: var(--r-md);
-  background: color-mix(in oklab, var(--tone) 30%, transparent);
-  color: var(--ink-fg);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--ink-fg-2);
 }
-.gm-topic[data-on] .gm-topic__icon { background: var(--tone); }
+.gm-topic[data-on] .gm-topic__icon { background: var(--ink-accent); color: var(--on-light-ink); }
 
 /* ── الصح والشرح بعد الإجابة ──────────────────────────────────────────── */
 .gm-explain {
@@ -707,7 +715,7 @@
 /* ── المستوى ──────────────────────────────────────────────────────────── */
 .gm-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .gm-level[data-level='easy'] { --tone: var(--viz-6); }
-.gm-level[data-level='medium'] { --tone: var(--viz-1); }
+.gm-level[data-level='medium'] { --tone: var(--ink-accent); }
 .gm-level[data-level='hard'] { --tone: var(--viz-4); }
 .gm-level {
   display: grid;
@@ -716,14 +724,17 @@
   min-width: 0;
   padding: 0.75rem 0.5rem;
   border-radius: var(--r-lg);
-  background: color-mix(in oklab, var(--tone) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--tone) 40%, transparent);
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--ink-line);
   cursor: pointer;
   text-align: center;
   transition: background-color var(--d-hover), box-shadow var(--d-hover), transform var(--d-hover) var(--ease-out);
 }
 .gm-level:hover { transform: translateY(-1px); }
-.gm-level[data-on] { background: var(--tone); color: #fff; box-shadow: 0 10px 24px color-mix(in oklab, var(--tone) 40%, transparent); }
+.gm-level:not([data-on]) .gm-level__label { color: color-mix(in oklab, var(--tone), #fff 30%); }
+.gm-level[data-on] { background: var(--tone); border-color: transparent; color: #fff; box-shadow: 0 10px 24px color-mix(in oklab, var(--tone) 35%, transparent); }
+/* الأكسنت فاتح — الأبيض عليه مابيتقريش. */
+.gm-level[data-level='medium'][data-on] { color: var(--on-light-ink); }
 .gm-level:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
 .gm-level__label { font-size: var(--fs-text-lg); font-weight: var(--fw-bold); }
 .gm-level__n { font-size: var(--fs-text-xs); opacity: 0.85; }
@@ -765,7 +776,7 @@
 .gm-summary__n {
   padding: 0.1rem 0.55rem;
   border-radius: var(--r-full);
-  background: color-mix(in oklab, var(--viz-2) 22%, transparent);
+  background: rgb(255 255 255 / 0.1);
   color: var(--ink-fg);
   font-size: var(--fs-text-xs);
 }
