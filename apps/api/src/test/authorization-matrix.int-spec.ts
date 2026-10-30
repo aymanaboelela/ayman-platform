@@ -1607,6 +1607,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'broadcast recipient count: anonymous', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'anonymous', status: 401 },
     { label: 'broadcast recipient count: student', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'student', status: 403 },
     { label: 'broadcast recipient count: admin', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'admin', status: 200 },
+    { label: 'broadcast courses: anonymous', method: 'get', path: () => '/api/admin/broadcast/courses', actor: 'anonymous', status: 401 },
+    { label: 'broadcast courses: student', method: 'get', path: () => '/api/admin/broadcast/courses', actor: 'student', status: 403 },
+    { label: 'broadcast courses: admin', method: 'get', path: () => '/api/admin/broadcast/courses', actor: 'admin', status: 200 },
     { label: 'broadcast send: anonymous', method: 'post', path: () => '/api/admin/broadcast', actor: 'anonymous', status: 401, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
     { label: 'broadcast send: student', method: 'post', path: () => '/api/admin/broadcast', actor: 'student', status: 403, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
 

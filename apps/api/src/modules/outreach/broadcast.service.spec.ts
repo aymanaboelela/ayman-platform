@@ -144,3 +144,97 @@ describe('BroadcastService.send — everyone', () => {
     expect(outreach.sendManual).toHaveBeenCalledTimes(6);
   });
 });
+
+describe('BroadcastService — «طلبة كورس»', () => {
+  const COURSE = '00000000-0000-7000-8000-00000000c001';
+  const M1 = '00000000-0000-7000-8000-0000000000a1';
+  const M3 = '00000000-0000-7000-8000-0000000000a3';
+  const past = new Date(Date.now() - 86_400_000);
+  const grant = (userId: string, scope: string, monthId: string | null, extra: object = {}) => ({
+    id: `${userId}-${scope}-${monthId ?? 'x'}`,
+    userId,
+    scope,
+    monthId,
+    validFrom: past,
+    validUntil: null,
+    revokedAt: null,
+    ...extra,
+  });
+
+  // u1 bought «شهر ١» only · u2 holds a term (covers every month) · u3 bought
+  // «شهر ٣» · u4 enrolled and never paid · u5's «شهر ١» lapsed.
+  function setup() {
+    const prisma = {
+      ...makePrisma(),
+      course: {
+        findUnique: jest.fn(async () => ({
+          id: COURSE,
+          subjectId: 's1',
+          requiresGrant: true,
+          months: [{ id: M1 }, { id: M3 }],
+        })),
+      },
+      enrollment: {
+        findMany: jest.fn(async () => ['u1', 'u2', 'u3', 'u4', 'u5'].map((userId) => ({ userId }))),
+      },
+      accessGrant: {
+        findMany: jest.fn(async () => [
+          grant('u1', 'course_month', M1),
+          grant('u2', 'term', null),
+          grant('u3', 'course_month', M3),
+          grant('u5', 'course_month', M1, { validUntil: past }),
+        ]),
+      },
+    };
+    const outreach = makeOutreach();
+    return { prisma, outreach, service: new BroadcastService(prisma as never, outreach as never) };
+  }
+
+  const target = (extra: object) => ({ type: 'course' as const, courseId: COURSE, access: 'any' as const, paidBefore: false, ...extra });
+
+  it('«مشتركوش في شهر ٣» skips the term holder who already owns it', async () => {
+    const { service } = setup();
+    await expect(service.recipientCount(target({ monthId: M3, access: 'missing' }))).resolves.toBe(3); // u1 u4 u5
+  });
+
+  it('«مشتركوش في شهر ٣» + «اشتركوا قبل كده» drops the never-paid', async () => {
+    const { service } = setup();
+    await expect(
+      service.recipientCount(target({ monthId: M3, access: 'missing', paidBefore: true })),
+    ).resolves.toBe(2); // u1 u5
+  });
+
+  it('«مشتركين في شهر ٣» counts the month buyer and the term holder', async () => {
+    const { service } = setup();
+    await expect(service.recipientCount(target({ monthId: M3, access: 'has' }))).resolves.toBe(2); // u2 u3
+  });
+
+  it('with no month, «مشتركين» is any live subscription to the course', async () => {
+    const { service } = setup();
+    await expect(service.recipientCount(target({ access: 'has' }))).resolves.toBe(3); // u1 u2 u3
+  });
+
+  it('«كل طلبة الكورس» reads enrolments only', async () => {
+    const { prisma, service } = setup();
+    await expect(service.recipientCount(target({}))).resolves.toBe(5);
+    expect(prisma.accessGrant.findMany).not.toHaveBeenCalled();
+  });
+
+  it('404s on a month that belongs to another course', async () => {
+    const { service } = setup();
+    await expect(
+      service.recipientCount(target({ monthId: '00000000-0000-7000-8000-0000000000ff', access: 'missing' })),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('sends to exactly the list the count showed', async () => {
+    const { outreach, service } = setup();
+    const result = await service.send(target({ monthId: M3, access: 'missing', paidBefore: true }), 'اشترك');
+    await flush();
+    expect(result).toEqual({ queued: 2 });
+    expect(outreach.sendManual.mock.calls.map((call) => (call as unknown[])[1])).toEqual([
+      { userId: 'u1', body: 'اشترك' },
+      { userId: 'u5', body: 'اشترك' },
+    ]);
+  });
+});

@@ -2533,13 +2533,32 @@ const admin = {
   broadcast: {
     eyebrow: 'رسالة مباشرة',
     title: 'رسالة للطلبة',
-    lead: 'اكتب رسالة بصوتك وابعتها لطالب واحد، أو لكل الطلبة دفعة واحدة. الرسالة بتوصل في نفس مكان «رسايلي للطلبة»، وبيقدر يردّ عليها.',
+    lead: 'اكتب رسالة بصوتك وابعتها لطالب واحد، أو لطلبة كورس أو شهر معيّن، أو لكل الطلبة دفعة واحدة. الرسالة بتوصل في نفس مكان «رسايلي للطلبة»، وبيقدر يردّ عليها.',
 
     body: 'الرسالة',
     bodyPlaceholder: 'اكتب اللي عايز تقوله…',
 
     targetAll: 'كل الطلبة',
     targetOne: 'طالب واحد',
+    /** «اللي في الكورس ومشتركوش في الشهر التالت» — one course, optionally
+     *  one curriculum month, and which side of it. */
+    targetCourse: 'طلبة كورس',
+    courseLabel: 'الكورس',
+    coursePlaceholder: 'اختار الكورس',
+    noCourses: 'مفيش كورسات لسه.',
+    monthLabel: 'الشهر',
+    monthWhole: 'الكورس كله',
+    accessLabel: 'مين بالظبط؟',
+    accessAny: 'كل اللي في الكورس',
+    /** Without a month: a live subscription to the course, any kind. */
+    accessHas: 'اللي مشتركين دلوقتي',
+    accessMissing: 'اللي مش مشتركين دلوقتي',
+    /** `{month}` — the month's own title, «شهر ٣ — نوفمبر». A term or yearly
+     *  subscriber counts as having it, the same way the player opens it. */
+    accessHasMonth: 'اللي اشتركوا في «{month}»',
+    accessMissingMonth: 'اللي ماشتركوش في «{month}»',
+    paidBefore: 'بس اللي اشتركوا قبل كده في الكورس',
+    paidBeforeHint: 'من غيرها الرسالة بتوصل كمان للي سجّلوا في الكورس وما دفعوش أي حاجة.',
     /** The field label when «طالب واحد» is selected. */
     targetSearchLabel: 'البريد الإلكتروني أو رقم الهاتف',
     targetSearchPlaceholder: 'ابحث بالبريد أو رقم الهاتف',
@@ -2564,6 +2583,8 @@ const admin = {
     /** The confirm dialog before an «كل الطلبة» send — the one press this
      *  screen exists to make sure is never an accident. */
     confirmTitle: 'هتبعت لكل الطلبة؟',
+    /** `{course}` */
+    confirmTitleCourse: 'هتبعت لطلبة «{course}»؟',
     /** `{count}` */
     confirmBody: 'الرسالة هتوصل لـ {count} طالب دلوقتي. الخطوة دي مش هترجع.',
     confirmCancel: 'رجوع',

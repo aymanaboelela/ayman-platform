@@ -12,9 +12,16 @@ import { adminGet, adminSend, AdminApiError } from '@/lib/admin-api';
 const StudentRowsSchema = listResponse(AdminStudentRowSchema);
 
 function targetQuery(target: BroadcastTarget): string {
-  return target.type === 'all'
-    ? 'type=all'
-    : `type=user&userId=${encodeURIComponent(target.userId)}`;
+  if (target.type === 'all') return 'type=all';
+  if (target.type === 'user') return `type=user&userId=${encodeURIComponent(target.userId)}`;
+  const params = new URLSearchParams({
+    type: 'course',
+    courseId: target.courseId,
+    access: target.access,
+    paidBefore: String(target.paidBefore),
+  });
+  if (target.monthId) params.set('monthId', target.monthId);
+  return params.toString();
 }
 
 export async function recipientCountAction(target: BroadcastTarget): Promise<number> {
