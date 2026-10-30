@@ -113,7 +113,7 @@ function goodEnv(): Record<string, string> {
 
 function check(
   overrides: Record<string, string | undefined> = {},
-  options: { firstDeploy?: boolean } = {},
+  options: { firstDeploy?: boolean; stagingUnderOwner?: boolean } = {},
 ) {
   const env = goodEnv();
   for (const [key, value] of Object.entries(overrides)) {
@@ -176,6 +176,45 @@ describe('checkTenantEnv', () => {
       const { errors } = check({ APP_URL: 'https://x.aymanaboelela.com' });
 
       expect(errors.join(' ')).toContain('apex');
+    });
+
+    describe('a staging stack under his zone, when the owner asked for one', () => {
+      const staging = {
+        APP_URL: 'https://arabito.aymanaboelela.com',
+        MEDIA_ORIGIN: 'https://media-arabito.aymanaboelela.com',
+        ADMIN_EMAIL: 'admin@arabito.aymanaboelela.com',
+        VAPID_SUBJECT: 'mailto:admin@arabito.aymanaboelela.com',
+      };
+
+      it('passes one label under his apex, with a warning that it is temporary', () => {
+        const { errors, warnings } = check(staging, { stagingUnderOwner: true });
+
+        expect(errors).toEqual([]);
+        expect(warnings.join(' ')).toContain('Staging on arabito.aymanaboelela.com');
+      });
+
+      it('still refuses it when the option was not passed — the CLI never passes it', () => {
+        expect(check(staging).errors.join(' ')).toContain('apex');
+      });
+
+      it('refuses one of his own hosts', () => {
+        for (const host of ['www', 'media', 'video', 'panel']) {
+          const { errors } = check({ ...staging, MEDIA_ORIGIN: `https://${host}.aymanaboelela.com` }, { stagingUnderOwner: true });
+          expect(errors.join(' ')).toContain('not a staging host');
+        }
+      });
+
+      it('refuses two labels deep, which the free certificate does not cover', () => {
+        const { errors } = check({ ...staging, MEDIA_ORIGIN: 'https://media.arabito.aymanaboelela.com' }, { stagingUnderOwner: true });
+
+        expect(errors.join(' ')).toContain('not a staging host');
+      });
+
+      it('still catches his domain anywhere ELSE in the env', () => {
+        const { errors } = check({ ...staging, TENANT_FACEBOOK: 'https://aymanaboelela.com/fb' }, { stagingUnderOwner: true });
+
+        expect(errors.join(' ')).toContain('TENANT_FACEBOOK points at aymanaboelela.com');
+      });
     });
 
     it('rejects plain http', () => {

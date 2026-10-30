@@ -20,6 +20,9 @@ export type ProvisionActionResult = ProvisionResult | { ok: false; steps: []; er
  * No `updateTag`: nothing on THIS stack reads what this creates. The new
  * stack is somebody else's; the owner's list re-reads Dokploy per request.
  */
+/** His own labels — the same list the preflight holds (`scripts/check-tenant-env.mjs`). */
+const OWNER_LABELS = new Set(['www', 'media', 'video', 'panel', 'api', 'mail', 'backup', 'backups', 'status', 'cdn', 'assets', 'admin']);
+
 export async function provisionTenantAction(input: ProvisionRequest): Promise<ProvisionActionResult> {
   if (!(await isControlPlaneOwner())) return { ok: false, steps: [], error: c.notOwner };
   if (!dokployConfigured()) return { ok: false, steps: [], error: c.notConnectedNew };
@@ -38,10 +41,26 @@ export async function provisionTenantAction(input: ProvisionRequest): Promise<Pr
     // No own URL to compare with — the preflight still refuses Ayman's domain.
   }
   const ownApex = own.split('.').slice(-2).join('.');
-  for (const host of [data.appHost, data.mediaHost]) {
-    if (own !== '' && (host === own || host === ownApex || host.endsWith(`.${ownApex}`))) {
-      return { ok: false, steps: [], error: c.errOwnerHost, field: host === data.appHost ? 'appHost' : 'mediaHost' };
+  /*
+   * A host under the owner's own apex is a STAGING stack — the instructor has
+   * no domain yet and the owner chose to start on `<label>.<his apex>`
+   * (2026-10-30, «عاوز كل حاجة تتعمل ساب دومين على ما يجيب الدومين بتاعه»).
+   *
+   * Allowed only as exactly one label under the apex (Cloudflare's free
+   * certificate covers one label, so `media.x.<apex>` would have none), never
+   * his own host or apex, never one of his labels, and both hosts together —
+   * a site on his zone with its media elsewhere, or the reverse, is a typo.
+   * The preflight re-checks every one of these (`stagingUnderOwner`).
+   */
+  const underOwner = (host: string) => own !== '' && (host === ownApex || host.endsWith(`.${ownApex}`));
+  let stagingUnderOwner = false;
+  if (underOwner(data.appHost) || underOwner(data.mediaHost)) {
+    for (const host of [data.appHost, data.mediaHost]) {
+      const label = host.endsWith(`.${ownApex}`) ? host.slice(0, -(ownApex.length + 1)) : '';
+      const ok = underOwner(host) && host !== own && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) && !OWNER_LABELS.has(label);
+      if (!ok) return { ok: false, steps: [], error: c.errOwnerHost, field: host === data.appHost ? 'appHost' : 'mediaHost' };
     }
+    stagingUnderOwner = true;
   }
 
   try {
@@ -66,6 +85,7 @@ export async function provisionTenantAction(input: ProvisionRequest): Promise<Pr
         facebook: data.facebook,
         whatsappChannel: data.whatsappChannel,
       },
+      stagingUnderOwner,
     });
   } catch (error) {
     // `provision` reports its own steps; anything thrown past it is the panel

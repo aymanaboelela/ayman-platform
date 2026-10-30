@@ -52,6 +52,21 @@ describe('the generated environment', () => {
     expect(report.errors).toEqual([]);
   });
 
+  it('passes it as a staging stack one label under the owner, admin email included', () => {
+    const text = renderEnvText(
+      buildTenantEnv(
+        spec({
+          appHost: 'arabito.aymanaboelela.com',
+          mediaHost: 'media-arabito.aymanaboelela.com',
+          adminEmail: 'admin@arabito.aymanaboelela.com',
+        }),
+        generateSecrets(),
+      ),
+    );
+    expect(checkEnvText(text, { firstDeploy: true, stagingUnderOwner: true }).errors).toEqual([]);
+    expect(checkEnvText(text, { firstDeploy: true }).errors).not.toEqual([]);
+  });
+
   it('carries every template key, in the template order', () => {
     const fromTemplate = TEMPLATE.split('\n')
       .map((line) => /^([A-Z_][A-Z0-9_]*)=/.exec(line.trim())?.[1])

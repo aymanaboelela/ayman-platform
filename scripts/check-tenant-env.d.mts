@@ -23,7 +23,7 @@ export const GRADE_SLUGS: readonly string[];
 
 export function checkTenantEnv(
   env: Record<string, string | undefined>,
-  options?: { firstDeploy?: boolean },
+  options?: { firstDeploy?: boolean; stagingUnderOwner?: boolean },
 ): TenantEnvReport;
 
 export function parseEnvFile(path: string): Record<string, string>;
