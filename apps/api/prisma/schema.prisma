@@ -4469,6 +4469,14 @@ enum ExpenseCategory {
   /// اشتراكات وخدمات — سيرفرات، برامج
   services
   other
+  /// شركة الشحن والبريد
+  shipping
+  /// مواصلات — أوبر، توك توك
+  transport
+  /// جوايز الطلبة
+  prizes
+  /// صدقات
+  charity
 
   @@map("expense_category")
   @@schema("app")

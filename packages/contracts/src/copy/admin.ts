@@ -3756,6 +3756,13 @@ const admin = {
     /** Over the profit breakdown, so the subtraction is shown rather than
      *  asserted: he can check the arithmetic instead of trusting it. */
     bookProfitBreakdown: 'مبيعات الكتب {items} − تكلفة النسخ {cost} = {profit}',
+    /** Once the courier's per-parcel price is set: the whole take, the copies
+     *  and the parcels, so «سعر الطباعة ٩٠ والشحن ١٠٠، الباقي مكسب» is the
+     *  arithmetic on screen. */
+    bookProfitBreakdownCourier:
+      'اللي دخل من الكتب {items} − الطباعة {cost} − الشحن {courier} = {profit}',
+    /** Replaces `shippingPassThrough` once the courier price is known. */
+    shippingCourier: 'الشحن: اتجمع {collected} من الطلبة، واتدفع للمندوب {courier} ({n} طرد × {per})',
     /** The «صافي الربح» tile's own one-liner. The formula is spelled out
      *  because three tiles above it are inputs to it and the reader should not
      *  have to guess which. */
@@ -4749,7 +4756,27 @@ const admin = {
     marketing: 'إعلانات',
     staff: 'أجور',
     services: 'خدمات واشتراكات',
+    shipping: 'شحن',
+    transport: 'مواصلات',
+    prizes: 'جوايز',
+    charity: 'صدقات',
     other: 'حاجات تانية',
+  },
+  /** Under the select: what belongs in the chosen category, in the words the
+   *  ledger already uses — so the same spend lands in the same bucket every
+   *  time instead of «شركه شحن» ending up under أجور. */
+  expenseCategoryHint: {
+    filming: 'الاستوديو وساعات التصوير — زي «استوديو» أو «اشتراك ٢٠ ساعة في الاستوديو».',
+    printing: 'المطبعة وطباعة أو تصوير الكتب.',
+    shipping: 'شركة الشحن والبريد — توصيل الكتب للطلبة.',
+    equipment: 'أجهزة وأدوات — ماك، آيباد، سبورة، أقلام، وصلات.',
+    marketing: 'إعلانات وتصميم — جرافيك ديزاين، بانرات، ستيكرز.',
+    staff: 'مرتبات وأجور الفريق — زي «راتب أمجد».',
+    services: 'اشتراكات وخدمات أونلاين — الدومين، كاب كات، عمولة التحويل.',
+    transport: 'مواصلات — أوبر، توك توك.',
+    prizes: 'جوايز الطلبة والمسابقات.',
+    charity: 'صدقات.',
+    other: 'أي حاجة مش داخلة في الأنواع اللي فوق.',
   },
   /**
    * الكتاب الورقي — `/admin/books`. `filterAddressOnly` and `filterPaid` are
@@ -5591,6 +5618,10 @@ const admin = {
      *  عشان أي كود قديم لسه شايفه ما يكسرش. الجديد `shippingZone*` تحت. */
     shippingSettingLabel: 'الشحن (ج)',
     shippingSettingSave: 'احفظ',
+    /** What the COURIER charges per parcel — feeds «مكسب الكتب», not the cart. */
+    courierCostLabel: 'الشحن بيكلفني كام للطرد (ج)',
+    courierCostHint:
+      'اللي بتدفعه لشركة الشحن على الطرد الواحد. الطالب مش بيشوفه — بيتخصم من مكسب الكتب في الحسابات. سيبه فاضي لو مش عايز تحسبه.',
     shippingSettingFailed: 'مقدرناش نحفظ سعر الشحن — نحاول تاني',
     /* ── المناطق التلاتة ──────────────────────────────────────────────────
        كل واحدة تحتها المحافظات اللي جوّاها بالاسم: «السويس وجه بحري ولا بعيد؟»

@@ -146,6 +146,9 @@ export function ExpenseForm({
               </option>
             ))}
           </Select>
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.expenseCategoryHint[category]}
+          </p>
         </div>
       </div>
 

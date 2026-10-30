@@ -19,10 +19,14 @@ import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
 export const ExpenseCategorySchema = z.enum([
   'filming',
   'printing',
+  'shipping',
   'equipment',
   'marketing',
   'staff',
   'services',
+  'transport',
+  'prizes',
+  'charity',
   'other',
 ]);
 export type ExpenseCategory = z.infer<typeof ExpenseCategorySchema>;
@@ -250,6 +254,19 @@ export const AdminFinanceOverviewSchema = z.object({
    * than folded into revenue OR profit: it is money that arrived and left.
    */
   bookShippingCents: z.number().int(),
+  /**
+   * Parcels that really went out — every counted order, giveaways included,
+   * because the courier was paid for those too.
+   */
+  bookParcelCount: z.number().int(),
+  /**
+   * `bookParcelCount` × `store.courierCostCents`, or NULL while that setting is
+   * unset. When it is set, `bookProfitCents` is the WHOLE book take (items +
+   * shipping − refunds) − copies − this, and `bookItemsNetCents` is that whole
+   * take: the fee a student paid stops being a pass-through, because what the
+   * courier charges is a fixed price that differs from it.
+   */
+  bookCourierCostCents: z.number().int().nullable(),
   /** net revenue − expenses. Negative is a real answer. */
   netCents: z.number().int(),
   /** Newest month first, capped by the API. */

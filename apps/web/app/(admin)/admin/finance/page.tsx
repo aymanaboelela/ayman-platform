@@ -164,11 +164,20 @@ export default async function FinanceOverviewPage() {
         <StatTile
           label={c.tileBookProfit}
           value={egp(overview.bookProfitCents)}
-          context={formatCopy(c.bookProfitBreakdown, {
-            items: egp(overview.bookItemsNetCents),
-            cost: egp(overview.bookCostOfSalesCents),
-            profit: egp(overview.bookProfitCents),
-          })}
+          context={
+            overview.bookCourierCostCents === null
+              ? formatCopy(c.bookProfitBreakdown, {
+                  items: egp(overview.bookItemsNetCents),
+                  cost: egp(overview.bookCostOfSalesCents),
+                  profit: egp(overview.bookProfitCents),
+                })
+              : formatCopy(c.bookProfitBreakdownCourier, {
+                  items: egp(overview.bookItemsNetCents),
+                  cost: egp(overview.bookCostOfSalesCents),
+                  courier: egp(overview.bookCourierCostCents),
+                  profit: egp(overview.bookProfitCents),
+                })
+          }
         />
       </div>
 
@@ -176,7 +185,16 @@ export default async function FinanceOverviewPage() {
           inside «مكسب الكتب» — the fee is collected from the student and handed
           straight to the courier, so counting it as margin credited the owner
           with the courier's money on every order. */}
-      {overview.bookShippingCents > 0 ? (
+      {overview.bookCourierCostCents !== null && overview.bookParcelCount > 0 ? (
+        <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {formatCopy(c.shippingCourier, {
+            collected: egp(overview.bookShippingCents),
+            courier: egp(overview.bookCourierCostCents),
+            n: overview.bookParcelCount,
+            per: egp(Math.round(overview.bookCourierCostCents / overview.bookParcelCount)),
+          })}
+        </p>
+      ) : overview.bookShippingCents > 0 ? (
         <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
           {formatCopy(c.shippingPassThrough, { amount: egp(overview.bookShippingCents) })}
         </p>

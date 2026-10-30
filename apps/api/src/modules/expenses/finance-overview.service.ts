@@ -5,10 +5,13 @@ import type {
   ExpenseCategory,
   FinanceMonth,
 } from '@ayman/contracts/admin/expenses';
+import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
+import { SITE_SETTINGS_ID } from '../admin/admin.constants';
 import {
   BOOK_COUNTED_SQL,
+  BOOK_COUNTED_WHERE,
   BOOK_REVENUE_SQL,
   BOOK_REVENUE_WHERE,
 } from '../book-orders/book-revenue';
@@ -50,6 +53,10 @@ const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   marketing: 'إعلانات',
   staff: 'أجور ومساعدين',
   services: 'اشتراكات وخدمات',
+  shipping: 'شحن',
+  transport: 'مواصلات',
+  prizes: 'جوايز',
+  charity: 'صدقات',
   other: 'حاجات تانية',
 };
 
@@ -141,6 +148,8 @@ export class FinanceOverviewService {
       walletIncome,
       walletSpent,
       walletHeld,
+      parcelCount,
+      courierCostPerParcelCents,
     ] = await Promise.all([
       this.prisma.paymentSubmission.aggregate({
         // Identical to the revenue tile's filter — see the class doc. A
@@ -173,6 +182,9 @@ export class FinanceOverviewService {
       }),
       // Held by students right now.
       this.prisma.wallet.aggregate({ _sum: { balanceCents: true } }),
+      // Every parcel that went out — a giveaway's courier was paid too.
+      this.prisma.bookOrder.count({ where: BOOK_COUNTED_WHERE }),
+      this.courierCostPerParcel(),
     ]);
 
     const subscriptionRevenueCents = subscriptionRevenue._sum.amountCents ?? 0;
@@ -196,8 +208,20 @@ export class FinanceOverviewService {
     // The refund comes off here too. A refunded order is one whose money went
     // back, and the copies it cost to print are still gone — so the profit on
     // it is genuinely negative, and saying so is the point of the figure.
-    const bookItemsNetCents = cost.bookItemsCents - bookRefundsCents;
-    const bookProfitCents = bookItemsNetCents - cost.bookCostOfSalesCents;
+    //
+    // Once the courier's real per-parcel price is known, the shipping fee is
+    // no longer a pass-through: students paid ٨٠/١٠٠/١٥٠ (or nothing, inside
+    // an old ٢٥٠ cover price) while the courier charges one fixed price. So the
+    // gross becomes everything the orders brought in, and every parcel costs
+    // that price — «سعر الطباعة ٩٠ والشحن ١٠٠، الباقي مكسب».
+    const bookCourierCostCents =
+      courierCostPerParcelCents === null ? null : parcelCount * courierCostPerParcelCents;
+    const bookItemsNetCents =
+      bookCourierCostCents === null
+        ? cost.bookItemsCents - bookRefundsCents
+        : cost.bookItemsCents + cost.bookShippingCents - bookRefundsCents;
+    const bookProfitCents =
+      bookItemsNetCents - cost.bookCostOfSalesCents - (bookCourierCostCents ?? 0);
 
     const expensesByCategory = expenseGroups
       .map((group) => ({
@@ -231,6 +255,8 @@ export class FinanceOverviewService {
       bookProfitCents,
       bookItemsNetCents,
       bookShippingCents: cost.bookShippingCents,
+      bookParcelCount: parcelCount,
+      bookCourierCostCents,
       // Revenue that actually STAYED, minus what went out. The refund is
       // subtracted here and the cost of sales is NOT — `printing` expenses
       // already carry what the paper cost, in the month the printer was paid,
@@ -291,6 +317,17 @@ export class FinanceOverviewService {
    * COUNTED, so a margin computed against a partly-unpriced catalogue announces
    * itself instead of quietly overstating profit.
    */
+  /** `store.courierCostCents`, or NULL when unset. A settings row that fails
+   *  to parse reads as unset rather than taking the whole finance screen down. */
+  private async courierCostPerParcel(): Promise<number | null> {
+    const row = await this.prisma.siteSetting.findUnique({
+      where: { id: SITE_SETTINGS_ID },
+      select: { data: true },
+    });
+    const parsed = SiteSettingsSchema.safeParse(row?.data ?? {});
+    return parsed.success ? (parsed.data.store.courierCostCents) : null;
+  }
+
   private async bookCostOfSales(): Promise<{
     bookCostOfSalesCents: number;
     bookCostUnknownCount: number;
