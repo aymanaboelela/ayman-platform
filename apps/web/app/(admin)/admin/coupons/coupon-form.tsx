@@ -200,25 +200,28 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
         ) : null}
       </fieldset>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
+      {/* Stacked, not side by side: the form lives in a narrow sheet, so a
+          viewport breakpoint says "wide" while the sheet is ~360px, and a
+          datetime-local input's intrinsic width then spills out of its track. */}
+      <div className="grid gap-4">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="cp-starts">{c.startsAt}</Label>
           <Input id="cp-starts" type="datetime-local" dir="ltr" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="cp-ends">{c.endsAt}</Label>
           <Input id="cp-ends" type="datetime-local" dir="ltr" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
         </div>
-        <p className="text-[length:var(--fs-text-xs)] text-fg-muted sm:col-span-2">{c.windowHint}</p>
+        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.windowHint}</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
+      <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-4">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="cp-max">{c.maxUses}</Label>
           <Input id="cp-max" type="number" inputMode="numeric" dir="ltr" min={1} value={maxUses} onChange={(event) => setMaxUses(event.target.value)} />
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.maxUsesHint}</p>
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="cp-per">{c.maxPerStudent}</Label>
           <Input id="cp-per" type="number" inputMode="numeric" dir="ltr" min={1} max={100} value={maxPerStudent} onChange={(event) => setMaxPerStudent(event.target.value)} />
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.maxPerStudentHint}</p>
