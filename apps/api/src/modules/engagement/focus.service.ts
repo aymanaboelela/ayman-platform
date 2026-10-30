@@ -91,7 +91,7 @@ export class FocusService {
 
     return {
       live: live[0]?.n ?? 0,
-      open: open ? this.toSession(open) : null,
+      open: open ? this.toSession(open, now) : null,
       today: { sessions: todayRow?.sessions ?? 0, minutes: todayRow?.minutes ?? 0 },
       week,
       total: { sessions: total[0]?.sessions ?? 0, minutes: total[0]?.minutes ?? 0 },
@@ -153,12 +153,14 @@ export class FocusService {
     `);
   }
 
-  private toSession(row: OpenRow): FocusSession {
+  private toSession(row: OpenRow, now: Date): FocusSession {
+    const endsAt = row.startedAt.getTime() + row.minutes * 60_000;
     return {
       id: row.id,
       startedAt: row.startedAt.toISOString(),
-      endsAt: new Date(row.startedAt.getTime() + row.minutes * 60_000).toISOString(),
+      endsAt: new Date(endsAt).toISOString(),
       minutes: row.minutes,
+      remainingMs: Math.max(0, endsAt - now.getTime()),
     };
   }
 }

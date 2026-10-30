@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Coffee, Loader2, Play, Square, Timer, Users } from 'lucide-react';
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Coffee, Loader2, Play, Square, Timer, Users, VolumeX } from 'lucide-react';
 import {
   FOCUS_BREAK_MINUTES,
   FOCUS_DEFAULT_MINUTES,
@@ -9,11 +9,26 @@ import {
   FocusPayloadSchema,
   FocusStopResultSchema,
   type FocusPayload,
+  type FocusSession,
 } from '@ayman/contracts/engagement';
 import { engagementCopy } from '@ayman/contracts/copy/engagement';
 import { formatCopy } from '@ayman/contracts/format';
 import { CountUp } from '@/components/rank/count-up';
 import { apiGet, apiPost } from '@/lib/api';
+import { Eq, FocusSoundPanel } from './focus-sound-panel';
+import {
+  buzz,
+  playAlarm,
+  readSoundPrefs,
+  scheduleAlarm,
+  serverSoundPrefs,
+  setAmbient,
+  stopAmbient,
+  subscribeSoundPrefs,
+  unlockAudio,
+  type FocusAlarm,
+  type SoundHandle,
+} from './focus-sound';
 
 const c = engagementCopy.focus;
 
@@ -35,40 +50,34 @@ function clock(ms: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-/** A soft two-note chime when a sitting or a break runs out. Silent where audio is blocked. */
-function chime(): void {
-  try {
-    const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const context = new AudioCtx();
-    [660, 880].forEach((frequency, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.frequency.value = frequency;
-      oscillator.type = 'sine';
-      const at = context.currentTime + index * 0.22;
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(at);
-      oscillator.stop(at + 0.55);
-    });
-  } catch {
-    // No sound is fine — the screen says it too.
-  }
-}
-
 /**
  * The ring: a full circle that empties as the time runs out. `progress` is
- * the share still LEFT, so a fresh sitting is a whole ring.
+ * the share still LEFT, so a fresh sitting is a whole ring. A dot rides the
+ * end of the arc and sixty ticks mark the minutes of the dial, so the ring
+ * reads as a clock and not a loading spinner.
  */
-function Ring({ progress, label, sub, tone }: { progress: number; label: string; sub: string; tone: 'run' | 'break' | 'idle' }) {
+function Ring({
+  progress,
+  label,
+  sub,
+  tone,
+  children,
+}: {
+  progress: number;
+  label: string;
+  sub: string;
+  tone: 'run' | 'break' | 'idle';
+  children?: ReactNode;
+}) {
   const radius = 92;
   const length = 2 * Math.PI * radius;
+  const share = Math.min(1, Math.max(0, progress));
+  const angle = 2 * Math.PI * share;
   return (
     <div className="eg-ring" data-tone={tone}>
+      <span className="eg-ring__halo" aria-hidden="true" />
       <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle className="eg-ring__ticks" cx="100" cy="100" r="78" pathLength="60" fill="none" />
         <circle className="eg-ring__track" cx="100" cy="100" r={radius} />
         <circle
           className="eg-ring__fill"
@@ -76,46 +85,86 @@ function Ring({ progress, label, sub, tone }: { progress: number; label: string;
           cy="100"
           r={radius}
           strokeDasharray={length}
-          strokeDashoffset={length * (1 - Math.min(1, Math.max(0, progress)))}
+          strokeDashoffset={length * (1 - share)}
         />
+        {tone !== 'idle' && share > 0.005 ? (
+          <circle
+            className="eg-ring__head"
+            cx={100 + radius * Math.cos(angle)}
+            cy={100 + radius * Math.sin(angle)}
+            r="7"
+          />
+        ) : null}
       </svg>
       <div className="eg-ring__text">
         <span className="eg-ring__time eg-ltr-num">{label}</span>
         <span className="eg-ring__sub">{sub}</span>
+        {children}
       </div>
     </div>
   );
 }
 
+/** When the sitting ends on THIS device's clock — see `FocusSession.remainingMs`. */
+function sittingEnd(open: FocusSession): number {
+  return open.remainingMs === undefined ? Date.parse(open.endsAt) : Date.now() + open.remainingMs;
+}
+
 /**
  * «أوضة المذاكرة». The server owns the sitting (`FocusService`); this screen
- * shows the countdown, chimes at the end, then runs a short break that is
+ * shows the countdown, rings at the end, then runs a short break that is
  * never stored. A reload in the middle comes back to the same timer, because
  * the open sitting arrives with the page.
+ *
+ * Sound lives in `focus-sound.ts`: the alarm is booked on the audio clock the
+ * moment a sitting starts, and the room sound plays under it until it ends.
  */
 export function FocusBoard({ initial }: { initial: FocusPayload }) {
   const [payload, setPayload] = useState(initial);
   const [minutes, setMinutes] = useState<number>(initial.open?.minutes ?? FOCUS_DEFAULT_MINUTES);
   const [phase, setPhase] = useState<Phase>(() =>
     initial.open
-      ? { kind: 'running', endsAt: Date.parse(initial.open.endsAt), minutes: initial.open.minutes }
+      ? { kind: 'running', endsAt: sittingEnd(initial.open), minutes: initial.open.minutes }
       : { kind: 'idle' },
   );
   const [now, setNow] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
   const finishing = useRef(false);
+  /** The alarm booked for the end of the current sitting or break, if any. */
+  const booked = useRef<SoundHandle | null>(null);
+  const prefs = useSyncExternalStore(subscribeSoundPrefs, readSoundPrefs, serverSoundPrefs);
+
+  function book(endsAt: number, alarm: FocusAlarm = prefs.alarm): void {
+    booked.current?.cancel();
+    booked.current = scheduleAlarm(alarm, endsAt);
+  }
+
+  /** The end arrived: ring, unless the audio clock already did. */
+  function ring(): void {
+    if (!booked.current) playAlarm(prefs.alarm);
+    booked.current = null;
+    buzz();
+  }
+
+  function silence(): void {
+    booked.current?.cancel();
+    booked.current = null;
+    stopAmbient();
+  }
 
   // The end of a sitting or a break, checked on every tick of the clock.
   const onTick = useEffectEvent((at: number) => {
     setNow(at);
     if (phase.kind === 'running' && at >= phase.endsAt && !finishing.current) {
       finishing.current = true;
-      chime();
+      stopAmbient();
+      ring();
       void stop(true);
     } else if (phase.kind === 'break' && at >= phase.endsAt) {
-      chime();
+      ring();
       setPhase({ kind: 'idle' });
     }
   });
@@ -130,6 +179,26 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
       window.clearInterval(every);
     };
   }, []);
+
+  // A reload mid-sitting comes back without sound: the browser opens audio
+  // only for a gesture. The first tap anywhere on the page books the alarm
+  // and brings the room sound back.
+  const resumeSound = useEffectEvent(() => {
+    unlockAudio();
+    if (phase.kind !== 'running' || booked.current) return;
+    book(phase.endsAt);
+    if (!muted) setAmbient(prefs.ambient);
+  });
+  useEffect(() => {
+    if (!initial.open) return;
+    const once = () => resumeSound();
+    window.addEventListener('pointerdown', once, { once: true });
+    return () => window.removeEventListener('pointerdown', once);
+  }, [initial.open]);
+
+  // Leaving the page stops the room sound; the sitting itself carries on server-side.
+  const leave = useEffectEvent(() => silence());
+  useEffect(() => () => leave(), []);
 
   // The live count, re-read every half minute.
   useEffect(() => {
@@ -159,6 +228,8 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
   }, [remaining, phase.kind]);
 
   async function start(): Promise<void> {
+    // Inside the click, before any await — the only moment iOS lets audio open.
+    unlockAudio();
     setBusy(true);
     setError(null);
     try {
@@ -166,7 +237,10 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
       setPayload(fresh);
       if (fresh.open) {
         finishing.current = false;
-        setPhase({ kind: 'running', endsAt: Date.parse(fresh.open.endsAt), minutes: fresh.open.minutes });
+        const endsAt = sittingEnd(fresh.open);
+        setPhase({ kind: 'running', endsAt, minutes: fresh.open.minutes });
+        book(endsAt);
+        if (!muted) setAmbient(prefs.ambient);
       }
     } catch {
       setError(c.errors.failed);
@@ -179,16 +253,14 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
     setBusy(true);
     setConfirming(false);
     setError(null);
+    if (!natural) silence();
     try {
       const result = await apiPost('/api/me/focus/stop', FocusStopResultSchema, {});
       setPayload(result.payload);
       if (result.completed) {
-        setPhase({
-          kind: 'break',
-          endsAt: Date.now() + FOCUS_BREAK_MINUTES * 60_000,
-          minutes: FOCUS_BREAK_MINUTES,
-          credited: result.minutes,
-        });
+        const endsAt = Date.now() + FOCUS_BREAK_MINUTES * 60_000;
+        setPhase({ kind: 'break', endsAt, minutes: FOCUS_BREAK_MINUTES, credited: result.minutes });
+        book(endsAt);
       } else {
         setPhase({ kind: 'stopped', minutes: result.minutes });
       }
@@ -198,6 +270,18 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function toggleMute(): void {
+    unlockAudio();
+    if (muted) setAmbient(prefs.ambient);
+    else stopAmbient();
+    setMuted(!muted);
+  }
+
+  /** A new alarm picked mid-sitting is booked in place of the old one. */
+  function changeAlarm(alarm: FocusAlarm): void {
+    if (phase.kind === 'running' || phase.kind === 'break') book(phase.endsAt, alarm);
   }
 
   const maxWeek = Math.max(1, ...payload.week.map((day) => day.minutes));
@@ -252,7 +336,20 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
               progress={remaining / (phase.minutes * 60_000)}
               label={clock(remaining)}
               sub={c.running}
-            />
+            >
+              {prefs.ambient === 'none' ? null : (
+                <button
+                  type="button"
+                  className="eg-ring__sound"
+                  aria-pressed={!muted}
+                  aria-label={muted ? c.sound.unmute : c.sound.mute}
+                  onClick={toggleMute}
+                >
+                  {muted ? <VolumeX className="size-3.5" aria-hidden="true" /> : <Eq />}
+                  {c.sound.ambients[prefs.ambient]}
+                </button>
+              )}
+            </Ring>
             <p className="eg-muted-line eg-focus__tip">{c.tip}</p>
             {confirming ? (
               <div className="eg-focus__actions">
@@ -332,6 +429,14 @@ export function FocusBoard({ initial }: { initial: FocusPayload }) {
           </p>
         ) : null}
       </section>
+
+      <FocusSoundPanel
+        prefs={prefs}
+        live={phase.kind === 'running'}
+        roomOn={phase.kind === 'running' && !muted}
+        onAlarm={changeAlarm}
+        onAmbient={() => setMuted(false)}
+      />
 
       <section className="eg-card">
         <header className="eg-card__head">
