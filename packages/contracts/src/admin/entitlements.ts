@@ -192,6 +192,18 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like `socialPosts`. Each stack connects ITS teacher's own
+     * channel through Google OAuth, so opening it for a teacher carries nothing
+     * of Ayman's — but it also needs the stack's own OAuth client
+     * (`YOUTUBE_OAUTH_CLIENT_ID`/`_SECRET`) before the button does anything.
+     */
+    key: 'youtubeStudio',
+    nameAr: 'قناة اليوتيوب',
+    descriptionAr: 'ربط قناة المدرّس على يوتيوب، وتعديل عناوين الفيديوهات ووصفها والتاجز والصورة المصغّرة من المنصة.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first": built at his request and off on every other stack until
      * the owner opens it from the signed document. It replies FROM a real
      * WhatsApp number, so it also needs `marketing.whatsapp` (the linked

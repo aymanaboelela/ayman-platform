@@ -5134,6 +5134,10 @@ export const copy = {
     /** ADMIN — `{name}` at the end, same reason as `paymentSubmitted`. */
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
     walletQueue: 'طلبات الشحن',
+    /** ADMIN — «يوتيوب». About the video, never to the reader. */
+    youtubeNewVideo: 'نزل فيديو جديد على القناة: {title}',
+    youtubeNewVideoNoTitle: 'نزل فيديو جديد على القناة',
+    youtubeNewVideoSubtitle: 'العنوان والوصف والتاجز مستنيين يتظبطوا',
     walletSubtitle: 'المحفظة',
     /*
      * ADMIN, push only — «لوحة التحكم على الموبايل» (`adminMobile`). None of

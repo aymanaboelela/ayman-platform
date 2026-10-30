@@ -5321,6 +5321,10 @@ enum NotificationKind {
   /// Carries ids and counts only; the stem, the options and the quiz's title
   /// are resolved at read time.
   suspect_key
+  /// ADMIN — «نزل فيديو جديد». The YouTube watcher saw an upload it had not
+  /// seen since the channel was connected. To the admin who connected the
+  /// channel only. Carries the video id; the title is read from `youtube_videos`.
+  youtube_new_video
 
   @@map("notification_kind")
   @@schema("app")
@@ -6976,6 +6980,56 @@ model SocialSettings {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("social_settings")
+  @@schema("app")
+}
+
+/// «يوتيوب» — the teacher's YouTube channel, connected through Google OAuth.
+/// A singleton (`id = 1`, CHECKed). The REFRESH token is stored ENCRYPTED
+/// (AES-256-GCM, key derived from `BETTER_AUTH_SECRET` with its own HKDF
+/// label) and never returned by any route; the browser sees `token_hint`.
+///
+/// `pending_state_*` is the one OAuth round-trip in flight: the SHA-256 of
+/// its nonce, the admin who started it, and when it stops being accepted.
+/// The callback consumes it with a conditional UPDATE, so a state is good
+/// for exactly one callback.
+model YoutubeConnection {
+  id                     Int       @id @default(1)
+  channelId              String?   @map("channel_id")
+  channelTitle           String?   @map("channel_title")
+  channelAvatarUrl       String?   @map("channel_avatar_url")
+  channelCustomUrl       String?   @map("channel_custom_url")
+  uploadsPlaylistId      String?   @map("uploads_playlist_id")
+  tokenCiphertext        String?   @map("token_ciphertext")
+  tokenHint              String?   @map("token_hint")
+  connectedBy            String?   @map("connected_by")
+  connectedAt            DateTime? @map("connected_at") @db.Timestamptz(3)
+  pendingStateHash       String?   @map("pending_state_hash")
+  pendingStateUserId     String?   @map("pending_state_user_id")
+  pendingStateExpiresAt  DateTime? @map("pending_state_expires_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("youtube_connection")
+  @@schema("app")
+}
+
+/// «يوتيوب» — every upload the platform has seen on the connected channel.
+/// Written by the watcher (one `playlistItems` call, 1 quota unit) and by the
+/// list's first page. The first sighting of a channel is a BASELINE
+/// (`is_new = false`), so connecting a channel with 300 videos does not
+/// announce 300 «new» ones. `handled_at` ends the «جديد» badge.
+model YoutubeVideo {
+  videoId         String    @id @map("video_id")
+  channelId       String    @map("channel_id")
+  title           String
+  thumbnailUrl    String?   @map("thumbnail_url")
+  publishedAt     DateTime? @map("published_at") @db.Timestamptz(3)
+  isNew           Boolean   @default(false) @map("is_new")
+  firstSeenAt     DateTime  @default(now()) @map("first_seen_at") @db.Timestamptz(3)
+  handledAt       DateTime? @map("handled_at") @db.Timestamptz(3)
+  thumbnailSetAt  DateTime? @map("thumbnail_set_at") @db.Timestamptz(3)
+
+  @@index([channelId, isNew, handledAt])
+  @@map("youtube_videos")
   @@schema("app")
 }
 

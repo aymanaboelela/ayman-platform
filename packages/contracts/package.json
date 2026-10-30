@@ -182,9 +182,11 @@
     "./engagement": "./src/engagement.ts",
     "./copy/engagement": "./src/copy/engagement.ts",
     "./copy/social-posts": "./src/copy/social-posts.ts",
+    "./copy/youtube-studio": "./src/copy/youtube-studio.ts",
     "./social/posts": "./src/social/posts.ts",
     "./social/caption": "./src/social/caption.ts",
-    "./social/names": "./src/social/names.ts"
+    "./social/names": "./src/social/names.ts",
+    "./youtube/studio": "./src/youtube/studio.ts"
   },
   "scripts": {
     "lint": "eslint src",

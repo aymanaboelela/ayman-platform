@@ -1,12 +1,12 @@
 /*
  * ⚠️ BEFORE the import below, because `AssistantAiService`'s constructor calls
- * `selectProvider()`, which calls `loadEnv(process.env)` — and a jest process
+ * `selectAnswerProvider()`, which calls `loadEnv(process.env)` — and a jest process
  * carries none of the twenty variables that schema demands, so merely
  * CONSTRUCTING the service throws «API_PORT: must be a number».
  *
  * Mocked rather than filled in: none of the tests below are about the
  * environment. They put a provider in front of the service by hand, which is
- * the only thing `selectProvider` would have decided, and an empty env is
+ * the only thing `selectAnswerProvider` would have decided, and an empty env is
  * exactly the "no key configured" state the written path is tested in.
  */
 jest.mock('../../../config/env', () => ({ loadEnv: () => ({}) }));

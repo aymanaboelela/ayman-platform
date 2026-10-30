@@ -165,7 +165,9 @@ export type EmitInput =
       pickedOptionId: string;
       picks: number;
       answers: number;
-    };
+    }
+  /** ADMIN — «نزل فيديو جديد». The video id only; the title is read from `youtube_videos`. */
+  | { userId: string; kind: 'youtube_new_video'; videoId: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set([
@@ -662,6 +664,20 @@ export class NotificationsService {
       }
     }
 
+    // «نزل فيديو جديد» — titles as the watcher last saw them, one query a page.
+    const youtubeIds = page
+      .filter((row) => row.kind === 'youtube_new_video')
+      .map((row) => payloadString(row.payload, 'videoId'))
+      .filter((id): id is string => id !== null);
+    const youtubeTitles = new Map<string, string>();
+    if (youtubeIds.length > 0) {
+      const videos = await this.prisma.youtubeVideo.findMany({
+        where: { videoId: { in: [...new Set(youtubeIds)] } },
+        select: { videoId: true, title: true },
+      });
+      for (const video of videos) youtubeTitles.set(video.videoId, video.title);
+    }
+
     const entries = page
       .map((row) =>
         toEntry(
@@ -674,6 +690,7 @@ export class NotificationsService {
           bookOrderDays,
           honorPins,
           suspectFacts,
+          youtubeTitles,
         ),
       )
       // A notification whose lesson has since been deleted has nothing left to
@@ -846,6 +863,8 @@ function toEntry(
   honorPins: Map<string, HonorPinFacts>,
   /** Notification row id → its resolved texts. Missing when the version is gone. */
   suspectFacts: Map<string, SuspectKeyFacts>,
+  /** Video id → its title. Missing for a video the channel no longer has. */
+  youtubeTitles: Map<string, string> = new Map(),
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -935,6 +954,12 @@ function toEntry(
    * «المحفظة» — none of the three names a lesson or a course, so they are
    * answered here, before the lesson lookup below would drop them.
    */
+  if (row.kind === 'youtube_new_video') {
+    const videoId = payloadString(row.payload, 'videoId');
+    if (!videoId) return null;
+    return { ...base, kind: 'youtube_new_video', videoId, title: youtubeTitles.get(videoId) ?? '' };
+  }
+
   if (row.kind === 'suspect_key') {
     const facts = suspectFacts.get(row.id);
     return facts ? { ...base, kind: 'suspect_key', ...facts } : null;

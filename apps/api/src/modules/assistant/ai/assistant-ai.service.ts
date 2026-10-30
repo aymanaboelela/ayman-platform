@@ -18,7 +18,6 @@ import {
 import { copy } from '@ayman/contracts/copy';
 import { subjectCopy } from '@ayman/contracts/copy/subject';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
-import { loadEnv } from '../../../config/env';
 import { IS_AYMAN, TEACHES_CODE, tenantName } from '../../../common/tenant';
 import { SUBJECT_NAME_AR, bySubject } from '../../../common/tenant-subject';
 import { CatalogService } from '../../catalog/catalog.service';
@@ -30,10 +29,7 @@ import {
   pricingBlock,
 } from './assistant-knowledge';
 import type { AnswerProvider } from './providers/answer-provider';
-import { GeminiProvider } from './providers/gemini.provider';
-import { AnthropicProvider } from './providers/anthropic.provider';
-import { GroqProvider } from './providers/groq.provider';
-import { ChainProvider } from './providers/chain.provider';
+import { selectAnswerProvider } from './providers/select-provider';
 
 /**
  * The half of المساعد that answers a question nobody wrote a button for.
@@ -449,7 +445,7 @@ export class AssistantAiService {
      */
     private readonly facts: AssistantFactsService,
   ) {
-    this.provider = selectProvider();
+    this.provider = selectAnswerProvider(REQUEST_TIMEOUT_MS);
     if (this.provider) {
       // The provider's ID and never the key. «ليه الردود وحشة؟» and «هو أصلاً
       // شغّال؟» are the two questions this line exists to answer at a glance.
@@ -739,59 +735,3 @@ export class AssistantAiService {
   }
 }
 
-/**
- * Whichever provider this deployment is configured for.
- *
- * Read ONCE, at construction. A per-request read would let a key rotated in
- * `.env` take effect without a restart, which sounds like a feature until the
- * chat starts answering from two different models depending on when the
- * process last happened to look.
- */
-function selectProvider(): AnswerProvider | null {
-  const env = loadEnv(process.env);
-
-  /** `"a, b,"` in a hand-edited `.env` is a two-model chain, not an empty one. */
-  const list = (value: string, fallback: string): string[] => {
-    const names = value.split(',').map((name) => name.trim()).filter(Boolean);
-    return names.length > 0 ? names : [fallback];
-  };
-
-  /*
-   * ORDER IS THE DESIGN, and it is quality-first rather than quota-first.
-   *
-   * Gemini answers the best Egyptian Arabic of the three and runs out after
-   * twenty questions; Groq answers fourteen thousand and sounds slightly less
-   * like a person from Cairo. Putting Gemini first spends the good answers on
-   * the earliest questions of the day and lets the rest still be answered —
-   * see `ChainProvider` for why it can only switch before the first byte.
-   *
-   * Anthropic is last because it is the only one that costs money: it should
-   * never be reached while a free tier still has room.
-   */
-  const providers: AnswerProvider[] = [];
-  if (env.GEMINI_API_KEY) {
-    providers.push(
-      new GeminiProvider(
-        env.GEMINI_API_KEY,
-        list(env.GEMINI_MODEL, 'gemini-2.5-flash'),
-        REQUEST_TIMEOUT_MS,
-      ),
-    );
-  }
-  if (env.GROQ_API_KEY) {
-    providers.push(
-      new GroqProvider(
-        env.GROQ_API_KEY,
-        list(env.GROQ_MODEL, 'llama-3.3-70b-versatile'),
-        REQUEST_TIMEOUT_MS,
-      ),
-    );
-  }
-  if (env.ANTHROPIC_API_KEY) {
-    providers.push(new AnthropicProvider(env.ANTHROPIC_API_KEY, REQUEST_TIMEOUT_MS));
-  }
-
-  if (providers.length === 0) return null;
-  // One provider is not worth a wrapper — and the log line reads better.
-  return providers.length === 1 ? providers[0]! : new ChainProvider(providers);
-}

@@ -26,8 +26,14 @@ const VERSION = 'v1';
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
-export function tokenKey(secret: string): Buffer {
-  return Buffer.from(hkdfSync('sha256', secret, 'ayman-platform', 'social-page-token:v1', 32));
+/**
+ * `label` separates one sealed secret from another: the YouTube refresh token
+ * (`youtube-refresh-token:v1`) is sealed under a key unrelated to the Page
+ * token's, so a ciphertext copied from one column into the other does not
+ * open. The default is the Page token's original label, byte for byte.
+ */
+export function tokenKey(secret: string, label = 'social-page-token:v1'): Buffer {
+  return Buffer.from(hkdfSync('sha256', secret, 'ayman-platform', label, 32));
 }
 
 export function sealToken(token: string, key: Buffer): string {

@@ -135,6 +135,13 @@ export const NOTIFICATION_KINDS = [
    * `question:write` — see `KeyWatchService`.
    */
   'suspect_key',
+  /**
+   * ADMIN — «نزل فيديو جديد». The YouTube watcher saw an upload it had not
+   * seen since the channel was connected. To the admin who connected the
+   * channel ONLY — not every admin: a channel is one person's to tend, and a
+   * fan-out would be a row per staff account for every video.
+   */
+  'youtube_new_video',
 ] as const;
 
 const base = {
@@ -497,6 +504,17 @@ export const SuspectKeyNotificationSchema = z.object({
 });
 
 /**
+ * ADMIN — «نزل فيديو جديد على القناة». The title is resolved at READ time from
+ * `youtube_videos`, so a video renamed from the studio reads renamed.
+ */
+export const YoutubeNewVideoNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('youtube_new_video'),
+  videoId: z.string(),
+  title: z.string(),
+});
+
+/**
  * Where money that landed in a wallet came from — the card says a different
  * sentence for each. `code` is not here: the student typed the code and is
  * looking at the success screen already.
@@ -544,6 +562,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   WalletCreditedNotificationSchema,
   WalletTopupRejectedNotificationSchema,
   SuspectKeyNotificationSchema,
+  YoutubeNewVideoNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

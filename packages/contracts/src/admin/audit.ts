@@ -587,6 +587,16 @@ export const AUDIT_ACTIONS = [
   'social:publish',
   'social:connection',
   /*
+   * «يوتيوب». `youtube:connect`/`youtube:disconnect` record that the channel's
+   * OAuth grant changed, never the token. `youtube:update` and
+   * `youtube:thumbnail` change a PUBLIC video under the teacher's name, so
+   * they carry the video id and which fields were sent.
+   */
+  'youtube:connect',
+  'youtube:disconnect',
+  'youtube:update',
+  'youtube:thumbnail',
+  /*
    * «المونتاج». Audited for the studio's reason — the editor's account belongs
    * to someone outside the team. `montage:publish` is the one that reaches
    * students: a hand-over put on a lesson, with the lesson's id.

@@ -106,6 +106,14 @@ describe('loadEnv', () => {
     expect(loadEnv({ ...VALID, META_PAGE_TOKEN: 'test-page-token' }).META_PAGE_TOKEN).toBe('test-page-token');
   });
 
+  it('reads empty YouTube OAuth vars as unset, and half a pair still boots', () => {
+    const env = loadEnv({ ...VALID, YOUTUBE_OAUTH_CLIENT_ID: '', YOUTUBE_OAUTH_CLIENT_SECRET: '' });
+    expect(env.YOUTUBE_OAUTH_CLIENT_ID).toBeUndefined();
+    expect(env.YOUTUBE_OAUTH_CLIENT_SECRET).toBeUndefined();
+    // The screen says «not available»; the API must not refuse to start.
+    expect(() => loadEnv({ ...VALID, YOUTUBE_OAUTH_CLIENT_ID: 'abc.apps.googleusercontent.com' })).not.toThrow();
+  });
+
   // The pairing rule still has to bite on a half-filled pair — normalising ""
   // to "absent" must not turn a real misconfiguration into a silent no-op.
   it('still rejects a real client id paired with an empty secret', () => {

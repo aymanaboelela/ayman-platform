@@ -67,6 +67,7 @@ import { PromoBannersModule } from './modules/promo-banners/promo-banners.module
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { SocialPostsModule } from './modules/social-posts/social-posts.module';
+import { YoutubeStudioModule } from './modules/youtube-studio/youtube-studio.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
 
@@ -213,6 +214,7 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     CouponsModule,
     AdminMobileModule,
     SocialPostsModule,
+    YoutubeStudioModule,
     EngagementModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,

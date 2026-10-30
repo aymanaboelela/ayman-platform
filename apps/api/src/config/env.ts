@@ -95,6 +95,19 @@ const schema = z
     // optional provider — so an empty value is normalised to "absent" first.
     GOOGLE_CLIENT_ID: optionalSecret,
     GOOGLE_CLIENT_SECRET: optionalSecret,
+    /**
+     * «يوتيوب» — the OAuth client the admin's «ربط قناة اليوتيوب» goes through
+     * (`modules/youtube-studio`). A SEPARATE client from `GOOGLE_CLIENT_*`:
+     * that one signs students in with the `openid email` scopes, and asking it
+     * for `youtube.force-ssl` would put a scary consent screen in front of
+     * every student. Its redirect URI is `<APP_URL>/api/admin/youtube/oauth/callback`.
+     *
+     * Both optional and deliberately NOT paired with a boot-time refine: half a
+     * pair only makes the screen say «الربط مش متاح», and an API that refuses
+     * to boot takes the whole domain down (CLAUDE.md §5).
+     */
+    YOUTUBE_OAUTH_CLIENT_ID: optionalSecret,
+    YOUTUBE_OAUTH_CLIENT_SECRET: optionalSecret,
     APPLE_CLIENT_ID: optionalSecret,
     APPLE_TEAM_ID: optionalSecret,
     APPLE_KEY_ID: optionalSecret,
