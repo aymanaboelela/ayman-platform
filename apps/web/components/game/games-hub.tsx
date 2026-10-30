@@ -726,7 +726,7 @@ function TopicPicker({
               className="gm-topic"
               data-on={on || undefined}
               data-short={n < min || undefined}
-              style={{ '--i': i, '--tone': `var(--viz-${(i % 6) + 1})` } as CSSProperties}
+              style={{ '--i': i } as CSSProperties}
             >
               <input
                 type="checkbox"
@@ -758,17 +758,17 @@ function MyResults({ me }: { me: GameHub['me'] }) {
   return (
     <section className="gm-me" aria-label={c.meTitle}>
       <div className="gm-me__stats">
-        <p className="gm-me__stat" data-tone="violet">
+        <p className="gm-me__stat">
           <Sparkles className="size-4" aria-hidden="true" />
           <span className="gm-me__n">{NUM.format(me.plays)}</span>
           <span className="gm-me__label">{c.mePlays}</span>
         </p>
-        <p className="gm-me__stat" data-tone="teal">
+        <p className="gm-me__stat">
           <Clock className="size-4" aria-hidden="true" />
           <span className="gm-me__n">{NUM.format(Math.round(me.seconds / 60))}</span>
           <span className="gm-me__label">{c.meMinutes}</span>
         </p>
-        <p className="gm-me__stat" data-tone="gold">
+        <p className="gm-me__stat">
           <Trophy className="size-4" aria-hidden="true" />
           <span className="gm-me__n">{NUM.format(best)}</span>
           <span className="gm-me__label">{c.meBest}</span>
