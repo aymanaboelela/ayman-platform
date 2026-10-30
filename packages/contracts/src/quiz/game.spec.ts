@@ -11,13 +11,28 @@ import {
   clampGameSeconds,
   defaultGameModes,
   gameItemAllowed,
+  gameLetters,
   gamePoints,
+  isEnglishQuestion,
   gameScopeCounts,
   gameSessionCapSeconds,
   millionaireFloor,
   settleGame,
   totalOf,
 } from './game';
+
+describe('gameLetters — A B C D on an English question', () => {
+  it('letters an English stem A B C D, and an Arabic one أ ب ج د', () => {
+    expect(gameLetters('<p>What does <b>HTTPS</b> protect?</p>').slice(0, 4)).toEqual(['A', 'B', 'C', 'D']);
+    expect(gameLetters('<p>ما وظيفة بروتوكول HTTPS؟</p>').slice(0, 4)).toEqual(['أ', 'ب', 'ج', 'د']);
+  });
+
+  it('an Arabic stem quoting code is still Arabic; an entity is not English', () => {
+    expect(isEnglishQuestion('<p>ما ناتج <code>print(5 // 2)</code>؟</p>')).toBe(false);
+    expect(isEnglishQuestion('<p>&nbsp;١٠ + ٥&nbsp;</p>')).toBe(false);
+    expect(isEnglishQuestion('')).toBe(false);
+  });
+});
 
 describe('gamePoints', () => {
   it('pays the base for a right answer at the buzzer, and double for an instant one', () => {

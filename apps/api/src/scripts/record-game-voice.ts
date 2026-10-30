@@ -19,7 +19,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { INTROS, LETTERS, LETTER_NAMES, libraryKey, textOf } from '../modules/quiz/game-voice.text';
+import { INTROS, LETTERS, LETTERS_EN, LETTER_NAMES, LETTER_NAMES_EN, libraryKey, textOf } from '../modules/quiz/game-voice.text';
 
 interface Question {
   id: string;
@@ -74,6 +74,7 @@ async function main(): Promise<void> {
   // The intros and letters first: fifteen and six clips every round plays.
   INTROS.forEach((line) => add(line, line));
   LETTERS.forEach((letter, i) => add(letter, LETTER_NAMES[i]));
+  LETTERS_EN.forEach((letter, i) => add(letter, LETTER_NAMES_EN[i]));
   for (const question of questions) {
     add(textOf(question.stem));
     for (const option of question.options ?? []) add(textOf(option.body));

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { GAME_LETTERS_AR, GAME_LETTERS_EN } from '@ayman/contracts/quiz/game';
 
 /**
  * The text side of the Millionaire voice, shared by the API (`GameVoiceService`)
@@ -10,30 +11,37 @@ import { createHash } from 'node:crypto';
  */
 
 /** The letters on the screen (`millionaire.tsx`), one clip each. */
-export const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
+export const LETTERS: readonly string[] = GAME_LETTERS_AR;
+/** …and on an English question (`isEnglishQuestion`), part `letter-en-<n>`. */
+export const LETTERS_EN: readonly string[] = GAME_LETTERS_EN;
 
 /**
  * How the recorder SAYS each letter. A lone «أ» sent to a TTS engine comes back
  * as a grunt; the letter's name is what a quiz host actually says.
  */
 export const LETTER_NAMES = ['ألِف', 'بَا', 'جِيم', 'دَال', 'هَا', 'وَاو'];
+/** A bare «A» is read as the article «uh»; with a full stop it is the letter. */
+export const LETTER_NAMES_EN = ['A.', 'B.', 'C.', 'D.', 'E.', 'F.'];
 
 /**
  * The line before each question, in the host's Egyptian. Varied so fifteen
  * questions in a row do not open on the same sentence; the last two say where
  * the student is on the ladder because that is what the show does.
+ *
+ * No imperative to the student («ركّز») — it is masculine, and the platform
+ * never assumes (CLAUDE.md §7).
  */
 export const INTROS = [
-  'السؤال الأول.. ركّز معايا..',
+  'السؤال الأول.. يلا نبدأ..',
   'السؤال التاني..',
   'السؤال التالت.. يلا بينا..',
   'السؤال الرابع..',
-  'السؤال الخامس.. ركّز كويس..',
+  'السؤال الخامس.. وده مهم..',
   'السؤال السادس..',
   'السؤال السابع.. يلا..',
   'السؤال التامن..',
   'السؤال التاسع..',
-  'السؤال العاشر.. ركّز معايا..',
+  'السؤال العاشر.. لسه مكمّلين..',
   'السؤال الحداشر..',
   'السؤال الاتناشر..',
   'السؤال التلاتاشر.. قرّبنا..',

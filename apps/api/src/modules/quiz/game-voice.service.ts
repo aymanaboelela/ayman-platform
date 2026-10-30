@@ -5,7 +5,7 @@ import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage
 import { PrismaService } from '../../prisma/prisma.service';
 import { GameService } from './game.service';
 import { azureSpeech, voiceLibrary } from './game-voice.config';
-import { LETTERS, introText, libraryKey, textOf } from './game-voice.text';
+import { LETTERS, LETTERS_EN, introText, libraryKey, textOf } from './game-voice.text';
 
 /** «شاكر» — صوت Azure المصري. مذيع مسابقات، مش قارئ نشرة. */
 const VOICE = 'ar-EG-ShakirNeural';
@@ -19,8 +19,8 @@ function escapeXml(text: string): string {
  *
  *   · `stem`        — نص السؤال.
  *   · `<optionId>`  — نص الاختيار.
- *   · `letter-<n>`  — «أ»، «ب»… لوحدها.
- *   · `intro-<n>`   — the host's line before question n («السؤال الأول.. ركّز معايا..»).
+ *   · `letter-<n>`  — «أ»، «ب»… لوحدها; `letter-en-<n>` — A, B… on an English question.
+ *   · `intro-<n>`   — the host's line before question n («السؤال الأول.. يلا نبدأ..»).
  *
  * Two sources, in order. The recorded library first (`voiceLibrary()` — his
  * own voice, recorded offline and stored on our server, so playing it never
@@ -51,10 +51,10 @@ export class GameVoiceService {
     if (!azure && !library) throw new NotFoundException();
 
     let text: string;
-    const letter = /^letter-(\d)$/.exec(part);
+    const letter = /^letter-(en-)?(\d)$/.exec(part);
     const intro = /^intro-(\d{1,2})$/.exec(part);
     if (letter) {
-      text = LETTERS[Number(letter[1])] ?? '';
+      text = (letter[1] ? LETTERS_EN : LETTERS)[Number(letter[2])] ?? '';
     } else if (intro) {
       text = Number(intro[1]) > 0 ? introText(Number(intro[1])) : '';
     } else {

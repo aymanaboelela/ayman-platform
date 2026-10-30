@@ -54,6 +54,14 @@ describe('GameVoiceService — recorded library', () => {
     await expect(read(await service.clip('u1', 'q1', 'intro-1'))).resolves.toBe('intro one');
   });
 
+  it('an English question asks for letter-en-<n>, and gets the recorded A, not «أ»', async () => {
+    files.set(libraryKey('A'), Buffer.from('letter A'));
+    files.set(libraryKey('أ'), Buffer.from('letter alef'));
+    await expect(read(await service.clip('u1', 'q1', 'letter-en-0'))).resolves.toBe('letter A');
+    await expect(read(await service.clip('u1', 'q1', 'letter-0'))).resolves.toBe('letter alef');
+    await expect(service.clip('u1', 'q1', 'letter-en-9')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('a question nobody recorded is a 404, so the browser reads it — not a call to a vendor', async () => {
     await expect(service.clip('u1', 'q1', 'stem')).rejects.toBeInstanceOf(NotFoundException);
     expect(fetchSpy).not.toHaveBeenCalled();

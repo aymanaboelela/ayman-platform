@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { gameLetters, isEnglishQuestion } from '@ayman/contracts/quiz/game';
 
 const STORAGE_KEY = 'game:voice';
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 
 function readPreference(): boolean {
   try {
@@ -134,7 +134,7 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
     if (!('speechSynthesis' in window)) return;
     const lines = [
       `السؤال ${n}. ${textOf(stemHtml)}`,
-      ...optionsHtml.map((html, i) => `${LETTERS[i] ?? ''}: ${textOf(html)}.`),
+      ...optionsHtml.map((html, i) => `${gameLetters(stemHtml)[i] ?? ''}: ${textOf(html)}.`),
     ];
     /**
      * `attempt` التانية بعد `cancel()` + `resume()`: ده اللي بيفك Chrome لما
@@ -204,10 +204,12 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         return;
       }
       const base = `/api/me/game/voice/${encodeURIComponent(input.questionId)}`;
+      // The letter the screen draws (`gameLetters`): A B C D on an English question.
+      const letter = isEnglishQuestion(input.stemHtml) ? 'letter-en' : 'letter';
       clips = [
         `${base}/intro-${input.n}`,
         `${base}/stem`,
-        ...input.options.flatMap((option, i) => [`${base}/letter-${i}`, `${base}/${encodeURIComponent(option.id)}`]),
+        ...input.options.flatMap((option, i) => [`${base}/${letter}-${i}`, `${base}/${encodeURIComponent(option.id)}`]),
       ];
       // كل القطع بتتطلب مع بعض من الأول (`preload`)، فأول مرة حد يوصل للسؤال
       // السيرفر بيسجّلهم بالتوازي بدل واحدة ورا التانية بين كل جملة والتانية.
