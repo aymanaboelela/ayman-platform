@@ -22,7 +22,15 @@ const STORAGE_KEY = 'game:sound';
  * مابيسمحش بصوت قبل تفاعل. والاختيار (شغّال/مقفول) بيتحفظ في localStorage —
  * راحة للطالب بس، فأي فشل في القراءة أو الكتابة بيتبلع والصوت بيفضل شغّال.
  */
+/**
+ * The choice as of the last press, for when localStorage refuses the write
+ * (private window, blocked site data). Without it the button flipped nothing
+ * there: the write failed, the read still said «on», and the music played on.
+ */
+let pressed: boolean | null = null;
+
 function readPreference(): boolean {
+  if (pressed !== null) return pressed;
   try {
     return window.localStorage.getItem(STORAGE_KEY) !== 'off';
   } catch {
@@ -61,20 +69,27 @@ export function useGameSound() {
    * «الصوت» يقفلها هي كمان، ومن غير context (المتصفح مالوش WebAudio) بتسكت
    * واللعبة شغّالة عادي.
    */
+  /*
+   * `show` and `play` read the LIVE choice, not `enabled` from the render that
+   * made them. The game hands them to timers — the bed starts 1 s after a
+   * question opens, the fanfare 1.8 s after a reveal — and a timer set before
+   * «اقفل الصوت» kept the old closure, so muting mid-question brought the
+   * music straight back.
+   */
   const show = useCallback(
     (run: (score: ShowScore) => void) => {
       const ctx = context.current;
-      if (!enabled || !ctx || !score.current) return;
+      if (!readPreference() || !ctx || !score.current) return;
       if (ctx.state === 'suspended') void ctx.resume();
       run(score.current);
     },
-    [enabled],
+    [],
   );
 
   const play = useCallback(
     (cue: Cue) => {
       const ctx = context.current;
-      if (!enabled || !ctx) return;
+      if (!readPreference() || !ctx) return;
       // Safari وChrome ساعات بيسيبوه «suspended» لحد دوسة تانية — بنصحّيه.
       if (ctx.state === 'suspended') void ctx.resume();
       let at = ctx.currentTime;
@@ -92,15 +107,23 @@ export function useGameSound() {
         at += duration * 0.9;
       }
     },
-    [enabled],
+    [],
   );
 
   const toggle = useCallback(() => {
-    if (readPreference()) score.current?.stopAll(0.2);
+    const next = !readPreference();
+    pressed = next;
     try {
-      window.localStorage.setItem(STORAGE_KEY, readPreference() ? 'off' : 'on');
+      window.localStorage.setItem(STORAGE_KEY, next ? 'on' : 'off');
     } catch {
       /* localStorage مقفول — الاختيار مش هيتحفظ، ومش مهم */
+    }
+    if (!next) {
+      // `stopAll` only ends the bed and the tension loop; the intro chord, a
+      // fanfare and the thumps already scheduled ahead kept sounding. Pausing
+      // the context silences all of it at once; `show`/`play` resume it.
+      score.current?.stopAll(0.05);
+      void context.current?.suspend();
     }
     for (const listener of listeners) listener();
   }, []);
