@@ -1,4 +1,7 @@
 import { copy } from '@ayman/contracts/copy';
+import { isEnglishQuestion } from '@ayman/contracts/quiz/game';
+
+const LATIN = 'ABCDEFGHIJ';
 
 /**
  * أ ب ج د — the name a student gives an option out loud («الإجابة ج»).
@@ -11,7 +14,12 @@ import { copy } from '@ayman/contracts/copy';
  *
  * Its own module with no directive, so the review (rendered from a client
  * list) and the runner share it without either importing the other.
+ *
+ * An English question (the لغات courses, `isEnglishQuestion`) is lettered
+ * A B C D — that is what the book and the teacher call them, and «أ» beside
+ * «True» reads as a typo. Pass the stem wherever it is known.
  */
-export function optionLetter(index: number): string {
+export function optionLetter(index: number, stemHtml?: string): string {
+  if (stemHtml && isEnglishQuestion(stemHtml)) return LATIN[index] ?? String(index + 1);
   return copy.quiz.optionLetters[index] ?? String(index + 1);
 }

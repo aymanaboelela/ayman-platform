@@ -288,7 +288,7 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
                           : null,
                   )}
                 >
-                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <span className="runner-option__letter">{optionLetter(index, question.stemHtml)}</span>
                   <div className="review-option__main">
                     <SafeHtml html={option.bodyHtml} className="runner-option__body" />
                     {/* I8: colour is never the ONLY channel — every highlighted

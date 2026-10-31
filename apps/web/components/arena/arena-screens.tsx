@@ -9,9 +9,9 @@ import { SafeHtml } from '@/components/content/safe-html';
 import { ArenaEmblem, Confetti, CountdownRing, Fighter, Num, SoundButton, useNow } from './arena-bits';
 import { clockText, isLatinText, patienceRanOut, remainingMs, type ArenaState } from './arena-state';
 import type { ArenaSound } from './use-arena-sound';
+import { optionLetter } from '@/components/quiz/option-letter';
 
 const c = arenaCopy;
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 
 // ── بندوّر ──────────────────────────────────────────────────────────────
 
@@ -226,7 +226,7 @@ export function ArenaMatch({
                   }}
                 >
                   <span className="ca-option__letter" aria-hidden="true">
-                    {LETTERS[i] ?? i + 1}
+                    {optionLetter(i, question.stemHtml)}
                   </span>
                   <span className="ca-option__text" data-dir={isLatinText(option.bodyHtml) ? 'ltr' : undefined}>
                     <SafeHtml html={option.bodyHtml} className="ca-option__body" />
