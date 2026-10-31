@@ -16,6 +16,15 @@
 
 type Loop = { stop: (fade?: number) => void };
 
+/**
+ * The bed's level, and its level under the host's voice. At 1 and 0.35 the
+ * bed drowned his recorded voice («صوت الموسيقى عالي»): the pad and the thump
+ * sit in the same low-mid band as a man's voice. The stings (right, wrong,
+ * the intro) are on `master`, not the bus, so they keep their punch.
+ */
+const MUSIC_LEVEL = 0.55;
+const MUSIC_UNDER_VOICE = 0.08;
+
 /** ترددات بالنوتة — A4 = 440. */
 const hz = (semitonesFromA4: number) => 440 * 2 ** (semitonesFromA4 / 12);
 
@@ -36,7 +45,7 @@ export class ShowScore {
     comp.ratio.value = 4;
     this.master.connect(comp).connect(ctx.destination);
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = 1;
+    this.musicBus.gain.value = MUSIC_LEVEL;
     this.musicBus.connect(this.master);
     this.noise = this.makeNoise();
   }
@@ -45,7 +54,7 @@ export class ShowScore {
   duck(on: boolean) {
     const t = this.ctx.currentTime;
     this.musicBus.gain.cancelScheduledValues(t);
-    this.musicBus.gain.setTargetAtTime(on ? 0.35 : 1, t, 0.15);
+    this.musicBus.gain.setTargetAtTime(on ? MUSIC_UNDER_VOICE : MUSIC_LEVEL, t, 0.15);
   }
 
   setUrgent(on: boolean) {
