@@ -5,7 +5,11 @@ import { gameLetters, isEnglishQuestion } from '@ayman/contracts/quiz/game';
 
 const STORAGE_KEY = 'game:voice';
 
+/** The last press, for when localStorage refuses the write — see `use-game-sound.ts`. */
+let pressed: boolean | null = null;
+
 function readPreference(): boolean {
+  if (pressed !== null) return pressed;
   try {
     return window.localStorage.getItem(STORAGE_KEY) !== 'off';
   } catch {
@@ -196,7 +200,10 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
    */
   const read = useCallback(
     (input: { questionId: string; stemHtml: string; options: Array<{ id: string; bodyHtml: string }>; n: number; server: boolean }) => {
-      if (!enabled) return;
+      // The live choice, not `enabled`: the game calls `read` from a timer set
+      // when the question opened, and «القراية مقفولة» pressed in that second
+      // still read the question out.
+      if (!readPreference()) return;
       stop();
       const optionsHtml = input.options.map((option) => option.bodyHtml);
       if (!input.server) {
@@ -268,11 +275,12 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         begin();
       }
     },
-    [enabled, stop, speakBrowser],
+    [stop, speakBrowser],
   );
 
   const toggle = useCallback(() => {
     const next = !readPreference();
+    pressed = next;
     try {
       window.localStorage.setItem(STORAGE_KEY, next ? 'on' : 'off');
     } catch {

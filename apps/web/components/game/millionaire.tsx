@@ -254,7 +254,11 @@ export function Millionaire({
     if (deadline.current === 0) deadline.current = performance.now() + seconds * 1000;
     const step = () => {
       const remaining = Math.max(0, (deadline.current - performance.now()) / 1000);
-      setLeft(remaining);
+      // Tenths, not the raw float: a new number every frame re-rendered the
+      // whole stage 60 times a second (ladder, options, lifelines) on top of
+      // the animated lights, and the game froze on mid-range phones. React
+      // skips a render when the value is the same, so this is ~10 a second.
+      setLeft(Math.ceil(remaining * 10) / 10);
       if (remaining <= 0) {
         void check(null);
         return;
