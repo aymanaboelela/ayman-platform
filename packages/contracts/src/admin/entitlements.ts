@@ -304,6 +304,17 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'أكواد خصم بنسبة أو بمبلغ على الاشتراكات، بمدة وعدد مرات، والطالب يكتب الكود وهو بيدفع.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new: on for him, off on every other stack
+     * until the owner opens it. It only reads that stack's own students and
+     * grants, and carries nothing of his, so an opened stack works at once.
+     */
+    key: 'subscribersReport',
+    nameAr: 'المشتركين وغير المشتركين',
+    descriptionAr: 'مين مشترك ومين لأ في كل كورس وكل شهر، بالأسامي والأرقام، وملف جاهز لإعلانات فيسبوك.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

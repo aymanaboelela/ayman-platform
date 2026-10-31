@@ -28,6 +28,7 @@ import {
   Trophy,
   Users,
   UserRoundSearch,
+  UserRoundCheck,
   UserCog,
   type LucideIcon,
   Megaphone,
@@ -61,6 +62,7 @@ import { socialPostsCopy } from '@ayman/contracts/copy/social-posts';
 import { youtubeStudioCopy } from '@ayman/contracts/copy/youtube-studio';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 import { promoBannersCopy } from '@ayman/contracts/copy/promo-banners';
+import { subscribersCopy } from '@ayman/contracts/copy/subscribers';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -496,6 +498,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.followUp,
     icon: UserRoundSearch,
     permission: 'student:read',
+    group: 'students',
+  },
+  {
+    // «المشتركين» — beside «متابعة الطلبة», on the same `student:read`: both
+    // are lists of students with their numbers, and this one is where the
+    // ads file comes from. `feature` like the API, so a stack without the
+    // report has no row pointing at a 404.
+    href: '/admin/subscribers',
+    labelAr: subscribersCopy.nav,
+    icon: UserRoundCheck,
+    permission: 'student:read',
+    feature: 'subscribersReport',
     group: 'students',
   },
   {

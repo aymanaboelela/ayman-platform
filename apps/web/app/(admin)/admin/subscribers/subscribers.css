@@ -1,0 +1,416 @@
+/* ---------------------------------------------------------------------------
+   /admin/subscribers — «المشتركين وغير المشتركين».
+
+   Colour carries the meaning on every block, and it is the same meaning
+   everywhere: --ok is «مشترك», --err is «مش مشترك», --warn is «كان مشترك».
+   A number in green on a tile, a pill in green on a month and the rail on a
+   row in green all say the same thing, so the page reads before it is read.
+   --------------------------------------------------------------------------- */
+
+.subs-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--s-12);
+  margin-block-end: var(--s-32);
+}
+
+.subs-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.subs-tile--link {
+  transition:
+    translate var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.subs-tile--link:hover {
+  translate: 0 -2px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.08);
+}
+
+.subs-tile__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 999px;
+  color: var(--ink-fg);
+}
+
+/* ── Courses ─────────────────────────────────────────────────────────────── */
+
+.subs-courses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: var(--s-16);
+}
+
+.subs-course {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  padding: var(--s-16);
+}
+
+.subs-course[data-current='true'] {
+  border-color: color-mix(in oklch, var(--a-9), transparent 40%);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--a-9), transparent 60%);
+}
+
+.subs-course__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+}
+
+.subs-course__art {
+  flex-shrink: 0;
+  inline-size: 5.5rem;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--n-3);
+}
+
+.subs-course__art > * {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.subs-course__art img {
+  object-fit: cover;
+}
+
+.subs-course__nums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+
+.subs-num {
+  --tone: var(--ok);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-8) var(--s-4);
+  border: var(--hairline) solid color-mix(in oklch, var(--tone), transparent 70%);
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--tone), transparent 91%);
+  text-align: center;
+  transition: background var(--d-hover) var(--ease);
+}
+
+.subs-num:hover {
+  background: color-mix(in oklch, var(--tone), transparent 82%);
+}
+
+.subs-num--err {
+  --tone: var(--err);
+}
+
+.subs-num--warn {
+  --tone: var(--warn);
+}
+
+.subs-num__value {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+  color: var(--tone);
+}
+
+.subs-num__label {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.subs-bar {
+  block-size: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--err), transparent 82%);
+}
+
+.subs-bar__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: 999px;
+  background: var(--ok);
+}
+
+.subs-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--s-8);
+}
+
+.subs-month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  min-inline-size: 0;
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.subs-month[data-current='true'] {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9), transparent 92%);
+}
+
+.subs-month__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-inline-size: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.subs-month__closed {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+.subs-month__pair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.subs-pill {
+  --tone: var(--ok);
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-8);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--tone), transparent 88%);
+  color: var(--tone);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  transition: background var(--d-hover) var(--ease);
+}
+
+.subs-pill:hover {
+  background: color-mix(in oklch, var(--tone), transparent 76%);
+}
+
+.subs-pill--out {
+  --tone: var(--err);
+}
+
+.subs-month__dropped {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--warn);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.subs-month__split {
+  font-size: var(--fs-text-xs);
+  line-height: 1.6;
+  color: var(--n-11);
+}
+
+.subs-more {
+  margin-block-start: var(--s-16);
+}
+
+.subs-more > summary {
+  inline-size: fit-content;
+  margin-block-end: var(--s-16);
+  padding: var(--s-8) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+
+/* ── The ads file + filters ─────────────────────────────────────────────── */
+
+.subs-ads {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-16);
+  margin-block-end: var(--s-20);
+  padding: var(--s-16);
+  border: var(--hairline) solid color-mix(in oklch, var(--info), transparent 65%);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklch, var(--info), transparent 92%);
+}
+
+.subs-ads > :first-child {
+  flex: 1 1 18rem;
+}
+
+.subs-ads__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.subs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  min-block-size: 2.5rem;
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  transition:
+    background var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease);
+}
+
+.subs-btn:hover {
+  border-color: color-mix(in oklch, var(--a-9), transparent 50%);
+  background: var(--n-2);
+}
+
+.subs-btn--meta {
+  border-color: var(--info);
+  background: var(--info);
+  color: var(--ink-fg);
+}
+
+.subs-btn--meta:hover {
+  border-color: var(--info);
+  background: color-mix(in oklch, var(--info), transparent 15%);
+}
+
+.subs-btn--wa {
+  border-color: color-mix(in oklch, var(--ok), transparent 55%);
+  background: color-mix(in oklch, var(--ok), transparent 88%);
+  color: var(--ok);
+}
+
+.subs-btn--wa:hover {
+  border-color: var(--ok);
+  background: color-mix(in oklch, var(--ok), transparent 78%);
+}
+
+.subs-search {
+  display: flex;
+  flex: 1 1 16rem;
+  gap: var(--s-8);
+}
+
+.subs-search__input {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 2.5rem;
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+}
+
+.subs-search__input:focus-visible {
+  outline: 2px solid var(--a-9);
+  outline-offset: 1px;
+}
+
+.subs-clear {
+  align-self: center;
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Rows ────────────────────────────────────────────────────────────────── */
+
+.subs-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+/* The rail at the inline start is the row's status, in the page's colours. */
+.subs-row {
+  --tone: var(--err);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid var(--tone);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.subs-row[data-tone='in'] {
+  --tone: var(--ok);
+}
+
+.subs-row[data-tone='past'] {
+  --tone: var(--warn);
+}
+
+.subs-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.subs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-8);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--ok), transparent 90%);
+  color: var(--n-12);
+  font-size: var(--fs-text-xs);
+}
+
+.subs-chip__tag {
+  font-weight: var(--fw-semibold);
+  color: var(--ok);
+}
+
+/* A phone number inside an Arabic line flips without this (CLAUDE.md §7). */
+.subs-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+@media (max-width: 40rem) {
+  .subs-row__actions {
+    inline-size: 100%;
+  }
+
+  .subs-row__actions > * {
+    flex: 1;
+  }
+}

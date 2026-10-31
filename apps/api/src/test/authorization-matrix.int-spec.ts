@@ -43,6 +43,7 @@ import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { PromoBannersModule } from '../modules/promo-banners/promo-banners.module';
+import { SubscribersModule } from '../modules/subscribers/subscribers.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
@@ -376,6 +377,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         HomeBlocksModule,
         // «البانرات الترويجية» — Prisma and `AuditService` only, both already here.
         PromoBannersModule,
+        SubscribersModule,
         // لوحة الشرف بالإيد. بيجرّ `NotificationsModule` معاه (الصف بيبعت
         // إشعار للطالب)، وهو موجود هنا أصلاً من `OutreachModule` تحت.
         AdminHonorBoardModule,
@@ -2137,6 +2139,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'home-blocks restore: student', method: 'post', path: () => `/api/admin/home-blocks/${homeBlockId}/restore`, actor: 'student', status: 403 },
     { label: 'home-blocks order: anonymous', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'anonymous', status: 401 },
     { label: 'home-blocks order: student', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'student', status: 403 },
+
+    // ── «المشتركين» — names and phones, so `student:read` on every route ──
+    // Behind `subscribersReport`, open here because the fixture runs as Ayman's stack.
+    { label: 'subscribers overview: anonymous', method: 'get', path: () => '/api/admin/subscribers/overview', actor: 'anonymous', status: 401 },
+    { label: 'subscribers overview: student', method: 'get', path: () => '/api/admin/subscribers/overview', actor: 'student', status: 403 },
+    { label: 'subscribers overview: admin', method: 'get', path: () => '/api/admin/subscribers/overview', actor: 'admin', status: 200 },
+    { label: 'subscribers list: anonymous', method: 'get', path: () => '/api/admin/subscribers', actor: 'anonymous', status: 401 },
+    { label: 'subscribers list: student', method: 'get', path: () => '/api/admin/subscribers', actor: 'student', status: 403 },
+    { label: 'subscribers list: admin', method: 'get', path: () => '/api/admin/subscribers?perPage=10', actor: 'admin', status: 200 },
+    { label: 'subscribers meta csv: anonymous', method: 'get', path: () => '/api/admin/subscribers/export/meta.csv', actor: 'anonymous', status: 401 },
+    { label: 'subscribers meta csv: student', method: 'get', path: () => '/api/admin/subscribers/export/meta.csv', actor: 'student', status: 403 },
+    { label: 'subscribers xlsx: anonymous', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'anonymous', status: 401 },
+    { label: 'subscribers xlsx: student', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'student', status: 403 },
 
     // ── «البانرات الترويجية» — one public read, admin-only on `home:*` ──
     // Behind `promoBanners`, open here because the fixture runs as Ayman's stack.
