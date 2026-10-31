@@ -36,7 +36,7 @@ import {
 } from '@ayman/contracts/quiz/challenges';
 import { Prisma } from '../../generated/prisma/client';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
-import { azureSpeech } from './game-voice.config';
+import { azureSpeech, voiceLibrary } from './game-voice.config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
 import {
@@ -244,7 +244,7 @@ export class GameService {
       (a, b) => Number(paid.has(b.id)) - Number(paid.has(a.id)) || countOf(b) - countOf(a),
     );
     const topicTotal = [...topical.values()].reduce((sum, course) => sum + course.entries.length, 0);
-    return { total: pool.entries.size + topicTotal, courses, voice: azureSpeech() !== null, me };
+    return { total: pool.entries.size + topicTotal, courses, voice: azureSpeech() !== null || voiceLibrary(), me };
   }
 
   /**

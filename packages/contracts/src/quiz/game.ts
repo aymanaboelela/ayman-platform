@@ -306,6 +306,25 @@ export function millionaireFloor(ladder: readonly number[], index: number): numb
   return floor;
 }
 
+/** The option letters «من سيربح المليون» draws and says, in screen order. */
+export const GAME_LETTERS_AR = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'] as const;
+export const GAME_LETTERS_EN = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+
+/**
+ * An English question — the لغات courses — is lettered A B C D. «أ: True» on an
+ * English card reads as a typo, and the host saying «ألِف» before an English
+ * option sounds like one. A question with any Arabic in it keeps أ ب ج د: an
+ * Arabic stem that quotes `print(x)` is still an Arabic question.
+ */
+export function isEnglishQuestion(stemHtml: string): boolean {
+  const text = stemHtml.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ');
+  return !/[؀-ۿ]/.test(text) && /[A-Za-z]/.test(text);
+}
+
+export function gameLetters(stemHtml: string): readonly string[] {
+  return isEnglishQuestion(stemHtml) ? GAME_LETTERS_EN : GAME_LETTERS_AR;
+}
+
 export const GAME_OUTCOMES = ['won', 'walked', 'lost', 'finished'] as const;
 export const GameOutcomeSchema = z.enum(GAME_OUTCOMES);
 export type GameOutcome = z.infer<typeof GameOutcomeSchema>;
