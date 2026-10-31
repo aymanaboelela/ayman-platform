@@ -20,8 +20,12 @@ export const LETTERS_EN: readonly string[] = GAME_LETTERS_EN;
  * as a grunt; the letter's name is what a quiz host actually says.
  */
 export const LETTER_NAMES = ['ألِف', 'بَا', 'جِيم', 'دَال', 'هَا', 'وَاو'];
-/** A bare «A» is read as the article «uh»; with a full stop it is the letter. */
-export const LETTER_NAMES_EN = ['A.', 'B.', 'C.', 'D.', 'E.', 'F.'];
+/**
+ * A bare «A» comes back as the article «uh», and «A.» still sounded clipped
+ * («A, B بيتنطقوا بشكل مش حلو»). He picked «Option A» out of three takes
+ * (2026-10-31); the clip is still keyed on the screen letter, `A`.
+ */
+export const LETTER_NAMES_EN = ['Option A.', 'Option B.', 'Option C.', 'Option D.', 'Option E.', 'Option F.'];
 
 /**
  * The line before each question, in the host's Egyptian. Varied so fifteen
