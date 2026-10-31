@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { gameLetters, isEnglishQuestion } from '@ayman/contracts/quiz/game';
 
 const STORAGE_KEY = 'game:voice';
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 
 /** The last press, for when localStorage refuses the write — see `use-game-sound.ts`. */
 let pressed: boolean | null = null;
@@ -60,6 +60,8 @@ let pending: number | null = null;
 /** الصوت الحقيقي (Azure): قطعة بتشتغل، واللي بعدها مستنية. */
 let audio: HTMLAudioElement | null = null;
 let clips: string[] = [];
+/** Counts `read()` calls, so a callback can tell it belongs to an older one. */
+let reads = 0;
 /** مراقب «اتقالت ولا لأ» — بيتلغي مع أي `stop()`. */
 let watchdog: number | null = null;
 
@@ -114,6 +116,7 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
   );
 
   const stop = useCallback(() => {
+    reads += 1;
     if (watchdog !== null) window.clearTimeout(watchdog);
     watchdog = null;
     speaking(false);
@@ -135,7 +138,7 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
     if (!('speechSynthesis' in window)) return;
     const lines = [
       `السؤال ${n}. ${textOf(stemHtml)}`,
-      ...optionsHtml.map((html, i) => `${LETTERS[i] ?? ''}: ${textOf(html)}.`),
+      ...optionsHtml.map((html, i) => `${gameLetters(stemHtml)[i] ?? ''}: ${textOf(html)}.`),
     ];
     /**
      * `attempt` التانية بعد `cancel()` + `resume()`: ده اللي بيفك Chrome لما
@@ -208,9 +211,12 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         return;
       }
       const base = `/api/me/game/voice/${encodeURIComponent(input.questionId)}`;
+      // The letter the screen draws (`gameLetters`): A B C D on an English question.
+      const letter = isEnglishQuestion(input.stemHtml) ? 'letter-en' : 'letter';
       clips = [
+        `${base}/intro-${input.n}`,
         `${base}/stem`,
-        ...input.options.flatMap((option, i) => [`${base}/letter-${i}`, `${base}/${encodeURIComponent(option.id)}`]),
+        ...input.options.flatMap((option, i) => [`${base}/${letter}-${i}`, `${base}/${encodeURIComponent(option.id)}`]),
       ];
       // كل القطع بتتطلب مع بعض من الأول (`preload`)، فأول مرة حد يوصل للسؤال
       // السيرفر بيسجّلهم بالتوازي بدل واحدة ورا التانية بين كل جملة والتانية.
@@ -220,7 +226,11 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         return el;
       });
       clips = [];
+      const round = ++reads;
+      // A late `error` from an earlier question's clips must not stop the
+      // question that is on screen now and read the old one over it.
       const fallback = () => {
+        if (round !== reads) return;
         stop();
         speakBrowser(input.stemHtml, optionsHtml, input.n);
       };
@@ -230,6 +240,17 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         watchdog = null;
         fallback();
       }, 5000);
+      // Starts only once the QUESTION itself is playable. The intro is one of
+      // fifteen clips and is almost always there; a question nobody recorded
+      // yet 404s, and finding that out after the intro played meant the host
+      // said «السؤال الأول» in one voice and the browser repeated it in another.
+      const stem = elements[1];
+      let begun = false;
+      const begin = () => {
+        if (begun || round !== reads) return;
+        begun = true;
+        playNext();
+      };
       const playNext = () => {
         const el = elements.shift();
         if (!el) {
@@ -247,7 +268,12 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         el.onerror = fallback;
         el.play().catch(fallback);
       };
-      playNext();
+      if (stem) {
+        stem.addEventListener('canplay', begin, { once: true });
+        stem.addEventListener('error', fallback, { once: true });
+      } else {
+        begin();
+      }
     },
     [stop, speakBrowser],
   );

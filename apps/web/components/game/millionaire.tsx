@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
   GAME_RULES,
+  gameLetters,
   GameAnswerResultSchema,
   GameLifelineResultSchema,
   MILLIONAIRE_LADDER,
@@ -23,7 +24,6 @@ import type { GameSound } from './use-game-sound';
 import { useSpeech } from './use-speech';
 
 const c = copy.game;
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 const NUM = new Intl.NumberFormat('en-US');
 
 type Phase = 'question' | 'locked' | 'checking' | 'reveal' | 'over';
@@ -108,6 +108,7 @@ export function Millionaire({
   const speech = useSpeech(duck);
 
   const question = round.questions[index];
+  const letters = gameLetters(question?.stemHtml ?? '');
   const secured = index === 0 ? 0 : ladder[index - 1]!;
   const safeFloor = millionaireFloor(ladder, index);
 
@@ -483,7 +484,7 @@ export function Millionaire({
                   <div key={option.id} className="mln-audience__bar">
                     <span className="mln-audience__fill" style={{ '--v': `${voteOf(option.id) ?? 0}%` } as CSSProperties} />
                     <span className="mln-audience__pct">{voteOf(option.id) ?? 0}%</span>
-                    <span className="mln-audience__letter">{LETTERS[i]}</span>
+                    <span className="mln-audience__letter">{letters[i]}</span>
                   </div>
                 ))}
               </div>
@@ -513,7 +514,7 @@ export function Millionaire({
                     disabled={gone || (phase !== 'question' && phase !== 'locked')}
                     onClick={() => lock(option.id)}
                   >
-                    <span className="mln-option__letter">{LETTERS[i]}:</span>
+                    <span className="mln-option__letter">{letters[i]}:</span>
                     {gone ? null : <SafeHtml html={option.bodyHtml} className="mln-option__body" />}
                   </button>
                 </li>
