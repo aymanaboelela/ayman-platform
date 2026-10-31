@@ -15,6 +15,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import { SafeHtml } from '@/components/content/safe-html';
 import { CountUp } from '@/components/rank/count-up';
 import { ApiRequestError, apiPost } from '@/lib/api';
+import { optionLetter } from '@/components/quiz/option-letter';
 
 const c = engagementCopy.daily;
 
@@ -150,6 +151,7 @@ export function DailyBoard({ initial }: { initial: DailyPayload }) {
               <li key={option.id}>
                 <OptionButton
                   index={index}
+                  stemHtml={question.stemHtml}
                   html={option.bodyHtml}
                   selected={(verdict?.chosenOptionId ?? picked) === option.id}
                   verdict={verdict}
@@ -188,10 +190,10 @@ export function DailyBoard({ initial }: { initial: DailyPayload }) {
   );
 }
 
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 
 function OptionButton({
   index,
+  stemHtml,
   html,
   selected,
   verdict,
@@ -200,6 +202,7 @@ function OptionButton({
   onPick,
 }: {
   index: number;
+  stemHtml: string;
   html: string;
   selected: boolean;
   verdict: DailyVerdict | null;
@@ -220,7 +223,7 @@ function OptionButton({
       onClick={onPick}
     >
       <span className="eg-option__letter" aria-hidden="true">
-        {tone === 'key' ? <Check className="size-4" /> : tone === 'missed' ? <X className="size-4" /> : LETTERS[index] ?? index + 1}
+        {tone === 'key' ? <Check className="size-4" /> : tone === 'missed' ? <X className="size-4" /> : optionLetter(index, stemHtml)}
       </span>
       <SafeHtml html={html} className="eg-option__body" />
     </button>

@@ -180,7 +180,7 @@ function QuestionViewImpl({
             {question.options.map((option, index) => (
               <li key={option.id}>
                 <label className="runner-option">
-                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <span className="runner-option__letter">{optionLetter(index, question.stemHtml)}</span>
                   <SafeHtml html={option.bodyHtml} className="runner-option__body" />
                   <RadioGroupItem value={option.id} className="runner-option__control" />
                 </label>
@@ -197,7 +197,7 @@ function QuestionViewImpl({
             return (
               <li key={option.id}>
                 <label className="runner-option">
-                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <span className="runner-option__letter">{optionLetter(index, question.stemHtml)}</span>
                   <SafeHtml html={option.bodyHtml} className="runner-option__body" />
                   <Checkbox
                     className="runner-option__control"

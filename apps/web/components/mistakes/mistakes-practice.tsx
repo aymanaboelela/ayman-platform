@@ -13,11 +13,11 @@ import { mistakesCopy } from '@ayman/contracts/copy/mistakes';
 import { Button } from '@ayman/ui/components/button';
 import { SafeHtml } from '@/components/content/safe-html';
 import { apiPost } from '@/lib/api';
+import { optionLetter } from '@/components/quiz/option-letter';
 
 const c = mistakesCopy.practice;
 
 /** Option letters, in the order the options arrive. */
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 
 interface Feedback {
   chosenIds: string[];
@@ -139,7 +139,7 @@ export function MistakesPractice({
                   onClick={() => void submit(option.id)}
                 >
                   <span className="mk-option__letter" aria-hidden="true">
-                    {LETTERS[i] ?? i + 1}
+                    {optionLetter(i, entry.stemHtml)}
                   </span>
                   <SafeHtml html={option.bodyHtml} className="mk-option__text" />
                   {state === 'right' && <Check className="mk-option__mark" size={20} aria-hidden="true" />}

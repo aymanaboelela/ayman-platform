@@ -183,7 +183,7 @@ export function QuestionBankList({
               below. */}
           <SafeHtml html={latest.stemHtml} className="qrow__stem" />
 
-          <QuestionPreview type={latest.type} options={latest.options} />
+          <QuestionPreview type={latest.type} options={latest.options} stemHtml={latest.stemHtml} />
 
           {/* The explanation, read with the wording it explains. Missing is
               only worth saying on a draft — that is when it can still be
@@ -349,7 +349,15 @@ function VariantGroup({ groupKey, count, children }: { groupKey: string; count: 
  * one(s) marked in `--ok`, a check AND the word «صح», so the key is checked by
  * reading, not by opening forty questions one at a time.
  */
-export function QuestionPreview({ type, options }: { type: BankRow['versions'][number]['type']; options: BankRow['versions'][number]['options'] }) {
+export function QuestionPreview({
+  type,
+  options,
+  stemHtml,
+}: {
+  type: BankRow['versions'][number]['type'];
+  options: BankRow['versions'][number]['options'];
+  stemHtml?: string;
+}) {
   if (type === 'essay') return <p className="qrow__note">{c.essayNote}</p>;
 
   if (type === 'short_answer') {
@@ -388,7 +396,7 @@ export function QuestionPreview({ type, options }: { type: BankRow['versions'][n
         const right = isRightOption(option);
         return (
           <li key={option.id} className={cn('qopt', right && 'qopt--right')}>
-            <span className="qopt__letter">{optionLetter(index)}</span>
+            <span className="qopt__letter">{optionLetter(index, stemHtml)}</span>
             <span className="qopt__body">{stripHtml(option.bodyHtml)}</span>
             {right ? (
               <span className="qopt__right">

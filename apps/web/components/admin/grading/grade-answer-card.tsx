@@ -252,7 +252,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
 
   /** «ب»، «أ، ج» — the letters the student saw, which is what he is looking at. */
   function lettersOf(ids: readonly string[]): string {
-    const letters = options.flatMap((option, index) => (ids.includes(option.id) ? [optionLetter(index)] : []));
+    const letters = options.flatMap((option, index) => (ids.includes(option.id) ? [optionLetter(index, question.questionHtml)] : []));
     return letters.length === 0 ? g.confirmNone : letters.join(copy.quiz.answerListSeparator);
   }
 
@@ -315,7 +315,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
                 {options.map((option, index) => (
                   <li key={option.id}>
                     <label className="runner-option">
-                      <span className="runner-option__letter">{optionLetter(index)}</span>
+                      <span className="runner-option__letter">{optionLetter(index, question.questionHtml)}</span>
                       <OptionBody option={option} chosen={false} />
                       <RadioGroupItem value={option.id} className="runner-option__control" />
                     </label>
@@ -328,7 +328,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
               {options.map((option, index) => (
                 <li key={option.id}>
                   <label className="runner-option">
-                    <span className="runner-option__letter">{optionLetter(index)}</span>
+                    <span className="runner-option__letter">{optionLetter(index, question.questionHtml)}</span>
                     <OptionBody option={option} chosen={false} />
                     <Checkbox
                       className="runner-option__control"
@@ -356,7 +356,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
                         right ? 'review-option--right' : chosen ? 'review-option--wrong' : null,
                       )}
                     >
-                      <span className="runner-option__letter">{optionLetter(index)}</span>
+                      <span className="runner-option__letter">{optionLetter(index, question.questionHtml)}</span>
                       <OptionBody option={option} chosen={chosen} />
                     </div>
                   </li>

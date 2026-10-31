@@ -16,10 +16,10 @@ import { formatCopy } from '@ayman/contracts/format';
 import { SafeHtml } from '@/components/content/safe-html';
 import { CountUp } from '@/components/rank/count-up';
 import { apiPost } from '@/lib/api';
+import { optionLetter } from '@/components/quiz/option-letter';
 
 const c = engagementCopy.cards;
 
-const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
 
 function CardsHero({ course, reviewedToday }: { course: CardsCourse; reviewedToday: number }) {
   return (
@@ -226,7 +226,7 @@ export function CardsBoard({ initial }: { initial: CardsPayload }) {
                   <li key={option.id}>
                     <div className="eg-option" data-tone={tone}>
                       <span className="eg-option__letter" aria-hidden="true">
-                        {tone === 'key' ? <Check className="size-4" /> : LETTERS[at] ?? at + 1}
+                        {tone === 'key' ? <Check className="size-4" /> : optionLetter(at, card.stemHtml)}
                       </span>
                       <SafeHtml html={option.bodyHtml} className="eg-option__body" />
                       {tone === 'key' ? <span className="sr-only">{c.round.answerLabel}</span> : null}
