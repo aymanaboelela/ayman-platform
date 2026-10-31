@@ -7,6 +7,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import {
   GAME_RULES,
   gameLetters,
+  isEnglishQuestion,
   GameAnswerResultSchema,
   GameLifelineResultSchema,
   MILLIONAIRE_LADDER,
@@ -109,6 +110,10 @@ export function Millionaire({
 
   const question = round.questions[index];
   const letters = gameLetters(question?.stemHtml ?? '');
+  // An English question (لغات) reads left to right: in the page's RTL the
+  // letter landed after the text («…likelihood. :A») and the stem hugged the
+  // wrong edge.
+  const dir = isEnglishQuestion(question?.stemHtml ?? '') ? 'ltr' : 'rtl';
   const secured = index === 0 ? 0 : ladder[index - 1]!;
   const safeFloor = millionaireFloor(ladder, index);
 
@@ -460,11 +465,16 @@ export function Millionaire({
           </header>
 
           <p className="mln-for">
-            {formatCopy(c.mlnQuestion, { n: index + 1 })} · {formatCopy(c.mlnFor, { points: NUM.format(ladder[index]!) })}
+            <span className="mln-for__n">{formatCopy(c.mlnQuestion, { n: index + 1 })}</span>
+            <span className="mln-for__points">{formatCopy(c.mlnFor, { points: NUM.format(ladder[index]!) })}</span>
           </p>
 
-          <div className="mln-question" key={question.id}>
-            <SafeHtml html={question.stemHtml} className="mln-question__stem" />
+          {/* The wire is on the wrapper: the bar itself is clip-pathed, and a
+              clip-path cuts its own pseudo-elements and shadows. */}
+          <div className="mln-bar mln-bar--question" key={question.id}>
+            <div className="mln-question" dir={dir}>
+              <SafeHtml html={question.stemHtml} className="mln-question__stem" />
+            </div>
           </div>
 
           {lifelineFailed ? (
@@ -491,7 +501,7 @@ export function Millionaire({
             </div>
           ) : null}
 
-          <ul className="mln-options">
+          <ul className="mln-options" dir={dir}>
             {question.options.map((option, i) => {
               const gone = removed.includes(option.id);
               const state =
@@ -505,7 +515,7 @@ export function Millionaire({
                     ? 'locked'
                     : undefined;
               return (
-                <li key={option.id} style={{ '--i': i } as CSSProperties}>
+                <li key={option.id} className="mln-bar" data-state={state} data-gone={gone || undefined} style={{ '--i': i } as CSSProperties}>
                   <button
                     type="button"
                     className="mln-option"
@@ -514,7 +524,7 @@ export function Millionaire({
                     disabled={gone || (phase !== 'question' && phase !== 'locked')}
                     onClick={() => lock(option.id)}
                   >
-                    <span className="mln-option__letter">{letters[i]}:</span>
+                    <span className="mln-option__letter">{letters[i]}</span>
                     {gone ? null : <SafeHtml html={option.bodyHtml} className="mln-option__body" />}
                   </button>
                 </li>
