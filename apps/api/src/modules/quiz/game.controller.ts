@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Query, StreamableFile, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res, StreamableFile, UsePipes } from '@nestjs/common';
+import type { Response } from 'express';
 import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type {
@@ -114,13 +115,18 @@ export class GameController {
     long: { limit: 5000, ttl: seconds(3600) },
   })
   @Get('voice/:questionId/:part')
-  @Header('Content-Type', 'audio/mpeg')
-  @Header('Cache-Control', 'private, max-age=604800, immutable')
   async clip(
     @CurrentUser() user: AuthenticatedUser,
     @Param('questionId', ParseUUIDPipe) questionId: string,
     @Param('part') part: string,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<StreamableFile> {
-    return new StreamableFile(await this.voice.clip(user.id, questionId, part));
+    const audio = await this.voice.clip(user.id, questionId, part);
+    // Only a clip is cached. `@Header` also stamped the 404 for a question not
+    // recorded yet, so the browser kept that silence `immutable` for a week
+    // after the recording landed.
+    response.setHeader('Content-Type', 'audio/mpeg');
+    response.setHeader('Cache-Control', 'private, max-age=604800, immutable');
+    return new StreamableFile(audio);
   }
 }

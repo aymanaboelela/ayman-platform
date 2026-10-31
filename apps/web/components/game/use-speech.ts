@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { gameLetters, isEnglishQuestion } from '@ayman/contracts/quiz/game';
 
 const STORAGE_KEY = 'game:voice';
+/**
+ * Bump to make every browser re-ask for every clip. The clip route answers
+ * `immutable` for a week, and until 2026-10-31 it said that on its 404s too —
+ * so a question played while the library was unreachable stayed silent in
+ * that browser for a week after the clips arrived. `2` drops those 404s.
+ */
+const CLIP_VERSION = 2;
 
 /** The last press, for when localStorage refuses the write — see `use-game-sound.ts`. */
 let pressed: boolean | null = null;
@@ -217,7 +224,7 @@ export function useSpeech(onSpeaking?: (on: boolean) => void) {
         `${base}/intro-${input.n}`,
         `${base}/stem`,
         ...input.options.flatMap((option, i) => [`${base}/${letter}-${i}`, `${base}/${encodeURIComponent(option.id)}`]),
-      ];
+      ].map((url) => `${url}?v=${CLIP_VERSION}`);
       // كل القطع بتتطلب مع بعض من الأول (`preload`)، فأول مرة حد يوصل للسؤال
       // السيرفر بيسجّلهم بالتوازي بدل واحدة ورا التانية بين كل جملة والتانية.
       const elements = clips.map((url) => {
