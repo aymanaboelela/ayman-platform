@@ -64,6 +64,7 @@ import { MistakesModule } from './modules/mistakes/mistakes.module';
 import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { PromoBannersModule } from './modules/promo-banners/promo-banners.module';
+import { SubscribersModule } from './modules/subscribers/subscribers.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
 import { SocialPostsModule } from './modules/social-posts/social-posts.module';
@@ -211,6 +212,8 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     ReferralsModule,
     // «البانرات الترويجية» — pictures on top of the student dashboard.
     PromoBannersModule,
+    // «المشتركين» — who holds a paid course or month, and who does not.
+    SubscribersModule,
     CouponsModule,
     AdminMobileModule,
     SocialPostsModule,
