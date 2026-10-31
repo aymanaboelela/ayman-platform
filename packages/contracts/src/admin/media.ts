@@ -222,9 +222,20 @@ export const DESIGN_KEY_PATTERN = /^design\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:png|j
  */
 export const SOCIAL_POST_KEY_PATTERN = /^sp\/[0-9a-f-]{36}\.jpg$/;
 
-/** Any of the eight shapes. `MediaStorage` implementations validate against this. */
+/**
+ * «من سيربح المليون» voice clips — `game-voice/<sha256>.mp3` (Azure, recorded
+ * on first request) and `game-voice/library/<sha256>.mp3` (his recorded
+ * library, `GameVoiceService`). Without this shape every lookup threw inside
+ * `stat()`, which reads as «not there», and all 1,881 uploaded clips 404'd.
+ * Never served by the public two-segment route — that one checks its own two
+ * patterns, not this list.
+ */
+export const GAME_VOICE_KEY_PATTERN = /^game-voice\/(?:library\/)?[0-9a-f]{64}\.mp3$/;
+
+/** Any of the nine shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
+    GAME_VOICE_KEY_PATTERN.test(key) ||
     STORAGE_KEY_PATTERN.test(key) ||
     DOCUMENT_KEY_PATTERN.test(key) ||
     CONVERSATION_KEY_PATTERN.test(key) ||

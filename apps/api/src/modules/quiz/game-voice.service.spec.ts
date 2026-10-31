@@ -1,5 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { NotFoundException } from '@nestjs/common';
+import { LocalDiskStorage } from '../media/storage/local-disk.storage';
 import type { MediaStorage } from '../media/storage/media-storage';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { GameService } from './game.service';
@@ -65,6 +69,19 @@ describe('GameVoiceService — recorded library', () => {
   it('a question nobody recorded is a 404, so the browser reads it — not a call to a vendor', async () => {
     await expect(service.clip('u1', 'q1', 'stem')).rejects.toBeInstanceOf(NotFoundException);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('a recorded clip on the REAL disk storage is found — its key is a valid storage key', async () => {
+    // The mock above accepts any key; the real `LocalDiskStorage` throws on a
+    // shape `isValidStorageKey` does not know, `stat()` swallows it, and every
+    // clip 404'd on prod while the files sat on the volume.
+    const root = mkdtempSync(path.join(tmpdir(), 'game-voice-'));
+    const key = libraryKey('What is HTTPS ?');
+    mkdirSync(path.join(root, path.dirname(key)), { recursive: true });
+    writeFileSync(path.join(root, key), 'his voice on disk');
+    const disk = new GameVoiceService(prisma, game, new LocalDiskStorage(root));
+    await expect(read(await disk.clip('u1', 'q1', 'stem'))).resolves.toBe('his voice on disk');
+    rmSync(root, { recursive: true, force: true });
   });
 
   it('GAME_VOICE_LIBRARY=off turns the library off', async () => {
