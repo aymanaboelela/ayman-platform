@@ -1333,15 +1333,15 @@ describe('StudentsService.exportContacts', () => {
     prisma.studentProfile.findMany.mockResolvedValueOnce(ROWS as never);
     prisma.contactExport.findMany.mockResolvedValueOnce([{ studentUserId: 'a' }]);
 
-    const result = await service.exportContacts({ ...FILTER, includeSaved: false }, 'admin-1');
+    const result = await service.exportContacts({ ...FILTER, includeSaved: false, kind: 'student' }, 'admin-1');
 
-    expect(result).toMatchObject({ exported: 1, alreadySaved: 1, withoutPhone: 1 });
+    expect(result).toMatchObject({ exported: 1, cards: 1, alreadySaved: 1, withoutPhone: 1 });
     expect(result.vcf).toContain('TEL;TYPE=CELL:+201000000002');
     expect(result.vcf).not.toContain('+201000000001');
     // vCard escaping: a comma or semicolon in a name must not split the field.
     expect(result.vcf).toContain('FN:Omar\\, Ali\\; Jr');
     expect(prisma.contactExport.createMany).toHaveBeenCalledWith({
-      data: [{ adminUserId: 'admin-1', studentUserId: 'b' }],
+      data: [{ adminUserId: 'admin-1', studentUserId: 'b', kind: 'student' }],
       skipDuplicates: true,
     });
   });
@@ -1351,7 +1351,7 @@ describe('StudentsService.exportContacts', () => {
     prisma.studentProfile.findMany.mockResolvedValueOnce(ROWS.slice(0, 1) as never);
     prisma.contactExport.findMany.mockResolvedValueOnce([{ studentUserId: 'a' }]);
 
-    const result = await service.exportContacts({ ...FILTER, includeSaved: false }, 'admin-1');
+    const result = await service.exportContacts({ ...FILTER, includeSaved: false, kind: 'student' }, 'admin-1');
 
     expect(result).toMatchObject({ vcf: '', exported: 0, alreadySaved: 1 });
     expect(prisma.contactExport.createMany).not.toHaveBeenCalled();
@@ -1362,9 +1362,36 @@ describe('StudentsService.exportContacts', () => {
     prisma.studentProfile.findMany.mockResolvedValueOnce(ROWS.slice(0, 1) as never);
     prisma.contactExport.findMany.mockResolvedValueOnce([{ studentUserId: 'a' }]);
 
-    const result = await service.exportContacts({ ...FILTER, includeSaved: true }, 'admin-1');
+    const result = await service.exportContacts({ ...FILTER, includeSaved: true, kind: 'student' }, 'admin-1');
 
     expect(result.exported).toBe(1);
     expect(result.vcf).toContain('FN:سارة أحمد');
+  });
+
+  it('hands over the parents as their own cards, siblings sharing a father on one card', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findMany.mockResolvedValueOnce([
+      { userId: 'a', fullName: 'أحمد', phone: '+201000000001', fatherPhone: '+201100000009', motherPhone: '+201200000008' },
+      { userId: 'b', fullName: 'منى', phone: '+201000000002', fatherPhone: '+201100000009', motherPhone: null },
+      { userId: 'c', fullName: 'من غير ولي أمر', phone: '+201000000003', fatherPhone: null, motherPhone: '  ' },
+    ] as never);
+    prisma.contactExport.findMany.mockResolvedValueOnce([]);
+
+    const result = await service.exportContacts({ ...FILTER, includeSaved: false, kind: 'parents' }, 'admin-1');
+
+    expect(result).toMatchObject({ exported: 2, cards: 2, alreadySaved: 0, withoutPhone: 1 });
+    expect(result.vcf).toContain('FN:والد أحمد ومنى\r\nN:والد أحمد ومنى;;;;\r\nTEL;TYPE=CELL:+201100000009');
+    expect(result.vcf).toContain('FN:والدة أحمد');
+    // The students' own numbers are not in the parents' file.
+    expect(result.vcf).not.toContain('+201000000001');
+    // Looked up and recorded as a parents export — the students' one says nothing about it.
+    expect(prisma.contactExport.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ kind: 'parents' }) }));
+    expect(prisma.contactExport.createMany).toHaveBeenCalledWith({
+      data: [
+        { adminUserId: 'admin-1', studentUserId: 'a', kind: 'parents' },
+        { adminUserId: 'admin-1', studentUserId: 'b', kind: 'parents' },
+      ],
+      skipDuplicates: true,
+    });
   });
 });

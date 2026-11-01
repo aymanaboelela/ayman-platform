@@ -27,6 +27,7 @@ import {
   deleteIdentityMatches,
 } from '@ayman/contracts/admin/students';
 import { cityBelongsTo, cityNameAr } from '@ayman/contracts/cities';
+import { copy } from '@ayman/contracts/copy/admin';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
 import {
   accountThrottleKey,
@@ -228,6 +229,35 @@ function toVCard(name: string, phone: string): string {
   return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${fn}`, `N:${fn};;;;`, `TEL;TYPE=CELL:${phone}`, 'END:VCARD', ''].join('\r\n');
 }
 
+/**
+ * The parents' cards for a set of students: «والد <name>» for the father's
+ * number and «والدة <name>» for the mother's (labels in the admin copy). A number already in the file
+ * gets the next child's name added to its card instead of a second card —
+ * siblings share a father, and two cards for one number is a duplicate the
+ * phone then asks to merge. A parent's number that is the student's own (a
+ * student who signed up on a parent's phone) still goes: in this file it is
+ * the parent being saved.
+ */
+function parentCards(
+  students: ReadonlyArray<{ fullName: string; fatherPhone: string | null; motherPhone: string | null }>,
+): Array<{ name: string; phone: string }> {
+  const byPhone = new Map<string, { label: string; children: string[] }>();
+  for (const student of students) {
+    const child = student.fullName.trim();
+    for (const [phone, label] of [
+      [student.fatherPhone, copy.admin.students.parentCardFather],
+      [student.motherPhone, copy.admin.students.parentCardMother],
+    ] as const) {
+      const number = phone?.trim();
+      if (!number) continue;
+      const card = byPhone.get(number);
+      if (!card) byPhone.set(number, { label, children: [child] });
+      else if (!card.children.includes(child)) card.children.push(child);
+    }
+  }
+  return [...byPhone].map(([phone, card]) => ({ name: `${card.label} ${card.children.join(' و')}`, phone }));
+}
+
 @Injectable()
 export class StudentsService {
   constructor(
@@ -404,19 +434,22 @@ export class StudentsService {
     input: StudentContactsExport,
     adminUserId: string,
   ): Promise<StudentContactsExportResult> {
+    const kind = input.kind;
     const where = await this.listWhere(input);
     const records = await this.prisma.studentProfile.findMany({
       where,
       orderBy: [{ fullName: 'asc' }, { userId: 'asc' }],
       take: CONTACT_EXPORT_MAX,
-      select: { userId: true, fullName: true, phone: true },
+      select: { userId: true, fullName: true, phone: true, fatherPhone: true, motherPhone: true },
     });
 
-    const withPhone = records.filter((record) => record.phone && record.phone.trim() !== '');
+    const numbersOf = (record: (typeof records)[number]) =>
+      kind === 'student' ? [record.phone] : [record.fatherPhone, record.motherPhone];
+    const withPhone = records.filter((record) => numbersOf(record).some((phone) => phone && phone.trim() !== ''));
     const saved = new Set(
       (
         await this.prisma.contactExport.findMany({
-          where: { adminUserId, studentUserId: { in: withPhone.map((record) => record.userId) } },
+          where: { adminUserId, kind, studentUserId: { in: withPhone.map((record) => record.userId) } },
           select: { studentUserId: true },
         })
       ).map((row) => row.studentUserId),
@@ -425,22 +458,28 @@ export class StudentsService {
 
     if (chosen.length > 0) {
       await this.prisma.contactExport.createMany({
-        data: chosen.map((record) => ({ adminUserId, studentUserId: record.userId })),
+        data: chosen.map((record) => ({ adminUserId, studentUserId: record.userId, kind })),
         skipDuplicates: true,
       });
     }
+
+    const cards =
+      kind === 'student'
+        ? chosen.map((record) => ({ name: record.fullName, phone: record.phone as string }))
+        : parentCards(chosen);
 
     await this.audit.record({
       action: 'student:export-contacts',
       resourceType: 'student_profile',
       resourceId: adminUserId,
       outcome: 'success',
-      metadata: { exported: chosen.length, includeSaved: input.includeSaved },
+      metadata: { kind, exported: chosen.length, cards: cards.length, includeSaved: input.includeSaved },
     });
 
     return {
-      vcf: chosen.map((record) => toVCard(record.fullName, record.phone as string)).join(''),
+      vcf: cards.map((card) => toVCard(card.name, card.phone)).join(''),
       exported: chosen.length,
+      cards: cards.length,
       alreadySaved: input.includeSaved ? 0 : withPhone.length - chosen.length,
       withoutPhone: records.length - withPhone.length,
     };

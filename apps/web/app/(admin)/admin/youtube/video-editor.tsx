@@ -19,8 +19,13 @@ import {
   type YoutubeVideoDetail,
   type YoutubeVideoUpdate,
 } from '@ayman/contracts/youtube/studio';
+import type { DesignAsset } from '@ayman/contracts/designs';
+import { useAdminCan } from '@/components/admin/permissions-context';
+import { DesignPicker } from '@/components/designs/design-picker';
 import { CHECKLIST, checklist } from '@/lib/youtube-studio/health';
+import { designAsThumbnail } from '@/lib/youtube-studio/design-thumbnail';
 import { uploadYoutubeThumbnail } from '@/lib/youtube-studio/upload-thumbnail';
+import { IS_AYMAN } from '@/lib/tenant';
 import { loadVideoAction, saveVideoAction, suggestAction } from './actions';
 import { CheckIcon, formatDate } from './parts';
 
@@ -107,6 +112,8 @@ export function VideoEditor({
   const [saving, startSaving] = useTransition();
   const [suggesting, startSuggesting] = useTransition();
   const [uploading, setUploading] = useState(false);
+  // The designer's studio is Ayman's stack only, and its originals need `design:read`.
+  const canUseDesigns = useAdminCan('design:read') && IS_AYMAN;
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -227,8 +234,8 @@ export function VideoEditor({
     });
   };
 
-  const pickThumbnail = async (file: File | undefined) => {
-    if (!file) return;
+  const pickThumbnail = async (file: File | undefined): Promise<boolean> => {
+    if (!file) return false;
     setNotice(null);
     setUploading(true);
     const outcome = await uploadYoutubeThumbnail(videoId, file);
@@ -236,11 +243,19 @@ export function VideoEditor({
     if (fileRef.current) fileRef.current.value = '';
     if (!outcome.ok) {
       setNotice({ tone: 'err', text: outcome.message });
-      return;
+      return false;
     }
     setDetail((current) => (current ? { ...current, thumbnailUrl: outcome.value.thumbnailUrl, thumbnailSetHere: true } : current));
     setNotice({ tone: 'ok', text: e.thumbnailDone });
     onThumbnail(outcome.value);
+    return true;
+  };
+
+  /** «من التصميمات» — the designer's finished thumbnail, straight to YouTube.
+   *  Throws on failure so the picker stays open and says so. */
+  const pickDesign = async (design: DesignAsset) => {
+    const file = await designAsThumbnail(design);
+    if (!(await pickThumbnail(file))) throw new Error('thumbnail refused');
   };
 
   const categoryKnown = form ? YOUTUBE_CATEGORIES.some((category) => category.id === form.categoryId) : true;
@@ -303,10 +318,13 @@ export function VideoEditor({
                         id={`yt-thumb-${videoId}`}
                         onChange={(event) => void pickThumbnail(event.target.files?.[0])}
                       />
-                      <label htmlFor={`yt-thumb-${videoId}`} className="yt-btn yt-btn--soft" aria-disabled={uploading}>
-                        <ImageUp className="size-4" aria-hidden="true" />
-                        {uploading ? e.thumbnailUploading : e.thumbnailPick}
-                      </label>
+                      <div className="yt-thumb-sources">
+                        {canUseDesigns ? <DesignPicker disabled={uploading} onChoose={pickDesign} /> : null}
+                        <label htmlFor={`yt-thumb-${videoId}`} className="yt-btn yt-btn--soft" aria-disabled={uploading}>
+                          <ImageUp className="size-4" aria-hidden="true" />
+                          {uploading ? e.thumbnailUploading : canUseDesigns ? e.thumbnailFromDevice : e.thumbnailPick}
+                        </label>
+                      </div>
                     </>
                   ) : null}
                   {detail.publishedAt ? <p className="yt-field__hint">{y.newVideo.published(formatDate(detail.publishedAt))}</p> : null}

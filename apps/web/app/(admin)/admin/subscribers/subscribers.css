@@ -70,7 +70,11 @@
   gap: var(--s-12);
 }
 
+/* `CourseArt` fills with `position: absolute; inset: 0`, so this box must be
+   its positioned ancestor — without it the cover escaped to the page and sat
+   over the whole report at full width. */
 .subs-course__art {
+  position: relative;
   flex-shrink: 0;
   inline-size: 5.5rem;
   aspect-ratio: 16 / 10;

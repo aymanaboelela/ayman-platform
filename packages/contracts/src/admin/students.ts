@@ -715,11 +715,19 @@ export const StudentListQuerySchema = z.object({
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;
 
+/** Whose numbers a contacts file carries: the students', or their parents'. */
+export const CONTACT_EXPORT_KINDS = ['student', 'parents'] as const;
+export type ContactExportKind = (typeof CONTACT_EXPORT_KINDS)[number];
+
 /**
  * «حفظ في جهات الاتصال» — the list screen's filters (no paging, no sort: the
  * whole filtered set goes, in name order) plus whether to include the students
  * this admin already exported. Off by default: the second press hands over
  * only the new ones, which is the point.
+ *
+ * `kind: 'parents'` hands over the father's and mother's numbers of the same
+ * students instead, each card named after the child («والد …» / «والدة …»).
+ * Tracked apart from the students' own export.
  */
 export const StudentContactsExportSchema = StudentListQuerySchema.omit({
   page: true,
@@ -728,17 +736,23 @@ export const StudentContactsExportSchema = StudentListQuerySchema.omit({
   dir: true,
 }).extend({
   includeSaved: z.boolean().default(false),
+  kind: z.enum(CONTACT_EXPORT_KINDS).default('student'),
 });
 
 export type StudentContactsExport = z.infer<typeof StudentContactsExportSchema>;
 
 export const StudentContactsExportResultSchema = z.object({
-  /** A vCard 3.0 file, one card per student. Empty when `exported` is 0. */
+  /** A vCard 3.0 file, one card per number. Empty when `exported` is 0. */
   vcf: z.string(),
+  /** Students handed over (for `parents`, students whose parents were). */
   exported: z.number().int(),
+  /** Cards in the file — for `parents` up to two per student, after merging
+   *  siblings who share a parent's number into one card. */
+  cards: z.number().int(),
   /** In the filter, skipped because this admin exported them before. */
   alreadySaved: z.number().int(),
-  /** In the filter, skipped because the profile has no phone. */
+  /** In the filter, skipped because the profile has no phone (for `parents`:
+   *  neither a father's nor a mother's number). */
   withoutPhone: z.number().int(),
 });
 
