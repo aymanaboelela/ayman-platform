@@ -101,6 +101,24 @@ interface MonthOfferingCourse {
   months: readonly { id: string; isOpen: boolean }[];
 }
 
+/**
+ * `payments.monthlyNeverExpires` (contracts `admin/flags.ts`): a MONTHLY
+ * course-wide purchase writes no end date, so a month sold as its own course
+ * stays with the student like a curriculum month does. Read per approval, not
+ * cached: a teacher's toggle takes effect on the next payment.
+ */
+export async function monthlyNeverExpires(
+  db: Pick<PrismaService, 'featureFlag'> | Prisma.TransactionClient,
+  plan: CourseWidePlan,
+): Promise<boolean> {
+  if (plan !== 'monthly') return false;
+  const flag = await db.featureFlag.findUnique({
+    where: { key: 'payments.monthlyNeverExpires' },
+    select: { enabled: true },
+  });
+  return flag?.enabled ?? false;
+}
+
 @Injectable()
 export class PaymentsService {
   constructor(
@@ -611,11 +629,9 @@ export class PaymentsService {
             where: { userId, courseId: course.id, scope: 'course', source: 'purchase', revokedAt: null },
             select: { id: true, validUntil: true },
           });
-          validUntil = computeApprovalValidUntil(
-            input.plan as CourseWidePlan,
-            now,
-            existing?.validUntil ?? null,
-          );
+          validUntil = (await monthlyNeverExpires(tx, input.plan as CourseWidePlan))
+            ? null
+            : computeApprovalValidUntil(input.plan as CourseWidePlan, now, existing?.validUntil ?? null);
           grantId = await this.writePurchaseGrant(tx, {
             userId,
             courseId: course.id,
@@ -1023,12 +1039,14 @@ export class PaymentsService {
     courseId: string,
     plan: CourseWidePlan,
     now: Date,
-  ): Promise<{ existingGrant: { id: string } | null; validUntil: Date }> {
+  ): Promise<{ existingGrant: { id: string } | null; validUntil: Date | null }> {
     const existingGrant = await this.prisma.accessGrant.findFirst({
       where: { userId, courseId, scope: 'course', source: 'purchase', revokedAt: null },
       select: { id: true, validUntil: true },
     });
-    const validUntil = computeApprovalValidUntil(plan, now, existingGrant?.validUntil ?? null);
+    const validUntil = (await monthlyNeverExpires(this.prisma, plan))
+      ? null
+      : computeApprovalValidUntil(plan, now, existingGrant?.validUntil ?? null);
     return { existingGrant: existingGrant ? { id: existingGrant.id } : null, validUntil };
   }
 
@@ -1050,7 +1068,8 @@ export class PaymentsService {
        *  nullable for exactly this, and the `note` says what did it. */
       adminId: string | null;
       now: Date;
-      validUntil: Date;
+      /** `null` = open-ended — `payments.monthlyNeverExpires`. */
+      validUntil: Date | null;
       existingGrant: { id: string } | null;
       note: string;
     },
