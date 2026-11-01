@@ -40,6 +40,7 @@ export const adminCouponsCopy = {
   note: 'ملاحظة (للأدمن بس)',
   create: 'إنشاء الكوبون',
   creating: 'بيتعمل…',
+  saving: 'بيتحفظ…',
   created: 'الكوبون اتعمل',
 
   listTitle: 'الكوبونات',
@@ -75,7 +76,7 @@ export const adminCouponsCopy = {
   save: 'حفظ',
   cancel: 'إلغاء',
   editTitle: 'تعديل الكوبون',
-  editHint: 'الكود والخصم والكورسات ثابتين بعد الإنشاء — لو فيهم غلط، كوبون جديد ووقّف القديم.',
+  editHint: 'التعديل بيمشي على الاستخدامات الجاية بس — اللي دفعوا قبل كده الخصم بتاعهم زي ما هو.',
 
   redemptions: 'الاستخدامات',
   redemptionsTitle: 'استخدامات {code}',

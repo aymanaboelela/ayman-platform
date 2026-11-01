@@ -250,7 +250,7 @@ export default async function AdminCouponsPage({
                         {row.createdBy ? ' · ' : null}
                         {DATE.format(new Date(row.createdAt))}
                       </p>
-                      <CouponRowActions coupon={row} canWrite={canWrite} />
+                      <CouponRowActions coupon={row} courses={courses.items} canWrite={canWrite} />
                     </div>
                   </li>
                 );

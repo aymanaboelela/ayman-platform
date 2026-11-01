@@ -283,4 +283,48 @@ describe('coupons', () => {
     const off = await coupons.update(adminId, couponId, { isActive: false });
     expect(off.status).toBe('inactive');
   });
+
+  it('an edit changes every term, and a payment already made keeps its discount', async () => {
+    const { id: couponId, code } = await coupon({ maxUses: 5 });
+    await claim(await student(), code);
+    const [before] = (await coupons.redemptions(couponId)).items;
+
+    const renamed = `${code}X`.slice(0, 32);
+    const edited = await coupons.update(adminId, couponId, {
+      code: renamed,
+      kind: 'fixed',
+      amountOffCents: 5_000,
+      allCourses: false,
+      courseIds: [otherCourseId],
+      maxUsesPerStudent: 2,
+    });
+    expect(edited).toMatchObject({
+      code: renamed,
+      kind: 'fixed',
+      percentOff: null,
+      amountOffCents: 5_000,
+      allCourses: false,
+      courses: [{ id: otherCourseId }],
+      maxUsesPerStudent: 2,
+      usesCount: 1,
+    });
+    // The redemption is a snapshot — the 25% it was priced at still stands.
+    const [after] = (await coupons.redemptions(couponId)).items;
+    expect(after?.discountCents).toBe(before?.discountCents);
+
+    // The next claim reads the new terms: 50 pounds, on the other course only.
+    await claim(await student(), renamed, otherCourseId);
+    const latest = (await coupons.redemptions(couponId)).items[0];
+    expect(latest).toMatchObject({ discountCents: 5_000, course: { id: otherCourseId } });
+
+    // The merged row is what is judged: a kind without its amount, a window
+    // that closes before it opens, a ceiling below the uses spent.
+    await expect(coupons.update(adminId, couponId, { kind: 'percent' })).rejects.toThrow();
+    await expect(
+      coupons.update(adminId, couponId, { startsAt: '2030-01-02T00:00:00Z', endsAt: '2030-01-01T00:00:00Z' }),
+    ).rejects.toThrow();
+    expect(await refusal(coupons.update(adminId, couponId, { maxUses: 1 }))).toBe('coupon_max_below_uses');
+    const other = await coupon();
+    expect(await refusal(coupons.update(adminId, other.id, { code: renamed }))).toBe('coupon_code_taken');
+  });
 });

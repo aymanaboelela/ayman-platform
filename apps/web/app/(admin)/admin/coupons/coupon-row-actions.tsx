@@ -6,22 +6,14 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ListChecks, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 import type { AdminCouponRedemptions, AdminCouponRow } from '@ayman/contracts/admin/coupons';
+import type { AdminUnlockCourseOption } from '@ayman/contracts/admin/unlock-codes';
 import { adminCouponsCopy as c } from '@ayman/contracts/copy/admin-coupons';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@ayman/ui/components/dialog';
-import { Input } from '@ayman/ui/components/input';
-import { Label } from '@ayman/ui/components/label';
-import { Textarea } from '@ayman/ui/components/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
 import { formatEGP } from '@/lib/price';
 import { couponRedemptionsAction, deleteCouponAction, updateCouponAction } from './actions';
+import { CouponForm } from './coupon-form';
 
 const DATE = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
   dateStyle: 'medium',
@@ -29,32 +21,25 @@ const DATE = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
   timeZone: 'Africa/Cairo',
 });
 
-/** An instant as the value a `datetime-local` input shows, in the admin's own
- *  clock — the inverse of the form's `toInstant`. */
-function toLocalInput(iso: string | null): string {
-  if (!iso) return '';
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 /**
- * One row's buttons: «إيقاف»/«تشغيل», «تعديل» (only what may still change —
- * see `AdminCouponUpdateSchema`), «الاستخدامات», and «حذف» for a code nobody
- * used. `canWrite` is `payment:review`; without it only the history opens.
+ * One row's buttons: «إيقاف»/«تشغيل», «تعديل» (the creation form again,
+ * every field — see `AdminCouponUpdateSchema`), «الاستخدامات», and «حذف» for a
+ * code nobody used. `canWrite` is `payment:review`; without it only the history opens.
  */
-export function CouponRowActions({ coupon, canWrite }: { coupon: AdminCouponRow; canWrite: boolean }) {
+export function CouponRowActions({
+  coupon,
+  courses,
+  canWrite,
+}: {
+  coupon: AdminCouponRow;
+  courses: AdminUnlockCourseOption[];
+  canWrite: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState<AdminCouponRedemptions | null | 'loading'>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [endsAt, setEndsAt] = useState(toLocalInput(coupon.endsAt));
-  const [maxUses, setMaxUses] = useState(coupon.maxUses === null ? '' : String(coupon.maxUses));
-  const [maxPerStudent, setMaxPerStudent] = useState(
-    coupon.maxUsesPerStudent === null ? '' : String(coupon.maxUsesPerStudent),
-  );
-  const [note, setNote] = useState(coupon.note ?? '');
 
   function run(action: () => Promise<{ ok: true } | { ok: false; message: string }>, success: string, after?: () => void) {
     startTransition(async () => {
@@ -68,8 +53,6 @@ export function CouponRowActions({ coupon, canWrite }: { coupon: AdminCouponRow;
       }
     });
   }
-
-  const optionalInt = (value: string) => (value.trim() ? Math.round(Number(value)) : null);
 
   function openHistory() {
     setHistoryOpen(true);
@@ -125,77 +108,7 @@ export function CouponRowActions({ coupon, canWrite }: { coupon: AdminCouponRow;
             </DialogTitle>
             <DialogDescription>{c.editHint}</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-1.5">
-              <Label htmlFor={`cp-ends-${coupon.id}`}>{c.endsAt}</Label>
-              <Input
-                id={`cp-ends-${coupon.id}`}
-                type="datetime-local"
-                dir="ltr"
-                value={endsAt}
-                onChange={(event) => setEndsAt(event.target.value)}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor={`cp-max-${coupon.id}`}>{c.maxUses}</Label>
-                <Input
-                  id={`cp-max-${coupon.id}`}
-                  type="number"
-                  inputMode="numeric"
-                  dir="ltr"
-                  min={1}
-                  value={maxUses}
-                  onChange={(event) => setMaxUses(event.target.value)}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor={`cp-per-${coupon.id}`}>{c.maxPerStudent}</Label>
-                <Input
-                  id={`cp-per-${coupon.id}`}
-                  type="number"
-                  inputMode="numeric"
-                  dir="ltr"
-                  min={1}
-                  max={100}
-                  value={maxPerStudent}
-                  onChange={(event) => setMaxPerStudent(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={`cp-note-${coupon.id}`}>{c.note}</Label>
-              <Textarea
-                id={`cp-note-${coupon.id}`}
-                maxLength={300}
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setEditing(false)} disabled={pending}>
-              {c.cancel}
-            </Button>
-            <Button
-              disabled={pending}
-              onClick={() =>
-                run(
-                  () =>
-                    updateCouponAction(coupon.id, {
-                      endsAt: endsAt ? new Date(endsAt).toISOString() : null,
-                      maxUses: optionalInt(maxUses),
-                      maxUsesPerStudent: optionalInt(maxPerStudent),
-                      note: note.trim() || null,
-                    }),
-                  c.saved,
-                  () => setEditing(false),
-                )
-              }
-            >
-              {c.save}
-            </Button>
-          </DialogFooter>
+          <CouponForm courses={courses} coupon={coupon} onSaved={() => setEditing(false)} />
         </DialogContent>
       </Dialog>
 

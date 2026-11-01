@@ -7100,10 +7100,12 @@ enum CouponKind {
 /// the column comes down by one in the same transaction as the rejection).
 /// A refund or a cancellation after approval does not: the coupon was used.
 ///
-/// ## What is fixed at creation
+/// ## Editing
 ///
-/// `code`, `kind`, the amount and the course list. A redemption is a snapshot
-/// of «X off Y»; see `admin/coupons.ts` in the contracts.
+/// Every column the admin set is editable, the amount included: a redemption
+/// is a snapshot of «X off Y» (its own `originalCents`/`discountCents`), so an
+/// edit never rewrites a payment already made. See `admin/coupons.ts` in the
+/// contracts.
 model Coupon {
   id                String     @id @default(uuid(7)) @db.Uuid
   /// Upper-case by CHECK — the comparison is case-insensitive by storing one

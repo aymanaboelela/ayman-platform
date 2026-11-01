@@ -232,28 +232,67 @@ export class CouponsService {
     const before = await this.prisma.coupon.findUnique({ where: { id }, select: ROW_SELECT });
     if (!before) throw new NotFoundException();
 
-    const endsAt = input.endsAt === undefined ? undefined : input.endsAt === null ? null : new Date(input.endsAt);
-    if (endsAt && before.startsAt && endsAt <= before.startsAt) {
-      throw new BadRequestException('endsAt must be after startsAt');
+    // The cross-field rules run on the MERGED row: half of each pair may be
+    // the stored value. The CHECKs hold the same rules underneath; these turn
+    // them into a 400 rather than a 500.
+    const kind = input.kind ?? before.kind;
+    const percentOff = kind === 'percent' ? (input.percentOff ?? before.percentOff) : null;
+    const amountOffCents = kind === 'fixed' ? (input.amountOffCents ?? before.amountOffCents) : null;
+    if (kind === 'percent' ? percentOff === null : amountOffCents === null) {
+      throw new BadRequestException('the amount does not match the kind');
     }
+
+    const instant = (value: string | null | undefined, stored: Date | null) =>
+      value === undefined ? stored : value === null ? null : new Date(value);
+    const startsAt = instant(input.startsAt, before.startsAt);
+    const endsAt = instant(input.endsAt, before.endsAt);
+    if (startsAt && endsAt && endsAt <= startsAt) throw new BadRequestException('endsAt must be after startsAt');
+
     if (input.maxUses !== undefined && input.maxUses !== null && input.maxUses < before.usesCount) {
       throw new ConflictException({ code: 'coupon_max_below_uses', message: 'max uses below uses so far' });
     }
 
+    // The course list is rewritten only when the body speaks about scope.
+    const allCourses = input.allCourses ?? before.allCourses;
+    const touchesScope = input.allCourses !== undefined || input.courseIds !== undefined;
+    const courseIds = allCourses
+      ? []
+      : [...new Set(input.courseIds ?? before.courses.map((link) => link.course.id))];
+    if (!allCourses && courseIds.length === 0) throw new BadRequestException('pick at least one course');
+    if (touchesScope && courseIds.length > 0) {
+      const found = await this.prisma.course.count({ where: { id: { in: courseIds } } });
+      if (found !== courseIds.length) throw new BadRequestException('a selected course does not exist');
+    }
+
     let updated: CouponRecord;
     try {
-      updated = await this.prisma.coupon.update({
-        where: { id },
-        data: {
-          isActive: input.isActive,
-          endsAt,
-          maxUses: input.maxUses,
-          maxUsesPerStudent: input.maxUsesPerStudent,
-          note: input.note === undefined ? undefined : input.note || null,
-        },
-        select: ROW_SELECT,
+      updated = await this.prisma.$transaction(async (tx) => {
+        if (touchesScope) {
+          await tx.couponCourse.deleteMany({ where: { couponId: id } });
+          if (courseIds.length > 0) {
+            await tx.couponCourse.createMany({ data: courseIds.map((courseId) => ({ couponId: id, courseId })) });
+          }
+        }
+        return tx.coupon.update({
+          where: { id },
+          data: {
+            code: input.code,
+            kind,
+            percentOff,
+            amountOffCents,
+            allCourses,
+            startsAt,
+            endsAt,
+            isActive: input.isActive,
+            maxUses: input.maxUses,
+            maxUsesPerStudent: input.maxUsesPerStudent,
+            note: input.note === undefined ? undefined : input.note || null,
+          },
+          select: ROW_SELECT,
+        });
       });
     } catch (error) {
+      if (isUniqueViolation(error)) throw new ConflictException({ code: 'coupon_code_taken', message: 'code taken' });
       /*
         `coupons_uses_within_max` (23514): a ceiling lowered below the uses
         already spent. Read as a 409 the screen can name rather than a 500 —
@@ -272,21 +311,7 @@ export class CouponsService {
       resourceId: id,
       actorUserId: adminId,
       outcome: 'success',
-      metadata: {
-        code: before.code,
-        before: {
-          isActive: before.isActive,
-          endsAt: before.endsAt?.toISOString() ?? null,
-          maxUses: before.maxUses,
-          maxUsesPerStudent: before.maxUsesPerStudent,
-        },
-        after: {
-          isActive: updated.isActive,
-          endsAt: updated.endsAt?.toISOString() ?? null,
-          maxUses: updated.maxUses,
-          maxUsesPerStudent: updated.maxUsesPerStudent,
-        },
-      },
+      metadata: { code: before.code, before: auditTerms(before), after: auditTerms(updated) },
     });
 
     const given = await this.discountGiven([id]);
@@ -362,6 +387,23 @@ export class CouponsService {
       })),
     };
   }
+}
+
+/** What an edit can change, for the audit row's before/after. */
+function auditTerms(coupon: CouponRecord) {
+  return {
+    code: coupon.code,
+    kind: coupon.kind,
+    percentOff: coupon.percentOff,
+    amountOffCents: coupon.amountOffCents,
+    allCourses: coupon.allCourses,
+    courseIds: coupon.courses.map((link) => link.course.id),
+    isActive: coupon.isActive,
+    startsAt: coupon.startsAt?.toISOString() ?? null,
+    endsAt: coupon.endsAt?.toISOString() ?? null,
+    maxUses: coupon.maxUses,
+    maxUsesPerStudent: coupon.maxUsesPerStudent,
+  };
 }
 
 /** A CHECK constraint refused the write (SQLSTATE 23514), however the driver
