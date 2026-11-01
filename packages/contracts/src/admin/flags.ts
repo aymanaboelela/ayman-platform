@@ -67,6 +67,21 @@ export const FLAG_DECLARATIONS = [
     defaultValue: true,
     defaultForTenant: false,
   },
+  /**
+   * «الشهر بيفضل مع الطالب» on a stack that sells each month as its own
+   * course («كورس الشهر التاني») with the old thirty-day plan. Ayman sells
+   * curriculum months (`CourseMonth`), which are open-ended by construction,
+   * so on his stack this changes nothing. On a teacher whose monthly course
+   * IS the month's content, thirty days meant the content a student paid for
+   * locked itself a month later (2026-11-01: 57 students on Adel and Sabry).
+   * On: a MONTHLY course-wide purchase writes `validUntil: null`. Quarterly
+   * and yearly keep their dates.
+   */
+  {
+    key: 'payments.monthlyNeverExpires',
+    descriptionAr: 'الاشتراك الشهري بيفضل مع الطالب على طول (مابيخلصش بعد ٣٠ يوم)',
+    defaultValue: false,
+  },
 ] as const satisfies readonly FlagDeclaration[];
 
 export type FlagKey = (typeof FLAG_DECLARATIONS)[number]['key'];
