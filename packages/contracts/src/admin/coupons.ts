@@ -7,14 +7,16 @@ import { CouponKindSchema } from '@ayman/contracts/coupons';
  * «كوبونات الخصم» — the admin's half: make a code, see how often it was used
  * and how much it took off, and stop it.
  *
- * ## What can change after a code is made, and what cannot
+ * ## Everything can change after a code is made
  *
- * The code, the kind, the amount and the courses are fixed at creation. A
- * redemption is a snapshot of «X off Y», and a coupon whose 10% quietly became
- * 50% would make every earlier row on the payments screen disagree with the
- * coupon it names. A mistake there is a new code. What CAN change is when and
- * how often it may still be used — `isActive`, `endsAt`, `maxUses`,
- * `maxUsesPerStudent` — and the note.
+ * The code, the kind, the amount, the courses, the window, the ceilings —
+ * all of it is editable. That is safe for the money history because a
+ * redemption is a SNAPSHOT: `coupon_redemptions` keeps its own
+ * `original_cents` and `discount_cents`, so a coupon whose 10% became 50%
+ * leaves every earlier payment row reading exactly what was paid. A claim
+ * already priced keeps its price too; only the next claim reads the new
+ * terms. The one thing an edit cannot do is lower `maxUses` below the uses
+ * already spent (`coupons_uses_within_max`).
  */
 
 /** «تاريخ» fields arrive as ISO strings or `null` for «من غير ميعاد». */
@@ -76,13 +78,23 @@ export const AdminCouponCreateSchema = z
 export type AdminCouponCreateInput = z.infer<typeof AdminCouponCreateSchema>;
 
 /**
- * The mutable half — see the header. Every key optional and with NO default:
- * a `.default()` inside a partial body writes the default over a field the
- * admin never touched.
+ * An edit — every key optional and with NO default: a `.default()` inside a
+ * partial body writes the default over a field the admin never touched.
+ *
+ * The cross-field rules (`kind` ⇔ amount, `allCourses` ⇔ `courseIds`,
+ * `endsAt` after `startsAt`) are checked by the service against the MERGED
+ * row, because half of each pair may be the stored value, not the body.
  */
 export const AdminCouponUpdateSchema = z
   .object({
+    code: CouponCodeSchema.optional(),
+    kind: CouponKindSchema.optional(),
+    percentOff: PercentOffSchema.nullable().optional(),
+    amountOffCents: AmountOffCentsSchema.nullable().optional(),
+    allCourses: z.boolean().optional(),
+    courseIds: z.uuid().array().max(200).optional(),
     isActive: z.boolean().optional(),
+    startsAt: optionalInstant.optional(),
     endsAt: optionalInstant.optional(),
     maxUses: MaxUsesSchema.nullable().optional(),
     maxUsesPerStudent: MaxPerStudentSchema.nullable().optional(),

@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useId, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Percent, Banknote } from 'lucide-react';
+import { AdminCouponCreateSchema, type AdminCouponRow } from '@ayman/contracts/admin/coupons';
 import type { AdminUnlockCourseOption } from '@ayman/contracts/admin/unlock-codes';
 import { adminCouponsCopy as c } from '@ayman/contracts/copy/admin-coupons';
 import { Button } from '@ayman/ui/components/button';
@@ -13,7 +14,7 @@ import { Label } from '@ayman/ui/components/label';
 import { Switch } from '@ayman/ui/components/switch';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
-import { createCouponAction } from './actions';
+import { createCouponAction, updateCouponAction } from './actions';
 
 /** `<input type="datetime-local">` is the admin's own clock; the API takes an
  *  instant. Empty is «من غير ميعاد». */
@@ -22,6 +23,17 @@ function toInstant(local: string): string | null {
   const date = new Date(local);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
+
+/** An instant as the value a `datetime-local` input shows, in the admin's own
+ *  clock — the inverse of `toInstant`. */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const optionalText = (n: number | null) => (n === null ? '' : String(n));
 
 /** A blank number field is «مفتوح» — `null`, never `0`. */
 function optionalInt(value: string): number | null {
@@ -32,24 +44,39 @@ function optionalInt(value: string): number | null {
 }
 
 /**
- * «كوبون جديد». Amounts are typed in POUNDS and sent in piastres, like every
+ * «كوبون جديد», and the same form for «تعديل» when `coupon` is given — every
+ * field stays editable (see `AdminCouponUpdateSchema`). Amounts are typed in POUNDS and sent in piastres, like every
  * money field on the admin side. The API is the judge of every bound
- * (`AdminCouponCreateSchema`); a 400 comes back as one sentence.
+ * (`AdminCouponCreateSchema`), but its 400 is one generic sentence — so the
+ * same schema runs here first, and the admin reads WHICH field is wrong
+ * («النهاية لازم تبقى بعد البداية») instead of «فيه حاجة مش مظبوطة».
  */
-export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) {
+export function CouponForm({
+  courses,
+  coupon,
+  onSaved,
+}: {
+  courses: AdminUnlockCourseOption[];
+  coupon?: AdminCouponRow;
+  onSaved?: () => void;
+}) {
   const router = useRouter();
+  // The edit dialog renders a second copy of this form per row — ids must not collide.
+  const id = useId();
   const [pending, startTransition] = useTransition();
-  const [code, setCode] = useState('');
-  const [kind, setKind] = useState<'percent' | 'fixed'>('percent');
-  const [value, setValue] = useState('');
-  const [allCourses, setAllCourses] = useState(true);
-  const [courseIds, setCourseIds] = useState<string[]>([]);
-  const [startsAt, setStartsAt] = useState('');
-  const [endsAt, setEndsAt] = useState('');
-  const [maxUses, setMaxUses] = useState('');
-  const [maxPerStudent, setMaxPerStudent] = useState('1');
-  const [isActive, setIsActive] = useState(true);
-  const [note, setNote] = useState('');
+  const [code, setCode] = useState(coupon?.code ?? '');
+  const [kind, setKind] = useState<'percent' | 'fixed'>(coupon?.kind ?? 'percent');
+  const [value, setValue] = useState(
+    coupon ? optionalText(coupon.kind === 'percent' ? coupon.percentOff : (coupon.amountOffCents ?? 0) / 100) : '',
+  );
+  const [allCourses, setAllCourses] = useState(coupon?.allCourses ?? true);
+  const [courseIds, setCourseIds] = useState<string[]>(coupon?.courses.map((course) => course.id) ?? []);
+  const [startsAt, setStartsAt] = useState(toLocalInput(coupon?.startsAt ?? null));
+  const [endsAt, setEndsAt] = useState(toLocalInput(coupon?.endsAt ?? null));
+  const [maxUses, setMaxUses] = useState(optionalText(coupon?.maxUses ?? null));
+  const [maxPerStudent, setMaxPerStudent] = useState(coupon ? optionalText(coupon.maxUsesPerStudent) : '1');
+  const [isActive, setIsActive] = useState(coupon?.isActive ?? true);
+  const [note, setNote] = useState(coupon?.note ?? '');
 
   function reset() {
     setCode('');
@@ -63,24 +90,34 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
 
   function submit() {
     const amount = Number(value);
+    const input = {
+      code: code.trim().toUpperCase(),
+      kind,
+      percentOff: kind === 'percent' ? Math.round(amount) : null,
+      amountOffCents: kind === 'fixed' ? Math.round(amount) * 100 : null,
+      allCourses,
+      courseIds: allCourses ? [] : courseIds,
+      startsAt: toInstant(startsAt),
+      endsAt: toInstant(endsAt),
+      maxUses: optionalInt(maxUses),
+      maxUsesPerStudent: optionalInt(maxPerStudent),
+      isActive,
+      note: note.trim() || null,
+    };
+    const parsed = AdminCouponCreateSchema.safeParse(input);
+    if (!parsed.success) {
+      // Only the refines and the code regex carry Arabic sentences; a bare
+      // bound (`.min(1)`) speaks zod's English, so it stays the generic line.
+      const issue = parsed.error.issues[0];
+      toast.error(issue && (issue.code === 'custom' || issue.code === 'invalid_format') ? issue.message : c.errors.invalid);
+      return;
+    }
     startTransition(async () => {
-      const result = await createCouponAction({
-        code: code.trim().toUpperCase(),
-        kind,
-        percentOff: kind === 'percent' ? Math.round(amount) : null,
-        amountOffCents: kind === 'fixed' ? Math.round(amount) * 100 : null,
-        allCourses,
-        courseIds: allCourses ? [] : courseIds,
-        startsAt: toInstant(startsAt),
-        endsAt: toInstant(endsAt),
-        maxUses: optionalInt(maxUses),
-        maxUsesPerStudent: optionalInt(maxPerStudent),
-        isActive,
-        note: note.trim() || null,
-      });
+      const result = coupon ? await updateCouponAction(coupon.id, parsed.data) : await createCouponAction(parsed.data);
       if (result.ok) {
-        toast.success(c.created);
-        reset();
+        toast.success(coupon ? c.saved : c.created);
+        if (!coupon) reset();
+        onSaved?.();
         router.refresh();
       } else {
         toast.error(result.message);
@@ -114,9 +151,9 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
       }}
     >
       <div className="grid gap-1.5">
-        <Label htmlFor="cp-code">{c.code}</Label>
+        <Label htmlFor={`${id}-code`}>{c.code}</Label>
         <Input
-          id="cp-code"
+          id={`${id}-code`}
           dir="ltr"
           required
           maxLength={32}
@@ -138,9 +175,9 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
       </fieldset>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="cp-value">{kind === 'percent' ? c.percentOff : c.amountOff}</Label>
+        <Label htmlFor={`${id}-value`}>{kind === 'percent' ? c.percentOff : c.amountOff}</Label>
         <Input
-          id="cp-value"
+          id={`${id}-value`}
           type="number"
           inputMode="numeric"
           dir="ltr"
@@ -184,7 +221,7 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
                       checked={checked}
                       onCheckedChange={(next) =>
                         setCourseIds((current) =>
-                          next === true ? [...current, course.id] : current.filter((id) => id !== course.id),
+                          next === true ? [...current, course.id] : current.filter((courseId) => courseId !== course.id),
                         )
                       }
                     />
@@ -205,42 +242,42 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
           datetime-local input's intrinsic width then spills out of its track. */}
       <div className="grid gap-4">
         <div className="grid min-w-0 gap-1.5">
-          <Label htmlFor="cp-starts">{c.startsAt}</Label>
-          <Input id="cp-starts" type="datetime-local" dir="ltr" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+          <Label htmlFor={`${id}-starts`}>{c.startsAt}</Label>
+          <Input id={`${id}-starts`} type="datetime-local" dir="ltr" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
         </div>
         <div className="grid min-w-0 gap-1.5">
-          <Label htmlFor="cp-ends">{c.endsAt}</Label>
-          <Input id="cp-ends" type="datetime-local" dir="ltr" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
+          <Label htmlFor={`${id}-ends`}>{c.endsAt}</Label>
+          <Input id={`${id}-ends`} type="datetime-local" dir="ltr" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
         </div>
         <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.windowHint}</p>
       </div>
 
       <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-4">
         <div className="grid min-w-0 gap-1.5">
-          <Label htmlFor="cp-max">{c.maxUses}</Label>
-          <Input id="cp-max" type="number" inputMode="numeric" dir="ltr" min={1} value={maxUses} onChange={(event) => setMaxUses(event.target.value)} />
+          <Label htmlFor={`${id}-max`}>{c.maxUses}</Label>
+          <Input id={`${id}-max`} type="number" inputMode="numeric" dir="ltr" min={1} value={maxUses} onChange={(event) => setMaxUses(event.target.value)} />
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.maxUsesHint}</p>
         </div>
         <div className="grid min-w-0 gap-1.5">
-          <Label htmlFor="cp-per">{c.maxPerStudent}</Label>
-          <Input id="cp-per" type="number" inputMode="numeric" dir="ltr" min={1} max={100} value={maxPerStudent} onChange={(event) => setMaxPerStudent(event.target.value)} />
+          <Label htmlFor={`${id}-per`}>{c.maxPerStudent}</Label>
+          <Input id={`${id}-per`} type="number" inputMode="numeric" dir="ltr" min={1} max={100} value={maxPerStudent} onChange={(event) => setMaxPerStudent(event.target.value)} />
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.maxPerStudentHint}</p>
         </div>
       </div>
 
       <div className="flex items-center gap-3 rounded-md border border-line-subtle bg-surface-1 p-3">
-        <Switch id="cp-active" checked={isActive} onCheckedChange={setIsActive} />
-        <Label htmlFor="cp-active">{c.active}</Label>
+        <Switch id={`${id}-active`} checked={isActive} onCheckedChange={setIsActive} />
+        <Label htmlFor={`${id}-active`}>{c.active}</Label>
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="cp-note">{c.note}</Label>
-        <Textarea id="cp-note" maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} />
+        <Label htmlFor={`${id}-note`}>{c.note}</Label>
+        <Textarea id={`${id}-note`} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} />
       </div>
 
       <div>
         <Button type="submit" disabled={pending || !code.trim() || !value || (!allCourses && courseIds.length === 0)}>
-          {pending ? c.creating : c.create}
+          {pending ? (coupon ? c.saving : c.creating) : coupon ? c.save : c.create}
         </Button>
       </div>
     </form>
