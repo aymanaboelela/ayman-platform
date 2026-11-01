@@ -659,6 +659,8 @@
   background: var(--n-3);
 }
 .yt-editor-media__side { display: grid; gap: 0.45rem; align-content: start; justify-items: start; }
+/* «من التصميمات» and «من الجهاز» side by side, wrapping on a narrow sheet. */
+.yt-thumb-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 @container (min-width: 36rem) {
   .yt-editor-media { grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); }
 }

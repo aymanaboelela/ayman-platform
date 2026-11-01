@@ -9,6 +9,7 @@ import { designsCopy } from '@ayman/contracts/copy/designs';
 import { formatCopy } from '@ayman/contracts/format';
 import {
   designPreviewPath,
+  type DesignAsset,
   type DesignFolderDetail,
   type DesignPublishShape,
   type DesignStudio,
@@ -30,15 +31,22 @@ const c = designsCopy.picker;
  * uploaded. No crop dialog — the designer drew it at the size it is meant
  * for, and a re-crop in the browser would re-encode it at the library's
  * 1600px/q82, which is the quality loss this whole path exists to avoid.
+ *
+ * `onChoose` replaces publishing for a target that is not the media library —
+ * the YouTube thumbnail, which wants the designer's own JPEG/PNG, not a WebP
+ * library copy. The caller does its own work with the chosen design and
+ * throws to report a failure; the dialog closes when it resolves.
  */
 export function DesignPicker({
-  shape,
+  shape = 'original',
   disabled,
   onPicked,
+  onChoose,
 }: {
-  shape: DesignPublishShape;
+  shape?: DesignPublishShape;
   disabled?: boolean;
-  onPicked: (asset: MediaAsset) => void;
+  onPicked?: (asset: MediaAsset) => void;
+  onChoose?: (design: DesignAsset) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [studio, setStudio] = useState<DesignStudio | null>(null);
@@ -65,13 +73,17 @@ export function DesignPicker({
     }
   }
 
-  async function pick(id: string) {
+  async function pick(design: DesignAsset) {
     if (busy) return;
-    setBusy(id);
+    setBusy(design.id);
     try {
-      const asset = await designsApi.publish(id, shape);
-      onPicked(asset);
-      toast.success(c.published);
+      if (onChoose) {
+        await onChoose(design);
+      } else {
+        const asset = await designsApi.publish(design.id, shape);
+        onPicked?.(asset);
+        toast.success(c.published);
+      }
       setOpen(false);
     } catch {
       toast.error(c.failed);
@@ -119,7 +131,7 @@ export function DesignPicker({
                           className="ds-pick"
                           aria-busy={busy === asset.id ? 'true' : undefined}
                           disabled={busy !== null}
-                          onClick={() => void pick(asset.id)}
+                          onClick={() => void pick(asset)}
                         >
                           <span className="ds-pick__thumb">
                             <img src={designPreviewPath(asset)} alt="" loading="lazy" />

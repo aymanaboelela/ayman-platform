@@ -147,6 +147,8 @@ export const youtubeStudioCopy = {
     thumbnail: 'الصورة المصغّرة',
     thumbnailHint: 'لحد ٢ ميجا، والأفضل مقاس ١٢٨٠×٧٢٠',
     thumbnailPick: 'رفع صورة جديدة',
+    /** Beside «من التصميمات», where «رفع صورة جديدة» would not say from where. */
+    thumbnailFromDevice: 'من الجهاز',
     thumbnailUploading: 'بيرفع…',
     thumbnailDone: 'الصورة المصغّرة اتغيّرت ✓',
     thumbnailTooLarge: 'الصورة أكبر من ٢ ميجا',
