@@ -6681,15 +6681,20 @@ model ArenaStat {
 /// already exported to their phone as a vCard, so the next press hands over
 /// only the new ones. Per admin: an assistant's phone holding a student says
 /// nothing about the instructor's. See the migration's header.
+///
+/// `kind` keeps the student's own card and their parents' cards apart:
+/// `student` | `parents` (CHECK in the migration). Saving one says nothing
+/// about the other.
 model ContactExport {
   adminUserId   String   @map("admin_user_id")
   studentUserId String   @map("student_user_id")
+  kind          String   @default("student")
   exportedAt    DateTime @default(now()) @map("exported_at") @db.Timestamptz(3)
 
   admin   User @relation("ContactExportAdmin", fields: [adminUserId], references: [id], onDelete: Cascade)
   student User @relation("ContactExportStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
 
-  @@id([adminUserId, studentUserId])
+  @@id([adminUserId, studentUserId, kind])
   @@index([studentUserId])
   @@map("contact_exports")
   @@schema("app")

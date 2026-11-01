@@ -101,8 +101,9 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         <span className="course-count__badge course-count__badge--paid">
           {formatCopy(copy.admin.students.matchingCount, { n: data.rowCount.toLocaleString('en') })}
         </span>
-        <div className="ms-auto">
+        <div className="ms-auto flex flex-wrap items-center gap-2">
           <SaveContactsButton />
+          <SaveContactsButton kind="parents" />
         </div>
       </div>
       <StudentsTable

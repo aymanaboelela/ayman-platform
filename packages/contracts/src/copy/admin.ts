@@ -3194,6 +3194,18 @@ const admin = {
   saveContactsFailed: 'الملف ماتجهّزش. جرّب تاني.',
   /** The vCard's file name, without the extension. */
   saveContactsFile: 'طلبة',
+  /** «حفظ أولياء الأمور» — the same students' father and mother numbers, one
+   *  card per number, named after the child. Tracked apart from the students. */
+  saveParents: 'حفظ أولياء الأمور',
+  saveParentsAgain: 'نزّل أولياء الأمور كلهم تاني',
+  saveParentsDone: 'اتجهّز ملف فيه {n} رقم لأولياء أمور {s} من الطلبة — افتحه وهيتضافوا لجهات الاتصال.',
+  saveParentsNothingNew: 'مفيش حد جديد — أولياء أمور الـ{n} اللي في الفلتر ده اتحفظوا قبل كده.',
+  saveParentsEmpty: 'مفيش أرقام أولياء أمور في الفلتر ده.',
+  saveParentsFile: 'أولياء-أمور',
+  /** The card's name is «<label> <child's name>»; siblings sharing a number
+   *  are joined on one card («والد أحمد ومنى»). */
+  parentCardFather: 'والد',
+  parentCardMother: 'والدة',
   /** «مش متسجّل» is a real bucket, not an absence: the onboarding question
    *  postdates a lot of these profiles, and calling them عربي would be a guess
    *  the screen has no business making. */
