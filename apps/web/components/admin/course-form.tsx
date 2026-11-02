@@ -10,6 +10,7 @@ import {
 } from '@ayman/contracts/content';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -68,6 +69,10 @@ export type CourseDefaults = {
      never render would only invite someone to add one back. The column and its
      history are still read by the finance screens. */
   yearlyPriceCents: number | null;
+  /** «سعر المشتركين القدام» — edit-only, and only drawn with the feature on.
+   *  Optional so the create page, which has no such field, need not pass it. */
+  returningMonthlyPriceCents?: number | null;
+  returningYearlyPriceCents?: number | null;
   /** الكتاب الورقي — `null` means this course has no book to order. Both
    *  set or both `null`, never one alone — see `courses_book_needs_price_
    *  and_title`. */
@@ -106,6 +111,16 @@ type Props = {
    * different things on two pages.
    */
   sellsByMonth?: boolean;
+  /**
+   * «سعر المشتركين القدام» — draws the field under the monthly price and sends
+   * it. Off (the default, and the create page) sends no key at all, so a stack
+   * without the feature never writes the column. See
+   * `Course.returningMonthlyPriceCents`.
+   */
+  returningPriceOn?: boolean;
+  /** The «قديم/جديد» line as the API holds it — `null` until the first
+   *  returning price draws it. Only read for the hint under the field. */
+  returningPriceBefore?: string | null;
   /**
    * `create` keeps an explicit «إضافة» button: there is no course to save into
    * until it is pressed, so autosaving is not merely unnecessary, it is
@@ -185,6 +200,9 @@ type Draft = {
    */
   monthlyPrice: string;
   yearlyPrice: string;
+  /** «سعر المشتركين القدام», same pounds-as-text convention. */
+  returningMonthlyPrice: string;
+  returningYearlyPrice: string;
   /** `''` is «مفيش كتاب لهذا الكورس». Trimmed to `null` on the way out,
    *  same convention as `emphasisNote`. */
   bookTitle: string;
@@ -201,12 +219,40 @@ function priceCentsOf(pounds: string): number | null {
   return parsed.kind === 'valid' ? parsed.cents : null;
 }
 
+/** «١٢ نوفمبر ٢٠٢٦», Western digits like every other number in the admin. */
+const returningDateFormat = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+function formatReturningDate(iso: string): string {
+  return returningDateFormat.format(new Date(iso));
+}
+
 /** Every price field holds a number or nothing. A typo is neither, and it
  *  used to save as «مش للبيع» — the plan came off sale under a «اتحفظ». */
 function pricesReadable(draft: Draft): boolean {
-  return [draft.monthlyPrice, draft.yearlyPrice, draft.bookPrice].every(
-    (text) => parsePounds(text).kind !== 'invalid',
+  return (
+    [
+      draft.monthlyPrice,
+      draft.yearlyPrice,
+      draft.returningMonthlyPrice,
+      draft.returningYearlyPrice,
+      draft.bookPrice,
+    ].every((text) => parsePounds(text).kind !== 'invalid') &&
+    returningBelow(draft.monthlyPrice, draft.returningMonthlyPrice) &&
+    returningBelow(draft.yearlyPrice, draft.returningYearlyPrice)
   );
+}
+
+/** The `courses_returning_*_below_*` CHECKs, so the field says why instead
+ *  of the autosave toasting a refusal. Empty always passes. */
+function returningBelow(regularPounds: string, returningPounds: string): boolean {
+  const returning = priceCentsOf(returningPounds);
+  if (returning === null) return true;
+  const regular = priceCentsOf(regularPounds);
+  return regular !== null && returning < regular;
 }
 
 /**
@@ -214,7 +260,7 @@ function pricesReadable(draft: Draft): boolean {
  * cannot disagree about what a course payload contains. The keys are the ones
  * `createCourseAction`/`updateCourseAction` read out of `FormData`.
  */
-function formDataOf(draft: Draft, sellsTerms = false): FormData {
+function formDataOf(draft: Draft, sellsTerms = false, returningPriceOn = false): FormData {
   const data = new FormData();
   data.set('title', draft.title);
   data.set('slug', draft.slug);
@@ -247,6 +293,11 @@ function formDataOf(draft: Draft, sellsTerms = false): FormData {
   // No `quarterlyPriceCents` key at all — `createCourseAction` reads none, and
   // an absent key on the PATCH is what leaves a past price where it is.
   data.set('yearlyPriceCents', yearlyPriceCents === null ? '' : String(yearlyPriceCents));
+  // Only when the field is drawn — see `returningPriceOn`.
+  if (returningPriceOn) {
+    data.set('returningMonthlyPriceCents', String(priceCentsOf(draft.returningMonthlyPrice) ?? ''));
+    data.set('returningYearlyPriceCents', String(priceCentsOf(draft.returningYearlyPrice) ?? ''));
+  }
   // Both set or both blank — a title with no price (or a price with no
   // title) trips `courses_book_needs_price_and_title` server-side, so an
   // admin who only filled one half sends neither rather than a 400 that
@@ -334,6 +385,8 @@ export function CourseForm({
   monthsAside,
   sellsTerms = false,
   sellsByMonth = false,
+  returningPriceOn = false,
+  returningPriceBefore = null,
 }: Props) {
   const [draft, setDraft] = useState<Draft>(() => {
     const initialSystemId = defaults?.systemId ?? taxonomy.systems[0]?.id ?? '';
@@ -362,6 +415,14 @@ export function CourseForm({
         defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
       yearlyPrice:
         defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
+      returningMonthlyPrice:
+        defaults?.returningMonthlyPriceCents != null
+          ? String(defaults.returningMonthlyPriceCents / 100)
+          : '',
+      returningYearlyPrice:
+        defaults?.returningYearlyPriceCents != null
+          ? String(defaults.returningYearlyPriceCents / 100)
+          : '',
       bookTitle: defaults?.bookTitle ?? '',
       bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
     };
@@ -461,7 +522,7 @@ export function CourseForm({
       next.slug.length > 0 &&
       pricesReadable(next)
     ) {
-      save(formDataOf(next, sellsTermsRef.current));
+      save(formDataOf(next, sellsTermsRef.current, returningPriceOn));
     }
   }
 
@@ -522,6 +583,12 @@ export function CourseForm({
   const hasSide = hasBook || Boolean(termsSlot);
 
   const monthlyInvalid = parsePounds(draft.monthlyPrice).kind === 'invalid';
+  const returningInvalid = parsePounds(draft.returningMonthlyPrice).kind === 'invalid';
+  const returningNotBelow =
+    !returningInvalid && !returningBelow(draft.monthlyPrice, draft.returningMonthlyPrice);
+  const returningYearlyInvalid = parsePounds(draft.returningYearlyPrice).kind === 'invalid';
+  const returningYearlyNotBelow =
+    !returningYearlyInvalid && !returningBelow(draft.yearlyPrice, draft.returningYearlyPrice);
   const yearlyInvalid = parsePounds(draft.yearlyPrice).kind === 'invalid';
   // A priced term locks the box only once the course IS closed: a course left
   // open by a term priced before terms closed anything shows the truth —
@@ -809,6 +876,38 @@ export function CourseForm({
               </p>
             ) : null}
           </div>
+          {/* «سعر المشتركين القدام» right beside the price it discounts —
+              one is meaningless without the other, and the hint names the
+              day that decides who is «قديم». */}
+          {returningPriceOn ? (
+            <div>
+              <Label htmlFor="returningMonthlyPrice">{copy.admin.course.priceReturningMonthly}</Label>
+              <Input
+                id="returningMonthlyPrice"
+                dir="ltr"
+                inputMode="decimal"
+                placeholder={copy.admin.course.priceReturningNone}
+                value={draft.returningMonthlyPrice}
+                aria-invalid={returningInvalid || returningNotBelow || undefined}
+                onChange={(event) => update({ returningMonthlyPrice: event.target.value })}
+              />
+              {returningInvalid || returningNotBelow ? (
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
+                  {returningInvalid
+                    ? copy.admin.course.priceInvalid
+                    : copy.admin.course.priceReturningNotBelow}
+                </p>
+              ) : (
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {returningPriceBefore
+                    ? formatCopy(copy.admin.course.priceReturningHintSince, {
+                        date: formatReturningDate(returningPriceBefore),
+                      })
+                    : copy.admin.course.priceReturningHintNew}
+                </p>
+              )}
+            </div>
+          ) : null}
           <div>
             <Label htmlFor="yearlyPrice">{copy.admin.course.priceYearly}</Label>
             <Input
@@ -826,6 +925,27 @@ export function CourseForm({
               </p>
             ) : null}
           </div>
+          {returningPriceOn ? (
+            <div>
+              <Label htmlFor="returningYearlyPrice">{copy.admin.course.priceReturningYearly}</Label>
+              <Input
+                id="returningYearlyPrice"
+                dir="ltr"
+                inputMode="decimal"
+                placeholder={copy.admin.course.priceReturningNone}
+                value={draft.returningYearlyPrice}
+                aria-invalid={returningYearlyInvalid || returningYearlyNotBelow || undefined}
+                onChange={(event) => update({ returningYearlyPrice: event.target.value })}
+              />
+              {returningYearlyInvalid || returningYearlyNotBelow ? (
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
+                  {returningYearlyInvalid
+                    ? copy.admin.course.priceInvalid
+                    : copy.admin.course.priceReturningNotBelow}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* الترم الأول / التاني — each term's price, here with the others

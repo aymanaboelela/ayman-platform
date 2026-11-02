@@ -315,6 +315,18 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'مين مشترك ومين لأ في كل كورس وكل شهر، بالأسامي والأرقام، وملف جاهز لإعلانات فيسبوك.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new. It changes what a student PAYS, so a
+     * teacher decides to offer it — and with the feature off no returning price
+     * can be set, so every student on that stack pays the one price, exactly as
+     * before.
+     */
+    key: 'returningPrice',
+    nameAr: 'سعر المشتركين القدام',
+    descriptionAr: 'سعر أقل للشهر والترم للطلبة اللي دفعوا في الكورس قبل كده، والسعر الجديد ظاهر جنبه متشطّب.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

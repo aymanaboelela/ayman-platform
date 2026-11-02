@@ -243,6 +243,14 @@ const courseWritableShape = {
    *  date-based expiry math (12 months instead of 1 or 3). See
    *  `Course.yearlyPriceCents`'s own doc in schema.prisma. */
   yearlyPriceCents: z.number().int().min(0).nullable().default(null),
+  /** «سعر المشتركين القدام» — the month's price for a student who paid for
+   *  this course before the price went up. `null` = everyone pays
+   *  `monthlyPriceCents`. Must sit below it; `CourseService.update` checks
+   *  that against the current row, the same way it resolves the other prices.
+   *  See `Course.returningMonthlyPriceCents` in schema.prisma. */
+  returningMonthlyPriceCents: z.number().int().min(0).nullable().default(null),
+  /** The same for the full year — below `yearlyPriceCents`. */
+  returningYearlyPriceCents: z.number().int().min(0).nullable().default(null),
   /**
    * الكتاب الورقي — a printed textbook this course ships home. `null` =
    * no book to order, and independent of the subscription prices above: a
@@ -392,6 +400,8 @@ const termWritableShape = {
   title: z.string().min(2).max(160),
   /** `null` = not for sale. See `CourseTerm.priceCents`'s own note. */
   priceCents: z.number().int().min(0).nullable().default(null),
+  /** «سعر المشتركين القدام» for this term — see `CourseTerm.returningPriceCents`. */
+  returningPriceCents: z.number().int().min(0).nullable().default(null),
 };
 
 export const TermCreateSchema = z.object(termWritableShape).strict();
@@ -413,6 +423,9 @@ export const CourseTermSchema = z.object({
   position: z.number().int(),
   isOpen: z.boolean(),
   priceCents: z.number().int().nullable(),
+  /** Defaulted so a web build that lands before its API does still parses
+   *  the term the older API sends back. */
+  returningPriceCents: z.number().int().nullable().default(null),
 });
 export type CourseTerm = z.infer<typeof CourseTermSchema>;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -40,10 +40,21 @@ type Term = AdminCourseDetail['terms'][number];
  * TYPED: the draft is reseeded from the server by the caller's `key`, so a
  * focus-and-blur can no longer write a stale price back over a newer one.
  */
-function TermPriceField({ courseId, term }: { courseId: string; term: Term }) {
+function TermPriceField({
+  courseId,
+  term,
+  field = 'priceCents',
+}: {
+  courseId: string;
+  term: Term;
+  /** `returningPriceCents` is «سعر المشتركين القدام» — the same field, the
+   *  same commit, writing the other column. */
+  field?: 'priceCents' | 'returningPriceCents';
+}) {
   const router = useRouter();
   const id = useId();
-  const [draft, setDraft] = useState(poundsOf(term.priceCents));
+  const saved = term[field];
+  const [draft, setDraft] = useState(poundsOf(saved));
   const [dirty, setDirty] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -55,29 +66,33 @@ function TermPriceField({ courseId, term }: { courseId: string; term: Term }) {
     // unreadable, and the term quietly left the storefront under a «اتحفظ».
     if (parsed.kind === 'invalid') {
       toast.error(copy.admin.course.priceInvalid);
-      setDraft(poundsOf(term.priceCents));
+      setDraft(poundsOf(saved));
       return;
     }
     const priceCents = parsed.kind === 'empty' ? null : parsed.cents;
-    if (priceCents === term.priceCents) {
-      setDraft(poundsOf(term.priceCents));
+    if (priceCents === saved) {
+      setDraft(poundsOf(saved));
       return;
     }
     setPending(true);
-    const result = await updateTermAction(courseId, term.id, { priceCents });
+    const result = await updateTermAction(courseId, term.id, { [field]: priceCents });
     setPending(false);
     if (result.ok) {
       toast.success(copy.admin.common.saved);
       router.refresh();
     } else {
-      toast.error(c.actionFailed);
-      setDraft(poundsOf(term.priceCents));
+      // The API's own sentence when it has one — «لازم يبقى أقل من السعر
+      // العادي» is the refusal he can act on; «حصلت مشكلة» is not.
+      toast.error(result.message || c.actionFailed);
+      setDraft(poundsOf(saved));
     }
   }
 
   return (
     <div>
-      <Label htmlFor={id}>{formatCopy(c.priceOf, { term: term.title })}</Label>
+      <Label htmlFor={id}>
+        {formatCopy(field === 'priceCents' ? c.priceOf : c.returningPriceOf, { term: term.title })}
+      </Label>
       {/* Text, not `type="number"`: a number field changes under the mouse
           wheel while focused, and blur then saved whatever the wheel left.
           Same shape as the monthly and yearly fields beside it. */}
@@ -85,7 +100,9 @@ function TermPriceField({ courseId, term }: { courseId: string; term: Term }) {
         id={id}
         dir="ltr"
         inputMode="decimal"
-        placeholder={copy.admin.course.priceNotForSale}
+        placeholder={
+          field === 'priceCents' ? copy.admin.course.priceNotForSale : copy.admin.course.priceReturningNone
+        }
         value={draft}
         disabled={pending}
         onChange={(event) => {
@@ -103,7 +120,17 @@ function TermPriceField({ courseId, term }: { courseId: string; term: Term }) {
 
 /** Every term's price, for the pricing block. Nothing on a course with no
  *  terms — the monthly and yearly fields are the whole answer there. */
-export function TermPriceFields({ courseId, terms }: { courseId: string; terms: Term[] }) {
+export function TermPriceFields({
+  courseId,
+  terms,
+  returningOn = false,
+}: {
+  courseId: string;
+  terms: Term[];
+  /** Draw «سعر المشتركين القدام» beside each term's price — feature
+   *  `returningPrice`. */
+  returningOn?: boolean;
+}) {
   if (terms.length === 0) return null;
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -111,7 +138,17 @@ export function TermPriceFields({ courseId, terms }: { courseId: string; terms: 
         // Keyed on the saved price as well: a price changed anywhere else
         // (another tab, another admin) reseeds the field instead of leaving a
         // stale draft for the next blur to write back.
-        <TermPriceField key={`${term.id}:${term.priceCents ?? ''}`} courseId={courseId} term={term} />
+        <Fragment key={term.id}>
+          <TermPriceField key={`${term.id}:${term.priceCents ?? ''}`} courseId={courseId} term={term} />
+          {returningOn ? (
+            <TermPriceField
+              key={`${term.id}:r:${term.returningPriceCents ?? ''}`}
+              courseId={courseId}
+              term={term}
+              field="returningPriceCents"
+            />
+          ) : null}
+        </Fragment>
       ))}
     </div>
   );

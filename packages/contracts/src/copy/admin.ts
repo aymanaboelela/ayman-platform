@@ -439,6 +439,20 @@ const admin = {
     /** Sits under `priceMonthly` on a course that sells by curriculum month:
      *  the one price buys ONE month, whichever the student picks. */
     priceMonthlyPerMonth: 'السعر ده لشهر واحد من اللي تحت.',
+    /**
+     * «سعر المشتركين القدام» — see `Course.returningMonthlyPriceCents`. The
+     * hint says who gets it, because «قديم» is a date and he should see which.
+     */
+    priceReturningMonthly: 'سعر الشهر للمشتركين القدام (جنيه)',
+    priceReturningYearly: 'سعر السنة للمشتركين القدام (جنيه)',
+    priceReturningNone: 'زي السعر العادي',
+    /** Before any returning price is set — the line is drawn by the first one. */
+    priceReturningHintNew:
+      'للطلبة اللي دفعوا في الكورس قبل ما تحط السعر ده. اللي جديد يدفع السعر العادي، والقديم يشوفه متشطّب والسعر ده جنبه.',
+    /** `{date}` — `Course.returningPriceBefore`, the day the line was drawn. */
+    priceReturningHintSince:
+      'للطلبة اللي دفعوا في الكورس قبل {date}. اللي جديد يدفع السعر العادي، والقديم يشوفه متشطّب والسعر ده جنبه.',
+    priceReturningNotBelow: 'سعر المشتركين القدام لازم يبقى أقل من السعر العادي — ماتحفظش.',
     priceNotForSale: 'مش للبيع',
     /** A price field holding something that is not a number. It used to save
      *  as «مش للبيع» and take the plan off sale under a «اتحفظ». */
@@ -519,6 +533,8 @@ const admin = {
     /** `{term}` — the label of each term's price field in the pricing block,
      *  e.g. «سعر الترم الأول (جنيه)». */
     priceOf: 'سعر {term} (جنيه)',
+    /** `{term}` — the returning price beside it. See `priceReturningMonthly`. */
+    returningPriceOf: 'سعر {term} للمشتركين القدام (جنيه)',
     open: 'مفتوح للبيع',
     /** Open, but with no price: the storefront lists only priced terms, so
      *  «مفتوح» alone read as «بيتباع» and it was not. */

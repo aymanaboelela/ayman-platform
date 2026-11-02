@@ -2885,6 +2885,18 @@ export const copy = {
     /** `{price}` — the CHEAPEST open term's price, shown on the term card
      *  when the course sells more than one (no single number to show yet). */
     planTermFromPrice: 'من {price} جنيه',
+    /**
+     * «سعر المشتركين القدام» — the tag on a plan card whose price is the
+     * returning one, under the regular price struck through. The instructor
+     * wanted it SEEN: «يبقى ظاهر إن في خصم». Neutral wording — never «انت
+     * مشترك قديم» in the masculine (CLAUDE.md §7).
+     */
+    returningPriceTag: 'سعر خاص',
+    /** Under the price on that card — `{amount}` is what came off. Says WHY
+     *  here rather than in the tag, which has to fit one line on a phone. */
+    returningPriceSave: 'خصم {amount} جنيه للمشتركين القدام',
+    /** The discount row in the payment summary. */
+    returningPriceSummary: 'خصم المشتركين القدام',
     chooseTermTitle: 'الترمات المتاحة',
 
     // ── «شهر» when the course sells by curriculum month ──────────────────
