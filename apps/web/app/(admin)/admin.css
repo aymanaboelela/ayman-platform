@@ -970,6 +970,41 @@ div.unit[data-open] > .unit__head:hover {
   display: grid;
 }
 
+/* «العرض / الخصم» — its own tinted box inside the pricing block, so the offer
+   reads as one decision (prices + end date) and not three more price fields. */
+.course-sale-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid color-mix(in oklch, var(--ok), transparent 55%);
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--ok), transparent 93%);
+}
+
+.course-sale-box__title {
+  font-weight: var(--fw-bold);
+  color: color-mix(in oklab, var(--ok), var(--n-12) 30%);
+}
+
+.course-sale-box__note {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.course-sale-box__status {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.course-sale-box__status.is-live {
+  color: color-mix(in oklab, var(--ok), var(--n-12) 25%);
+}
+
+.course-sale-box__status.is-over {
+  color: var(--err);
+}
+
 .term-row {
   display: flex;
   flex-wrap: wrap;

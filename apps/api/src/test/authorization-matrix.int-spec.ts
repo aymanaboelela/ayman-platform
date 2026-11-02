@@ -2623,11 +2623,6 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'payment my months: anonymous', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'anonymous', status: 401 },
     { label: 'payment my months: student', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'student', status: 200 },
     { label: 'payment my months: admin', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'admin', status: 200 },
-    // «سعر المشتركين القدام» — same self-scoped read, plus feature
-    // `returningPrice` (open here: no TENANT_KEY is the instructor's stack).
-    { label: 'payment my prices: anonymous', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/prices/mine`, actor: 'anonymous', status: 401 },
-    { label: 'payment my prices: student', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/prices/mine`, actor: 'student', status: 200 },
-    { label: 'payment my prices: admin', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/prices/mine`, actor: 'admin', status: 200 },
     // «كود الخصم ← تطبيق» — `payment:submit` + feature `coupons` (open here:
     // no TENANT_KEY is the instructor's own stack). Through the gate, then 404
     // on a course that does not exist — before any coupon is even looked up.

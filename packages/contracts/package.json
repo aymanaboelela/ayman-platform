@@ -63,6 +63,7 @@
     "./notifications": "./src/notifications.ts",
     "./notifications/push": "./src/notifications/push.ts",
     "./payments": "./src/payments.ts",
+    "./sale": "./src/sale.ts",
     "./coupons": "./src/coupons.ts",
     "./coupon-code": "./src/coupon-code.ts",
     "./wallet": "./src/wallet.ts",

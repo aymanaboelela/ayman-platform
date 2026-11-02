@@ -21,6 +21,8 @@ import { getBookShippingRates } from '@/lib/books';
 import { formatCopy } from '@ayman/contracts/format';
 import { formatEGP } from '@/lib/price';
 import { monthlyForSaleCents } from '@/lib/monthly-sale';
+import { formatSaleDay } from '@/lib/sale-day';
+import { activeSalePrice } from '@ayman/contracts/sale';
 import { RichText } from '@/components/content/rich-text';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
@@ -202,6 +204,14 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
     course.quarterlyPriceCents !== null ||
     course.yearlyPriceCents !== null ||
     course.terms.length > 0;
+  // «عرض» — what each plan sells for while the offer is live; `null` = no
+  // offer on that plan right now. See `activeSalePrice`.
+  const saleMonthly = activeSalePrice(course.monthlyPriceCents, course.saleMonthlyPriceCents, course.saleEndsAt);
+  const saleYearly = activeSalePrice(course.yearlyPriceCents, course.saleYearlyPriceCents, course.saleEndsAt);
+  const saleAnyOn =
+    saleMonthly !== null ||
+    saleYearly !== null ||
+    course.terms.some((term) => activeSalePrice(term.priceCents, term.salePriceCents, course.saleEndsAt) !== null);
   // الكتاب الورقي — entirely independent of `priced` above: a free course
   // can sell a book, and a priced one can sell none. Both `bookTitle` and
   // `bookPriceCents` are set together or not at all (`courses_book_needs_
@@ -302,14 +312,24 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
 
           {priced ? (
             <div className="course-aside__price">
+              {/*
+                «عرض» — a plan on offer reads its offer price, with a tag
+                before it and the regular price struck after it; the end date,
+                when there is one, once under all of them. `activeSalePrice`
+                is the rule the checkout charges by.
+              */}
               {course.monthlyPriceCents !== null ? (
                 <span className="course-aside__price-row">
+                  {saleMonthly !== null ? <span className="course-aside__sale-tag">{copy.course.saleTag}</span> : null}
                   {formatCopy(
                     monthlyForSaleCents(course) === null
                       ? copy.course.priceMonthlyClosed
                       : copy.course.priceMonthly,
-                    { price: formatEGP(course.monthlyPriceCents) },
+                    { price: formatEGP(saleMonthly ?? course.monthlyPriceCents) },
                   )}
+                  {saleMonthly !== null ? (
+                    <s className="course-aside__was">{formatEGP(course.monthlyPriceCents)}</s>
+                  ) : null}
                 </span>
               ) : null}
               {course.quarterlyPriceCents !== null ? (
@@ -317,14 +337,29 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                   {formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })}
                 </span>
               ) : null}
-              {course.terms.map((term) => (
-                <span key={term.id} className="course-aside__price-row">
-                  {formatCopy(copy.course.priceTerm, { price: formatEGP(term.priceCents), term: term.title })}
-                </span>
-              ))}
+              {course.terms.map((term) => {
+                const termSale = activeSalePrice(term.priceCents, term.salePriceCents, course.saleEndsAt);
+                return (
+                  <span key={term.id} className="course-aside__price-row">
+                    {termSale !== null ? <span className="course-aside__sale-tag">{copy.course.saleTag}</span> : null}
+                    {formatCopy(copy.course.priceTerm, {
+                      price: formatEGP(termSale ?? term.priceCents),
+                      term: term.title,
+                    })}
+                    {termSale !== null ? <s className="course-aside__was">{formatEGP(term.priceCents)}</s> : null}
+                  </span>
+                );
+              })}
               {course.yearlyPriceCents !== null ? (
                 <span className="course-aside__price-row">
-                  {formatCopy(copy.course.priceYearly, { price: formatEGP(course.yearlyPriceCents) })}
+                  {saleYearly !== null ? <span className="course-aside__sale-tag">{copy.course.saleTag}</span> : null}
+                  {formatCopy(copy.course.priceYearly, { price: formatEGP(saleYearly ?? course.yearlyPriceCents) })}
+                  {saleYearly !== null ? <s className="course-aside__was">{formatEGP(course.yearlyPriceCents)}</s> : null}
+                </span>
+              ) : null}
+              {saleAnyOn && course.saleEndsAt != null ? (
+                <span className="course-aside__sale-until">
+                  {formatCopy(copy.course.saleUntil, { date: formatSaleDay(course.saleEndsAt) })}
                 </span>
               ) : null}
             </div>

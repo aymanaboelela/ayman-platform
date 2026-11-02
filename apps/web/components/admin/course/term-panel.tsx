@@ -47,9 +47,9 @@ function TermPriceField({
 }: {
   courseId: string;
   term: Term;
-  /** `returningPriceCents` is «سعر المشتركين القدام» — the same field, the
-   *  same commit, writing the other column. */
-  field?: 'priceCents' | 'returningPriceCents';
+  /** `salePriceCents` is the term's «عرض» price — the same field, the same
+   *  commit, writing the other column. */
+  field?: 'priceCents' | 'salePriceCents';
 }) {
   const router = useRouter();
   const id = useId();
@@ -82,7 +82,7 @@ function TermPriceField({
       router.refresh();
     } else {
       // The API's own sentence when it has one — «لازم يبقى أقل من السعر
-      // العادي» is the refusal he can act on; «حصلت مشكلة» is not.
+      // الأصلي» is the refusal he can act on; «حصلت مشكلة» is not.
       toast.error(result.message || c.actionFailed);
       setDraft(poundsOf(saved));
     }
@@ -91,7 +91,7 @@ function TermPriceField({
   return (
     <div>
       <Label htmlFor={id}>
-        {formatCopy(field === 'priceCents' ? c.priceOf : c.returningPriceOf, { term: term.title })}
+        {formatCopy(field === 'priceCents' ? c.priceOf : c.saleOf, { term: term.title })}
       </Label>
       {/* Text, not `type="number"`: a number field changes under the mouse
           wheel while focused, and blur then saved whatever the wheel left.
@@ -101,7 +101,7 @@ function TermPriceField({
         dir="ltr"
         inputMode="decimal"
         placeholder={
-          field === 'priceCents' ? copy.admin.course.priceNotForSale : copy.admin.course.priceReturningNone
+          field === 'priceCents' ? copy.admin.course.priceNotForSale : copy.admin.course.saleNone
         }
         value={draft}
         disabled={pending}
@@ -123,13 +123,12 @@ function TermPriceField({
 export function TermPriceFields({
   courseId,
   terms,
-  returningOn = false,
+  saleOn = false,
 }: {
   courseId: string;
   terms: Term[];
-  /** Draw «سعر المشتركين القدام» beside each term's price — feature
-   *  `returningPrice`. */
-  returningOn?: boolean;
+  /** Draw the term's «عرض» price beside its price — feature `courseSale`. */
+  saleOn?: boolean;
 }) {
   if (terms.length === 0) return null;
   return (
@@ -140,12 +139,12 @@ export function TermPriceFields({
         // stale draft for the next blur to write back.
         <Fragment key={term.id}>
           <TermPriceField key={`${term.id}:${term.priceCents ?? ''}`} courseId={courseId} term={term} />
-          {returningOn ? (
+          {saleOn ? (
             <TermPriceField
-              key={`${term.id}:r:${term.returningPriceCents ?? ''}`}
+              key={`${term.id}:s:${term.salePriceCents ?? ''}`}
               courseId={courseId}
               term={term}
-              field="returningPriceCents"
+              field="salePriceCents"
             />
           ) : null}
         </Fragment>

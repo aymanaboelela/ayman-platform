@@ -2691,6 +2691,11 @@ export const copy = {
     /** `{term}` — the term's own title, `{price}` — EGP, already formatted.
      *  One row per open, priced term — see `CatalogCourseTerm`'s own doc. */
     priceTerm: '{price} ج / {term}',
+    /** «عرض» on the course page — the tag beside a price sold below its
+     *  regular one, which is drawn struck through next to it. */
+    saleTag: 'عرض',
+    /** `{date}` — under the prices, when the offer ends. */
+    saleUntil: 'العرض لحد {date}',
     lessonsLabel: 'الدروس:',
     /**
      * Replaces the play-frame's "تشغيل الكورس" for a PRICED course, on the
@@ -2886,17 +2891,18 @@ export const copy = {
      *  when the course sells more than one (no single number to show yet). */
     planTermFromPrice: 'من {price} جنيه',
     /**
-     * «سعر المشتركين القدام» — the tag on a plan card whose price is the
-     * returning one, under the regular price struck through. The instructor
-     * wanted it SEEN: «يبقى ظاهر إن في خصم». Neutral wording — never «انت
-     * مشترك قديم» in the masculine (CLAUDE.md §7).
+     * «عرض» — the tag on a plan card sold below its price, over the regular
+     * price struck through. The instructor wanted it SEEN: «يظهر للناس بدل ما
+     * هو بـ١٥٠ يبقى ٩٩». Neutral wording, never addressing the student in the
+     * masculine (CLAUDE.md §7).
      */
-    returningPriceTag: 'سعر خاص',
-    /** Under the price on that card — `{amount}` is what came off. Says WHY
-     *  here rather than in the tag, which has to fit one line on a phone. */
-    returningPriceSave: 'خصم {amount} جنيه للمشتركين القدام',
+    saleTag: 'عرض',
+    /** Under the price on that card — `{amount}` is what came off. */
+    saleSave: 'خصم {amount} جنيه',
+    /** `{date}` — when the offer ends, so «لحد إمتى؟» has an answer. */
+    saleUntil: 'العرض لحد {date}',
     /** The discount row in the payment summary. */
-    returningPriceSummary: 'خصم المشتركين القدام',
+    saleSummary: 'خصم العرض',
     chooseTermTitle: 'الترمات المتاحة',
 
     // ── «شهر» when the course sells by curriculum month ──────────────────

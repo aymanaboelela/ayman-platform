@@ -44,11 +44,11 @@ const AdminCourseDetailSchema = z.object({
    *  how the next reader learns the column is still there. */
   quarterlyPriceCents: z.number().int().nullable(),
   yearlyPriceCents: z.number().int().nullable(),
-  /** «سعر المشتركين القدام» and the line that decides who is «قديم». Defaulted
-   *  so an API that predates them (a rolling deploy) still opens the editor. */
-  returningMonthlyPriceCents: z.number().int().nullable().default(null),
-  returningYearlyPriceCents: z.number().int().nullable().default(null),
-  returningPriceBefore: z.iso.datetime().nullable().default(null),
+  /** «عرض» — the sale prices and when the offer ends. Defaulted so an API
+   *  that predates them (a rolling deploy) still opens the editor. */
+  saleMonthlyPriceCents: z.number().int().nullable().default(null),
+  saleYearlyPriceCents: z.number().int().nullable().default(null),
+  saleEndsAt: z.iso.datetime().nullable().default(null),
   bookTitle: z.string().nullable(),
   bookPriceCents: z.number().int().nullable(),
   forGeneral: z.boolean(),
@@ -64,7 +64,7 @@ const AdminCourseDetailSchema = z.object({
       position: z.number().int(),
       isOpen: z.boolean(),
       priceCents: z.number().int().nullable(),
-      returningPriceCents: z.number().int().nullable().default(null),
+      salePriceCents: z.number().int().nullable().default(null),
       /** Live term grants — what closing this term would revoke. Optional:
        *  during a rolling deploy the API answering may predate the field, and
        *  a missing count must degrade to a confirmation without a number, not

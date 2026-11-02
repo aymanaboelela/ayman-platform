@@ -891,32 +891,25 @@ model Course {
   /// grant with a real calendar expiry, same as every other whole-course plan.
   yearlyPriceCents    Int? @map("yearly_price_cents")
 
-  /// «سعر المشتركين القدام» — what a student who already paid for this course
-  /// before `returningPriceBefore` pays for one month, while everyone else pays
-  /// `monthlyPriceCents`. The instructor raised a course from ١٥٠ to ٢٠٠ and
-  /// kept the old price for the students already in it, and wanted them to SEE
-  /// that: the checkout draws `monthlyPriceCents` struck through beside this.
+  /// «عرض» — a sale on this course: the month and the year sold below their
+  /// price, to everyone, until `saleEndsAt` (or until he takes it off when
+  /// that is `null`). The regular price stays where it is and the checkout
+  /// draws it struck through beside this one: «بدل ما هو بـ١٥٠ يبقى ٩٩».
   ///
-  /// `null` = no such price, and every student pays `monthlyPriceCents` —
-  /// which is every course on every stack until somebody sets one.
-  /// `courses_returning_monthly_below_monthly` keeps it a real discount: at or
-  /// above the regular price it would draw a fake one, the same reasoning as
+  /// `null` = no sale on that plan. `courses_sale_monthly_below_monthly` /
+  /// `courses_sale_yearly_below_yearly` keep a sale a real discount — at or
+  /// above the price it would draw a fake one, the same reasoning as
   /// `books_compare_price_above_price`.
   ///
-  /// Checkout data only, like the prices above. Who counts as «قديم» is
-  /// decided by `isReturningSubscriber` in `payments/returning-price.ts`, and
-  /// nothing reads this to decide access.
-  returningMonthlyPriceCents Int? @map("returning_monthly_price_cents")
-  /// The same for the full year — below `yearlyPriceCents`, by
-  /// `courses_returning_yearly_below_yearly`, and the same cutoff.
-  returningYearlyPriceCents  Int? @map("returning_yearly_price_cents")
-  /// The line between «قديم» and «جديد»: a student is returning when they paid
-  /// for this course BEFORE this moment. Stamped by the server the first time
-  /// any returning price on the course (this one or a term's) is set, and
-  /// never moved after — otherwise a student who joined at the new price would
-  /// turn «قديم» the day after their first payment and buy the next month at
-  /// the old one, which is the opposite of raising the price.
-  returningPriceBefore       DateTime? @map("returning_price_before")
+  /// Checkout data only. Whether a sale is live NOW is `activeSalePrice` in
+  /// `@ayman/contracts/sale`, which the API charges from and the web draws
+  /// from — one rule, so the card cannot say ٩٩ while the claim asks ١٥٠.
+  saleMonthlyPriceCents Int?      @map("sale_monthly_price_cents")
+  saleYearlyPriceCents  Int?      @map("sale_yearly_price_cents")
+  /// When the sale ends — for every plan of the course, terms included.
+  /// `null` = open-ended. A past date is a sale that is over; the columns
+  /// stay so he can see what it was and extend it.
+  saleEndsAt            DateTime? @map("sale_ends_at")
 
   /// الكتاب الورقي — a printed textbook this course ships to a student's
   /// door, entirely independent of the subscription plans above: a course
@@ -1237,10 +1230,10 @@ model CourseTerm {
   position   Int
   isOpen     Boolean  @default(true) @map("is_open")
   priceCents Int?     @map("price_cents")
-  /// The same «سعر المشتركين القدام» as `Course.returningMonthlyPriceCents`,
-  /// for this term — and the same cutoff, `Course.returningPriceBefore`.
-  /// `course_terms_returning_below_price` keeps it under `priceCents`.
-  returningPriceCents Int? @map("returning_price_cents")
+  /// «عرض» on this term — see `Course.saleMonthlyPriceCents`. Ends with the
+  /// course's `saleEndsAt`; `course_terms_sale_below_price` keeps it under
+  /// `priceCents`.
+  salePriceCents Int? @map("sale_price_cents")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 

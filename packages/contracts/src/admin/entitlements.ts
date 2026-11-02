@@ -318,13 +318,13 @@ export const FEATURE_DECLARATIONS = [
   {
     /*
      * "Ayman first", like everything new. It changes what a student PAYS, so a
-     * teacher decides to offer it — and with the feature off no returning price
-     * can be set, so every student on that stack pays the one price, exactly as
-     * before.
+     * teacher decides to run offers — and with the feature off no sale price
+     * can be set or charged, so every student on that stack pays the one
+     * price, exactly as before.
      */
-    key: 'returningPrice',
-    nameAr: 'سعر المشتركين القدام',
-    descriptionAr: 'سعر أقل للشهر والترم للطلبة اللي دفعوا في الكورس قبل كده، والسعر الجديد ظاهر جنبه متشطّب.',
+    key: 'courseSale',
+    nameAr: 'عروض الكورسات',
+    descriptionAr: 'سعر عرض للشهر والترم والسنة لكل الطلبة، لوقت محدد أو مفتوح، والسعر الأصلي ظاهر جنبه متشطّب.',
     defaultForTenant: false,
   },
 ] as const satisfies readonly FeatureDeclaration[];

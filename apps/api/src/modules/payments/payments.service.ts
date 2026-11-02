@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { MyCoursePrices, PaymentSubmission, SubmitPaymentInput } from '@ayman/contracts/payments';
+import type { PaymentSubmission, SubmitPaymentInput } from '@ayman/contracts/payments';
 // A RUNTIME import, so it comes off the subpath and never the root barrel —
 // see `packages/contracts`'s own note on why the barrel cannot boot the API.
 import { SellablePaymentPlanSchema } from '@ayman/contracts/months';
@@ -25,7 +25,7 @@ import type { Prisma } from '../../generated/prisma/client';
 import { computeApprovalValidUntil, type PaymentPlan as CourseWidePlan } from './payment-expiry';
 import { amountCollectedCents } from './finance-status';
 import { resolvePlanPriceCents } from './plan-price';
-import { chargedPlanPriceCents, isReturningSubscriber } from './returning-price';
+import { chargedPlanPriceCents } from './sale-price';
 import {
   checkMonthSelection,
   monthPurchaseAmountCents,
@@ -211,11 +211,11 @@ export class PaymentsService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
-        returningMonthlyPriceCents: true,
-        returningYearlyPriceCents: true,
-        returningPriceBefore: true,
+        saleMonthlyPriceCents: true,
+        saleYearlyPriceCents: true,
+        saleEndsAt: true,
         terms: {
-          select: { id: true, title: true, isOpen: true, priceCents: true, returningPriceCents: true },
+          select: { id: true, title: true, isOpen: true, priceCents: true, salePriceCents: true },
         },
         // EVERY month, open or not — `courseSellsByMonth` below is keyed on
         // the course having any at all, and `isOpen` then decides which of
@@ -237,15 +237,13 @@ export class PaymentsService {
       throw new BadRequestException('this term is not open for subscription');
     }
 
-    // «سعر المشتركين القدام» is decided here, in the one derivation every
-    // way of paying shares — so the coupon quote, the transfer claim and the
-    // wallet all charge a returning student the same price.
-    const planPriceCents = await chargedPlanPriceCents(
-      this.prisma,
-      userId,
+    // «عرض» is decided here, in the one derivation every way of paying
+    // shares — so the coupon quote, the transfer claim and the wallet all
+    // charge the offer price while it is live, and the regular one after.
+    const planPriceCents = chargedPlanPriceCents(
       course,
       input.plan,
-      term?.id ?? null,
+      term,
       resolvePlanPriceCents(course, input.plan, term?.priceCents ?? null),
     );
     if (planPriceCents === null) {
@@ -883,44 +881,6 @@ export class PaymentsService {
       this.prisma.paymentSubmission.count({ where: { userId, courseId, status: 'pending' } }),
     ]);
     return { ...ownership, pending: pending > 0 };
-  }
-
-  /**
-   * «سعر المشتركين القدام» for this student on this course — what the checkout
-   * draws instead of the catalog price. `GET /payments/courses/:courseId/prices/mine`.
-   *
-   * Reads the same `isReturningSubscriber` `resolvePurchase` charges from, so
-   * the number on the plan card is the number the claim asks for.
-   */
-  async myCoursePrices(userId: string, courseId: string): Promise<MyCoursePrices> {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-      select: {
-        id: true,
-        returningMonthlyPriceCents: true,
-        returningYearlyPriceCents: true,
-        returningPriceBefore: true,
-        terms: { select: { id: true, returningPriceCents: true } },
-      },
-    });
-    if (!course) throw new NotFoundException();
-
-    const terms = course.terms.flatMap((term) =>
-      term.returningPriceCents === null ? [] : [{ termId: term.id, priceCents: term.returningPriceCents }],
-    );
-    const hasAny =
-      course.returningMonthlyPriceCents !== null ||
-      course.returningYearlyPriceCents !== null ||
-      terms.length > 0;
-    if (!hasAny || !(await isReturningSubscriber(this.prisma, userId, course))) {
-      return { returning: false, monthlyPriceCents: null, yearlyPriceCents: null, terms: [] };
-    }
-    return {
-      returning: true,
-      monthlyPriceCents: course.returningMonthlyPriceCents,
-      yearlyPriceCents: course.returningYearlyPriceCents,
-      terms,
-    };
   }
 
   /**
@@ -1573,10 +1533,10 @@ export class PaymentsService {
           monthlyPriceCents: true,
           quarterlyPriceCents: true,
           yearlyPriceCents: true,
-          returningMonthlyPriceCents: true,
-          returningYearlyPriceCents: true,
-          returningPriceBefore: true,
-          terms: { select: { id: true, title: true, priceCents: true, returningPriceCents: true } },
+          saleMonthlyPriceCents: true,
+          saleYearlyPriceCents: true,
+          saleEndsAt: true,
+          terms: { select: { id: true, title: true, priceCents: true, salePriceCents: true } },
           // EVERY month, open or not — `isOpen` is deliberately not a gate on
           // this route. See `AdminManualSubscribeSchema.monthIds`. Selected
           // anyway because `MonthOfferingCourse` carries it.
@@ -1597,14 +1557,12 @@ export class PaymentsService {
     if (input.plan === 'term' && term === null) throw new NotFoundException();
 
     // The same price the student's own checkout would have asked for —
-    // including «سعر المشتركين القدام» — so a transfer recorded by hand does
-    // not book a returning student at the new price.
-    const planPriceCents = await chargedPlanPriceCents(
-      this.prisma,
-      userId,
+    // including a live «عرض» — so a transfer recorded by hand during an offer
+    // is booked at what the student actually sent.
+    const planPriceCents = chargedPlanPriceCents(
       course,
       input.plan,
-      term?.id ?? null,
+      term,
       resolvePlanPriceCents(course, input.plan, term?.priceCents ?? null),
     );
     if (planPriceCents === null) {

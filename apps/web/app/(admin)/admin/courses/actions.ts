@@ -2,6 +2,7 @@
 
 import { updateTag } from 'next/cache';
 import { revalidatePath } from '@/lib/revalidate-screen';
+import { saleEndOfDayIso } from '@/lib/sale-day';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { z } from 'zod';
@@ -413,14 +414,14 @@ export async function updateCourseAction(
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
       // No `quarterlyPriceCents` — see the note in `createCourseAction` above.
       yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
-      // Only when the form drew the field: on a stack without
-      // `returningPrice` there is none, and an absent key leaves the column
+      // «عرض» — only when the form drew the box: on a stack without
+      // `courseSale` there is none, and an absent key leaves the columns
       // alone instead of writing `null` — or a value the API would refuse.
-      ...(formData.has('returningMonthlyPriceCents') && {
-        returningMonthlyPriceCents: readOptionalPriceCents(formData, 'returningMonthlyPriceCents'),
-      }),
-      ...(formData.has('returningYearlyPriceCents') && {
-        returningYearlyPriceCents: readOptionalPriceCents(formData, 'returningYearlyPriceCents'),
+      // The end arrives as a Cairo day and leaves as that day's last second.
+      ...(formData.has('saleMonthlyPriceCents') && {
+        saleMonthlyPriceCents: readOptionalPriceCents(formData, 'saleMonthlyPriceCents'),
+        saleYearlyPriceCents: readOptionalPriceCents(formData, 'saleYearlyPriceCents'),
+        saleEndsAt: saleEndOfDayIso(String(formData.get('saleEndsDay') ?? '')),
       }),
       bookTitle: readOptionalText(formData, 'bookTitle'),
       bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
@@ -763,7 +764,7 @@ export async function createTermAction(
 export async function updateTermAction(
   courseId: string,
   termId: string,
-  input: { title?: string; priceCents?: number | null; returningPriceCents?: number | null },
+  input: { title?: string; priceCents?: number | null; salePriceCents?: number | null },
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/terms/${termId}`, CourseTermSchema, input);

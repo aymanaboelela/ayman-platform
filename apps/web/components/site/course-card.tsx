@@ -3,6 +3,7 @@ import { Clock, GraduationCap, Layers } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { coursePriceBadge } from '@/lib/price';
+import { courseOffer } from '@/lib/sale-day';
 import { CourseCover } from '@/components/site/course-cover';
 import { ElectricCard } from '@/components/site/electric-card';
 import { EmphasisBadge } from '@/components/emphasis-badge';
@@ -53,6 +54,7 @@ export function CourseCard({
   priority?: boolean;
 }) {
   const href = `/courses/${course.slug}`;
+  const offer = courseOffer(course);
 
   const card = (
     <>
@@ -151,7 +153,19 @@ export function CourseCard({
           <h3 className="course-card__title">
             <Link href={href}>{course.title}</Link>
           </h3>
-          <span className="course-card__badge">{coursePriceBadge(course)}</span>
+          {/* «عرض» — the offer price with the regular one struck under it,
+              so the card says «بدل ما هو بـ١٥٠ يبقى ٩٩» before anyone opens
+              the course. The ordinary badge otherwise. */}
+          {offer ? (
+            <span className="course-card__offer">
+              <span className="course-card__badge course-card__badge--sale">
+                {copy.course.saleTag} · {offer.now}
+              </span>
+              <s className="course-card__was">{offer.was}</s>
+            </span>
+          ) : (
+            <span className="course-card__badge">{coursePriceBadge(course)}</span>
+          )}
         </div>
 
         {/* Under the title, above the taxonomy meta: a visitor scanning for

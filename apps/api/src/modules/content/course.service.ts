@@ -21,10 +21,7 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { YouTubeDurationService } from './youtube-duration.service';
-import {
-  assertReturningBelowRegular,
-  assertReturningPriceWritable,
-} from './returning-price';
+import { assertSaleBelowRegular, assertSaleWritable } from './sale-price';
 import type { Course } from '../../generated/prisma/client';
 import type { Prisma } from '../../generated/prisma/client';
 
@@ -221,9 +218,8 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
-        returningMonthlyPriceCents: true,
-        returningYearlyPriceCents: true,
-        returningPriceBefore: true,
+        saleMonthlyPriceCents: true,
+        saleYearlyPriceCents: true,
         bookTitle: true,
         bookPriceCents: true,
       },
@@ -289,20 +285,19 @@ export class CourseService {
       throw new BadRequestException('الكتاب محتاج اسم وسعر مع بعض');
     }
 
-    // «سعر المشتركين القدام» — resolved against the current row like the
-    // prices above, because lowering `monthlyPriceCents` alone can break it.
-    assertReturningPriceWritable(input.returningMonthlyPriceCents);
-    const nextReturningMonthly =
-      input.returningMonthlyPriceCents === undefined
-        ? current.returningMonthlyPriceCents
-        : input.returningMonthlyPriceCents;
-    assertReturningBelowRegular(nextMonthly, nextReturningMonthly);
-    assertReturningPriceWritable(input.returningYearlyPriceCents);
-    const nextReturningYearly =
-      input.returningYearlyPriceCents === undefined
-        ? current.returningYearlyPriceCents
-        : input.returningYearlyPriceCents;
-    assertReturningBelowRegular(nextYearly, nextReturningYearly);
+    // «عرض» — resolved against the current row like the prices above,
+    // because lowering a regular price alone can put it under its sale.
+    assertSaleWritable(input.saleMonthlyPriceCents);
+    assertSaleWritable(input.saleYearlyPriceCents);
+    assertSaleWritable(input.saleEndsAt);
+    assertSaleBelowRegular(
+      nextMonthly,
+      input.saleMonthlyPriceCents === undefined ? current.saleMonthlyPriceCents : input.saleMonthlyPriceCents,
+    );
+    assertSaleBelowRegular(
+      nextYearly,
+      input.saleYearlyPriceCents === undefined ? current.saleYearlyPriceCents : input.saleYearlyPriceCents,
+    );
 
     try {
       const course = await this.prisma.course.update({
@@ -352,16 +347,15 @@ export class CourseService {
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
           }),
-          ...(input.returningMonthlyPriceCents !== undefined && {
-            returningMonthlyPriceCents: input.returningMonthlyPriceCents,
+          ...(input.saleMonthlyPriceCents !== undefined && {
+            saleMonthlyPriceCents: input.saleMonthlyPriceCents,
           }),
-          // The first returning price draws the «قديم/جديد» line; a later edit
-          // never moves it — see `Course.returningPriceBefore`.
-          ...(input.returningYearlyPriceCents !== undefined && {
-            returningYearlyPriceCents: input.returningYearlyPriceCents,
+          ...(input.saleYearlyPriceCents !== undefined && {
+            saleYearlyPriceCents: input.saleYearlyPriceCents,
           }),
-          ...((nextReturningMonthly !== null || nextReturningYearly !== null) &&
-            current.returningPriceBefore === null && { returningPriceBefore: new Date() }),
+          ...(input.saleEndsAt !== undefined && {
+            saleEndsAt: input.saleEndsAt === null ? null : new Date(input.saleEndsAt),
+          }),
           ...(input.quarterlyPriceCents !== undefined && {
             quarterlyPriceCents: input.quarterlyPriceCents,
           }),
@@ -1057,11 +1051,11 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
-        // «سعر المشتركين القدام» — selected for the same autosave reason as
-        // the fields above: a field that opens empty would save itself empty.
-        returningMonthlyPriceCents: true,
-        returningYearlyPriceCents: true,
-        returningPriceBefore: true,
+        // «عرض» — selected for the same autosave reason as the fields
+        // above: a field that opens empty would save itself empty.
+        saleMonthlyPriceCents: true,
+        saleYearlyPriceCents: true,
+        saleEndsAt: true,
         bookTitle: true,
         bookPriceCents: true,
         forGeneral: true,
@@ -1079,7 +1073,7 @@ export class CourseService {
             position: true,
             isOpen: true,
             priceCents: true,
-            returningPriceCents: true,
+            salePriceCents: true,
             // Live term grants — exactly the rows `TermService.setOpen` would
             // revoke. The close confirmation names this number BEFORE the
             // press, instead of the toast reporting it after the access is

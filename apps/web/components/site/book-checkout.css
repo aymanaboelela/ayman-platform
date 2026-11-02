@@ -1497,6 +1497,18 @@
   color: var(--ok);
 }
 
+/* «العرض لحد …» — once above the plan cards, in the deal cards' green. */
+.bco-note--sale {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-color: color-mix(in oklch, var(--ok), transparent 55%);
+  background: color-mix(in oklch, var(--ok), transparent 88%);
+  font-weight: var(--fw-semibold);
+  color: color-mix(in oklab, var(--ok), var(--n-12) 25%);
+}
+
 /* The summary: the course's name over its rows, and the months as chips. */
 .bco-sum__course {
   margin-bottom: 0.75rem;

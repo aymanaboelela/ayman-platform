@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { toHonorBoardRounds } from './honor-board';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 import { monthlyPlanOnSale } from '../payments/month-grants';
+import { publicSale, publicTermSale } from '../payments/sale-price';
 
 /**
  * "Published" is a THREE-level condition: the course, its section, and the
@@ -69,6 +70,10 @@ export class CatalogService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        // «عرض» — published only while live; see `publicSale`.
+        saleMonthlyPriceCents: true,
+        saleYearlyPriceCents: true,
+        saleEndsAt: true,
         // Every month's open flag, for `monthlyOnSale` — at most twelve rows.
         months: { select: { isOpen: true } },
         bookTitle: true,
@@ -118,6 +123,7 @@ export class CatalogService {
       }),
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
+      ...publicSale(row),
       /* `bookId` is deliberately dropped: it is what `priceCourseBook` needs in
          order to attach an order line to a catalogue row, and nothing a public
          payload should carry. Destructured rather than spread so adding a field
@@ -167,6 +173,9 @@ export class CatalogService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        saleMonthlyPriceCents: true,
+        saleYearlyPriceCents: true,
+        saleEndsAt: true,
         bookTitle: true,
         bookPriceCents: true,
         publishedAt: true,
@@ -187,7 +196,7 @@ export class CatalogService {
         terms: {
           where: { isOpen: true, priceCents: { not: null } },
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
-          select: { id: true, title: true, priceCents: true },
+          select: { id: true, title: true, priceCents: true, salePriceCents: true },
         },
         // «الأشهر اللي يقدر يشترك فيها». OPEN ones only, same reasoning as
         // terms one line up: a closed month is not for sale and offering it
@@ -280,6 +289,7 @@ export class CatalogService {
       monthlyOnSale: monthlyPlanOnSale(row.monthlyPriceCents, { total: row._count.months, open: row.months.length }),
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
+      ...publicSale(row),
       /* `bookId` is deliberately dropped: it is what `priceCourseBook` needs in
          order to attach an order line to a catalogue row, and nothing a public
          payload should carry. Destructured rather than spread so adding a field
@@ -315,6 +325,7 @@ export class CatalogService {
         // rather than left nullable on a schema this specific query cannot
         // actually return null for.
         priceCents: term.priceCents as number,
+        salePriceCents: publicTermSale(row, term),
       })),
       lessonCount: lessons.filter(isLecture).length,
       totalSeconds: lessons.reduce(

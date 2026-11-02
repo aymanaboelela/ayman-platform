@@ -23,12 +23,8 @@ import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { CatalogCourseDetailSchema, type CatalogCourseTerm } from '@ayman/contracts/catalog';
 import { PublicSettingsReadSchema } from '@ayman/contracts/admin/settings';
-import {
-  MyCoursePricesSchema,
-  PaymentSubmissionSchema,
-  type MyCoursePrices,
-  type PaymentSubmission,
-} from '@ayman/contracts/payments';
+import { PaymentSubmissionSchema, type PaymentSubmission } from '@ayman/contracts/payments';
+import { activeSalePrice } from '@ayman/contracts/sale';
 import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contracts/wallet';
 import { EntitlementsResponseSchema } from '@ayman/contracts/admin/entitlements';
 import { CouponQuoteSchema, CouponRefusalSchema, type CouponQuote } from '@ayman/contracts/coupons';
@@ -41,6 +37,7 @@ import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
+import { formatSaleDay } from '@/lib/sale-day';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
 import {
@@ -207,6 +204,10 @@ type LivePlans = {
   yearlyPriceCents: number | null;
   terms: CatalogCourseTerm[];
   months: CourseMonth[];
+  /** «عرض» — the course's sale prices and when the offer ends, as the
+   *  catalog published them. Read only through `activeSalePrice`: a cached
+   *  payload can outlive the offer. */
+  sale: { monthlyCents: number | null; yearlyCents: number | null; endsAt: string | null };
 };
 
 /**
@@ -239,16 +240,15 @@ function PlanCard({
   name: string;
   price: string;
   /**
-   * «سعر المشتركين القدام» — the regular price struck through beside the one
-   * this student pays, the tag above and what came off below. The instructor
-   * wanted the old price SEEN as a discount («يبقى ظاهر إن في خصم»), not
-   * silently charged.
+   * «عرض» — the regular price struck through beside the one the offer
+   * charges, the tag above and what came off below. The instructor wanted the
+   * discount SEEN: «يظهر للناس بدل ما هو بـ١٥٠ يبقى ٩٩».
    */
   deal?: Deal;
   onClick: () => void;
 }) {
   const saved = deal
-    ? formatCopy(copy.subscribe.returningPriceSave, { amount: formatEGP(deal.wasCents - deal.nowCents) })
+    ? formatCopy(copy.subscribe.saleSave, { amount: formatEGP(deal.wasCents - deal.nowCents) })
     : null;
   const label = deal ? `${name} — ${price} — ${saved}` : `${name} — ${price}`;
   return (
@@ -261,7 +261,7 @@ function PlanCard({
       {deal ? (
         <span className="bco-plan__ribbon">
           <Sparkles size={13} aria-hidden="true" />
-          {copy.subscribe.returningPriceTag}
+          {copy.subscribe.saleTag}
         </span>
       ) : null}
       <span className="bco-plan__icon" aria-hidden="true">
@@ -510,10 +510,6 @@ export function SubscribePanel({
    * The price is never ours — the claim sends the code, not the figure.
    */
   const [couponsOn, setCouponsOn] = useState(false);
-  /** «سعر المشتركين القدام» for this student — `null` until the read lands,
-   *  and after one that failed: the catalog prices stand, which is what the
-   *  server charges anyone it does not know to be «قديم». */
-  const [myPrices, setMyPrices] = useState<MyCoursePrices | null>(null);
   const [couponOpen, setCouponOpen] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [coupon, setCoupon] = useState<CouponQuote | null>(null);
@@ -568,15 +564,7 @@ export function SubscribePanel({
     let cancelled = false;
 
     async function load() {
-      const [
-        mineResult,
-        courseResult,
-        settingsResult,
-        ownedMonthsResult,
-        walletResult,
-        featuresResult,
-        myPricesResult,
-      ] =
+      const [mineResult, courseResult, settingsResult, ownedMonthsResult, walletResult, featuresResult] =
         await Promise.allSettled([
           apiGet('/api/payments/submissions/me', MY_SUBMISSIONS_SCHEMA),
           apiGet(`/api/catalog/courses/${encodeURIComponent(slug)}`, CatalogCourseDetailSchema),
@@ -587,16 +575,8 @@ export function SubscribePanel({
           ),
           apiGet('/api/wallet/balance', WalletBalanceSchema),
           apiGet('/api/entitlements', EntitlementsResponseSchema),
-          // 403 on a stack without `returningPrice`, 401 signed out — both
-          // mean «the catalog price», which is what this falls back to.
-          apiGet(
-            `/api/payments/courses/${encodeURIComponent(courseId)}/prices/mine`,
-            MyCoursePricesSchema,
-          ),
         ]);
       if (cancelled) return;
-
-      setMyPrices(myPricesResult.status === 'fulfilled' ? myPricesResult.value : null);
 
       setCouponsOn(featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true);
 
@@ -615,6 +595,11 @@ export function SubscribePanel({
           // «شهر» card and the picker behind it can never disagree about
           // whether a monthly plan exists.
           months: live.months,
+          sale: {
+            monthlyCents: live.saleMonthlyPriceCents ?? null,
+            yearlyCents: live.saleYearlyPriceCents ?? null,
+            endsAt: live.saleEndsAt ?? null,
+          },
         });
       }
 
@@ -714,34 +699,34 @@ export function SubscribePanel({
       : null
     : cachedMonthly;
   /*
-   * «سعر المشتركين القدام» replaces the price where it applies, under the SAME
-   * names the rest of the component reads — so every card, the month total and
-   * the transfer amount move together, the way the server charges. The regular
-   * figure survives only as the struck-through «قبل» beside it.
+   * «عرض» replaces the price while it is live, under the SAME names the rest
+   * of the component reads — so every card, the month total and the transfer
+   * amount move together, the way the server charges. The regular figure
+   * survives only as the struck-through «قبل» beside it. `activeSalePrice` is
+   * the rule the API charges by, so an offer that ended while this tab sat
+   * open stops showing the moment it ends.
    */
-  const returningMonthlyCents = myPrices?.returning ? myPrices.monthlyPriceCents : null;
-  const monthlyPriceCents =
-    regularMonthlyCents !== null && returningMonthlyCents !== null
-      ? returningMonthlyCents
-      : regularMonthlyCents;
-  const monthlyWasCents = monthlyPriceCents !== regularMonthlyCents ? regularMonthlyCents : null;
+  const sale = livePlans?.sale ?? { monthlyCents: null, yearlyCents: null, endsAt: null };
+  const saleMonthlyCents = activeSalePrice(regularMonthlyCents, sale.monthlyCents, sale.endsAt);
+  const monthlyPriceCents = saleMonthlyCents ?? regularMonthlyCents;
+  const monthlyWasCents = saleMonthlyCents !== null ? regularMonthlyCents : null;
   const regularYearlyCents = livePlans ? livePlans.yearlyPriceCents : cachedYearly;
-  const returningYearlyCents = myPrices?.returning ? myPrices.yearlyPriceCents : null;
-  const yearlyPriceCents =
-    regularYearlyCents !== null && returningYearlyCents !== null
-      ? returningYearlyCents
-      : regularYearlyCents;
-  const yearlyWasCents = yearlyPriceCents !== regularYearlyCents ? regularYearlyCents : null;
+  const saleYearlyCents = activeSalePrice(regularYearlyCents, sale.yearlyCents, sale.endsAt);
+  const yearlyPriceCents = saleYearlyCents ?? regularYearlyCents;
+  const yearlyWasCents = saleYearlyCents !== null ? regularYearlyCents : null;
   /** Each discounted term's regular price, by id — the «قبل» on its card. */
   const termWasCents = new Map<string, number>();
   const terms = (livePlans ? livePlans.terms : cachedTerms).map((term) => {
-    const returning = myPrices?.returning
-      ? myPrices.terms.find((row) => row.termId === term.id)?.priceCents
-      : undefined;
-    if (returning === undefined) return term;
+    const onSale = activeSalePrice(term.priceCents, term.salePriceCents, sale.endsAt);
+    if (onSale === null) return term;
     termWasCents.set(term.id, term.priceCents);
-    return { ...term, priceCents: returning };
+    return { ...term, priceCents: onSale };
   });
+  /** When ANY plan is on offer and the offer has an end — said once, above the cards. */
+  const saleUntil =
+    sale.endsAt !== null && (monthlyWasCents !== null || yearlyWasCents !== null || termWasCents.size > 0)
+      ? sale.endsAt
+      : null;
   const instapay = liveInstapay !== undefined ? liveInstapay : cachedInstapay;
   /**
    * ⚠️ ONE array decides what «شهر» means, and there is no second flag to
@@ -753,11 +738,9 @@ export function SubscribePanel({
    * for why this one has no cached prop behind it.
    */
   const months = (livePlans ? livePlans.months : []).map((month) =>
-    // One price for any month, so the returning one is too — see
+    // One price for any month, so the offer's is too — see
     // `selectedMonthsTotalCents` for why the total is summed from these rows.
-    returningMonthlyCents !== null && regularMonthlyCents !== null
-      ? { ...month, priceCents: returningMonthlyCents }
-      : month,
+    saleMonthlyCents !== null ? { ...month, priceCents: saleMonthlyCents } : month,
   );
   /**
    * What a month purchase costs — summed from the CHOSEN months' own prices
@@ -1208,9 +1191,9 @@ export function SubscribePanel({
           ? (chosenTerm?.title ?? copy.subscribe.planTermLabel)
           : null;
   const chosenMonths = months.filter((month) => selectedMonthIds.includes(month.id));
-  /** What «سعر المشتركين القدام» took off the chosen plan — `0` when it does
-   *  not apply. Restated in the summary so the discount is seen, not inferred. */
-  const returningSavedCents =
+  /** What the «عرض» took off the chosen plan — `0` when it does not apply.
+   *  Restated in the summary so the discount is seen, not inferred. */
+  const saleSavedCents =
     plan === 'monthly' && monthlyWasCents !== null && monthlyPriceCents !== null
       ? (monthlyWasCents - monthlyPriceCents) * (months.length > 0 ? chosenMonths.length : 1)
       : plan === 'yearly' && yearlyWasCents !== null && yearlyPriceCents !== null
@@ -1252,11 +1235,11 @@ export function SubscribePanel({
               </dd>
             </div>
           ) : null}
-          {returningSavedCents > 0 ? (
+          {saleSavedCents > 0 ? (
             <div className="bco-sum__row bco-sum__row--discount">
-              <dt>{copy.subscribe.returningPriceSummary}</dt>
+              <dt>{copy.subscribe.saleSummary}</dt>
               <dd>
-                −<Money cents={returningSavedCents} />
+                −<Money cents={saleSavedCents} />
               </dd>
             </div>
           ) : null}
@@ -1357,6 +1340,12 @@ export function SubscribePanel({
           <p className="bco-note bco-note--warn">{copy.subscribe.previouslySubscribedLapsed}</p>
         ) : null}
         {monthCardCovered ? <p className="bco-note bco-note--ok">{copy.subscribe.coversAllNote}</p> : null}
+        {saleUntil !== null ? (
+          <p className="bco-note bco-note--sale">
+            <Sparkles size={16} aria-hidden="true" />
+            {formatCopy(copy.subscribe.saleUntil, { date: formatSaleDay(saleUntil) })}
+          </p>
+        ) : null}
         <section className="bco-card" aria-labelledby="bco-plans-title">
           <h3 id="bco-plans-title" className="bco-heading">
             {copy.subscribe.choosePlan}

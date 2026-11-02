@@ -157,6 +157,25 @@ export const CatalogCourseSchema = z.object({
     .nullable()
     .describe('Egyptian piastres. 95000 is 950 EGP (ج.م). null when this plan is not for sale.'),
   /**
+   * «عرض» — the month's and the year's sale price, and when the offer ends
+   * (`null` = open-ended). Only a LIVE sale is published: the API drops one
+   * whose date has passed. A cached payload can still carry one that ended
+   * since, so the web reads them through `activeSalePrice` and never alone.
+   * Optional, so a payload from before the fields existed — and every
+   * fixture that predates them — reads as no sale.
+   */
+  saleMonthlyPriceCents: z
+    .number()
+    .int()
+    .nullish()
+    .describe('Egyptian piastres. The monthly price during a running offer; null when there is none.'),
+  saleYearlyPriceCents: z
+    .number()
+    .int()
+    .nullish()
+    .describe('Egyptian piastres. The yearly price during a running offer; null when there is none.'),
+  saleEndsAt: z.iso.datetime().nullish().describe('When the running offer ends; null when open-ended.'),
+  /**
    * الكتاب الورقي — `null` when this course has no printed textbook to
    * order, which is what gates «اطلب الكتاب» everywhere it can appear: the
    * public course page, and the signed-in dashboard's `EnrolledCourseCard`
@@ -197,6 +216,12 @@ export const CatalogCourseTermSchema = z.object({
   id: z.uuid(),
   title: z.string(),
   priceCents: z.number().int().describe('Egyptian piastres. 45000 is 450 EGP (ج.م).'),
+  /** «عرض» on this term — ends with the course's `saleEndsAt`. */
+  salePriceCents: z
+    .number()
+    .int()
+    .nullish()
+    .describe('Egyptian piastres. The term price during a running offer; null when there is none.'),
 });
 export type CatalogCourseTerm = z.infer<typeof CatalogCourseTermSchema>;
 
