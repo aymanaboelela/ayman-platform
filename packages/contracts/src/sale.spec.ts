@@ -14,6 +14,10 @@ describe('activeSalePrice', () => {
     expect(activeSalePrice(15000, 9900, now, now)).toBeNull();
   });
 
+  it('trusts the source and reads no clock when told `now: null`', () => {
+    expect(activeSalePrice(15000, 9900, '2026-11-01T00:00:00Z', null)).toBe(9900);
+  });
+
   it('is nothing without a sale, without a regular price, or when it is no discount', () => {
     expect(activeSalePrice(15000, null, null, now)).toBeNull();
     expect(activeSalePrice(null, 9900, null, now)).toBeNull();

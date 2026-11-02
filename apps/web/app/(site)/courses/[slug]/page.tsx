@@ -205,13 +205,14 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
     course.yearlyPriceCents !== null ||
     course.terms.length > 0;
   // «عرض» — what each plan sells for while the offer is live; `null` = no
-  // offer on that plan right now. See `activeSalePrice`.
-  const saleMonthly = activeSalePrice(course.monthlyPriceCents, course.saleMonthlyPriceCents, course.saleEndsAt);
-  const saleYearly = activeSalePrice(course.yearlyPriceCents, course.saleYearlyPriceCents, course.saleEndsAt);
-  const saleAnyOn =
-    saleMonthly !== null ||
-    saleYearly !== null ||
-    course.terms.some((term) => activeSalePrice(term.priceCents, term.salePriceCents, course.saleEndsAt) !== null);
+  // offer on that plan. `now: null`: this page is prerendered and must not
+  // read the clock — the catalog only publishes a live offer. See
+  // `activeSalePrice`.
+  const saleMonthly = activeSalePrice(course.monthlyPriceCents, course.saleMonthlyPriceCents, course.saleEndsAt, null);
+  const saleYearly = activeSalePrice(course.yearlyPriceCents, course.saleYearlyPriceCents, course.saleEndsAt, null);
+  const termSale = (term: { priceCents: number; salePriceCents?: number | null }) =>
+    activeSalePrice(term.priceCents, term.salePriceCents, course.saleEndsAt, null);
+  const saleAnyOn = saleMonthly !== null || saleYearly !== null || course.terms.some((term) => termSale(term) !== null);
   // الكتاب الورقي — entirely independent of `priced` above: a free course
   // can sell a book, and a priced one can sell none. Both `bookTitle` and
   // `bookPriceCents` are set together or not at all (`courses_book_needs_
@@ -338,15 +339,15 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 </span>
               ) : null}
               {course.terms.map((term) => {
-                const termSale = activeSalePrice(term.priceCents, term.salePriceCents, course.saleEndsAt);
+                const onSale = termSale(term);
                 return (
                   <span key={term.id} className="course-aside__price-row">
-                    {termSale !== null ? <span className="course-aside__sale-tag">{copy.course.saleTag}</span> : null}
+                    {onSale !== null ? <span className="course-aside__sale-tag">{copy.course.saleTag}</span> : null}
                     {formatCopy(copy.course.priceTerm, {
-                      price: formatEGP(termSale ?? term.priceCents),
+                      price: formatEGP(onSale ?? term.priceCents),
                       term: term.title,
                     })}
-                    {termSale !== null ? <s className="course-aside__was">{formatEGP(term.priceCents)}</s> : null}
+                    {onSale !== null ? <s className="course-aside__was">{formatEGP(term.priceCents)}</s> : null}
                   </span>
                 );
               })}

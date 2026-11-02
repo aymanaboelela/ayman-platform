@@ -57,8 +57,9 @@ export function formatSaleDay(iso: string): string {
 /**
  * A course's offer as a card states it — the cheapest plan on offer, like
  * `coursePriceBadge` ladders the regular prices: the month first, then the
- * year. `null` when nothing is on offer right now, and the card keeps its
- * ordinary badge.
+ * year. `null` when nothing is on offer, and the card keeps its ordinary
+ * badge. Reads no clock (`now: null`): the card is server-rendered and the
+ * catalog only publishes a live offer — see `activeSalePrice`.
  */
 export function courseOffer(course: {
   monthlyPriceCents: number | null;
@@ -67,14 +68,14 @@ export function courseOffer(course: {
   saleYearlyPriceCents?: number | null;
   saleEndsAt?: string | null;
 }): { now: string; was: string } | null {
-  const monthly = activeSalePrice(course.monthlyPriceCents, course.saleMonthlyPriceCents, course.saleEndsAt);
+  const monthly = activeSalePrice(course.monthlyPriceCents, course.saleMonthlyPriceCents, course.saleEndsAt, null);
   if (monthly !== null && course.monthlyPriceCents !== null) {
     return {
       now: formatCopy(copy.course.priceMonthly, { price: formatEGP(monthly) }),
       was: formatEGP(course.monthlyPriceCents),
     };
   }
-  const yearly = activeSalePrice(course.yearlyPriceCents, course.saleYearlyPriceCents, course.saleEndsAt);
+  const yearly = activeSalePrice(course.yearlyPriceCents, course.saleYearlyPriceCents, course.saleEndsAt, null);
   if (yearly !== null && course.yearlyPriceCents !== null) {
     return {
       now: formatCopy(copy.course.priceYearly, { price: formatEGP(yearly) }),
