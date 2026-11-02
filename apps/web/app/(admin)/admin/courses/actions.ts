@@ -413,6 +413,12 @@ export async function updateCourseAction(
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
       // No `quarterlyPriceCents` — see the note in `createCourseAction` above.
       yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
+      // Only when the form drew the field: on a stack without
+      // `returningPrice` there is none, and an absent key leaves the column
+      // alone instead of writing `null` — or a value the API would refuse.
+      ...(formData.has('returningMonthlyPriceCents') && {
+        returningMonthlyPriceCents: readOptionalPriceCents(formData, 'returningMonthlyPriceCents'),
+      }),
       bookTitle: readOptionalText(formData, 'bookTitle'),
       bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
       ...readStream(formData),
@@ -754,7 +760,7 @@ export async function createTermAction(
 export async function updateTermAction(
   courseId: string,
   termId: string,
-  input: { title?: string; priceCents?: number | null },
+  input: { title?: string; priceCents?: number | null; returningPriceCents?: number | null },
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/terms/${termId}`, CourseTermSchema, input);

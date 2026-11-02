@@ -22,7 +22,12 @@ import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { CatalogCourseDetailSchema, type CatalogCourseTerm } from '@ayman/contracts/catalog';
 import { PublicSettingsReadSchema } from '@ayman/contracts/admin/settings';
-import { PaymentSubmissionSchema, type PaymentSubmission } from '@ayman/contracts/payments';
+import {
+  MyCoursePricesSchema,
+  PaymentSubmissionSchema,
+  type MyCoursePrices,
+  type PaymentSubmission,
+} from '@ayman/contracts/payments';
 import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contracts/wallet';
 import { EntitlementsResponseSchema } from '@ayman/contracts/admin/entitlements';
 import { CouponQuoteSchema, CouponRefusalSchema, type CouponQuote } from '@ayman/contracts/coupons';
@@ -215,24 +220,41 @@ type LivePlans = {
  * two components over: a screen reader announces exactly what the eye reads,
  * never a paraphrase of it.
  */
+/** The struck-through «قبل» line for a plan card — `null` when not discounted. */
+function wasLine(cents: number | undefined | null): string | null {
+  return cents == null ? null : formatCopy(copy.subscribe.priceLine, { price: formatEGP(cents) });
+}
+
 function PlanCard({
   icon,
   name,
   price,
+  wasPrice = null,
   onClick,
 }: {
   icon: ReactNode;
   name: string;
   price: string;
+  /**
+   * «سعر المشتركين القدام» — the regular price, struck through above the one
+   * this student pays, with the tag under it. The instructor wanted the old
+   * price SEEN as a discount («يبقى ظاهر إن في خصم»), not silently charged.
+   */
+  wasPrice?: string | null;
   onClick: () => void;
 }) {
+  const label = wasPrice
+    ? `${name} — ${price} — ${copy.subscribe.returningPriceTag}`
+    : `${name} — ${price}`;
   return (
-    <button type="button" className="bco-plan" onClick={onClick} aria-label={`${name} — ${price}`}>
+    <button type="button" className="bco-plan" onClick={onClick} aria-label={label}>
       <span className="bco-plan__icon" aria-hidden="true">
         {icon}
       </span>
       <span className="bco-plan__name">{name}</span>
+      {wasPrice ? <s className="bco-plan__was">{wasPrice}</s> : null}
       <span className="bco-plan__price">{price}</span>
+      {wasPrice ? <span className="bco-plan__tag">{copy.subscribe.returningPriceTag}</span> : null}
     </button>
   );
 }
@@ -464,6 +486,10 @@ export function SubscribePanel({
    * The price is never ours — the claim sends the code, not the figure.
    */
   const [couponsOn, setCouponsOn] = useState(false);
+  /** «سعر المشتركين القدام» for this student — `null` until the read lands,
+   *  and after one that failed: the catalog prices stand, which is what the
+   *  server charges anyone it does not know to be «قديم». */
+  const [myPrices, setMyPrices] = useState<MyCoursePrices | null>(null);
   const [couponOpen, setCouponOpen] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [coupon, setCoupon] = useState<CouponQuote | null>(null);
@@ -518,7 +544,15 @@ export function SubscribePanel({
     let cancelled = false;
 
     async function load() {
-      const [mineResult, courseResult, settingsResult, ownedMonthsResult, walletResult, featuresResult] =
+      const [
+        mineResult,
+        courseResult,
+        settingsResult,
+        ownedMonthsResult,
+        walletResult,
+        featuresResult,
+        myPricesResult,
+      ] =
         await Promise.allSettled([
           apiGet('/api/payments/submissions/me', MY_SUBMISSIONS_SCHEMA),
           apiGet(`/api/catalog/courses/${encodeURIComponent(slug)}`, CatalogCourseDetailSchema),
@@ -529,8 +563,16 @@ export function SubscribePanel({
           ),
           apiGet('/api/wallet/balance', WalletBalanceSchema),
           apiGet('/api/entitlements', EntitlementsResponseSchema),
+          // 403 on a stack without `returningPrice`, 401 signed out — both
+          // mean «the catalog price», which is what this falls back to.
+          apiGet(
+            `/api/payments/courses/${encodeURIComponent(courseId)}/prices/mine`,
+            MyCoursePricesSchema,
+          ),
         ]);
       if (cancelled) return;
+
+      setMyPrices(myPricesResult.status === 'fulfilled' ? myPricesResult.value : null);
 
       setCouponsOn(featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true);
 
@@ -642,13 +684,34 @@ export function SubscribePanel({
    * and only the sale — «is the course paid?» is answered elsewhere, from the
    * price.
    */
-  const monthlyPriceCents = livePlans
+  const regularMonthlyCents = livePlans
     ? livePlans.monthlyOnSale
       ? livePlans.monthlyPriceCents
       : null
     : cachedMonthly;
+  /*
+   * «سعر المشتركين القدام» replaces the price where it applies, under the SAME
+   * names the rest of the component reads — so every card, the month total and
+   * the transfer amount move together, the way the server charges. The regular
+   * figure survives only as the struck-through «قبل» beside it.
+   */
+  const returningMonthlyCents = myPrices?.returning ? myPrices.monthlyPriceCents : null;
+  const monthlyPriceCents =
+    regularMonthlyCents !== null && returningMonthlyCents !== null
+      ? returningMonthlyCents
+      : regularMonthlyCents;
+  const monthlyWasCents = monthlyPriceCents !== regularMonthlyCents ? regularMonthlyCents : null;
   const yearlyPriceCents = livePlans ? livePlans.yearlyPriceCents : cachedYearly;
-  const terms = livePlans ? livePlans.terms : cachedTerms;
+  /** Each discounted term's regular price, by id — the «قبل» on its card. */
+  const termWasCents = new Map<string, number>();
+  const terms = (livePlans ? livePlans.terms : cachedTerms).map((term) => {
+    const returning = myPrices?.returning
+      ? myPrices.terms.find((row) => row.termId === term.id)?.priceCents
+      : undefined;
+    if (returning === undefined) return term;
+    termWasCents.set(term.id, term.priceCents);
+    return { ...term, priceCents: returning };
+  });
   const instapay = liveInstapay !== undefined ? liveInstapay : cachedInstapay;
   /**
    * ⚠️ ONE array decides what «شهر» means, and there is no second flag to
@@ -659,7 +722,13 @@ export function SubscribePanel({
    * `[]` until the live read lands, and after one that failed — see `LivePlans`
    * for why this one has no cached prop behind it.
    */
-  const months = livePlans ? livePlans.months : [];
+  const months = (livePlans ? livePlans.months : []).map((month) =>
+    // One price for any month, so the returning one is too — see
+    // `selectedMonthsTotalCents` for why the total is summed from these rows.
+    returningMonthlyCents !== null && regularMonthlyCents !== null
+      ? { ...month, priceCents: returningMonthlyCents }
+      : month,
+  );
   /**
    * What a month purchase costs — summed from the CHOSEN months' own prices
    * rather than `monthlyPriceCents × count`.
@@ -1109,6 +1178,14 @@ export function SubscribePanel({
           ? (chosenTerm?.title ?? copy.subscribe.planTermLabel)
           : null;
   const chosenMonths = months.filter((month) => selectedMonthIds.includes(month.id));
+  /** What «سعر المشتركين القدام» took off the chosen plan — `0` when it does
+   *  not apply. Restated in the summary so the discount is seen, not inferred. */
+  const returningSavedCents =
+    plan === 'monthly' && monthlyWasCents !== null && monthlyPriceCents !== null
+      ? (monthlyWasCents - monthlyPriceCents) * (months.length > 0 ? chosenMonths.length : 1)
+      : plan === 'term' && chosenTerm !== null && termWasCents.has(chosenTerm.id)
+        ? termWasCents.get(chosenTerm.id)! - chosenTerm.priceCents
+        : 0;
 
   /** `withCoupon` on the payment step only — the one step whose figure the
    *  quote is for. */
@@ -1140,6 +1217,14 @@ export function SubscribePanel({
                     </li>
                   ))}
                 </ul>
+              </dd>
+            </div>
+          ) : null}
+          {returningSavedCents > 0 ? (
+            <div className="bco-sum__row bco-sum__row--discount">
+              <dt>{copy.subscribe.returningPriceTag}</dt>
+              <dd>
+                −<Money cents={returningSavedCents} />
               </dd>
             </div>
           ) : null}
@@ -1250,6 +1335,7 @@ export function SubscribePanel({
                 icon={<CalendarClock className="size-6" strokeWidth={2} />}
                 name={copy.subscribe.planMonthlyLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
+                wasPrice={wasLine(monthlyWasCents)}
                 onClick={() => choosePlan('monthly')}
               />
             ) : null}
@@ -1271,6 +1357,7 @@ export function SubscribePanel({
                 icon={<BookOpen className="size-6" strokeWidth={2} />}
                 name={copy.subscribe.planTermLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(terms[0]!.priceCents) })}
+                wasPrice={wasLine(termWasCents.get(terms[0]!.id))}
                 onClick={() => choosePlan('term')}
               />
             ) : cheapestTermCents !== null ? (
@@ -1381,6 +1468,7 @@ export function SubscribePanel({
               icon={<BookOpen className="size-6" strokeWidth={2} />}
               name={term.title}
               price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(term.priceCents) })}
+              wasPrice={wasLine(termWasCents.get(term.id))}
               onClick={() => chooseTerm(term)}
             />
           ))}

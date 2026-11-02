@@ -279,6 +279,7 @@ export function CourseEditor({
   months: AdminCourseMonth[] | null;
 }) {
   const booksOpen = useFeature('books');
+  const returningPriceOn = useFeature('returningPrice');
   const nextStatus = course.status === 'published' ? 'draft' : 'published';
   const [publishState, publishAction, publishPending] = useActionState<ActionResult, FormData>(
     () => setCourseStatusAction(course.id, nextStatus),
@@ -421,6 +422,7 @@ export function CourseEditor({
                  more. The payload still carries it; nothing on this screen
                  renders it. */
               yearlyPriceCents: course.yearlyPriceCents,
+              returningMonthlyPriceCents: course.returningMonthlyPriceCents,
               bookTitle: course.bookTitle,
               bookPriceCents: course.bookPriceCents,
               forGeneral: course.forGeneral,
@@ -429,13 +431,15 @@ export function CourseEditor({
             action={updateCourseAction.bind(null, course.id)}
             mode="edit"
             sellsByMonth={sellsByMonth}
+            returningPriceOn={returningPriceOn}
+            returningPriceBefore={course.returningPriceBefore}
             sellsTerms={course.terms.some((term) => term.priceCents !== null)}
             /* Each term's price with the other prices, and — on a course still
                sold by the thirty-day month — the one press that turns it over
                to curriculum months. */
             pricingSlot={
               <>
-                <TermPriceFields courseId={course.id} terms={course.terms} />
+                <TermPriceFields courseId={course.id} terms={course.terms} returningOn={returningPriceOn} />
                 {/* Only on a course that actually sells a monthly plan — on a
                     free, yearly-only or term-only course «الاشتراك الشهري العادي»
                     is not true, and turning it over to months means nothing. */}

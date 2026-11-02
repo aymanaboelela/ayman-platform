@@ -609,6 +609,118 @@ describe('PaymentsService', () => {
     });
   });
 
+  describe('submit — «سعر المشتركين القدام»', () => {
+    let courseId = '';
+    let termId = '';
+
+    beforeAll(async () => {
+      const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+      const course = await prisma.course.create({
+        data: {
+          slug: `pay-returning-${Date.now()}`,
+          title: 'كورس سعره زاد',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          subjectId,
+          year: 2,
+          instructorId: adminId,
+          requiresGrant: true,
+          monthlyPriceCents: 20000,
+          returningMonthlyPriceCents: 15000,
+          // The line sits between the old payment below and today.
+          returningPriceBefore: new Date('2026-10-15T00:00:00Z'),
+          terms: { create: { title: 'الترم الأول', position: 0, priceCents: 55000, returningPriceCents: 45000 } },
+        },
+        include: { terms: true },
+      });
+      courseId = course.id;
+      termId = course.terms[0]!.id;
+    });
+
+    // `beforeEach`, not `beforeAll`: the suite's own `beforeEach` wipes every
+    // submission these two students hold before each test.
+    beforeEach(async () => {
+      // The student paid for this course at the old price, before the line.
+      await prisma.paymentSubmission.create({
+        data: {
+          userId: studentId,
+          courseId,
+          plan: 'monthly',
+          amountCents: 15000,
+          status: 'approved',
+          reviewedByUserId: adminId,
+          reviewedAt: new Date('2026-10-02T00:00:00Z'),
+          createdAt: new Date('2026-10-01T00:00:00Z'),
+        },
+      });
+      // The stranger paid too — but AFTER the line, at the new price. That is
+      // a new subscriber, and stays one.
+      await prisma.paymentSubmission.create({
+        data: {
+          userId: strangerId,
+          courseId,
+          plan: 'monthly',
+          amountCents: 20000,
+          status: 'approved',
+          reviewedByUserId: adminId,
+          reviewedAt: new Date('2026-10-21T00:00:00Z'),
+          createdAt: new Date('2026-10-20T00:00:00Z'),
+        },
+      });
+    });
+
+    it('charges a student who paid before the line the returning month and term', async () => {
+      const month = await service.submit(studentId, {
+        courseId,
+        plan: 'monthly',
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: month.id } })).amountCents).toBe(15000);
+      // One claim per course at a time — clear it before the term's.
+      await prisma.paymentSubmission.delete({ where: { id: month.id } });
+
+      const term = await service.submit(studentId, {
+        courseId,
+        plan: 'term',
+        termId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: term.id } })).amountCents).toBe(45000);
+    });
+
+    it('charges a student who first paid after the line the new price', async () => {
+      const month = await service.submit(strangerId, {
+        courseId,
+        plan: 'monthly',
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: month.id } })).amountCents).toBe(20000);
+    });
+
+    it('tells the checkout the same prices it charges', async () => {
+      await expect(service.myCoursePrices(studentId, courseId)).resolves.toEqual({
+        returning: true,
+        monthlyPriceCents: 15000,
+        terms: [{ termId, priceCents: 45000 }],
+      });
+      await expect(service.myCoursePrices(strangerId, courseId)).resolves.toEqual({
+        returning: false,
+        monthlyPriceCents: null,
+        terms: [],
+      });
+    });
+
+    it('refuses a returning price at or above the regular one at the database', async () => {
+      await expect(
+        prisma.course.update({ where: { id: courseId }, data: { returningMonthlyPriceCents: 20000 } }),
+      ).rejects.toThrow(/courses_returning_monthly_below_monthly/);
+    });
+  });
+
   describe('approve', () => {
     it('creates a purchase grant, activates enrollment, and notifies the student', async () => {
       const submission = await service.submit(studentId, {

@@ -135,3 +135,21 @@ export type PaymentSubmissionList = z.infer<typeof PaymentSubmissionListSchema>;
 export const SubmitPaymentScreenshotResultSchema = z.object({
   screenshotKey: z.string(),
 });
+
+/**
+ * «سعر المشتركين القدام» — what THIS student pays on this course, where it
+ * differs from the catalog. `GET /payments/courses/:courseId/prices/mine`.
+ *
+ * `returning: false` is every student on every course with no returning price,
+ * and the two price fields are then `null`/empty: the checkout keeps the
+ * catalog's prices. When `true`, `monthlyPriceCents` and each term's
+ * `priceCents` REPLACE the catalog's for that plan (`null` = that plan has no
+ * returning price), and the checkout draws the catalog price struck through
+ * beside them — the server charges exactly these, from the same derivation.
+ */
+export const MyCoursePricesSchema = z.object({
+  returning: z.boolean(),
+  monthlyPriceCents: z.number().int().nullable(),
+  terms: z.array(z.object({ termId: z.uuid(), priceCents: z.number().int() })),
+});
+export type MyCoursePrices = z.infer<typeof MyCoursePricesSchema>;

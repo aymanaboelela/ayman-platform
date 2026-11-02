@@ -1379,6 +1379,23 @@
   color: var(--a-11);
 }
 
+/* «سعر المشتركين القدام»: the regular price struck through above the one this
+   student pays, and the tag under it. Muted and small, so the eye still lands
+   on the price pill. */
+.bco-plan__was {
+  font-size: 0.8125rem;
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+  text-decoration-thickness: 1.5px;
+}
+
+.bco-plan__tag {
+  font-size: 0.75rem;
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  color: var(--ok);
+}
+
 /* The month cards (`MonthCard`, `.pay-choice__card`): wider than the two
    rails, because a month title is a phrase — «الشهر الأول» — not a word. */
 .bco .bco-months {

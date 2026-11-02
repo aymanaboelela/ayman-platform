@@ -21,6 +21,10 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { YouTubeDurationService } from './youtube-duration.service';
+import {
+  assertReturningBelowRegular,
+  assertReturningPriceWritable,
+} from './returning-price';
 import type { Course } from '../../generated/prisma/client';
 import type { Prisma } from '../../generated/prisma/client';
 
@@ -217,6 +221,8 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        returningMonthlyPriceCents: true,
+        returningPriceBefore: true,
         bookTitle: true,
         bookPriceCents: true,
       },
@@ -282,6 +288,15 @@ export class CourseService {
       throw new BadRequestException('الكتاب محتاج اسم وسعر مع بعض');
     }
 
+    // «سعر المشتركين القدام» — resolved against the current row like the
+    // prices above, because lowering `monthlyPriceCents` alone can break it.
+    assertReturningPriceWritable(input.returningMonthlyPriceCents);
+    const nextReturningMonthly =
+      input.returningMonthlyPriceCents === undefined
+        ? current.returningMonthlyPriceCents
+        : input.returningMonthlyPriceCents;
+    assertReturningBelowRegular(nextMonthly, nextReturningMonthly);
+
     try {
       const course = await this.prisma.course.update({
         where: { id },
@@ -330,6 +345,13 @@ export class CourseService {
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
           }),
+          ...(input.returningMonthlyPriceCents !== undefined && {
+            returningMonthlyPriceCents: input.returningMonthlyPriceCents,
+          }),
+          // The first returning price draws the «قديم/جديد» line; a later edit
+          // never moves it — see `Course.returningPriceBefore`.
+          ...(nextReturningMonthly !== null &&
+            current.returningPriceBefore === null && { returningPriceBefore: new Date() }),
           ...(input.quarterlyPriceCents !== undefined && {
             quarterlyPriceCents: input.quarterlyPriceCents,
           }),
@@ -1025,6 +1047,10 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        // «سعر المشتركين القدام» — selected for the same autosave reason as
+        // the fields above: a field that opens empty would save itself empty.
+        returningMonthlyPriceCents: true,
+        returningPriceBefore: true,
         bookTitle: true,
         bookPriceCents: true,
         forGeneral: true,
@@ -1042,6 +1068,7 @@ export class CourseService {
             position: true,
             isOpen: true,
             priceCents: true,
+            returningPriceCents: true,
             // Live term grants — exactly the rows `TermService.setOpen` would
             // revoke. The close confirmation names this number BEFORE the
             // press, instead of the toast reporting it after the access is
