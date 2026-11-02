@@ -1221,6 +1221,27 @@
   background: var(--site-accent-solid);
 }
 
+.course-card__offer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+}
+
+/* «عرض» — the offer badge in the offer green rather than the site accent,
+   because the accent already means «a price»; this one also means «less». */
+.course-card__badge--sale {
+  color: var(--n-1);
+  background: var(--ok);
+}
+
+.course-card__was {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--site-fg-2);
+}
+
 .course-card__meta {
   display: flex;
   flex-direction: column;

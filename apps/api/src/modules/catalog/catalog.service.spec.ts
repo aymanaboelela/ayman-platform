@@ -233,7 +233,7 @@ describe('CatalogService', () => {
       });
 
       const detail = await service.findBySlug(publishedSlug);
-      expect(detail.terms).toEqual([{ id: expect.any(String), title: 'الترم الأول', priceCents: 45000 }]);
+      expect(detail.terms).toEqual([{ id: expect.any(String), title: 'الترم الأول', priceCents: 45000, salePriceCents: null }]);
     });
 
     it('matches the shared contract with terms present', async () => {

@@ -4,7 +4,7 @@ import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { memoryStorage } from 'multer';
 import { MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
-import type { MyCoursePrices, PaymentSubmission } from '@ayman/contracts/payments';
+import type { PaymentSubmission } from '@ayman/contracts/payments';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import type { WalletPurchaseResult } from '@ayman/contracts/wallet';
@@ -117,21 +117,5 @@ export class PaymentsController {
     @Param('courseId', ParseUUIDPipe) courseId: string,
   ): Promise<{ ownedMonthIds: string[]; coversAll: boolean; pending: boolean }> {
     return this.payments.listOwnedMonths(user.id, courseId);
-  }
-
-  /**
-   * «سعر المشتركين القدام» — what this student pays on this course where it
-   * differs from the catalog. Same self-scoped `payment:submit` as the months
-   * read above, and closed on a stack without the feature: the panel reads a
-   * failure as «the catalog price», which is what such a stack charges.
-   */
-  @RequirePermission('payment:submit')
-  @RequireFeature('returningPrice')
-  @Get('courses/:courseId/prices/mine')
-  myPrices(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('courseId', ParseUUIDPipe) courseId: string,
-  ): Promise<MyCoursePrices> {
-    return this.payments.myCoursePrices(user.id, courseId);
   }
 }

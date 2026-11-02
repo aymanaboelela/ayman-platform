@@ -21,6 +21,8 @@ import { StreamChoiceField } from '@/components/admin/stream-choice';
 import { useAutosave } from '@/components/admin/course/autosave';
 import { FieldCount, FormSection } from '@/components/admin/form-section';
 import { parsePounds } from '@/lib/pounds';
+import { formatSaleDay, saleDayOf, saleEndOfDayIso } from '@/lib/sale-day';
+import { activeSalePrice } from '@ayman/contracts/sale';
 
 export type CourseDefaults = {
   slug: string;
@@ -71,8 +73,11 @@ export type CourseDefaults = {
   yearlyPriceCents: number | null;
   /** «سعر المشتركين القدام» — edit-only, and only drawn with the feature on.
    *  Optional so the create page, which has no such field, need not pass it. */
-  returningMonthlyPriceCents?: number | null;
-  returningYearlyPriceCents?: number | null;
+  /** «عرض» — edit-only, and only drawn with the feature on. Optional so the
+   *  create page, which has no such fields, need not pass them. */
+  saleMonthlyPriceCents?: number | null;
+  saleYearlyPriceCents?: number | null;
+  saleEndsAt?: string | null;
   /** الكتاب الورقي — `null` means this course has no book to order. Both
    *  set or both `null`, never one alone — see `courses_book_needs_price_
    *  and_title`. */
@@ -112,15 +117,14 @@ type Props = {
    */
   sellsByMonth?: boolean;
   /**
-   * «سعر المشتركين القدام» — draws the field under the monthly price and sends
-   * it. Off (the default, and the create page) sends no key at all, so a stack
-   * without the feature never writes the column. See
-   * `Course.returningMonthlyPriceCents`.
+   * «العرض / الخصم» — draws the sale box and sends its fields. Off (the
+   * default, and the create page) sends no key at all, so a stack without the
+   * feature never writes the columns. See `Course.saleMonthlyPriceCents`.
    */
-  returningPriceOn?: boolean;
-  /** The «قديم/جديد» line as the API holds it — `null` until the first
-   *  returning price draws it. Only read for the hint under the field. */
-  returningPriceBefore?: string | null;
+  saleOn?: boolean;
+  /** Whether any term currently carries a sale price — the box's «live?»
+   *  line counts it, since the term fields sit in `pricingSlot`. */
+  termsOnSale?: boolean;
   /**
    * `create` keeps an explicit «إضافة» button: there is no course to save into
    * until it is pressed, so autosaving is not merely unnecessary, it is
@@ -201,8 +205,11 @@ type Draft = {
   monthlyPrice: string;
   yearlyPrice: string;
   /** «سعر المشتركين القدام», same pounds-as-text convention. */
-  returningMonthlyPrice: string;
-  returningYearlyPrice: string;
+  /** «عرض» — pounds as text like the prices; the end as a Cairo DAY
+   *  (`YYYY-MM-DD`, `''` = open-ended). See `lib/sale-day.ts`. */
+  saleMonthlyPrice: string;
+  saleYearlyPrice: string;
+  saleEndsDay: string;
   /** `''` is «مفيش كتاب لهذا الكورس». Trimmed to `null` on the way out,
    *  same convention as `emphasisNote`. */
   bookTitle: string;
@@ -219,17 +226,6 @@ function priceCentsOf(pounds: string): number | null {
   return parsed.kind === 'valid' ? parsed.cents : null;
 }
 
-/** «١٢ نوفمبر ٢٠٢٦», Western digits like every other number in the admin. */
-const returningDateFormat = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
-function formatReturningDate(iso: string): string {
-  return returningDateFormat.format(new Date(iso));
-}
-
 /** Every price field holds a number or nothing. A typo is neither, and it
  *  used to save as «مش للبيع» — the plan came off sale under a «اتحفظ». */
 function pricesReadable(draft: Draft): boolean {
@@ -237,22 +233,62 @@ function pricesReadable(draft: Draft): boolean {
     [
       draft.monthlyPrice,
       draft.yearlyPrice,
-      draft.returningMonthlyPrice,
-      draft.returningYearlyPrice,
+      draft.saleMonthlyPrice,
+      draft.saleYearlyPrice,
       draft.bookPrice,
     ].every((text) => parsePounds(text).kind !== 'invalid') &&
-    returningBelow(draft.monthlyPrice, draft.returningMonthlyPrice) &&
-    returningBelow(draft.yearlyPrice, draft.returningYearlyPrice)
+    saleBelow(draft.monthlyPrice, draft.saleMonthlyPrice) &&
+    saleBelow(draft.yearlyPrice, draft.saleYearlyPrice)
   );
 }
 
-/** The `courses_returning_*_below_*` CHECKs, so the field says why instead
- *  of the autosave toasting a refusal. Empty always passes. */
-function returningBelow(regularPounds: string, returningPounds: string): boolean {
-  const returning = priceCentsOf(returningPounds);
-  if (returning === null) return true;
+/** The `courses_sale_*_below_*` CHECKs, so the field says why instead of
+ *  the autosave toasting a refusal. Empty always passes. */
+function saleBelow(regularPounds: string, salePounds: string): boolean {
+  const sale = priceCentsOf(salePounds);
+  if (sale === null) return true;
   const regular = priceCentsOf(regularPounds);
-  return regular !== null && returning < regular;
+  return regular !== null && sale < regular;
+}
+
+/**
+ * One sale price field — the regular price's twin, with its own two errors:
+ * not a number, or not below the price it discounts.
+ */
+function SalePriceField({
+  id,
+  label,
+  value,
+  regular,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  regular: string;
+  onChange: (value: string) => void;
+}) {
+  const invalid = parsePounds(value).kind === 'invalid';
+  const notBelow = !invalid && !saleBelow(regular, value);
+  return (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        dir="ltr"
+        inputMode="decimal"
+        placeholder={copy.admin.course.saleNone}
+        value={value}
+        aria-invalid={invalid || notBelow || undefined}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {invalid || notBelow ? (
+        <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
+          {invalid ? copy.admin.course.priceInvalid : copy.admin.course.saleNotBelow}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -260,7 +296,7 @@ function returningBelow(regularPounds: string, returningPounds: string): boolean
  * cannot disagree about what a course payload contains. The keys are the ones
  * `createCourseAction`/`updateCourseAction` read out of `FormData`.
  */
-function formDataOf(draft: Draft, sellsTerms = false, returningPriceOn = false): FormData {
+function formDataOf(draft: Draft, sellsTerms = false, saleOn = false): FormData {
   const data = new FormData();
   data.set('title', draft.title);
   data.set('slug', draft.slug);
@@ -293,10 +329,11 @@ function formDataOf(draft: Draft, sellsTerms = false, returningPriceOn = false):
   // No `quarterlyPriceCents` key at all — `createCourseAction` reads none, and
   // an absent key on the PATCH is what leaves a past price where it is.
   data.set('yearlyPriceCents', yearlyPriceCents === null ? '' : String(yearlyPriceCents));
-  // Only when the field is drawn — see `returningPriceOn`.
-  if (returningPriceOn) {
-    data.set('returningMonthlyPriceCents', String(priceCentsOf(draft.returningMonthlyPrice) ?? ''));
-    data.set('returningYearlyPriceCents', String(priceCentsOf(draft.returningYearlyPrice) ?? ''));
+  // Only when the sale box is drawn — see `saleOn`.
+  if (saleOn) {
+    data.set('saleMonthlyPriceCents', String(priceCentsOf(draft.saleMonthlyPrice) ?? ''));
+    data.set('saleYearlyPriceCents', String(priceCentsOf(draft.saleYearlyPrice) ?? ''));
+    data.set('saleEndsDay', draft.saleEndsDay);
   }
   // Both set or both blank — a title with no price (or a price with no
   // title) trips `courses_book_needs_price_and_title` server-side, so an
@@ -385,8 +422,8 @@ export function CourseForm({
   monthsAside,
   sellsTerms = false,
   sellsByMonth = false,
-  returningPriceOn = false,
-  returningPriceBefore = null,
+  saleOn = false,
+  termsOnSale = false,
 }: Props) {
   const [draft, setDraft] = useState<Draft>(() => {
     const initialSystemId = defaults?.systemId ?? taxonomy.systems[0]?.id ?? '';
@@ -415,19 +452,20 @@ export function CourseForm({
         defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
       yearlyPrice:
         defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
-      returningMonthlyPrice:
-        defaults?.returningMonthlyPriceCents != null
-          ? String(defaults.returningMonthlyPriceCents / 100)
-          : '',
-      returningYearlyPrice:
-        defaults?.returningYearlyPriceCents != null
-          ? String(defaults.returningYearlyPriceCents / 100)
-          : '',
+      saleMonthlyPrice:
+        defaults?.saleMonthlyPriceCents != null ? String(defaults.saleMonthlyPriceCents / 100) : '',
+      saleYearlyPrice:
+        defaults?.saleYearlyPriceCents != null ? String(defaults.saleYearlyPriceCents / 100) : '',
+      saleEndsDay: saleDayOf(defaults?.saleEndsAt ?? null),
       bookTitle: defaults?.bookTitle ?? '',
       bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
     };
   });
   const [saving, setSaving] = useState(false);
+  /** «Now» for the sale box's live/over line — the moment the editor opened,
+   *  read once: rendering must not read the clock, and an offer that ends
+   *  while he is editing is the next load's news. */
+  const [openedAt] = useState(() => Date.now());
   /*
    * `createCourseAction` redirected back here instead of crashing — say why,
    * once. `[]` on purpose: `formError` is a query param from THIS load, and a
@@ -522,7 +560,7 @@ export function CourseForm({
       next.slug.length > 0 &&
       pricesReadable(next)
     ) {
-      save(formDataOf(next, sellsTermsRef.current, returningPriceOn));
+      save(formDataOf(next, sellsTermsRef.current, saleOn));
     }
   }
 
@@ -583,12 +621,27 @@ export function CourseForm({
   const hasSide = hasBook || Boolean(termsSlot);
 
   const monthlyInvalid = parsePounds(draft.monthlyPrice).kind === 'invalid';
-  const returningInvalid = parsePounds(draft.returningMonthlyPrice).kind === 'invalid';
-  const returningNotBelow =
-    !returningInvalid && !returningBelow(draft.monthlyPrice, draft.returningMonthlyPrice);
-  const returningYearlyInvalid = parsePounds(draft.returningYearlyPrice).kind === 'invalid';
-  const returningYearlyNotBelow =
-    !returningYearlyInvalid && !returningBelow(draft.yearlyPrice, draft.returningYearlyPrice);
+  /*
+   * Is the offer live NOW? Read through `activeSalePrice` — the rule the API
+   * charges by — over what the box currently says, so the line under it
+   * changes the moment he types a date in the past.
+   */
+  const saleEndIso = draft.saleEndsDay === '' ? null : saleEndOfDayIso(draft.saleEndsDay);
+  const saleAny =
+    activeSalePrice(priceCentsOf(draft.monthlyPrice), priceCentsOf(draft.saleMonthlyPrice), null) !== null ||
+    activeSalePrice(priceCentsOf(draft.yearlyPrice), priceCentsOf(draft.saleYearlyPrice), null) !== null ||
+    termsOnSale;
+  const saleStatus = !saleAny
+    ? null
+    : saleEndIso !== null && new Date(saleEndIso).getTime() <= openedAt
+      ? { live: false, text: formatCopy(copy.admin.course.saleEnded, { date: formatSaleDay(saleEndIso) }) }
+      : {
+          live: true,
+          text:
+            saleEndIso === null
+              ? copy.admin.course.saleLiveOpen
+              : formatCopy(copy.admin.course.saleLiveUntil, { date: formatSaleDay(saleEndIso) }),
+        };
   const yearlyInvalid = parsePounds(draft.yearlyPrice).kind === 'invalid';
   // A priced term locks the box only once the course IS closed: a course left
   // open by a term priced before terms closed anything shows the truth —
@@ -876,38 +929,6 @@ export function CourseForm({
               </p>
             ) : null}
           </div>
-          {/* «سعر المشتركين القدام» right beside the price it discounts —
-              one is meaningless without the other, and the hint names the
-              day that decides who is «قديم». */}
-          {returningPriceOn ? (
-            <div>
-              <Label htmlFor="returningMonthlyPrice">{copy.admin.course.priceReturningMonthly}</Label>
-              <Input
-                id="returningMonthlyPrice"
-                dir="ltr"
-                inputMode="decimal"
-                placeholder={copy.admin.course.priceReturningNone}
-                value={draft.returningMonthlyPrice}
-                aria-invalid={returningInvalid || returningNotBelow || undefined}
-                onChange={(event) => update({ returningMonthlyPrice: event.target.value })}
-              />
-              {returningInvalid || returningNotBelow ? (
-                <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
-                  {returningInvalid
-                    ? copy.admin.course.priceInvalid
-                    : copy.admin.course.priceReturningNotBelow}
-                </p>
-              ) : (
-                <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-                  {returningPriceBefore
-                    ? formatCopy(copy.admin.course.priceReturningHintSince, {
-                        date: formatReturningDate(returningPriceBefore),
-                      })
-                    : copy.admin.course.priceReturningHintNew}
-                </p>
-              )}
-            </div>
-          ) : null}
           <div>
             <Label htmlFor="yearlyPrice">{copy.admin.course.priceYearly}</Label>
             <Input
@@ -925,27 +946,6 @@ export function CourseForm({
               </p>
             ) : null}
           </div>
-          {returningPriceOn ? (
-            <div>
-              <Label htmlFor="returningYearlyPrice">{copy.admin.course.priceReturningYearly}</Label>
-              <Input
-                id="returningYearlyPrice"
-                dir="ltr"
-                inputMode="decimal"
-                placeholder={copy.admin.course.priceReturningNone}
-                value={draft.returningYearlyPrice}
-                aria-invalid={returningYearlyInvalid || returningYearlyNotBelow || undefined}
-                onChange={(event) => update({ returningYearlyPrice: event.target.value })}
-              />
-              {returningYearlyInvalid || returningYearlyNotBelow ? (
-                <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
-                  {returningYearlyInvalid
-                    ? copy.admin.course.priceInvalid
-                    : copy.admin.course.priceReturningNotBelow}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {/* الترم الأول / التاني — each term's price, here with the others
@@ -954,6 +954,55 @@ export function CourseForm({
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.admin.course.priceHint}
         </p>
+
+        {/*
+          «العرض / الخصم» — its own box under the prices it discounts, because
+          it is one decision with its own end date: the sale prices and «لحد»
+          go on and come off together. The line at the bottom says whether it
+          is live NOW, since a sale whose date passed still sits in the fields.
+        */}
+        {saleOn ? (
+          <div className="course-sale-box">
+            <div>
+              <p className="course-sale-box__title">{copy.admin.course.saleTitle}</p>
+              <p className="course-sale-box__note">{copy.admin.course.saleNote}</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <SalePriceField
+                id="saleMonthlyPrice"
+                label={copy.admin.course.priceSaleMonthly}
+                value={draft.saleMonthlyPrice}
+                regular={draft.monthlyPrice}
+                onChange={(value) => update({ saleMonthlyPrice: value })}
+              />
+              <SalePriceField
+                id="saleYearlyPrice"
+                label={copy.admin.course.priceSaleYearly}
+                value={draft.saleYearlyPrice}
+                regular={draft.yearlyPrice}
+                onChange={(value) => update({ saleYearlyPrice: value })}
+              />
+              <div>
+                <Label htmlFor="saleEndsDay">{copy.admin.course.saleEndsAt}</Label>
+                <Input
+                  id="saleEndsDay"
+                  type="date"
+                  dir="ltr"
+                  value={draft.saleEndsDay}
+                  onChange={(event) => update({ saleEndsDay: event.target.value })}
+                />
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {copy.admin.course.saleEndsAtHint}
+                </p>
+              </div>
+            </div>
+            {saleStatus ? (
+              <p className={`course-sale-box__status ${saleStatus.live ? 'is-live' : 'is-over'}`}>
+                {saleStatus.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/*
           Free or closed.

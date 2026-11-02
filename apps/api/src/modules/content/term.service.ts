@@ -3,11 +3,7 @@ import type { CourseTerm, TermCreateInput, TermSetOpenResult, TermUpdateInput } 
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  assertReturningBelowRegular,
-  assertReturningPriceWritable,
-  stampReturningPriceBefore,
-} from './returning-price';
+import { assertSaleBelowRegular, assertSaleWritable } from './sale-price';
 
 /**
  * الترم الأول / الترم الثاني — CRUD on `CourseTerm`, and the one action that
@@ -40,8 +36,8 @@ export class TermService {
   async create(courseId: string, input: TermCreateInput): Promise<CourseTerm> {
     const course = await this.prisma.course.findUnique({ where: { id: courseId }, select: { id: true } });
     if (!course) throw new NotFoundException();
-    assertReturningPriceWritable(input.returningPriceCents);
-    assertReturningBelowRegular(input.priceCents, input.returningPriceCents);
+    assertSaleWritable(input.salePriceCents);
+    assertSaleBelowRegular(input.priceCents, input.salePriceCents);
 
     const last = await this.prisma.courseTerm.findFirst({
       where: { courseId },
@@ -54,11 +50,10 @@ export class TermService {
         courseId,
         title: input.title,
         priceCents: input.priceCents,
-        returningPriceCents: input.returningPriceCents,
+        salePriceCents: input.salePriceCents,
         position: last === null ? 0 : last.position + 1,
       },
     });
-    if (term.returningPriceCents !== null) await stampReturningPriceBefore(this.prisma, courseId);
 
     // Same "one action, `operation` in metadata" convention as
     // `SectionService.create`/`.update` — `AUDIT_ACTIONS` carries `term:update`
@@ -80,15 +75,15 @@ export class TermService {
   async update(id: string, input: TermUpdateInput): Promise<CourseTerm> {
     const term = await this.prisma.courseTerm.findUnique({
       where: { id },
-      select: { id: true, courseId: true, priceCents: true, returningPriceCents: true },
+      select: { id: true, courseId: true, priceCents: true, salePriceCents: true },
     });
     if (!term) throw new NotFoundException();
     // Resolved against the current row: lowering the term's price alone can
-    // put it at or under the returning price it already carries.
-    assertReturningPriceWritable(input.returningPriceCents);
-    assertReturningBelowRegular(
+    // put it at or under the sale price it already carries.
+    assertSaleWritable(input.salePriceCents);
+    assertSaleBelowRegular(
       input.priceCents === undefined ? term.priceCents : input.priceCents,
-      input.returningPriceCents === undefined ? term.returningPriceCents : input.returningPriceCents,
+      input.salePriceCents === undefined ? term.salePriceCents : input.salePriceCents,
     );
 
     const updated = await this.prisma.courseTerm.update({
@@ -96,12 +91,9 @@ export class TermService {
       data: {
         ...(input.title !== undefined && { title: input.title }),
         ...(input.priceCents !== undefined && { priceCents: input.priceCents }),
-        ...(input.returningPriceCents !== undefined && {
-          returningPriceCents: input.returningPriceCents,
-        }),
+        ...(input.salePriceCents !== undefined && { salePriceCents: input.salePriceCents }),
       },
     });
-    if (updated.returningPriceCents !== null) await stampReturningPriceBefore(this.prisma, term.courseId);
 
     await this.audit.record({
       action: 'term:update',
