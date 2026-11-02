@@ -1446,7 +1446,7 @@
    because `--ok` alone on its own tint is too faint to read as a price. */
 .bco-plan--deal .bco-plan__price {
   background: color-mix(in oklch, var(--ok), transparent 82%);
-  color: color-mix(in oklch, var(--ok), var(--n-12) 35%);
+  color: color-mix(in oklab, var(--ok), var(--n-12) 35%);
   font-size: 0.9375rem;
 }
 
@@ -1455,7 +1455,7 @@
   font-weight: var(--fw-semibold);
   line-height: 1.5;
   text-wrap: balance;
-  color: color-mix(in oklch, var(--ok), var(--n-12) 25%);
+  color: color-mix(in oklab, var(--ok), var(--n-12) 25%);
 }
 
 /* The month cards (`MonthCard`, `.pay-choice__card`): wider than the two
