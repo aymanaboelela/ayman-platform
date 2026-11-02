@@ -250,7 +250,7 @@ function PlanCard({
   const saved = deal
     ? formatCopy(copy.subscribe.returningPriceSave, { amount: formatEGP(deal.wasCents - deal.nowCents) })
     : null;
-  const label = deal ? `${name} — ${price} — ${copy.subscribe.returningPriceTag}، ${saved}` : `${name} — ${price}`;
+  const label = deal ? `${name} — ${price} — ${saved}` : `${name} — ${price}`;
   return (
     <button
       type="button"
@@ -1254,7 +1254,7 @@ export function SubscribePanel({
           ) : null}
           {returningSavedCents > 0 ? (
             <div className="bco-sum__row bco-sum__row--discount">
-              <dt>{copy.subscribe.returningPriceTag}</dt>
+              <dt>{copy.subscribe.returningPriceSummary}</dt>
               <dd>
                 −<Money cents={returningSavedCents} />
               </dd>

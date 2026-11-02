@@ -1414,6 +1414,7 @@
 
 .bco-plan__ribbon {
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   gap: 0.3125rem;
   padding: 0.25rem 0.625rem;
@@ -1441,17 +1442,20 @@
   text-decoration-color: color-mix(in oklch, var(--n-11), transparent 30%);
 }
 
+/* The green mixed toward the text colour — darker on light, lighter on dark —
+   because `--ok` alone on its own tint is too faint to read as a price. */
 .bco-plan--deal .bco-plan__price {
-  background: color-mix(in oklch, var(--ok), transparent 84%);
-  color: var(--ok);
+  background: color-mix(in oklch, var(--ok), transparent 82%);
+  color: color-mix(in oklch, var(--ok), var(--n-12) 35%);
   font-size: 0.9375rem;
 }
 
 .bco-plan__save {
   font-size: 0.75rem;
   font-weight: var(--fw-semibold);
-  line-height: 1.4;
-  color: var(--ok);
+  line-height: 1.5;
+  text-wrap: balance;
+  color: color-mix(in oklch, var(--ok), var(--n-12) 25%);
 }
 
 /* The month cards (`MonthCard`, `.pay-choice__card`): wider than the two

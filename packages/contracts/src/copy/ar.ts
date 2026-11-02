@@ -2891,9 +2891,12 @@ export const copy = {
      * wanted it SEEN: «يبقى ظاهر إن في خصم». Neutral wording — never «انت
      * مشترك قديم» in the masculine (CLAUDE.md §7).
      */
-    returningPriceTag: 'سعر خاص للمشتركين القدام',
-    /** Under the price on that card — `{amount}` is what came off. */
-    returningPriceSave: 'خصم {amount} جنيه',
+    returningPriceTag: 'سعر خاص',
+    /** Under the price on that card — `{amount}` is what came off. Says WHY
+     *  here rather than in the tag, which has to fit one line on a phone. */
+    returningPriceSave: 'خصم {amount} جنيه للمشتركين القدام',
+    /** The discount row in the payment summary. */
+    returningPriceSummary: 'خصم المشتركين القدام',
     chooseTermTitle: 'الترمات المتاحة',
 
     // ── «شهر» when the course sells by curriculum month ──────────────────
