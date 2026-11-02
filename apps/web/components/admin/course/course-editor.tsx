@@ -423,6 +423,7 @@ export function CourseEditor({
                  renders it. */
               yearlyPriceCents: course.yearlyPriceCents,
               returningMonthlyPriceCents: course.returningMonthlyPriceCents,
+              returningYearlyPriceCents: course.returningYearlyPriceCents,
               bookTitle: course.bookTitle,
               bookPriceCents: course.bookPriceCents,
               forGeneral: course.forGeneral,

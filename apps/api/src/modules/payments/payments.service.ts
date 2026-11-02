@@ -212,6 +212,7 @@ export class PaymentsService {
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
         returningMonthlyPriceCents: true,
+        returningYearlyPriceCents: true,
         returningPriceBefore: true,
         terms: {
           select: { id: true, title: true, isOpen: true, priceCents: true, returningPriceCents: true },
@@ -897,6 +898,7 @@ export class PaymentsService {
       select: {
         id: true,
         returningMonthlyPriceCents: true,
+        returningYearlyPriceCents: true,
         returningPriceBefore: true,
         terms: { select: { id: true, returningPriceCents: true } },
       },
@@ -906,11 +908,19 @@ export class PaymentsService {
     const terms = course.terms.flatMap((term) =>
       term.returningPriceCents === null ? [] : [{ termId: term.id, priceCents: term.returningPriceCents }],
     );
-    const hasAny = course.returningMonthlyPriceCents !== null || terms.length > 0;
+    const hasAny =
+      course.returningMonthlyPriceCents !== null ||
+      course.returningYearlyPriceCents !== null ||
+      terms.length > 0;
     if (!hasAny || !(await isReturningSubscriber(this.prisma, userId, course))) {
-      return { returning: false, monthlyPriceCents: null, terms: [] };
+      return { returning: false, monthlyPriceCents: null, yearlyPriceCents: null, terms: [] };
     }
-    return { returning: true, monthlyPriceCents: course.returningMonthlyPriceCents, terms };
+    return {
+      returning: true,
+      monthlyPriceCents: course.returningMonthlyPriceCents,
+      yearlyPriceCents: course.returningYearlyPriceCents,
+      terms,
+    };
   }
 
   /**
@@ -1564,6 +1574,7 @@ export class PaymentsService {
           quarterlyPriceCents: true,
           yearlyPriceCents: true,
           returningMonthlyPriceCents: true,
+          returningYearlyPriceCents: true,
           returningPriceBefore: true,
           terms: { select: { id: true, title: true, priceCents: true, returningPriceCents: true } },
           // EVERY month, open or not — `isOpen` is deliberately not a gate on

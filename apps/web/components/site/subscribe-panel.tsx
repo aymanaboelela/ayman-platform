@@ -12,6 +12,7 @@ import {
   ImagePlus,
   LoaderCircle,
   Lock,
+  Sparkles,
   TicketPercent,
   TriangleAlert,
   Wallet,
@@ -220,41 +221,64 @@ type LivePlans = {
  * two components over: a screen reader announces exactly what the eye reads,
  * never a paraphrase of it.
  */
-/** The struck-through «قبل» line for a plan card — `null` when not discounted. */
-function wasLine(cents: number | undefined | null): string | null {
-  return cents == null ? null : formatCopy(copy.subscribe.priceLine, { price: formatEGP(cents) });
+/** A plan card's discount — `null` when this student pays the regular price. */
+type Deal = { wasCents: number; nowCents: number } | null;
+
+function dealOf(wasCents: number | undefined | null, nowCents: number | null): Deal {
+  return wasCents == null || nowCents === null ? null : { wasCents, nowCents };
 }
 
 function PlanCard({
   icon,
   name,
   price,
-  wasPrice = null,
+  deal = null,
   onClick,
 }: {
   icon: ReactNode;
   name: string;
   price: string;
   /**
-   * «سعر المشتركين القدام» — the regular price, struck through above the one
-   * this student pays, with the tag under it. The instructor wanted the old
-   * price SEEN as a discount («يبقى ظاهر إن في خصم»), not silently charged.
+   * «سعر المشتركين القدام» — the regular price struck through beside the one
+   * this student pays, the tag above and what came off below. The instructor
+   * wanted the old price SEEN as a discount («يبقى ظاهر إن في خصم»), not
+   * silently charged.
    */
-  wasPrice?: string | null;
+  deal?: Deal;
   onClick: () => void;
 }) {
-  const label = wasPrice
-    ? `${name} — ${price} — ${copy.subscribe.returningPriceTag}`
-    : `${name} — ${price}`;
+  const saved = deal
+    ? formatCopy(copy.subscribe.returningPriceSave, { amount: formatEGP(deal.wasCents - deal.nowCents) })
+    : null;
+  const label = deal ? `${name} — ${price} — ${copy.subscribe.returningPriceTag}، ${saved}` : `${name} — ${price}`;
   return (
-    <button type="button" className="bco-plan" onClick={onClick} aria-label={label}>
+    <button
+      type="button"
+      className={cn('bco-plan', deal && 'bco-plan--deal')}
+      onClick={onClick}
+      aria-label={label}
+    >
+      {deal ? (
+        <span className="bco-plan__ribbon">
+          <Sparkles size={13} aria-hidden="true" />
+          {copy.subscribe.returningPriceTag}
+        </span>
+      ) : null}
       <span className="bco-plan__icon" aria-hidden="true">
         {icon}
       </span>
       <span className="bco-plan__name">{name}</span>
-      {wasPrice ? <s className="bco-plan__was">{wasPrice}</s> : null}
-      <span className="bco-plan__price">{price}</span>
-      {wasPrice ? <span className="bco-plan__tag">{copy.subscribe.returningPriceTag}</span> : null}
+      {deal ? (
+        <span className="bco-plan__prices">
+          <s className="bco-plan__was">
+            {formatCopy(copy.subscribe.priceLine, { price: formatEGP(deal.wasCents) })}
+          </s>
+          <span className="bco-plan__price">{price}</span>
+        </span>
+      ) : (
+        <span className="bco-plan__price">{price}</span>
+      )}
+      {saved ? <span className="bco-plan__save">{saved}</span> : null}
     </button>
   );
 }
@@ -701,7 +725,13 @@ export function SubscribePanel({
       ? returningMonthlyCents
       : regularMonthlyCents;
   const monthlyWasCents = monthlyPriceCents !== regularMonthlyCents ? regularMonthlyCents : null;
-  const yearlyPriceCents = livePlans ? livePlans.yearlyPriceCents : cachedYearly;
+  const regularYearlyCents = livePlans ? livePlans.yearlyPriceCents : cachedYearly;
+  const returningYearlyCents = myPrices?.returning ? myPrices.yearlyPriceCents : null;
+  const yearlyPriceCents =
+    regularYearlyCents !== null && returningYearlyCents !== null
+      ? returningYearlyCents
+      : regularYearlyCents;
+  const yearlyWasCents = yearlyPriceCents !== regularYearlyCents ? regularYearlyCents : null;
   /** Each discounted term's regular price, by id — the «قبل» on its card. */
   const termWasCents = new Map<string, number>();
   const terms = (livePlans ? livePlans.terms : cachedTerms).map((term) => {
@@ -1183,9 +1213,11 @@ export function SubscribePanel({
   const returningSavedCents =
     plan === 'monthly' && monthlyWasCents !== null && monthlyPriceCents !== null
       ? (monthlyWasCents - monthlyPriceCents) * (months.length > 0 ? chosenMonths.length : 1)
-      : plan === 'term' && chosenTerm !== null && termWasCents.has(chosenTerm.id)
-        ? termWasCents.get(chosenTerm.id)! - chosenTerm.priceCents
-        : 0;
+      : plan === 'yearly' && yearlyWasCents !== null && yearlyPriceCents !== null
+        ? yearlyWasCents - yearlyPriceCents
+        : plan === 'term' && chosenTerm !== null && termWasCents.has(chosenTerm.id)
+          ? termWasCents.get(chosenTerm.id)! - chosenTerm.priceCents
+          : 0;
 
   /** `withCoupon` on the payment step only — the one step whose figure the
    *  quote is for. */
@@ -1335,7 +1367,7 @@ export function SubscribePanel({
                 icon={<CalendarClock className="size-6" strokeWidth={2} />}
                 name={copy.subscribe.planMonthlyLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
-                wasPrice={wasLine(monthlyWasCents)}
+                deal={dealOf(monthlyWasCents, monthlyPriceCents)}
                 onClick={() => choosePlan('monthly')}
               />
             ) : null}
@@ -1357,7 +1389,7 @@ export function SubscribePanel({
                 icon={<BookOpen className="size-6" strokeWidth={2} />}
                 name={copy.subscribe.planTermLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(terms[0]!.priceCents) })}
-                wasPrice={wasLine(termWasCents.get(terms[0]!.id))}
+                deal={dealOf(termWasCents.get(terms[0]!.id), terms[0]!.priceCents)}
                 onClick={() => choosePlan('term')}
               />
             ) : cheapestTermCents !== null ? (
@@ -1373,6 +1405,7 @@ export function SubscribePanel({
                 icon={<CalendarRange className="size-6" strokeWidth={2} />}
                 name={copy.subscribe.planYearlyLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
+                deal={dealOf(yearlyWasCents, yearlyPriceCents)}
                 onClick={() => choosePlan('yearly')}
               />
             ) : null}
@@ -1468,7 +1501,7 @@ export function SubscribePanel({
               icon={<BookOpen className="size-6" strokeWidth={2} />}
               name={term.title}
               price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(term.priceCents) })}
-              wasPrice={wasLine(termWasCents.get(term.id))}
+              deal={dealOf(termWasCents.get(term.id), term.priceCents)}
               onClick={() => chooseTerm(term)}
             />
           ))}

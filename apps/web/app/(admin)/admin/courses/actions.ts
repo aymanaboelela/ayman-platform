@@ -419,6 +419,9 @@ export async function updateCourseAction(
       ...(formData.has('returningMonthlyPriceCents') && {
         returningMonthlyPriceCents: readOptionalPriceCents(formData, 'returningMonthlyPriceCents'),
       }),
+      ...(formData.has('returningYearlyPriceCents') && {
+        returningYearlyPriceCents: readOptionalPriceCents(formData, 'returningYearlyPriceCents'),
+      }),
       bookTitle: readOptionalText(formData, 'bookTitle'),
       bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
       ...readStream(formData),

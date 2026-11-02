@@ -444,6 +444,7 @@ const admin = {
      * hint says who gets it, because «قديم» is a date and he should see which.
      */
     priceReturningMonthly: 'سعر الشهر للمشتركين القدام (جنيه)',
+    priceReturningYearly: 'سعر السنة للمشتركين القدام (جنيه)',
     priceReturningNone: 'زي السعر العادي',
     /** Before any returning price is set — the line is drawn by the first one. */
     priceReturningHintNew:

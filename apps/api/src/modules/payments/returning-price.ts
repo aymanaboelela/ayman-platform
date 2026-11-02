@@ -13,6 +13,7 @@ import { isFeatureEnabled } from '../../common/entitlements';
 export type ReturningPriceCourse = {
   id: string;
   returningMonthlyPriceCents: number | null;
+  returningYearlyPriceCents: number | null;
   returningPriceBefore: Date | null;
   terms: readonly { id: string; returningPriceCents: number | null }[];
 };
@@ -58,8 +59,8 @@ export async function isReturningSubscriber(
  * What a returning student pays for this plan — `null` when the plan has no
  * returning price, and the caller charges the regular one.
  *
- * Month and term only: those are the two the instructor priced twice. A year
- * has one price for everyone.
+ * Month, term and year. «٣ شهور» is off the shelf, and only ever charges its
+ * one price.
  */
 export function returningPlanPriceCents(
   course: ReturningPriceCourse,
@@ -69,6 +70,8 @@ export function returningPlanPriceCents(
   switch (plan) {
     case 'monthly':
       return course.returningMonthlyPriceCents;
+    case 'yearly':
+      return course.returningYearlyPriceCents;
     case 'term':
       return course.terms.find((term) => term.id === termId)?.returningPriceCents ?? null;
     default:

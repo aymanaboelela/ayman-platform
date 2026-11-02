@@ -13,6 +13,7 @@ describe('returning price', () => {
   const course = {
     id: 'course-1',
     returningMonthlyPriceCents: 15000,
+    returningYearlyPriceCents: 95000,
     returningPriceBefore: before,
     terms: [
       { id: 'term-1', returningPriceCents: 45000 },
@@ -62,11 +63,12 @@ describe('returning price', () => {
     expect(client.paymentSubmission.findFirst).not.toHaveBeenCalled();
   });
 
-  it('prices only the month and the term twice', () => {
+  it('prices the month, the term and the year twice — never «٣ شهور»', () => {
     expect(returningPlanPriceCents(course, 'monthly', null)).toBe(15000);
     expect(returningPlanPriceCents(course, 'term', 'term-1')).toBe(45000);
     expect(returningPlanPriceCents(course, 'term', 'term-2')).toBeNull();
-    expect(returningPlanPriceCents(course, 'yearly', null)).toBeNull();
+    expect(returningPlanPriceCents(course, 'yearly', null)).toBe(95000);
+    expect(returningPlanPriceCents(course, 'quarterly', null)).toBeNull();
   });
 
   it('charges a returning student the returning price and a new one the regular', async () => {
@@ -77,7 +79,7 @@ describe('returning price', () => {
 
   it('asks nothing for a plan with no returning price, and keeps a plan not sold unsold', async () => {
     const client = db(true);
-    await expect(chargedPlanPriceCents(client as never, 'u', course, 'yearly', null, 95000)).resolves.toBe(95000);
+    await expect(chargedPlanPriceCents(client as never, 'u', course, 'term', 'term-2', 55000)).resolves.toBe(55000);
     await expect(chargedPlanPriceCents(client as never, 'u', course, 'monthly', null, null)).resolves.toBeNull();
     expect(client.paymentSubmission.findFirst).not.toHaveBeenCalled();
   });

@@ -249,6 +249,8 @@ const courseWritableShape = {
    *  that against the current row, the same way it resolves the other prices.
    *  See `Course.returningMonthlyPriceCents` in schema.prisma. */
   returningMonthlyPriceCents: z.number().int().min(0).nullable().default(null),
+  /** The same for the full year — below `yearlyPriceCents`. */
+  returningYearlyPriceCents: z.number().int().min(0).nullable().default(null),
   /**
    * الكتاب الورقي — a printed textbook this course ships home. `null` =
    * no book to order, and independent of the subscription prices above: a

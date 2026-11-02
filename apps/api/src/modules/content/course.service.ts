@@ -222,6 +222,7 @@ export class CourseService {
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
         returningMonthlyPriceCents: true,
+        returningYearlyPriceCents: true,
         returningPriceBefore: true,
         bookTitle: true,
         bookPriceCents: true,
@@ -296,6 +297,12 @@ export class CourseService {
         ? current.returningMonthlyPriceCents
         : input.returningMonthlyPriceCents;
     assertReturningBelowRegular(nextMonthly, nextReturningMonthly);
+    assertReturningPriceWritable(input.returningYearlyPriceCents);
+    const nextReturningYearly =
+      input.returningYearlyPriceCents === undefined
+        ? current.returningYearlyPriceCents
+        : input.returningYearlyPriceCents;
+    assertReturningBelowRegular(nextYearly, nextReturningYearly);
 
     try {
       const course = await this.prisma.course.update({
@@ -350,7 +357,10 @@ export class CourseService {
           }),
           // The first returning price draws the «قديم/جديد» line; a later edit
           // never moves it — see `Course.returningPriceBefore`.
-          ...(nextReturningMonthly !== null &&
+          ...(input.returningYearlyPriceCents !== undefined && {
+            returningYearlyPriceCents: input.returningYearlyPriceCents,
+          }),
+          ...((nextReturningMonthly !== null || nextReturningYearly !== null) &&
             current.returningPriceBefore === null && { returningPriceBefore: new Date() }),
           ...(input.quarterlyPriceCents !== undefined && {
             quarterlyPriceCents: input.quarterlyPriceCents,
@@ -1050,6 +1060,7 @@ export class CourseService {
         // «سعر المشتركين القدام» — selected for the same autosave reason as
         // the fields above: a field that opens empty would save itself empty.
         returningMonthlyPriceCents: true,
+        returningYearlyPriceCents: true,
         returningPriceBefore: true,
         bookTitle: true,
         bookPriceCents: true,

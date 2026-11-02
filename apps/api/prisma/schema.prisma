@@ -907,6 +907,9 @@ model Course {
   /// decided by `isReturningSubscriber` in `payments/returning-price.ts`, and
   /// nothing reads this to decide access.
   returningMonthlyPriceCents Int? @map("returning_monthly_price_cents")
+  /// The same for the full year — below `yearlyPriceCents`, by
+  /// `courses_returning_yearly_below_yearly`, and the same cutoff.
+  returningYearlyPriceCents  Int? @map("returning_yearly_price_cents")
   /// The line between «قديم» and «جديد»: a student is returning when they paid
   /// for this course BEFORE this moment. Stamped by the server the first time
   /// any returning price on the course (this one or a term's) is set, and

@@ -72,6 +72,7 @@ export type CourseDefaults = {
   /** «سعر المشتركين القدام» — edit-only, and only drawn with the feature on.
    *  Optional so the create page, which has no such field, need not pass it. */
   returningMonthlyPriceCents?: number | null;
+  returningYearlyPriceCents?: number | null;
   /** الكتاب الورقي — `null` means this course has no book to order. Both
    *  set or both `null`, never one alone — see `courses_book_needs_price_
    *  and_title`. */
@@ -201,6 +202,7 @@ type Draft = {
   yearlyPrice: string;
   /** «سعر المشتركين القدام», same pounds-as-text convention. */
   returningMonthlyPrice: string;
+  returningYearlyPrice: string;
   /** `''` is «مفيش كتاب لهذا الكورس». Trimmed to `null` on the way out,
    *  same convention as `emphasisNote`. */
   bookTitle: string;
@@ -232,19 +234,25 @@ function formatReturningDate(iso: string): string {
  *  used to save as «مش للبيع» — the plan came off sale under a «اتحفظ». */
 function pricesReadable(draft: Draft): boolean {
   return (
-    [draft.monthlyPrice, draft.yearlyPrice, draft.returningMonthlyPrice, draft.bookPrice].every(
-      (text) => parsePounds(text).kind !== 'invalid',
-    ) && returningBelowMonthly(draft)
+    [
+      draft.monthlyPrice,
+      draft.yearlyPrice,
+      draft.returningMonthlyPrice,
+      draft.returningYearlyPrice,
+      draft.bookPrice,
+    ].every((text) => parsePounds(text).kind !== 'invalid') &&
+    returningBelow(draft.monthlyPrice, draft.returningMonthlyPrice) &&
+    returningBelow(draft.yearlyPrice, draft.returningYearlyPrice)
   );
 }
 
-/** The `courses_returning_monthly_below_monthly` CHECK, so the field says
- *  why instead of the autosave toasting a refusal. Empty always passes. */
-function returningBelowMonthly(draft: Draft): boolean {
-  const returning = priceCentsOf(draft.returningMonthlyPrice);
+/** The `courses_returning_*_below_*` CHECKs, so the field says why instead
+ *  of the autosave toasting a refusal. Empty always passes. */
+function returningBelow(regularPounds: string, returningPounds: string): boolean {
+  const returning = priceCentsOf(returningPounds);
   if (returning === null) return true;
-  const monthly = priceCentsOf(draft.monthlyPrice);
-  return monthly !== null && returning < monthly;
+  const regular = priceCentsOf(regularPounds);
+  return regular !== null && returning < regular;
 }
 
 /**
@@ -288,6 +296,7 @@ function formDataOf(draft: Draft, sellsTerms = false, returningPriceOn = false):
   // Only when the field is drawn — see `returningPriceOn`.
   if (returningPriceOn) {
     data.set('returningMonthlyPriceCents', String(priceCentsOf(draft.returningMonthlyPrice) ?? ''));
+    data.set('returningYearlyPriceCents', String(priceCentsOf(draft.returningYearlyPrice) ?? ''));
   }
   // Both set or both blank — a title with no price (or a price with no
   // title) trips `courses_book_needs_price_and_title` server-side, so an
@@ -409,6 +418,10 @@ export function CourseForm({
       returningMonthlyPrice:
         defaults?.returningMonthlyPriceCents != null
           ? String(defaults.returningMonthlyPriceCents / 100)
+          : '',
+      returningYearlyPrice:
+        defaults?.returningYearlyPriceCents != null
+          ? String(defaults.returningYearlyPriceCents / 100)
           : '',
       bookTitle: defaults?.bookTitle ?? '',
       bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
@@ -571,7 +584,11 @@ export function CourseForm({
 
   const monthlyInvalid = parsePounds(draft.monthlyPrice).kind === 'invalid';
   const returningInvalid = parsePounds(draft.returningMonthlyPrice).kind === 'invalid';
-  const returningNotBelow = !returningInvalid && !returningBelowMonthly(draft);
+  const returningNotBelow =
+    !returningInvalid && !returningBelow(draft.monthlyPrice, draft.returningMonthlyPrice);
+  const returningYearlyInvalid = parsePounds(draft.returningYearlyPrice).kind === 'invalid';
+  const returningYearlyNotBelow =
+    !returningYearlyInvalid && !returningBelow(draft.yearlyPrice, draft.returningYearlyPrice);
   const yearlyInvalid = parsePounds(draft.yearlyPrice).kind === 'invalid';
   // A priced term locks the box only once the course IS closed: a course left
   // open by a term priced before terms closed anything shows the truth —
@@ -908,6 +925,27 @@ export function CourseForm({
               </p>
             ) : null}
           </div>
+          {returningPriceOn ? (
+            <div>
+              <Label htmlFor="returningYearlyPrice">{copy.admin.course.priceReturningYearly}</Label>
+              <Input
+                id="returningYearlyPrice"
+                dir="ltr"
+                inputMode="decimal"
+                placeholder={copy.admin.course.priceReturningNone}
+                value={draft.returningYearlyPrice}
+                aria-invalid={returningYearlyInvalid || returningYearlyNotBelow || undefined}
+                onChange={(event) => update({ returningYearlyPrice: event.target.value })}
+              />
+              {returningYearlyInvalid || returningYearlyNotBelow ? (
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
+                  {returningYearlyInvalid
+                    ? copy.admin.course.priceInvalid
+                    : copy.admin.course.priceReturningNotBelow}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* الترم الأول / التاني — each term's price, here with the others

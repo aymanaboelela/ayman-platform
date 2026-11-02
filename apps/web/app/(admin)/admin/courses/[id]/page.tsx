@@ -47,6 +47,7 @@ const AdminCourseDetailSchema = z.object({
   /** «سعر المشتركين القدام» and the line that decides who is «قديم». Defaulted
    *  so an API that predates them (a rolling deploy) still opens the editor. */
   returningMonthlyPriceCents: z.number().int().nullable().default(null),
+  returningYearlyPriceCents: z.number().int().nullable().default(null),
   returningPriceBefore: z.iso.datetime().nullable().default(null),
   bookTitle: z.string().nullable(),
   bookPriceCents: z.number().int().nullable(),

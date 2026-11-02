@@ -628,6 +628,8 @@ describe('PaymentsService', () => {
           requiresGrant: true,
           monthlyPriceCents: 20000,
           returningMonthlyPriceCents: 15000,
+          yearlyPriceCents: 125000,
+          returningYearlyPriceCents: 95000,
           // The line sits between the old payment below and today.
           returningPriceBefore: new Date('2026-10-15T00:00:00Z'),
           terms: { create: { title: 'الترم الأول', position: 0, priceCents: 55000, returningPriceCents: 45000 } },
@@ -691,6 +693,18 @@ describe('PaymentsService', () => {
       expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: term.id } })).amountCents).toBe(45000);
     });
 
+    // Its own test: every claim notifies every admin, and three in one test
+    // outrun Jest's 5 s on a local database with thousands of them.
+    it('charges a student who paid before the line the returning year', async () => {
+      const year = await service.submit(studentId, {
+        courseId,
+        plan: 'yearly',
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: year.id } })).amountCents).toBe(95000);
+    });
+
     it('charges a student who first paid after the line the new price', async () => {
       const month = await service.submit(strangerId, {
         courseId,
@@ -705,11 +719,13 @@ describe('PaymentsService', () => {
       await expect(service.myCoursePrices(studentId, courseId)).resolves.toEqual({
         returning: true,
         monthlyPriceCents: 15000,
+        yearlyPriceCents: 95000,
         terms: [{ termId, priceCents: 45000 }],
       });
       await expect(service.myCoursePrices(strangerId, courseId)).resolves.toEqual({
         returning: false,
         monthlyPriceCents: null,
+        yearlyPriceCents: null,
         terms: [],
       });
     });

@@ -2892,6 +2892,8 @@ export const copy = {
      * مشترك قديم» in the masculine (CLAUDE.md §7).
      */
     returningPriceTag: 'سعر خاص للمشتركين القدام',
+    /** Under the price on that card — `{amount}` is what came off. */
+    returningPriceSave: 'خصم {amount} جنيه',
     chooseTermTitle: 'الترمات المتاحة',
 
     // ── «شهر» when the course sells by curriculum month ──────────────────
