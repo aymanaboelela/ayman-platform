@@ -4,6 +4,7 @@ import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
 import type { CourseMonth } from '@ayman/contracts/months';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
+import { formatEGP } from '@/lib/price';
 import { SubscribePanel } from './subscribe-panel';
 
 /**
@@ -846,6 +847,23 @@ describe('a coupon named in the link', () => {
     await screen.findByText(copy.subscribe.railQuestion);
   }
 
+  /** Every quote answered by what was asked, so the order requests happen to
+   *  go out in does not decide the figures. An `Error` is a refusal. */
+  function quoteWith(answer: (body: Record<string, unknown>) => unknown) {
+    apiPost.mockImplementation((path: string, _schema: unknown, body: Record<string, unknown>) => {
+      if (path !== '/api/payments/coupon-quote') return Promise.reject(new Error(`unexpected ${path}`));
+      const result = answer(body);
+      return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
+    });
+  }
+
+  /** «كود الخصم ‹CODE› متطبّق» — one sentence across a `<bdi>`, so matched on
+   *  the whole line rather than a text node. */
+  function findBanner(code: string) {
+    const line = `${copy.subscribe.couponBannerLead} ${code} ${copy.subscribe.couponBannerApplied}`;
+    return screen.findByText((_, element) => element?.tagName === 'SPAN' && element.textContent === line);
+  }
+
   it('opens the box filled and applies the code as soon as a plan is chosen', async () => {
     window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=%20save25%20`);
     respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
@@ -877,11 +895,15 @@ describe('a coupon named in the link', () => {
 
     render(<Panel />);
     await screen.findByText(copy.subscribe.chooseMonthsTitle);
-    expect(apiPost).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.monthsContinue) }));
 
+    // Priced on the picker itself, before «كمّل».
     await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
     expect(apiPost.mock.calls[0]![2]).toMatchObject({ code: 'SAVE25', plan: 'monthly', monthIds: [MONTH_ONE.id] });
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.monthsContinue) }));
+    await screen.findByText(copy.subscribe.railQuestion);
+    // The payment step opens on the answer the picker already had.
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('SAVE25').length).toBeGreaterThan(0);
   });
 
   it('says why the code was refused instead of dropping it', async () => {
@@ -902,10 +924,14 @@ describe('a coupon named in the link', () => {
     expect(screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: '200' })).length).toBeGreaterThan(0);
   });
 
-  it('drops the quote on a change of plan and keeps the code typed, like a code the student entered', async () => {
+  it('re-prices the code for the new plan on a change of plan, never carrying the old figure', async () => {
     window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
     respondWith({ course: liveCourse({ yearlyPriceCents: 150000 }), settings: liveSettings(), couponsOn: true });
-    apiPost.mockResolvedValueOnce(QUOTE);
+    quoteWith((body) =>
+      body.plan === 'yearly'
+        ? { code: 'SAVE25', originalCents: 150000, discountCents: 30000, finalCents: 120000 }
+        : QUOTE,
+    );
 
     render(<Panel />);
     await chooseMonthly();
@@ -915,11 +941,127 @@ describe('a coupon named in the link', () => {
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(copy.subscribe.planYearlyLabel) }));
     await screen.findByText(copy.subscribe.railQuestion);
 
-    // Applied once, for the plan it was priced against — never re-sent behind
-    // the student's back, never shown against the year.
-    expect(apiPost).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText(copy.subscribe.couponLabel)).toHaveValue('SAVE25');
+    // The year's own quote from the server — the month's 150 is nowhere.
+    expect((await screen.findAllByText(formatCopy(copy.subscribe.priceLine, { price: formatEGP(120000) }))).length).toBeGreaterThan(0);
     expect(screen.queryByText(formatCopy(copy.subscribe.priceLine, { price: '150' }))).toBeNull();
+    expect(apiPost.mock.calls.some((call) => (call[2] as { plan?: string }).plan === 'yearly')).toBe(true);
+  });
+
+  it('prices every plan card on the first step and says the code is applied', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ yearlyPriceCents: 150000, terms: [TERM] }),
+      settings: liveSettings(),
+      couponsOn: true,
+    });
+    const { ApiRequestError } = await import('@/lib/api');
+    quoteWith((body) =>
+      body.plan === 'monthly'
+        ? QUOTE
+        : body.plan === 'term'
+          ? { code: 'SAVE25', originalCents: 30000, discountCents: 5000, finalCents: 25000 }
+          : new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_exceeds_price', message: 'no' }),
+    );
+
+    render(<Panel />);
+
+    expect(await findBanner('SAVE25')).toBeTruthy();
+    // The month and the term: struck regular price, the server's price, what came off.
+    const monthly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) });
+    expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '150' }));
+    expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.saleSave, { amount: '50' }));
+    expect(monthly.querySelector('s')?.textContent).toBe(formatCopy(copy.subscribe.priceLine, { price: '200' }));
+    const term = screen.getByRole('button', { name: new RegExp(copy.subscribe.planTermLabel) });
+    expect(term.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '250' }));
+    // The code does not apply to the year, so its card says nothing about it.
+    const yearly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planYearlyLabel) });
+    expect(yearly.querySelector('s')).toBeNull();
+    expect(yearly.textContent).not.toContain('SAVE25');
+    expect(apiPost).toHaveBeenCalledTimes(3);
+
+    // The payment step opens on the card's quote, without asking again.
+    fireEvent.click(monthly);
+    await screen.findByText(copy.subscribe.railQuestion);
+    expect(screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: '150' })).length).toBeGreaterThan(0);
+    expect(apiPost).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows the refusal on the first step when the code applies to nothing there', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=OLDCODE`);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
+    const { ApiRequestError } = await import('@/lib/api');
+    quoteWith(
+      () => new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_expired', message: 'expired' }),
+    );
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.couponRefused.expired)).toBeTruthy();
+    const monthly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) });
+    expect(monthly.querySelector('s')).toBeNull();
+    expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '200' }));
+  });
+
+  it('re-quotes the month total on every change of months, debounced, from the server only', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?month=${MONTH_ONE.id}&coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+      couponsOn: true,
+    });
+    // A deliberately odd discount per selection, so a client-side
+    // calculation could not land on the same figures.
+    quoteWith((body) => {
+      const count = (body.monthIds as string[]).length;
+      return count === 1
+        ? { code: 'SAVE25', originalCents: 20000, discountCents: 5000, finalCents: 15000 }
+        : { code: 'SAVE25', originalCents: 40000, discountCents: 7000, finalCents: 33000 };
+    });
+
+    render(<Panel />);
+
+    expect(await findBanner('SAVE25')).toBeTruthy();
+    expect(await screen.findByText(formatCopy(copy.subscribe.monthsTotal, { price: '150' }), { exact: false })).toBeTruthy();
+    expect(document.querySelector('.bco-total__was')?.textContent).toContain(
+      formatCopy(copy.subscribe.priceLine, { price: '200' }),
+    );
+    // The summary box carries the same two figures.
+    expect(document.querySelector('.bco-sum__was')?.textContent).toContain('200');
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(MONTH_TWO.title) }));
+    // Untouched until the server answers for the new selection — the plain total.
+    expect(screen.getByText(formatCopy(copy.subscribe.monthsTotal, { price: '400' }))).toBeTruthy();
+    expect(await screen.findByText(formatCopy(copy.subscribe.monthsTotal, { price: '330' }), { exact: false })).toBeTruthy();
+    expect(apiPost).toHaveBeenCalledTimes(2);
+    expect(apiPost.mock.calls[1]![2]).toMatchObject({
+      plan: 'monthly',
+      monthIds: [MONTH_ONE.id, MONTH_TWO.id].sort(),
+    });
+  });
+
+  it('asks once for a burst of month taps, not once per tap', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?month=${MONTH_ONE.id}&coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+      couponsOn: true,
+    });
+    quoteWith(() => QUOTE);
+
+    render(<Panel />);
+    await screen.findByText(copy.subscribe.chooseMonthsTitle);
+    const two = screen.getByRole('button', { name: new RegExp(MONTH_TWO.title) });
+    fireEvent.click(two);
+    fireEvent.click(two);
+    fireEvent.click(two);
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    // One month ticked after three taps, priced once.
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    expect(apiPost.mock.calls[0]![2]).toMatchObject({ monthIds: [MONTH_ONE.id, MONTH_TWO.id].sort() });
   });
 
   it('is ignored on a stack where coupons are off', async () => {

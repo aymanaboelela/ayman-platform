@@ -1573,6 +1573,17 @@
   color: var(--n-12);
 }
 
+/* The regular figure beside the coupon's, struck — in the footer total and the
+   summary's «المبلغ» alike. */
+.bco-total__was,
+.bco-sum__was {
+  font-size: 0.8125rem;
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in oklch, var(--n-11), transparent 30%);
+}
+
 .bco-total__hint {
   margin-inline-end: auto;
   font-size: 0.875rem;
