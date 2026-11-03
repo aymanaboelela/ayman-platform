@@ -1,7 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
 import { CouponCodeSchema } from '@ayman/contracts/coupon-code';
-import { CouponKindSchema } from '@ayman/contracts/coupons';
+import { CouponKindSchema, CouponPlanAmountsSchema, hasAnyPlanAmount } from '@ayman/contracts/coupons';
 
 /**
  * «كوبونات الخصم» — the admin's half: make a code, see how often it was used
@@ -40,6 +40,9 @@ export const AdminCouponCreateSchema = z
     percentOff: PercentOffSchema.nullable().default(null),
     /** Set exactly when `kind = 'fixed'`. */
     amountOffCents: AmountOffCentsSchema.nullable().default(null),
+    /** Set exactly when `kind = 'per_plan'` — a plan left `null` is a plan the
+     *  code does not apply to. */
+    planAmounts: CouponPlanAmountsSchema.nullable().default(null),
     /** «كل الكورسات» — or only `courseIds`. */
     allCourses: z.boolean().default(true),
     courseIds: z.uuid().array().max(200).default([]),
@@ -54,12 +57,21 @@ export const AdminCouponCreateSchema = z
   })
   .strict()
   .refine(
-    (value) =>
-      value.kind === 'percent'
-        ? value.percentOff !== null && value.amountOffCents === null
-        : value.amountOffCents !== null && value.percentOff === null,
+    (value) => {
+      if (value.kind === 'percent') {
+        return value.percentOff !== null && value.amountOffCents === null && value.planAmounts === null;
+      }
+      if (value.kind === 'fixed') {
+        return value.amountOffCents !== null && value.percentOff === null && value.planAmounts === null;
+      }
+      return value.percentOff === null && value.amountOffCents === null && value.planAmounts !== null;
+    },
     { message: 'حدد الخصم نسبة أو مبلغ', path: ['percentOff'] },
   )
+  .refine((value) => value.kind !== 'per_plan' || (value.planAmounts !== null && hasAnyPlanAmount(value.planAmounts)), {
+    message: 'حدد خصم لنوع اشتراك واحد على الأقل',
+    path: ['planAmounts'],
+  })
   .refine((value) => value.allCourses || value.courseIds.length > 0, {
     message: 'اختار كورس واحد على الأقل',
     path: ['courseIds'],
@@ -104,6 +116,8 @@ export const AdminCouponRowSchema = z.object({
   kind: CouponKindSchema,
   percentOff: z.number().int().nullable(),
   amountOffCents: z.number().int().nullable(),
+  /** `per_plan` only — see `CouponPlanAmountsSchema`. */
+  planAmounts: CouponPlanAmountsSchema.nullable().default(null),
   allCourses: z.boolean(),
   courses: z.array(z.object({ id: z.uuid(), title: z.string() })),
   startsAt: z.iso.datetime().nullable(),
@@ -119,6 +133,8 @@ export const AdminCouponRowSchema = z.object({
   note: z.string().nullable(),
   createdAt: z.iso.datetime(),
   createdBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+  /** The campaign that made it — a «كود خصم لكل يوم». */
+  campaign: z.object({ id: z.uuid(), name: z.string() }).nullable().default(null),
 });
 export type AdminCouponRow = z.infer<typeof AdminCouponRowSchema>;
 

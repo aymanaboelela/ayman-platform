@@ -12,6 +12,11 @@ import {
   type RunState,
 } from '@ayman/contracts/marketing/pacing';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
+import { AudienceSchema, isCourseAware } from '@ayman/contracts/marketing/campaign';
+import { DailyCouponSchema } from '@ayman/contracts/marketing/daily-coupon';
+import { missingMonthsPhrase } from '@ayman/contracts/marketing/missing-months';
+import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
+import { isFeatureEnabled } from '../../common/entitlements';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
@@ -25,6 +30,7 @@ import {
   type SendResult,
 } from './whatsapp-device.service';
 import { OutreachService } from '../outreach/outreach.service';
+import { CourseOfferService, DayCouponTakenError, type DayCoupon } from './course-offer.service';
 import { pacingOf } from './campaign.service';
 import type { MarketingCampaign } from '../../generated/prisma/client';
 
@@ -122,6 +128,7 @@ export class CampaignRunner {
     @Inject(REDIS) private readonly redis: Redis,
     @InjectMediaUrl() private readonly mediaUrl: MediaUrlResolver,
     private readonly outreach: OutreachService,
+    private readonly offers: CourseOfferService,
   ) {}
 
   @Cron(CronExpression.EVERY_10_SECONDS)
@@ -242,12 +249,6 @@ export class CampaignRunner {
         })
       : null;
 
-    const text = renderCampaignBody({
-      body: campaign.body,
-      name: recipient.name,
-      linkUrl: campaign.linkUrl,
-    });
-
     /*
      * ## The platform leg runs FIRST, and its failure is not the send's failure
      *
@@ -280,6 +281,14 @@ export class CampaignRunner {
         return;
       }
     }
+
+    /*
+     * Rendered only now — after the opt-out, the window and the number's
+     * ceiling — because on a course-aware campaign rendering can CREATE the
+     * day's coupon, and a day that sends nothing must not leave a code behind.
+     */
+    const text = await this.textFor(campaign, recipient, now, state);
+    if (text === null) return;
 
     if (wantsPlatform) {
       if (recipient.userId !== null) {
@@ -348,6 +357,84 @@ export class CampaignRunner {
         dayKey: next.state.dayKey,
       },
     });
+  }
+
+  /**
+   * The message for one recipient, or `null` when this step already settled
+   * the recipient (skipped) or paused the campaign — the caller just returns.
+   *
+   * A plain campaign is `renderCampaignBody` over the template, as it always
+   * was. A course-aware one (a daily coupon, or «ناقصهم شهور» — see
+   * `isCourseAware`) also reads, per recipient and at THIS moment:
+   *
+   *   · which of the campaign's courses is theirs and which open months they
+   *     are missing (`CourseOfferService.offerFor`, `monthSliceOf`'s rule) —
+   *     nothing missing any more on a «ناقصهم شهور» campaign is a skip, not a
+   *     message about months already bought;
+   *   · which text: `bodyPartial` for somebody holding some open months, when
+   *     the campaign has one; `body` for everybody else;
+   *   · the day's code, made on the first send of the Cairo day;
+   *   · `{{اللينك}}` = their subscribe page, first missing month, the code.
+   */
+  private async textFor(
+    campaign: MarketingCampaign,
+    recipient: { id: string; name: string | null; userId: string | null },
+    now: Date,
+    state: RunState,
+  ): Promise<string | null> {
+    // `== null`, not `=== null`: a row read through an older select (and the
+    // specs' hand-built campaigns) has no such key at all.
+    const dailyCoupon = campaign.dailyCoupon == null ? null : DailyCouponSchema.parse(campaign.dailyCoupon);
+    const parsed = AudienceSchema.safeParse(campaign.audience);
+    const audience = parsed.success ? parsed.data : null;
+    if (audience === null || !isCourseAware({ audience, dailyCoupon })) {
+      return renderCampaignBody({ body: campaign.body, name: recipient.name, linkUrl: campaign.linkUrl });
+    }
+
+    // The courses the link and the months are about: the audience's when it
+    // asked for «ناقصهم شهور», otherwise the ones the code applies to.
+    const courseIds = audience.missingMonths ? audience.courseIds : (dailyCoupon?.courseIds ?? []);
+    const courses = await this.offers.courses(courseIds);
+    const offer = await this.offers.offerFor(recipient.userId, courses, now);
+
+    if (audience.missingMonths && offer !== null && offer.missing.length === 0) {
+      await this.settle(recipient.id, { status: 'skipped', error: offerCopy.skipNothingMissing });
+      await this.reschedule(campaign, new Date(now.getTime() + SKIP_DELAY_MS), state);
+      return null;
+    }
+
+    let coupon: DayCoupon | null = null;
+    if (dailyCoupon !== null) {
+      if (!isFeatureEnabled('campaignCoupons') || !isFeatureEnabled('coupons')) {
+        await this.pauseWith(campaign, offerCopy.pauseFeatureOff);
+        return null;
+      }
+      try {
+        coupon = await this.offers.ensureDayCoupon(campaign, dailyCoupon, now);
+      } catch (error) {
+        if (!(error instanceof DayCouponTakenError)) throw error;
+        await this.pauseWith(campaign, formatCopy(offerCopy.pauseCodeTaken, { code: error.code }));
+        return null;
+      }
+    }
+
+    const body = campaign.bodyPartial != null && offer?.holdsSome ? campaign.bodyPartial : campaign.body;
+    return renderCampaignBody({
+      body,
+      name: recipient.name,
+      linkUrl: this.offers.linkFor(offer, coupon?.code ?? null),
+      coupon,
+      missingMonths: offer ? missingMonthsPhrase(offer.missing.map((m) => m.monthIndex), offer.openCount) : null,
+    });
+  }
+
+  /** A pause the runner decided, with the sentence the screen shows. */
+  private async pauseWith(campaign: MarketingCampaign, reason: string): Promise<void> {
+    await this.prisma.marketingCampaign.update({
+      where: { id: campaign.id },
+      data: { status: 'paused', nextSendAt: null, pausedReason: reason.slice(0, 200) },
+    });
+    this.logger.error({ campaign: campaign.id, reason }, 'campaign paused by its daily coupon');
   }
 
   /**

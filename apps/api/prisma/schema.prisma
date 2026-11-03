@@ -6051,6 +6051,9 @@ model MarketingCampaign {
   /// recipient at send time — never stored rendered, so a typo can be fixed
   /// in a paused campaign and every remaining message gets the fix.
   body    String
+  /// «للي مشترك في شهور وناقصه شهور» — the second text on a «ناقصه شهور»
+  /// campaign. NULL = every recipient gets `body`.
+  bodyPartial String? @map("body_partial")
   status  CampaignStatus  @default(draft)
   /// See `CampaignChannel`. `@default(whatsapp)` is what makes this column
   /// safe to add to a table that already holds finished campaigns.
@@ -6063,6 +6066,8 @@ model MarketingCampaign {
   /// The resolved filter, kept for the audit trail and for the detail screen.
   /// NOT re-evaluated at send time — see `MarketingRecipient`.
   audience Json
+  /// «كود خصم لكل يوم» — `DailyCouponSchema` in the contracts, or NULL.
+  dailyCoupon Json? @map("daily_coupon")
 
   minDelaySeconds   Int @default(30) @map("min_delay_seconds")
   maxDelaySeconds   Int @default(90) @map("max_delay_seconds")
@@ -6098,6 +6103,7 @@ model MarketingCampaign {
   image      MediaAsset?          @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
   createdBy  User?                @relation("MarketingCampaignAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   recipients MarketingRecipient[]
+  coupons    Coupon[]
 
   @@index([status, nextSendAt])
   @@index([createdAt(sort: Desc)])
@@ -7097,10 +7103,12 @@ model MontageVideo {
   @@schema("app")
 }
 
-/// «كوبونات الخصم» — percent or fixed.
+/// «كوبونات الخصم» — percent, fixed, or a fixed amount per plan (`per_plan`,
+/// see `coupons.ts` in the contracts).
 enum CouponKind {
   percent
   fixed
+  per_plan
 
   @@map("coupon_kind")
   @@schema("app")
@@ -7138,6 +7146,12 @@ model Coupon {
   percentOff        Int?       @map("percent_off")
   /// Whole pounds in piastres, set exactly when `kind = fixed`.
   amountOffCents    Int?       @map("amount_off_cents")
+  /// `kind = per_plan` only: whole pounds off each plan. NULL = the code does
+  /// not apply to that plan (`not_for_plan`). At least one is set — CHECK.
+  monthlyOffCents   Int?       @map("monthly_off_cents")
+  quarterlyOffCents Int?       @map("quarterly_off_cents")
+  termOffCents      Int?       @map("term_off_cents")
+  yearlyOffCents    Int?       @map("yearly_off_cents")
   /// `false` ⇒ only the courses in `courses`.
   allCourses        Boolean    @default(true) @map("all_courses")
   startsAt          DateTime?  @map("starts_at")
@@ -7149,13 +7163,20 @@ model Coupon {
   isActive          Boolean    @default(true) @map("is_active")
   note              String?    @db.VarChar(300)
   createdByUserId   String?    @map("created_by_user_id")
+  /// «كود خصم لكل يوم» — the campaign that made this code, and the Cairo send
+  /// day (`YYYY-MM-DD`) it was made for. UNIQUE together: that pair is what
+  /// makes the runner's lazy create idempotent across ticks and workers.
+  campaignId        String?    @map("campaign_id") @db.Uuid
+  campaignDay       String?    @map("campaign_day") @db.VarChar(10)
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
 
   createdBy   User?              @relation("CouponCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  campaign    MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   courses     CouponCourse[]
   redemptions CouponRedemption[]
 
+  @@unique([campaignId, campaignDay])
   @@index([createdAt])
   @@map("coupons")
   @@schema("app")

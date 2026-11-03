@@ -8,6 +8,7 @@ import type {
   AdminCouponStatus,
   AdminCouponUpdateInput,
 } from '@ayman/contracts/admin/coupons';
+import { planAmountsOf } from '@ayman/contracts/coupons';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Prisma } from '../../generated/prisma/client';
@@ -20,6 +21,10 @@ const ROW_SELECT = {
   kind: true,
   percentOff: true,
   amountOffCents: true,
+  monthlyOffCents: true,
+  quarterlyOffCents: true,
+  termOffCents: true,
+  yearlyOffCents: true,
   allCourses: true,
   startsAt: true,
   endsAt: true,
@@ -30,6 +35,7 @@ const ROW_SELECT = {
   note: true,
   createdAt: true,
   createdBy: { select: { id: true, name: true } },
+  campaign: { select: { id: true, name: true } },
   courses: { select: { course: { select: { id: true, title: true } } } },
 } as const satisfies Prisma.CouponSelect;
 
@@ -112,6 +118,7 @@ export class CouponsService {
       kind: coupon.kind,
       percentOff: coupon.percentOff,
       amountOffCents: coupon.amountOffCents,
+      planAmounts: planAmountsOf(coupon),
       allCourses: coupon.allCourses,
       courses: coupon.courses.map((link) => ({ id: link.course.id, title: link.course.title })),
       startsAt: coupon.startsAt?.toISOString() ?? null,
@@ -125,6 +132,7 @@ export class CouponsService {
       note: coupon.note,
       createdAt: coupon.createdAt.toISOString(),
       createdBy: coupon.createdBy,
+      campaign: coupon.campaign,
     };
   }
 
@@ -187,6 +195,7 @@ export class CouponsService {
           kind: input.kind,
           percentOff: input.kind === 'percent' ? input.percentOff : null,
           amountOffCents: input.kind === 'fixed' ? input.amountOffCents : null,
+          ...planColumns(input.kind === 'per_plan' ? input.planAmounts : null),
           allCourses: input.allCourses,
           startsAt: input.startsAt ? new Date(input.startsAt) : null,
           endsAt: input.endsAt ? new Date(input.endsAt) : null,
@@ -216,6 +225,7 @@ export class CouponsService {
         kind: created.kind,
         percentOff: created.percentOff,
         amountOffCents: created.amountOffCents,
+        planAmounts: planAmountsOf(created),
         allCourses: created.allCourses,
         courseIds,
         startsAt: input.startsAt,
@@ -362,6 +372,16 @@ export class CouponsService {
       })),
     };
   }
+}
+
+/** `CouponPlanAmounts` → the four columns; all `null` for any other kind. */
+export function planColumns(amounts: AdminCouponCreateInput['planAmounts']) {
+  return {
+    monthlyOffCents: amounts?.monthly ?? null,
+    quarterlyOffCents: amounts?.quarterly ?? null,
+    termOffCents: amounts?.term ?? null,
+    yearlyOffCents: amounts?.yearly ?? null,
+  };
 }
 
 /** A CHECK constraint refused the write (SQLSTATE 23514), however the driver

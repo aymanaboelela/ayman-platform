@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { CatalogListSchema } from '@ayman/contracts/catalog';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
+import { SITE_URL } from '@/lib/seo/site-url';
 import { CampaignForm } from '../../campaign-form';
 
 const c = copy.marketing;
@@ -29,7 +30,10 @@ export default async function NewCampaignPage() {
 
       <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.newCampaign}</h1>
 
-      <CampaignForm courses={courses.map((course) => ({ id: course.id, title: course.title }))} />
+      <CampaignForm
+        courses={courses.map((course) => ({ id: course.id, title: course.title, slug: course.slug }))}
+        siteUrl={SITE_URL}
+      />
     </>
   );
 }

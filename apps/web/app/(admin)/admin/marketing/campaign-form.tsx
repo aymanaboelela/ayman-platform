@@ -19,6 +19,12 @@ import {
 } from '@ayman/contracts/marketing/campaign';
 import type { Pacing } from '@ayman/contracts/marketing/pacing';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
+import { COUPON_TOKEN, LAST_DAY_TOKEN, dailyCouponCode, dailyCouponLastDay, formatArabicDay } from '@ayman/contracts/marketing/daily-coupon';
+import { MISSING_MONTHS_TOKEN, missingMonthsPhrase } from '@ayman/contracts/marketing/missing-months';
+import { cairoParts } from '@ayman/contracts/marketing/pacing';
+import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
+import type { CouponPlanAmounts } from '@ayman/contracts/coupons';
+import { PlanAmountFields, planAmountsCents } from '../coupons/coupon-form';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminAutoOutreach as autoCopy } from '@ayman/contracts/copy/admin-auto-outreach';
 import { formatCopy } from '@ayman/contracts/format';
@@ -42,6 +48,8 @@ const c = copy.marketing;
 export interface CourseOption {
   id: string;
   title: string;
+  /** For the preview's sample link only — the real one is built per student. */
+  slug: string;
 }
 
 /** Debounce for the audience preview call — every checkbox click and every
@@ -65,10 +73,14 @@ const PREVIEW_DEBOUNCE_MS = 400;
  *  cannot be added to the enum and silently never appear on the form. */
 const CHANNEL_OPTIONS = CampaignChannelSchema.options;
 
-export function CampaignForm({ courses }: { courses: CourseOption[] }) {
+export function CampaignForm({ courses, siteUrl }: { courses: CourseOption[]; siteUrl: string }) {
   const router = useRouter();
   // «المهتمين» only where the bot runs — the API resolves it to nobody elsewhere.
   const botOn = useFeature('whatsapp.bot');
+  // «كود خصم لكل يوم» needs both switches; the API refuses it otherwise.
+  const campaignCouponsOn = useFeature('campaignCoupons');
+  const checkoutCouponsOn = useFeature('coupons');
+  const couponsOn = campaignCouponsOn && checkoutCouponsOn;
   const [pending, startTransition] = useTransition();
 
   const [name, setName] = useState('');
@@ -81,6 +93,21 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
   const [extraPhonesText, setExtraPhonesText] = useState('');
   const [pacing, setPacing] = useState<Pacing>(DEFAULT_PACING_INPUT);
   const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
+
+  // «رسالة مختلفة للي ناقصهم شهور» — off = one text for everybody.
+  const [twoTexts, setTwoTexts] = useState(false);
+  const [bodyPartial, setBodyPartial] = useState('');
+  // «كود خصم لكل يوم».
+  const [couponOn, setCouponOn] = useState(false);
+  const [couponPrefix, setCouponPrefix] = useState('WELCOME');
+  const [couponDays, setCouponDays] = useState(3);
+  const [couponCourseIds, setCouponCourseIds] = useState<string[]>([]);
+  const [planValues, setPlanValues] = useState<Record<keyof CouponPlanAmounts, string>>({
+    monthly: '',
+    quarterly: '',
+    term: '',
+    yearly: '',
+  });
 
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -136,18 +163,81 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `resolvedAudience` is a fresh object every render; its own fields are the real deps.
   }, [audience, extraPhones, pacing]);
 
-  const renderedPreview = renderCampaignBody({ body, name: 'محمد', linkUrl: linkUrl || null });
+  /*
+   * «اللينك بيتعمل لوحده» — a daily code or «ناقصهم شهور» makes `{{اللينك}}`
+   * each student's own subscribe page, so the hand-typed link is cleared and
+   * locked (the API refuses both together; see `isCourseAware`).
+   */
+  const courseAware = (couponsOn && couponOn) || audience.missingMonths;
+  // The code courses default to the audience's: the usual campaign is «this
+  // course's students, a code for this course».
+  const codeCourseIds = couponCourseIds.length > 0 ? couponCourseIds : audience.courseIds;
+
+  // The preview's sample code is what TODAY's would be — nothing is created.
+  const today = cairoParts(new Date()).day;
+  const sampleCoupon =
+    couponsOn && couponOn
+      ? {
+          code: dailyCouponCode(couponPrefix.trim() || 'CODE', today),
+          lastDay: formatArabicDay(dailyCouponLastDay(today, couponDays)),
+        }
+      : null;
+  const sampleCourse = courses.find((course) => (audience.missingMonths ? audience.courseIds : codeCourseIds).includes(course.id));
+  const sampleLink = courseAware
+    ? sampleCourse
+      ? `${siteUrl}/courses/${sampleCourse.slug}/subscribe${sampleCoupon ? `?coupon=${sampleCoupon.code}` : ''}`
+      : `${siteUrl}/courses`
+    : linkUrl || null;
+  const allOpen = offerCopy.sampleMonthsAll.length;
+  const renderedPreview = renderCampaignBody({
+    body,
+    name: offerCopy.sampleName,
+    linkUrl: sampleLink,
+    coupon: sampleCoupon,
+    missingMonths: courseAware ? missingMonthsPhrase(offerCopy.sampleMonthsAll, allOpen) : null,
+  });
+  const renderedPartial =
+    courseAware && twoTexts && bodyPartial
+      ? renderCampaignBody({
+          body: bodyPartial,
+          name: offerCopy.sampleName,
+          linkUrl: sampleLink,
+          coupon: sampleCoupon,
+          missingMonths: missingMonthsPhrase(offerCopy.sampleMonthsPartial, allOpen),
+        })
+      : null;
+
+  const appendToken = (token: string, target: 'body' | 'partial') =>
+    target === 'body' ? setBody((b) => `${b}${token}`) : setBodyPartial((b) => `${b}${token}`);
+  const offerTokens = [
+    { token: MISSING_MONTHS_TOKEN, hint: offerCopy.tokenMonths, on: audience.missingMonths },
+    { token: LINK_TOKEN, hint: offerCopy.tokenLink, on: courseAware },
+    { token: COUPON_TOKEN, hint: offerCopy.tokenCode, on: couponsOn && couponOn },
+    { token: LAST_DAY_TOKEN, hint: offerCopy.tokenLastDay, on: couponsOn && couponOn },
+  ].filter((entry) => entry.on);
 
   async function submit() {
     setError(null);
     const parsed = CampaignCreateSchema.safeParse({
       name,
       body,
+      bodyPartial: courseAware && twoTexts && bodyPartial.trim() ? bodyPartial : null,
       imageAssetId: imageAsset?.id ?? null,
-      linkUrl: linkUrl || null,
+      linkUrl: courseAware ? null : linkUrl || null,
       audience: resolvedAudience,
       pacing,
       channel,
+      dailyCoupon:
+        couponsOn && couponOn
+          ? {
+              prefix: couponPrefix,
+              validDays: couponDays,
+              courseIds: codeCourseIds,
+              // All-null rather than `null` so the schema answers with its own
+              // sentence («حدد خصم لنوع اشتراك واحد على الأقل»).
+              planAmounts: planAmountsCents(planValues) ?? { monthly: null, quarterly: null, term: null, yearly: null },
+            }
+          : null,
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'فيه بيانات ناقصة');
@@ -342,6 +432,7 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
                       // Disabling the control below leaves a stale `true` behind
                       // if it isn't cleared here too — see the control's own note.
                       notSubscribedOnly: courseIds.length > 0 ? a.notSubscribedOnly : false,
+                      missingMonths: courseIds.length > 0 ? a.missingMonths : false,
                     };
                   })
                 }
@@ -418,6 +509,29 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
                 {audience.courseIds.length === 0
                   ? c.audienceNotSubscribedOnlyNeedsCourse
                   : c.audienceNotSubscribedOnlyHint}
+              </span>
+            </span>
+          </label>
+
+          {/* «ناقصهم شهور في الكورس المختار» — the course's own students
+              (year and stream), missing at least one OPEN month. Needs a
+              course, like the box above, and disabled rather than hidden for
+              the same reason. */}
+          <label className={cn('flex items-start gap-2', audience.courseIds.length === 0 && 'opacity-50')}>
+            <Checkbox
+              className="mt-1"
+              checked={audience.missingMonths}
+              disabled={audience.courseIds.length === 0}
+              onCheckedChange={(v) => setAudience((a) => ({ ...a, missingMonths: v === true }))}
+            />
+            <span>
+              {offerCopy.audienceMissingMonths}
+              <span className="block text-[length:var(--fs-text-xs)] text-fg-muted">
+                {audience.courseIds.length === 0
+                  ? offerCopy.audienceMissingMonthsNeedsCourse
+                  : audience.missingMonths
+                    ? offerCopy.audienceMissingMonthsCourses
+                    : offerCopy.audienceMissingMonthsHint}
               </span>
             </span>
           </label>
@@ -533,7 +647,36 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
                 {NAME_TOKEN}
               </button>
             </p>
+            {courseAware && twoTexts ? (
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.bodyMainForNone}</p>
+            ) : null}
+            <OfferTokens tokens={offerTokens} onPick={(token) => appendToken(token, 'body')} />
           </div>
+
+          {courseAware ? (
+            <div className="rounded-lg border border-line-subtle bg-surface-2 p-3">
+              <label className="flex items-center gap-2">
+                <Checkbox checked={twoTexts} onCheckedChange={(v) => setTwoTexts(v === true)} />
+                <span>{offerCopy.bodyPartialToggle}</span>
+              </label>
+              {twoTexts ? (
+                <div className="mt-2">
+                  <Label htmlFor="marketing-body-partial">{offerCopy.bodyPartialLabel}</Label>
+                  <Textarea
+                    id="marketing-body-partial"
+                    rows={5}
+                    value={bodyPartial}
+                    onChange={(e) => setBodyPartial(e.target.value)}
+                  />
+                  <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.bodyPartialHint}</p>
+                  <OfferTokens
+                    tokens={[{ token: NAME_TOKEN, hint: '' }, ...offerTokens]}
+                    onPick={(token) => appendToken(token, 'partial')}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div>
             <Label>{c.fieldImage}</Label>
@@ -562,12 +705,13 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
             <Input
               id="marketing-link"
               dir="ltr"
-              value={linkUrl}
+              value={courseAware ? '' : linkUrl}
+              disabled={courseAware}
               onChange={(e) => setLinkUrl(e.target.value)}
               placeholder="https://…"
             />
             <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-              {c.fieldLinkHint}{' '}
+              {courseAware ? offerCopy.linkAutomatic : c.fieldLinkHint}{' '}
               <button
                 type="button"
                 className="mono text-accent underline"
@@ -580,14 +724,89 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
 
           {body ? (
             <div>
-              <Label>{c.previewTitle}</Label>
+              <Label>{renderedPartial ? offerCopy.previewNone : c.previewTitle}</Label>
               <div className="mt-1 whitespace-pre-wrap rounded-[var(--r-lg)] border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)]">
                 {renderedPreview || '—'}
               </div>
             </div>
           ) : null}
+          {renderedPartial ? (
+            <div>
+              <Label>{offerCopy.previewPartial}</Label>
+              <div className="mt-1 whitespace-pre-wrap rounded-[var(--r-lg)] border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)]">
+                {renderedPartial}
+              </div>
+            </div>
+          ) : null}
         </CardBody>
       </Card>
+
+      {/* ── كود خصم لكل يوم ─────────────────────────────────────────── */}
+      {couponsOn ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{offerCopy.couponTitle}</CardTitle>
+          </CardHeader>
+          <CardBody className="flex flex-col gap-4">
+            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{offerCopy.couponLead}</p>
+            <label className="flex items-center gap-2">
+              <Checkbox checked={couponOn} onCheckedChange={(v) => setCouponOn(v === true)} />
+              <span>{offerCopy.couponToggle}</span>
+            </label>
+            {couponOn ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="marketing-coupon-prefix">{offerCopy.couponPrefix}</Label>
+                    <Input
+                      id="marketing-coupon-prefix"
+                      dir="ltr"
+                      className="mono uppercase"
+                      maxLength={28}
+                      value={couponPrefix}
+                      onChange={(e) => setCouponPrefix(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                    />
+                    <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.couponPrefixHint}</p>
+                  </div>
+                  <NumberField
+                    label={offerCopy.couponValidDays}
+                    value={couponDays}
+                    onChange={(v) => setCouponDays(Math.min(14, Math.max(1, v)))}
+                  />
+                </div>
+                <p className="-mt-2 text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.couponValidDaysHint}</p>
+
+                <div>
+                  <Label htmlFor="marketing-coupon-courses">{offerCopy.couponCourses}</Label>
+                  <Select
+                    id="marketing-coupon-courses"
+                    multiple
+                    size={Math.min(4, Math.max(2, courses.length))}
+                    value={codeCourseIds}
+                    onChange={(event) =>
+                      setCouponCourseIds(Array.from(event.target.selectedOptions, (o) => o.value))
+                    }
+                  >
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <PlanAmountFields values={planValues} onChange={setPlanValues} idPrefix="marketing-coupon-plan" />
+
+                {sampleCoupon ? (
+                  <p className="text-[length:var(--fs-text-sm)] text-fg">
+                    {formatCopy(offerCopy.couponSample, { code: sampleCoupon.code, date: sampleCoupon.lastDay })}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
 
       {/* ── السرعة والأمان ──────────────────────────────────────────── */}
       <Card>
@@ -639,6 +858,30 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** The per-recipient tokens this campaign can use, as insert buttons. */
+function OfferTokens({
+  tokens,
+  onPick,
+}: {
+  tokens: readonly { token: string; hint: string }[];
+  onPick: (token: string) => void;
+}) {
+  if (tokens.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+      <span>{offerCopy.tokensLead}</span>
+      {tokens.map(({ token, hint }) => (
+        <span key={token}>
+          <button type="button" className="mono text-accent underline" onClick={() => onPick(token)}>
+            {token}
+          </button>
+          {hint ? ` — ${hint}` : null}
+        </span>
+      ))}
     </div>
   );
 }

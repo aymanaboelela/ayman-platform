@@ -379,6 +379,7 @@ export class PaymentsService {
       code: input.code,
       userId,
       courseId: course.id,
+      plan: input.plan,
       originalCents: amountCents,
       now: new Date(),
     });
@@ -427,6 +428,7 @@ export class PaymentsService {
             code: input.couponCode as string,
             userId,
             courseId: input.courseId,
+            plan: input.plan,
             originalCents: priceCents,
             now,
           })
@@ -586,6 +588,7 @@ export class PaymentsService {
               code: input.couponCode as string,
               userId,
               courseId: course.id,
+              plan: input.plan,
               originalCents: priceCents,
               now,
             })
