@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpen,
@@ -28,6 +29,7 @@ import { activeSalePrice } from '@ayman/contracts/sale';
 import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contracts/wallet';
 import { EntitlementsResponseSchema } from '@ayman/contracts/admin/entitlements';
 import { CouponQuoteSchema, CouponRefusalSchema, type CouponQuote } from '@ayman/contracts/coupons';
+import { normalizeCouponCode } from '@ayman/contracts/coupon-code';
 // The SUBPATH, never the root barrel — `lib/client-barrel.test.ts` fails the
 // build on a root-barrel import from a `'use client'` file.
 import type { CourseMonth, SellablePaymentPlan } from '@ayman/contracts/months';
@@ -38,6 +40,7 @@ import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
 import { formatSaleDay } from '@/lib/sale-day';
+import { withNext } from '@/lib/safe-next';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
 import {
@@ -121,6 +124,80 @@ function requestedMonthIds(months: readonly { id: string }[], owned: readonly st
   return months
     .map((month) => month.id)
     .filter((id) => asked.has(id) && !owned.includes(id));
+}
+
+/**
+ * `?coupon=CODE` — a campaign link names the code, so the plan cards open
+ * already priced with it and the box on the payment step opens filled
+ * (`activeCode`). Normalised the way the server stores codes, and NOT
+ * checked against the pattern: a malformed code is the server's to refuse,
+ * and the student then reads why instead of finding the box quietly empty.
+ */
+function couponFromLocation(): string | null {
+  const raw = new URLSearchParams(window.location.search).get('coupon');
+  if (!raw) return null;
+  // The input's own `maxLength` — longer is no code the server stores.
+  const code = normalizeCouponCode(raw).slice(0, 32);
+  return code === '' ? null : code;
+}
+
+/**
+ * The sign-in form, coming back to THIS page with the code still on it.
+ *
+ * A quote needs a session (`payment:submit`), so a signed-out visitor is sent
+ * to log in or register first — and `?next=` carries the whole path AND query,
+ * through `/register`, `/onboarding` and `/welcome` (see `safeNext`), so the
+ * link's `?coupon=` and `?month=` are both there on the way back. A code the
+ * student TYPED is written onto that URL too, so it is not lost to the detour.
+ */
+function loginKeepingCoupon(code: string | null): string {
+  const url = new URL(window.location.href);
+  if (code) url.searchParams.set('coupon', code);
+  return withNext('/login', `${url.pathname}${url.search}`);
+}
+
+/** Exactly what a quote prices — the plan, term and months of one purchase. */
+type CouponSelection = { plan: SellablePaymentPlan; termId: string | null; monthIds: string[] };
+
+/**
+ * The server's answer for one code against one selection. Only these two are
+ * remembered: a 429 or a dropped connection says nothing about the code, so it
+ * is asked again on the next change rather than cached as a refusal.
+ */
+type QuoteResult = { kind: 'ok'; quote: CouponQuote } | { kind: 'refused'; sentence: string };
+
+/** Month order does not change a price, so it does not change the key. */
+function quoteKey(code: string, selection: CouponSelection): string {
+  return [code, selection.plan, selection.termId ?? '', [...selection.monthIds].sort().join(',')].join('|');
+}
+
+/**
+ * How long the month picker waits after the last tap before asking. The route
+ * allows 5 quotes in 10 s and 30 in 10 min (`payments.controller.ts`), and a
+ * student ticking four months in a row is one question, not four.
+ */
+const QUOTE_DEBOUNCE_MS = 350;
+
+type QuoteOutcome = QuoteResult | { kind: 'signedOut' } | { kind: 'failed'; conflict: boolean };
+
+/** One quote request. Writes nothing — the claim prices the code again. */
+async function requestQuote(courseId: string, code: string, selection: CouponSelection): Promise<QuoteOutcome> {
+  try {
+    const quote = await apiPost('/api/payments/coupon-quote', CouponQuoteSchema, {
+      code,
+      courseId,
+      plan: selection.plan,
+      termId: selection.termId,
+      monthIds: selection.monthIds,
+    });
+    return { kind: 'ok', quote };
+  } catch (caught) {
+    // No session — a refusal sentence would blame the code for it.
+    if (caught instanceof ApiRequestError && caught.status === 401) return { kind: 'signedOut' };
+    const sentence = couponRefusalSentence(caught);
+    if (sentence) return { kind: 'refused', sentence };
+    return { kind: 'failed', conflict: caught instanceof ApiRequestError && caught.status === 409 };
+  }
 }
 
 type Step =
@@ -232,8 +309,9 @@ function dealOf(wasCents: number | undefined | null, nowCents: number | null): D
 function PlanCard({
   icon,
   name,
-  price,
-  deal = null,
+  price: listedPrice,
+  deal: saleDeal = null,
+  coupon = null,
   onClick,
 }: {
   icon: ReactNode;
@@ -245,8 +323,17 @@ function PlanCard({
    * discount SEEN: «يظهر للناس بدل ما هو بـ١٥٠ يبقى ٩٩».
    */
   deal?: Deal;
+  /**
+   * The server's quote for the link's code on THIS card's purchase — drawn
+   * like the offer, with the code as the tag. `null` when the code does not
+   * apply here (or has not been priced yet): the card then says nothing about
+   * it rather than guess.
+   */
+  coupon?: CouponQuote | null;
   onClick: () => void;
 }) {
+  const deal = coupon ? { wasCents: coupon.originalCents, nowCents: coupon.finalCents } : saleDeal;
+  const price = coupon ? formatCopy(copy.subscribe.priceLine, { price: formatEGP(coupon.finalCents) }) : listedPrice;
   const saved = deal
     ? formatCopy(copy.subscribe.saleSave, { amount: formatEGP(deal.wasCents - deal.nowCents) })
     : null;
@@ -258,7 +345,14 @@ function PlanCard({
       onClick={onClick}
       aria-label={label}
     >
-      {deal ? (
+      {coupon ? (
+        <span className="bco-plan__ribbon">
+          <TicketPercent size={13} aria-hidden="true" />
+          <bdi dir="ltr" className="bco-coupon__code">
+            {coupon.code}
+          </bdi>
+        </span>
+      ) : deal ? (
         <span className="bco-plan__ribbon">
           <Sparkles size={13} aria-hidden="true" />
           {copy.subscribe.saleTag}
@@ -515,6 +609,34 @@ export function SubscribePanel({
   const [coupon, setCoupon] = useState<CouponQuote | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
+  /**
+   * The code the student is carrying through the checkout — the link's
+   * `?coupon=` from the moment the panel opens, then whatever was last
+   * applied in the box; `null` once removed. It is priced on the PLAN step
+   * already (every card, the month total), so the discount is seen before the
+   * choice it rewards, and it follows every change of plan or month: each new
+   * selection is a new server quote, never a figure carried over.
+   *
+   * `quotes` remembers those answers by code + selection (`quoteKey`), so the
+   * payment step opens on the quote the card showed instead of asking again,
+   * and the month picker does not spend the route's throttle on a selection
+   * it has already priced. Mirrored in a ref, because the debounced effect
+   * reads it without re-running on every answer.
+   */
+  const linkCouponRead = useRef(false);
+  const [activeCode, setActiveCode] = useState<string | null>(null);
+  const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
+  const quotesRef = useRef<Record<string, QuoteResult>>({});
+  const quotesInFlight = useRef(new Set<string>());
+  /**
+   * Bumped by every `dropCoupon`, so a quote still in flight for the PREVIOUS
+   * selection lands on nothing. Without it, an auto-applied quote that
+   * answered after a quick «رجوع» to another plan would show its discount
+   * against a purchase it was not made for — the one thing `coupon` promises
+   * never happens.
+   */
+  const couponSeq = useRef(0);
+  const router = useRouter();
   // The native file input is visually hidden (`sr-only`) — this is what the
   // styled dropzone button actually clicks, since a plain browser "Choose
   // File" control reads as nothing selectable on the smaller, older devices
@@ -578,7 +700,36 @@ export function SubscribePanel({
         ]);
       if (cancelled) return;
 
-      setCouponsOn(featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true);
+      const couponsLive = featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true;
+      setCouponsOn(couponsLive);
+      // Read once per mount: a «جرّب تاني» must not put the link's code back
+      // over one the student has since changed or removed.
+      let linkCode: string | null = null;
+      if (couponsLive && !linkCouponRead.current) {
+        linkCouponRead.current = true;
+        linkCode = couponFromLocation();
+        if (linkCode) {
+          setActiveCode(linkCode);
+          setCouponInput(linkCode);
+          setCouponOpen(true);
+        }
+      }
+      /*
+       * A campaign link opened with no session. The code cannot be priced
+       * without one, so the visitor signs in FIRST, rather than choosing a plan
+       * and only then being sent away. `replace`, not `push`: «رجوع» from the
+       * login form must not land on a page that sends them straight back.
+       * 401 and only 401 — anything else is not "signed out".
+       */
+      if (
+        linkCode &&
+        mineResult.status === 'rejected' &&
+        mineResult.reason instanceof ApiRequestError &&
+        mineResult.reason.status === 401
+      ) {
+        router.replace(loginKeepingCoupon(null));
+        return;
+      }
 
       setWalletBalance(walletResult.status === 'fulfilled' ? walletResult.value.balanceCents : null);
 
@@ -672,7 +823,7 @@ export function SubscribePanel({
     return () => {
       cancelled = true;
     };
-  }, [courseId, slug, attempt]);
+  }, [courseId, slug, attempt, router]);
 
   /*
    * The live answer where there is one, the cached prop where there is not.
@@ -768,6 +919,110 @@ export function SubscribePanel({
    * offered a screen with no way off it.
    */
   const hasPlan = monthlyPriceCents !== null || yearlyPriceCents !== null || terms.length > 0;
+
+  /*
+   * What the plan step asks the server to price the carried code against — one
+   * selection per card that names a single purchase (the rolling «شهر», a
+   * course's only term, the year), each term on the term screen, and the
+   * months ticked so far on the month picker. The «من …» card of a
+   * several-term course names no one purchase, so it is not priced.
+   */
+  const stepOneSelections: CouponSelection[] =
+    !couponsOn || !activeCode
+      ? []
+      : step === 'choose'
+        ? [
+            ...(monthlyPriceCents !== null && months.length === 0
+              ? [{ plan: 'monthly' as const, termId: null, monthIds: [] }]
+              : []),
+            ...(terms.length === 1 ? [{ plan: 'term' as const, termId: terms[0]!.id, monthIds: [] }] : []),
+            ...(yearlyPriceCents !== null ? [{ plan: 'yearly' as const, termId: null, monthIds: [] }] : []),
+          ]
+        : step === 'chooseTerm'
+          ? terms.map((term) => ({ plan: 'term' as const, termId: term.id, monthIds: [] }))
+          : step === 'chooseMonths' && selectedMonthIds.length > 0
+            ? [{ plan: 'monthly' as const, termId: null, monthIds: [...selectedMonthIds].sort() }]
+            : [];
+  // A string, so the effect re-runs on a change of selection and not on every
+  // render's fresh array.
+  const stepOnePlan = JSON.stringify(stepOneSelections);
+
+  /*
+   * Prices the plan step, debounced — see `QUOTE_DEBOUNCE_MS`. Only selections
+   * with no remembered answer are asked; the server's quote is the only
+   * figure ever drawn, and a selection with no answer yet draws its plain price.
+   */
+  useEffect(() => {
+    if (!activeCode) return;
+    const code = activeCode;
+    const unasked = (JSON.parse(stepOnePlan) as CouponSelection[]).filter((selection) => {
+      const key = quoteKey(code, selection);
+      return !(key in quotesRef.current) && !quotesInFlight.current.has(key);
+    });
+    if (unasked.length === 0) return;
+    const timer = window.setTimeout(() => {
+      for (const selection of unasked) {
+        const key = quoteKey(code, selection);
+        if (key in quotesRef.current || quotesInFlight.current.has(key)) continue;
+        quotesInFlight.current.add(key);
+        void requestQuote(courseId, code, selection).then((outcome) => {
+          quotesInFlight.current.delete(key);
+          if (outcome.kind === 'signedOut') {
+            router.push(loginKeepingCoupon(code));
+            return;
+          }
+          if (outcome.kind === 'failed') return;
+          quotesRef.current = { ...quotesRef.current, [key]: outcome };
+          setQuotes(quotesRef.current);
+        });
+      }
+    }, QUOTE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeCode, stepOnePlan, courseId, router]);
+
+  function stepOneQuote(selection: CouponSelection): QuoteResult | undefined {
+    return activeCode ? quotes[quoteKey(activeCode, selection)] : undefined;
+  }
+
+  /** The server's quote for one card's purchase, or `null` — see `PlanCard`. */
+  function cardCoupon(selection: CouponSelection): CouponQuote | null {
+    const result = stepOneQuote(selection);
+    return result?.kind === 'ok' ? result.quote : null;
+  }
+
+  /**
+   * «كود الخصم ‹CODE› متطبّق» above the plan step's choices once ANY of them
+   * is discounted; the refusal sentence once every one has been refused; and
+   * nothing while the answers are still coming, rather than a claim either way.
+   */
+  function couponBanner() {
+    if (!activeCode || stepOneSelections.length === 0) return null;
+    const results = stepOneSelections.map(stepOneQuote);
+    if (results.some((result) => result?.kind === 'ok')) {
+      return (
+        <p className="bco-note bco-note--ok bco-coupon__note" role="status">
+          <TicketPercent size={18} aria-hidden="true" />
+          <span>
+            {copy.subscribe.couponBannerLead}{' '}
+            <bdi dir="ltr" className="bco-coupon__code">
+              {activeCode}
+            </bdi>{' '}
+            {copy.subscribe.couponBannerApplied}
+          </span>
+        </p>
+      );
+    }
+    const first = results[0];
+    if (first?.kind === 'refused' && results.every((result) => result?.kind === 'refused')) {
+      return (
+        <p className="bco-note bco-note--err bco-coupon__note" role="status">
+          <TicketPercent size={18} aria-hidden="true" />
+          <span>{first.sentence}</span>
+        </p>
+      );
+    }
+    return null;
+  }
 
   /*
    * ══ The screen ═══════════════════════════════════════════════════════════
@@ -951,8 +1206,36 @@ export function SubscribePanel({
   /** The quote belonged to the previous selection — see `coupon`. The typed
    *  code stays, so re-applying it is one press. */
   function dropCoupon() {
+    couponSeq.current += 1;
     setCoupon(null);
     setCouponError(null);
+    setCouponBusy(false);
+  }
+
+  function rememberQuote(key: string, result: QuoteResult) {
+    quotesRef.current = { ...quotesRef.current, [key]: result };
+    setQuotes(quotesRef.current);
+  }
+
+  /** The carried code, on arrival at the payment step — see `activeCode`. The
+   *  answer the plan step already got for this exact selection is used as is;
+   *  anything else is asked. Handed the selection explicitly: it runs in the
+   *  same handler that sets it, before the state above has caught up. */
+  function carryCoupon(selection: CouponSelection) {
+    if (!couponsOn || !activeCode) return;
+    const known = quotesRef.current[quoteKey(activeCode, selection)];
+    if (known?.kind === 'ok') {
+      couponSeq.current += 1;
+      setCoupon(known.quote);
+      setCouponError(null);
+      setCouponBusy(false);
+      return;
+    }
+    if (known?.kind === 'refused') {
+      setCouponError(known.sentence);
+      return;
+    }
+    void applyCoupon(activeCode, selection);
   }
 
   function choosePlan(next: SellablePaymentPlan) {
@@ -990,6 +1273,7 @@ export function SubscribePanel({
       if (terms.length === 1) {
         setTermId(terms[0]!.id);
         setStep('form');
+        carryCoupon({ plan: 'term', termId: terms[0]!.id, monthIds: [] });
       } else {
         setTermId(null);
         setStep('chooseTerm');
@@ -998,6 +1282,7 @@ export function SubscribePanel({
     }
     setTermId(null);
     setStep('form');
+    carryCoupon({ plan: next, termId: null, monthIds: [] });
   }
 
   function chooseTerm(next: CatalogCourseTerm) {
@@ -1005,6 +1290,7 @@ export function SubscribePanel({
     setError(null);
     dropCoupon();
     setStep('form');
+    carryCoupon({ plan: 'term', termId: next.id, monthIds: [] });
   }
 
   /** Multi-select, because a student buys several months in ONE transfer —
@@ -1035,31 +1321,43 @@ export function SubscribePanel({
    * carry, and no transfer. The server re-derives the price and re-checks
    * everything `submit` is checked for; this only says what was picked.
    */
-  /** «تطبيق» — asks the server what this exact purchase costs with the code. */
-  async function applyCoupon() {
-    if (!plan || !couponInput.trim()) return;
+  /** Asks the server what this exact purchase costs with the code. */
+  async function applyCoupon(raw: string, selection: CouponSelection) {
+    const code = raw.trim();
+    if (!code) return;
+    const seq = ++couponSeq.current;
     setCouponBusy(true);
     setCouponError(null);
-    try {
-      const quote = await apiPost('/api/payments/coupon-quote', CouponQuoteSchema, {
-        code: couponInput.trim(),
-        courseId,
-        plan,
-        termId,
-        monthIds: selectedMonthIds,
-      });
-      setCoupon(quote);
-    } catch (caught) {
-      setCoupon(null);
-      setCouponError(
-        couponRefusalSentence(caught) ??
-          (caught instanceof ApiRequestError && caught.status === 409
-            ? copy.subscribe.alreadyPending
-            : copy.subscribe.couponRefused.generic),
-      );
-    } finally {
-      setCouponBusy(false);
+    const outcome = await requestQuote(courseId, code, selection);
+    if (seq !== couponSeq.current) return;
+    setCouponBusy(false);
+    if (outcome.kind === 'signedOut') {
+      router.push(loginKeepingCoupon(code));
+      return;
     }
+    if (outcome.kind === 'ok' || outcome.kind === 'refused') {
+      rememberQuote(quoteKey(normalizeCouponCode(code), selection), outcome);
+    }
+    if (outcome.kind === 'ok') {
+      setCoupon(outcome.quote);
+      return;
+    }
+    setCoupon(null);
+    setCouponError(
+      outcome.kind === 'refused'
+        ? outcome.sentence
+        : outcome.conflict
+          ? copy.subscribe.alreadyPending
+          : copy.subscribe.couponRefused.generic,
+    );
+  }
+
+  /** «تطبيق» — the typed code, against what is on screen. From here on it is
+   *  the code the plan step prices too. */
+  function applyTypedCoupon() {
+    if (!plan || !couponInput.trim()) return;
+    setActiveCode(normalizeCouponCode(couponInput).slice(0, 32));
+    void applyCoupon(couponInput, { plan, termId, monthIds: selectedMonthIds });
   }
 
   /**
@@ -1202,9 +1500,10 @@ export function SubscribePanel({
           ? termWasCents.get(chosenTerm.id)! - chosenTerm.priceCents
           : 0;
 
-  /** `withCoupon` on the payment step only — the one step whose figure the
-   *  quote is for. */
-  function summaryCard(amount: number | null, withCoupon = false) {
+  /** `quote` is the server's answer for exactly the selection this summary
+   *  describes — the regular figure is then struck beside the one it charges. */
+  function summaryCard(amount: number | null, quote: CouponQuote | null = null) {
+    const total = quote ? quote.finalCents : amount;
     return (
       <CheckoutSummary
         title={copy.subscribe.summaryTitle}
@@ -1243,32 +1542,32 @@ export function SubscribePanel({
               </dd>
             </div>
           ) : null}
-          {withCoupon && coupon ? (
-            <>
-              <div className="bco-sum__row">
-                <dt>{copy.subscribe.couponOriginal}</dt>
-                <dd>
-                  <Money cents={coupon.originalCents} />
-                </dd>
-              </div>
-              <div className="bco-sum__row bco-sum__row--discount">
-                <dt>
-                  {copy.subscribe.couponDiscount}{' '}
-                  <bdi dir="ltr" className="bco-coupon__code">
-                    {coupon.code}
-                  </bdi>
-                </dt>
-                <dd>
-                  −<Money cents={coupon.discountCents} />
-                </dd>
-              </div>
-            </>
+          {quote ? (
+            <div className="bco-sum__row bco-sum__row--discount">
+              <dt>
+                {copy.subscribe.couponDiscount}{' '}
+                <bdi dir="ltr" className="bco-coupon__code">
+                  {quote.code}
+                </bdi>
+              </dt>
+              <dd>
+                −<Money cents={quote.discountCents} />
+              </dd>
+            </div>
           ) : null}
-          {amount !== null && amount > 0 ? (
+          {total !== null && total > 0 ? (
             <div className="bco-sum__row bco-sum__row--total">
               <dt>{copy.subscribe.summaryAmount}</dt>
               <dd>
-                <Money cents={amount} />
+                {quote ? (
+                  <>
+                    <s className="bco-sum__was">
+                      <span className="sr-only">{copy.subscribe.couponOriginal} </span>
+                      <Money cents={quote.originalCents} />
+                    </s>{' '}
+                  </>
+                ) : null}
+                <Money cents={total} />
               </dd>
             </div>
           ) : null}
@@ -1346,6 +1645,7 @@ export function SubscribePanel({
             {formatCopy(copy.subscribe.saleUntil, { date: formatSaleDay(saleUntil) })}
           </p>
         ) : null}
+        {couponBanner()}
         <section className="bco-card" aria-labelledby="bco-plans-title">
           <h3 id="bco-plans-title" className="bco-heading">
             {copy.subscribe.choosePlan}
@@ -1357,6 +1657,9 @@ export function SubscribePanel({
                 name={copy.subscribe.planMonthlyLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
                 deal={dealOf(monthlyWasCents, monthlyPriceCents)}
+                coupon={
+                  months.length === 0 ? cardCoupon({ plan: 'monthly', termId: null, monthIds: [] }) : null
+                }
                 onClick={() => choosePlan('monthly')}
               />
             ) : null}
@@ -1379,6 +1682,7 @@ export function SubscribePanel({
                 name={copy.subscribe.planTermLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(terms[0]!.priceCents) })}
                 deal={dealOf(termWasCents.get(terms[0]!.id), terms[0]!.priceCents)}
+                coupon={cardCoupon({ plan: 'term', termId: terms[0]!.id, monthIds: [] })}
                 onClick={() => choosePlan('term')}
               />
             ) : cheapestTermCents !== null ? (
@@ -1395,6 +1699,7 @@ export function SubscribePanel({
                 name={copy.subscribe.planYearlyLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
                 deal={dealOf(yearlyWasCents, yearlyPriceCents)}
+                coupon={cardCoupon({ plan: 'yearly', termId: null, monthIds: [] })}
                 onClick={() => choosePlan('yearly')}
               />
             ) : null}
@@ -1407,6 +1712,11 @@ export function SubscribePanel({
 
   if (step === 'chooseMonths') {
     const nothingChosen = selectedMonthIds.length === 0;
+    // The server's figure for exactly the months ticked — `null` while it is
+    // being asked, and after a refusal, so the plain total stands until then.
+    const monthsQuote = nothingChosen
+      ? null
+      : cardCoupon({ plan: 'monthly', termId: null, monthIds: [...selectedMonthIds].sort() });
 
     return frame(
       1,
@@ -1418,6 +1728,7 @@ export function SubscribePanel({
             year reads «شهر» as thirty days, and every screen after this one
             would quietly confirm it. */}
         <p className="bco-lead">{copy.subscribe.chooseMonthsHint}</p>
+        {couponBanner()}
 
         {/* `.pay-choice__grid` for the cards' selected state (see `MonthCard`),
             re-flowed by `.bco-months` so a month title — a phrase, not a word —
@@ -1450,8 +1761,17 @@ export function SubscribePanel({
           ) : (
             <p className="bco-total__line">
               {formatCopy(copy.subscribe.monthsTotal, {
-                price: formatEGP(selectedMonthsTotalCents),
+                price: formatEGP(monthsQuote ? monthsQuote.finalCents : selectedMonthsTotalCents),
               })}
+              {monthsQuote ? (
+                <>
+                  {' '}
+                  <s className="bco-total__was">
+                    <span className="sr-only">{copy.subscribe.couponOriginal} </span>
+                    {formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthsQuote.originalCents) })}
+                  </s>
+                </>
+              ) : null}
             </p>
           )
         }
@@ -1464,7 +1784,10 @@ export function SubscribePanel({
           <Button
             type="button"
             className="bco-primary"
-            onClick={() => setStep('form')}
+            onClick={() => {
+              setStep('form');
+              carryCoupon({ plan: 'monthly', termId: null, monthIds: selectedMonthIds });
+            }}
             disabled={nothingChosen}
           >
             {copy.subscribe.monthsContinue}
@@ -1472,7 +1795,7 @@ export function SubscribePanel({
           </Button>
         }
       />,
-      nothingChosen ? undefined : summaryCard(selectedMonthsTotalCents),
+      nothingChosen ? undefined : summaryCard(selectedMonthsTotalCents, monthsQuote),
     );
   }
 
@@ -1483,6 +1806,7 @@ export function SubscribePanel({
         <h3 id="bco-terms-title" className="bco-heading">
           {copy.subscribe.chooseTermTitle}
         </h3>
+        {couponBanner()}
         <div className="bco-plans">
           {terms.map((term) => (
             <PlanCard
@@ -1491,6 +1815,7 @@ export function SubscribePanel({
               name={term.title}
               price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(term.priceCents) })}
               deal={dealOf(termWasCents.get(term.id), term.priceCents)}
+              coupon={cardCoupon({ plan: 'term', termId: term.id, monthIds: [] })}
               onClick={() => chooseTerm(term)}
             />
           ))}
@@ -1556,6 +1881,8 @@ export function SubscribePanel({
                 onClick={() => {
                   setCoupon(null);
                   setCouponInput('');
+                  // Gone from the plan step too — «إلغاء» is not «for this plan».
+                  setActiveCode(null);
                 }}
                 disabled={submitting}
               >
@@ -1593,7 +1920,7 @@ export function SubscribePanel({
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault();
-                      void applyCoupon();
+                      applyTypedCoupon();
                     }
                   }}
                   disabled={couponBusy || submitting}
@@ -1601,7 +1928,7 @@ export function SubscribePanel({
                 <Button
                   type="button"
                   className="bco-coupon__apply"
-                  onClick={() => void applyCoupon()}
+                  onClick={applyTypedCoupon}
                   disabled={couponBusy || submitting || !couponInput.trim()}
                 >
                   {couponBusy ? (
@@ -1819,6 +2146,6 @@ export function SubscribePanel({
         ) : null
       }
     />,
-    summaryCard(payableCents, true),
+    summaryCard(payableCents, amountCents !== null ? coupon : null),
   );
 }

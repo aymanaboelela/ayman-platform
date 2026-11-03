@@ -3086,6 +3086,10 @@ export const copy = {
      *  isolated LTR run (a «-» inside a Latin code flips in an RTL line). */
     couponAppliedLead: 'الكود',
     couponApplied: 'اتطبّق — خصم {amount} جنيه',
+    /** «كود الخصم ‹CODE› متطبّق» — above the plan step's choices once the
+     *  carried code discounts any of them. Same split as `couponAppliedLead`. */
+    couponBannerLead: 'كود الخصم',
+    couponBannerApplied: 'متطبّق',
     couponOriginal: 'السعر قبل الخصم',
     couponDiscount: 'الخصم',
     /** One sentence per `CouponRefusal`, plus a fallback for anything else. */

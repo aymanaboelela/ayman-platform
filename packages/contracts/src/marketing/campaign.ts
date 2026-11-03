@@ -4,6 +4,7 @@ import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
 import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
 import { LeadStatusSchema } from '@ayman/contracts/wa-bot/schemas';
 import { DailyCouponSchema } from '@ayman/contracts/marketing/daily-coupon';
+import { WaHistoryFilterSchema } from '@ayman/contracts/marketing/wa-history';
 
 /**
  * «حملة واتساب» — the shapes the admin screen, the API and the sender all
@@ -221,6 +222,22 @@ export const AudienceSchema = z.object({
    * two explicitly is the only way to include them.
    */
   leadStatuses: z.array(LeadStatusSchema).default([]),
+  /**
+   * «كلّمني على واتساب» / «مكلّمنيش» — keep only the numbers that already
+   * have a chat with the linked number, or only the ones that do not. `null`
+   * is no filter. See `marketing/wa-history.ts` for where the answer comes
+   * from and why it is the axis WhatsApp itself cares about.
+   *
+   * Applied LAST, per number, after students, parents, leads and pasted
+   * numbers are merged — the question is about the phone a message goes to,
+   * not about the account behind it, so a parent's number is judged as the
+   * parent's chat and not the child's.
+   *
+   * Behind the `whatsapp.history` entitlement; a stack without it ignores the
+   * field rather than narrowing to nobody. `.default(null)` so every campaign
+   * row written before it still parses.
+   */
+  waHistory: WaHistoryFilterSchema.nullable().default(null),
 });
 export type Audience = z.infer<typeof AudienceSchema>;
 
@@ -237,6 +254,7 @@ export const EMPTY_AUDIENCE: Audience = {
   extraPhones: [],
   leads: false,
   leadStatuses: [],
+  waHistory: null,
 };
 
 /**

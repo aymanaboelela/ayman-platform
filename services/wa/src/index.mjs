@@ -10,6 +10,7 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import { clearAuthDir } from './auth-store.mjs';
 import { fenceAuthState } from './auth-fence.mjs';
+import { HistoryChats, historyUrl, httpSender } from './history-chats.mjs';
 import { ConnectWatchdog } from './connect-watchdog.mjs';
 import { inboundPhone, inboundText } from './inbound.mjs';
 import { waitForLinkProgress } from './link-wait.mjs';
@@ -83,6 +84,11 @@ const INBOUND_URL = process.env.WA_INBOUND_URL ?? '';
  * nobody. Set it.
  */
 const RECEIPT_URL = process.env.WA_RECEIPT_URL ?? '';
+/**
+ * Where the linked number's OLD chats are reported, once, on link — see
+ * `history-chats.mjs`. `WA_HISTORY_URL`, else derived from `WA_INBOUND_URL`.
+ */
+const HISTORY_URL = historyUrl(process.env);
 
 if (!TOKEN) {
   console.error('WA_TOKEN is required — refusing to start an unauthenticated sender');
@@ -289,6 +295,15 @@ const sent = new SentStore();
 const receipts = new ReceiptStore();
 
 /**
+ * «مين كلّمني قبل كده» — counts per phone from the history sync, held until
+ * the API has them. Outside `connect()` because the sync's chunks arrive over
+ * minutes and its posts are retried across a reconnect.
+ */
+const history = HISTORY_URL
+  ? new HistoryChats({ send: httpSender(HISTORY_URL, TOKEN), logger, selfPhone: () => phone })
+  : null;
+
+/**
  * A single in-flight send at a time. Two concurrent `sendMessage` calls on one
  * Baileys socket is a class of bug nobody wants to debug.
  */
@@ -455,6 +470,22 @@ async function connect({ interactive = false } = {}) {
     if (RECEIPT_URL) {
       socket.ev.on('messages.update', (updates) => onStatusUpdates(updates, socket));
       socket.ev.on('message-receipt.update', onReceiptUpdates);
+    }
+
+    // The one-time history sync on link. Counts only, never relayed to the
+    // inbound route — nothing in it can reach the bot or a campaign.
+    if (history) {
+      socket.ev.on('messaging-history.set', (event) => {
+        if (!isCurrent()) return;
+        const lidMapping = socket.signalRepository?.lidMapping;
+        const pnForLid = lidMapping?.getPNForLID ? (lid) => lidMapping.getPNForLID(lid) : undefined;
+        history
+          .observe(event, pnForLid)
+          .then(({ chats, unresolved }) =>
+            logger.info({ syncType: event?.syncType ?? null, progress: event?.progress ?? null, chats, unresolved }, 'wa history: chunk'),
+          )
+          .catch((error) => logger.warn({ err: error }, 'wa history: could not read a history chunk'));
+      });
     }
   })();
 
@@ -848,6 +879,8 @@ async function unlink() {
   limitsAskedAt = 0;
   receipts.clear();
   sent.clear();
+  // The next number linked here is somebody else's history.
+  history?.reset();
   backoff.reset();
 
   return wipe;

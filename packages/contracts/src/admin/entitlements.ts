@@ -329,6 +329,19 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like everything new: built for HIS main number, the one
+     * students have been writing to for years. Off on every other stack until
+     * the owner opens it. It reads only what that stack's own linked number
+     * sends on link, and carries nothing of his — but like `whatsapp.bot` it
+     * needs `marketing.whatsapp` (the linked device) to receive anything.
+     */
+    key: 'whatsapp.history',
+    nameAr: 'مين كلّمني على واتساب',
+    descriptionAr: 'المحادثات اللي كانت على الرقم قبل ربطه — فلتر «كلّمني / مكلّمنيش» في الطلبة والحملات.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first", like everything new. It makes discount codes on its own
      * and sends them from the WhatsApp number, so it only does anything on a
      * stack where `marketing.whatsapp` and `coupons` are open too — the runner
