@@ -326,6 +326,21 @@ export class WaBotService {
     };
   }
 
+  /**
+   * The thread of a student's OWN number, for their admin page.
+   *
+   * Matched on the number, not on `wa_chats.user_id`: a parent's chat carries
+   * the child's `userId` too (see `WaChat`), and «المحادثة» on the student's
+   * page must not open their father's thread.
+   */
+  async chatIdForStudent(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { phoneNumber: true } });
+    const phone = user?.phoneNumber ? chatPhone(user.phoneNumber) : null;
+    if (!phone) return null;
+    const chat = await this.prisma.waChat.findUnique({ where: { phone }, select: { id: true } });
+    return chat?.id ?? null;
+  }
+
   async chatDetail(id: string, now = new Date()): Promise<WaChatDetail> {
     const chat = await this.prisma.waChat.findUnique({ where: { id } });
     if (!chat) throw new NotFoundException();

@@ -180,6 +180,14 @@ export const WaChatDetailSchema = WaChatRowSchema.extend({
 });
 export type WaChatDetail = z.infer<typeof WaChatDetailSchema>;
 
+/**
+ * A student's own WhatsApp thread, for the «المحادثة» button on their admin
+ * page. `null` when that number never wrote to the linked device — the page
+ * then shows only the plain «واتساب» button.
+ */
+export const WaStudentChatSchema = z.object({ id: z.uuid().nullable() });
+export type WaStudentChat = z.infer<typeof WaStudentChatSchema>;
+
 export const WA_CHAT_FILTERS = ['handoff', 'unread', 'all'] as const;
 export const WaChatFilterSchema = z.enum(WA_CHAT_FILTERS).default('handoff');
 export type WaChatFilter = z.infer<typeof WaChatFilterSchema>;
