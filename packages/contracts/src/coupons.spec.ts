@@ -28,6 +28,22 @@ describe('coupon arithmetic', () => {
     expect(couponDiscountCents(coupon, 95_000, 'yearly')).toBe(0);
     expect(couponDiscountCents(coupon, 15_000)).toBe(0);
   });
+
+  it('takes the month amount off EACH month bought, and the term amount once', () => {
+    const coupon = {
+      kind: 'per_plan' as const,
+      percentOff: null,
+      amountOffCents: null,
+      planAmounts: { monthly: 5_100, quarterly: 9_000, term: 15_000, yearly: null },
+    };
+    // «الشهر بـ ٩٩»: 2 × 150 − 2 × 51 = 198, 3 × 150 − 3 × 51 = 297.
+    expect(30_000 - couponDiscountCents(coupon, 30_000, 'monthly', 2)).toBe(19_800);
+    expect(45_000 - couponDiscountCents(coupon, 45_000, 'monthly', 3)).toBe(29_700);
+    expect(couponDiscountCents(coupon, 45_000, 'term', 3)).toBe(15_000);
+    expect(couponDiscountCents(coupon, 40_000, 'quarterly', 3)).toBe(9_000);
+    // A fixed coupon is never multiplied.
+    expect(couponDiscountCents({ kind: 'fixed', percentOff: null, amountOffCents: 5_000 }, 30_000, 'monthly', 2)).toBe(5_000);
+  });
 });
 
 describe('coupon schemas', () => {

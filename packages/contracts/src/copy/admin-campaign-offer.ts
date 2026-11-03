@@ -48,7 +48,7 @@ export const adminCampaignOffer = {
   couponValidDaysHint: 'من يوم ما الرسالة توصل، لحد آخر اليوم الأخير.',
   couponCourses: 'الكود على أنهي كورسات',
   couponPlanAmounts: 'الخصم على كل نوع اشتراك (جنيه)',
-  couponPlanAmountsHint: 'فاضي = الكود مابيطبّقش على النوع ده.',
+  couponPlanAmountsHint: 'خصم الشهر بيتحسب على كل شهر في الطلب (شهرين = الخصم مرتين). فاضي = الكود مابيطبّقش على النوع ده.',
   couponSample: 'مثال: كود النهارده {code}، شغال لحد {date}',
   couponOff: 'الخصم مقفول على الستاك ده — كوبونات الخصم لازم تكون مفتوحة.',
 

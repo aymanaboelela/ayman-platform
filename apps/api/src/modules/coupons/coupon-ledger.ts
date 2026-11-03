@@ -78,6 +78,9 @@ export interface CouponRequest {
   courseId: string;
   /** The plan being bought — a `per_plan` coupon's amount is read off it. */
   plan: PaymentPlan;
+  /** Curriculum months in this purchase (1 for anything that is not a month
+   *  purchase) — a `per_plan` month amount comes off once per month. */
+  monthCount: number;
   /** The price `resolvePurchase` derived — never a number from the client. */
   originalCents: number;
   now: Date;
@@ -129,8 +132,18 @@ export function couponRefusal(coupon: CouponFacts, now: Date, plan: PaymentPlan)
  * A discount of zero (10% of a 5-pound price floors to nothing) is refused the
  * same way: a code that changes nothing is not something to record a use of.
  */
-export function priceWithCoupon(coupon: CouponFacts, originalCents: number, plan: PaymentPlan): CouponPrice {
-  const discountCents = couponDiscountCents({ ...coupon, planAmounts: planAmountsOf(coupon) }, originalCents, plan);
+export function priceWithCoupon(
+  coupon: CouponFacts,
+  originalCents: number,
+  plan: PaymentPlan,
+  monthCount = 1,
+): CouponPrice {
+  const discountCents = couponDiscountCents(
+    { ...coupon, planAmounts: planAmountsOf(coupon) },
+    originalCents,
+    plan,
+    monthCount,
+  );
   if (discountCents <= 0 || discountCents >= originalCents) {
     throw new CouponRefusedError('exceeds_price');
   }
@@ -170,7 +183,7 @@ export async function quoteCoupon(client: CouponReader, request: CouponRequest):
   const refusal =
     couponRefusal(coupon, request.now, request.plan) ?? (await perStudentRefusal(client, coupon, request.userId));
   if (refusal) throw new CouponRefusedError(refusal);
-  return priceWithCoupon(coupon, request.originalCents, request.plan);
+  return priceWithCoupon(coupon, request.originalCents, request.plan, request.monthCount);
 }
 
 /**
@@ -209,7 +222,7 @@ export async function claimCoupon(
   const refusal =
     couponRefusal(before, request.now, request.plan) ?? (await perStudentRefusal(tx, before, request.userId));
   if (refusal) throw new CouponRefusedError(refusal);
-  return priceWithCoupon(before, request.originalCents, request.plan);
+  return priceWithCoupon(before, request.originalCents, request.plan, request.monthCount);
 }
 
 /** The redemption row, beside the claim it priced — same transaction. */

@@ -27,8 +27,9 @@ import { CouponCodeSchema } from '@ayman/contracts/coupon-code';
 
 /**
  * `per_plan` is «خصم لكل نوع اشتراك» — a fixed number of pounds that depends
- * on WHICH plan is bought: 51 off the month, 150 off the term, nothing off the
- * year. A plan with no amount is a plan the code does not apply to, and the
+ * on WHICH plan is bought: 51 off EACH month, 150 off the term, nothing off
+ * the year. The month amount is per month in the purchase (see
+ * `couponDiscountCents`); every other plan's comes off once. A plan with no amount is a plan the code does not apply to, and the
  * student is told so (`not_for_plan`) rather than charged in full in silence.
  * It is its own kind and not a `fixed` with extras, because «X off» means
  * something different on a 150 month and on a 950 year, and a single number
@@ -107,6 +108,9 @@ export function couponDiscountCents(
   },
   priceCents: number,
   plan?: PaymentPlan,
+  /** How many curriculum months this purchase buys — only a `per_plan`
+   *  MONTH amount reads it. Defaults to one (a course-wide monthly plan). */
+  monthCount = 1,
 ): number {
   if (coupon.kind === 'percent') {
     const raw = Math.floor((priceCents * (coupon.percentOff ?? 0)) / 100);
@@ -116,7 +120,11 @@ export function couponDiscountCents(
     // No plan, or no amount for it, is nothing off — the ledger refuses that
     // as `not_for_plan` before it ever gets here; this stays total.
     if (plan === undefined) return 0;
-    return coupon.planAmounts?.[plan] ?? 0;
+    const amount = coupon.planAmounts?.[plan] ?? 0;
+    // «الشهر بـ ٩٩» is a price PER MONTH: two months bought together are
+    // 2 × 150 − 2 × 51 = 198, not 300 − 51. Every other plan is one purchase
+    // of one thing, so its amount comes off once.
+    return plan === 'monthly' ? amount * Math.max(1, monthCount) : amount;
   }
   return coupon.amountOffCents ?? 0;
 }

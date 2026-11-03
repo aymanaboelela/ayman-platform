@@ -1,5 +1,6 @@
 // Prisma 7 does not auto-load .env, and this spec runs outside Nest's bootstrap.
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { HttpException } from '@nestjs/common';
 import { EMPTY_AUDIENCE } from '@ayman/contracts/marketing/campaign';
@@ -282,6 +283,24 @@ describe('course offers', () => {
       });
       expect(month).toEqual({ code, originalCents: 15_000, discountCents: 5_100, finalCents: 9_900 });
 
+      // «الشهر بـ ٩٩» per month: two months together are 198, three are 297.
+      const twoMonths = await payments.quoteCoupon(studentId, {
+        code,
+        courseId: general.id,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [general.months[1]!, general.months[2]!],
+      });
+      expect(twoMonths).toEqual({ code, originalCents: 30_000, discountCents: 10_200, finalCents: 19_800 });
+      const threeMonths = await payments.quoteCoupon(ids.none!, {
+        code,
+        courseId: general.id,
+        plan: 'monthly',
+        termId: null,
+        monthIds: general.months.slice(0, 3),
+      });
+      expect(threeMonths).toEqual({ code, originalCents: 45_000, discountCents: 15_300, finalCents: 29_700 });
+
       const term = await payments.quoteCoupon(studentId, {
         code,
         courseId: general.id,
@@ -295,6 +314,22 @@ describe('course offers', () => {
         .quoteCoupon(studentId, { code, courseId: general.id, plan: 'yearly', termId: null, monthIds: [] })
         .catch(codeOf);
       expect(year).toBe('coupon_not_for_plan');
+    });
+
+    it('files a two-month claim at 2 × 99, under the lock, and records the per-month discount', async () => {
+      const code = dailyCouponCode(prefix, cairoParts(new Date()).day);
+      const submission = await payments.submit(ids.month1!, {
+        courseId: general.id,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [general.months[1]!, general.months[2]!],
+        senderPhone: '+201012345678',
+        screenshotKey: `payment-proof/${randomUUID()}.webp`,
+        couponCode: code,
+      });
+      expect(submission.amountCents).toBe(19_800);
+      const redemption = await prisma.couponRedemption.findUniqueOrThrow({ where: { submissionId: submission.id } });
+      expect(redemption).toMatchObject({ originalCents: 30_000, discountCents: 10_200 });
     });
   });
 
