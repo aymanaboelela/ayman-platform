@@ -87,6 +87,7 @@ describe('coupons', () => {
       kind: 'percent',
       percentOff: 25,
       amountOffCents: null,
+      planAmounts: null,
       allCourses: true,
       courseIds: [],
       startsAt: null,

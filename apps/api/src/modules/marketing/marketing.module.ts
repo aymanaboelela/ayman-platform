@@ -6,6 +6,7 @@ import { EnvMediaUrlResolver, MEDIA_URL_RESOLVER } from '../../common/media/medi
 import { AudienceService } from './audience.service';
 import { CampaignRunner } from './campaign-runner.service';
 import { CampaignService } from './campaign.service';
+import { CourseOfferService } from './course-offer.service';
 import { MarketingController } from './marketing.controller';
 import { WhatsappInboundController } from './whatsapp-inbound.controller';
 import { WhatsappReceiptController } from './whatsapp-receipt.controller';
@@ -41,6 +42,7 @@ import { WaContactsService } from './wa-contacts.service';
     AudienceService,
     WhatsappDeviceService,
     CampaignRunner,
+    CourseOfferService,
     WaContactsService,
     WaContactsRunner,
     { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver },

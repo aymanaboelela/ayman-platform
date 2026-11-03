@@ -374,11 +374,13 @@ export class PaymentsService {
    * real, under the lock, and may still refuse.
    */
   async quoteCoupon(userId: string, input: CouponQuoteRequest): Promise<CouponQuote> {
-    const { course, amountCents } = await this.resolvePurchase(userId, input);
+    const { course, amountCents, isMonthPurchase, requestedMonthIds } = await this.resolvePurchase(userId, input);
     const price = await quoteCoupon(this.prisma, {
       code: input.code,
       userId,
       courseId: course.id,
+      plan: input.plan,
+      monthCount: isMonthPurchase ? requestedMonthIds.length : 1,
       originalCents: amountCents,
       now: new Date(),
     });
@@ -427,6 +429,8 @@ export class PaymentsService {
             code: input.couponCode as string,
             userId,
             courseId: input.courseId,
+            plan: input.plan,
+            monthCount: isMonthPurchase ? requestedMonthIds.length : 1,
             originalCents: priceCents,
             now,
           })
@@ -586,6 +590,8 @@ export class PaymentsService {
               code: input.couponCode as string,
               userId,
               courseId: course.id,
+              plan: input.plan,
+              monthCount: isMonthPurchase ? monthIds.length : 1,
               originalCents: priceCents,
               now,
             })

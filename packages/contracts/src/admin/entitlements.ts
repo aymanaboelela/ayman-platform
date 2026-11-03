@@ -353,6 +353,20 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'الطلبة بيتحفظوا جهات اتصال في واتساب الرقم المربوط بس، مش في التليفون، عشان الاستوري توصلهم.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new. It makes discount codes on its own
+     * and sends them from the WhatsApp number, so it only does anything on a
+     * stack where `marketing.whatsapp` and `coupons` are open too — the runner
+     * pauses a campaign rather than send a code the checkout would refuse.
+     * Nothing in it carries his identity: the link is built from the stack's
+     * own `APP_URL`.
+     */
+    key: 'campaignCoupons',
+    nameAr: 'كود خصم يومي في الحملات',
+    descriptionAr: 'الحملة تعمل كود خصم لكل يوم بتبعت فيه، بخصم لكل نوع اشتراك، ولينك لصفحة الاشتراك والكود مكتوب فيها.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

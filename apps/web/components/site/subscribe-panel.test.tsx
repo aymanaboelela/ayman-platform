@@ -807,6 +807,21 @@ describe('coupon code', () => {
     expect(await screen.findByText(copy.subscribe.couponRefused.expired)).toBeTruthy();
   });
 
+  it('names a campaign offer already used with another day’s code — its own sentence, not the generic one', async () => {
+    await openMonthlyForm(true);
+    const { ApiRequestError } = await import('@/lib/api');
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.couponToggle) }));
+    fireEvent.change(screen.getByLabelText(copy.subscribe.couponLabel), { target: { value: 'WELCOME0411-K7QM' } });
+    apiPost.mockRejectedValueOnce(
+      new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_campaign_used', message: 'campaign_used' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.couponApply }));
+
+    expect(await screen.findByText(copy.subscribe.couponRefused.campaign_used)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.couponRefused.generic)).toBeNull();
+  });
+
   it('sends a press with no session to log in, carrying the typed code back', async () => {
     window.history.replaceState({}, '', `/courses/${SLUG}/subscribe`);
     await openMonthlyForm(true);

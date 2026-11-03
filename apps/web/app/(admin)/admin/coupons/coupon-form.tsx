@@ -3,7 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Percent, Banknote } from 'lucide-react';
+import { Percent, Banknote, Layers } from 'lucide-react';
+import type { CouponKind, CouponPlanAmounts } from '@ayman/contracts/coupons';
+import { PaymentPlanSchema } from '@ayman/contracts/payments';
+import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
 import type { AdminUnlockCourseOption } from '@ayman/contracts/admin/unlock-codes';
 import { adminCouponsCopy as c } from '@ayman/contracts/copy/admin-coupons';
 import { Button } from '@ayman/ui/components/button';
@@ -40,8 +43,15 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [code, setCode] = useState('');
-  const [kind, setKind] = useState<'percent' | 'fixed'>('percent');
+  const [kind, setKind] = useState<CouponKind>('percent');
   const [value, setValue] = useState('');
+  // «لكل نوع اشتراك» — pounds per plan, as typed; blank = not for that plan.
+  const [planValues, setPlanValues] = useState<Record<keyof CouponPlanAmounts, string>>({
+    monthly: '',
+    quarterly: '',
+    term: '',
+    yearly: '',
+  });
   const [allCourses, setAllCourses] = useState(true);
   const [courseIds, setCourseIds] = useState<string[]>([]);
   const [startsAt, setStartsAt] = useState('');
@@ -54,6 +64,7 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
   function reset() {
     setCode('');
     setValue('');
+    setPlanValues({ monthly: '', quarterly: '', term: '', yearly: '' });
     setCourseIds([]);
     setStartsAt('');
     setEndsAt('');
@@ -69,6 +80,7 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
         kind,
         percentOff: kind === 'percent' ? Math.round(amount) : null,
         amountOffCents: kind === 'fixed' ? Math.round(amount) * 100 : null,
+        planAmounts: kind === 'per_plan' ? planAmountsCents(planValues) : null,
         allCourses,
         courseIds: allCourses ? [] : courseIds,
         startsAt: toInstant(startsAt),
@@ -88,7 +100,7 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
     });
   }
 
-  const kindButton = (next: 'percent' | 'fixed', label: string, Icon: typeof Percent) => (
+  const kindButton = (next: CouponKind, label: string, Icon: typeof Percent) => (
     <button
       type="button"
       aria-pressed={kind === next}
@@ -134,24 +146,29 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
         <div className="flex gap-2">
           {kindButton('percent', c.kindPercent, Percent)}
           {kindButton('fixed', c.kindFixed, Banknote)}
+          {kindButton('per_plan', offerCopy.kindPerPlan, Layers)}
         </div>
       </fieldset>
 
-      <div className="grid gap-1.5">
-        <Label htmlFor="cp-value">{kind === 'percent' ? c.percentOff : c.amountOff}</Label>
-        <Input
-          id="cp-value"
-          type="number"
-          inputMode="numeric"
-          dir="ltr"
-          required
-          min={1}
-          max={kind === 'percent' ? 99 : 100_000}
-          step={1}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-        />
-      </div>
+      {kind === 'per_plan' ? (
+        <PlanAmountFields values={planValues} onChange={setPlanValues} idPrefix="cp-plan" />
+      ) : (
+        <div className="grid gap-1.5">
+          <Label htmlFor="cp-value">{kind === 'percent' ? c.percentOff : c.amountOff}</Label>
+          <Input
+            id="cp-value"
+            type="number"
+            inputMode="numeric"
+            dir="ltr"
+            required
+            min={1}
+            max={kind === 'percent' ? 99 : 100_000}
+            step={1}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </div>
+      )}
 
       <fieldset className="grid gap-2">
         <legend className="mb-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">{c.scope}</legend>
@@ -239,10 +256,68 @@ export function CouponForm({ courses }: { courses: AdminUnlockCourseOption[] }) 
       </div>
 
       <div>
-        <Button type="submit" disabled={pending || !code.trim() || !value || (!allCourses && courseIds.length === 0)}>
+        <Button
+          type="submit"
+          disabled={
+            pending ||
+            !code.trim() ||
+            (kind === 'per_plan' ? planAmountsCents(planValues) === null : !value) ||
+            (!allCourses && courseIds.length === 0)
+          }
+        >
           {pending ? c.creating : c.create}
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Pounds as typed → piastres per plan; `null` when no plan has an amount. */
+export function planAmountsCents(values: Record<keyof CouponPlanAmounts, string>): CouponPlanAmounts | null {
+  const toCents = (raw: string) => {
+    const n = optionalInt(raw);
+    return n !== null && n > 0 ? n * 100 : null;
+  };
+  const amounts: CouponPlanAmounts = {
+    monthly: toCents(values.monthly),
+    quarterly: toCents(values.quarterly),
+    term: toCents(values.term),
+    yearly: toCents(values.yearly),
+  };
+  return Object.values(amounts).some((cents) => cents !== null) ? amounts : null;
+}
+
+/** One pounds field per plan — shared with the campaign form's daily code. */
+export function PlanAmountFields({
+  values,
+  onChange,
+  idPrefix,
+}: {
+  values: Record<keyof CouponPlanAmounts, string>;
+  onChange: (next: Record<keyof CouponPlanAmounts, string>) => void;
+  idPrefix: string;
+}) {
+  return (
+    <fieldset className="grid gap-1.5">
+      <legend className="mb-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">{offerCopy.couponPlanAmounts}</legend>
+      <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
+        {PaymentPlanSchema.options.map((plan) => (
+          <div key={plan} className="grid min-w-0 gap-1">
+            <Label htmlFor={`${idPrefix}-${plan}`}>{offerCopy.plan[plan]}</Label>
+            <Input
+              id={`${idPrefix}-${plan}`}
+              type="number"
+              inputMode="numeric"
+              dir="ltr"
+              min={1}
+              step={1}
+              value={values[plan]}
+              onChange={(event) => onChange({ ...values, [plan]: event.target.value })}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.couponPlanAmountsHint}</p>
+    </fieldset>
   );
 }

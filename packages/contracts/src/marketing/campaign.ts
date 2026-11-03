@@ -3,6 +3,7 @@ import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
 import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
 import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
 import { LeadStatusSchema } from '@ayman/contracts/wa-bot/schemas';
+import { DailyCouponSchema } from '@ayman/contracts/marketing/daily-coupon';
 import { WaHistoryFilterSchema } from '@ayman/contracts/marketing/wa-history';
 
 /**
@@ -57,7 +58,14 @@ export type RecipientFilter = (typeof RECIPIENT_FILTERS)[number];
  * is a deliverability property and not only a courtesy.
  */
 export const NAME_TOKEN = '{{الاسم}}';
-/** Optional; when absent and a link is attached, the link is appended. */
+/**
+ * Optional; when absent and a link is attached, the link is appended.
+ *
+ * On a course-aware campaign (a daily coupon, or «ناقصه شهور») this is NOT
+ * `linkUrl`: it is each recipient's own subscribe page — their course, their
+ * first missing month, the day's code — built by the runner. See
+ * `isCourseAware`.
+ */
 export const LINK_TOKEN = '{{اللينك}}';
 
 /**
@@ -114,6 +122,24 @@ export const AudienceSchema = z.object({
    * so stored campaigns still parse.
    */
   neverSubscribed: z.boolean().default(false),
+  /**
+   * «ناقصه شهور في الكورس المختار» — of the students who BELONG to one of
+   * `courseIds` (its year and stream, or anybody who ever paid for it — the
+   * subscribers report's `audience=all`), keep the ones missing at least one
+   * OPEN month of it: never subscribed, or bought month 1 and not 2, or 1 and
+   * 2 and not 3. A live term / course / year grant covers every month
+   * (`monthSliceOf`).
+   *
+   * ⚠️ With this on, `courseIds` stops meaning «enrolled in»: most of the
+   * people this axis exists for never pressed «اشترك» on the course and have
+   * no enrolment row at all. Meaningless with no `courseIds` (no course to be
+   * missing months of), so `AudienceService` treats it as a no-op there.
+   *
+   * Re-checked per recipient at SEND time too — a campaign takes weeks, and a
+   * student who bought the missing month on day three must not be told on day
+   * nine that it is missing. `.default(false)` so stored campaigns still parse.
+   */
+  missingMonths: z.boolean().default(false),
   /**
    * «الناس اللي اتشحن ليها، واللي ماتشحنتش ليها، واللي وصل ليها» — students
    * picked by the state of a book order they placed. Empty = no filter on this
@@ -223,6 +249,7 @@ export const EMPTY_AUDIENCE: Audience = {
   courseIds: [],
   notSubscribedOnly: false,
   neverSubscribed: false,
+  missingMonths: false,
   bookOrderStatuses: [],
   extraPhones: [],
   leads: false,
@@ -285,9 +312,28 @@ export const DEFAULT_PACING_INPUT = DEFAULT_PACING;
 export const CampaignChannelSchema = z.enum(['whatsapp', 'platform', 'both']);
 export type CampaignChannel = z.infer<typeof CampaignChannelSchema>;
 
+const BodySchema = z.string().trim().min(4).max(900);
+
 export const CampaignCreateSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  body: z.string().trim().min(4).max(900),
+  /**
+   * The message. On a «ناقصه شهور» campaign with `bodyPartial` set, this is
+   * the text for a student who holds NO open month of their course (never
+   * subscribed, or every month lapsed) — and for anybody the runner has no
+   * course for (a parent's number, a pasted one).
+   */
+  body: BodySchema,
+  /**
+   * «للي مشترك في شهور وناقصه شهور» — the second text, for a student who holds
+   * at least one open month of their course and is missing others. `null` =
+   * everybody gets `body`.
+   *
+   * Two whole texts rather than a conditional block inside one: the instructor
+   * writes and proof-reads each as the message somebody will actually get, the
+   * preview shows both, and there is no template syntax to mistype on a send
+   * that cannot be taken back. `.default(null)` so stored campaigns parse.
+   */
+  bodyPartial: BodySchema.nullable().default(null),
   /** Attached above the text as a WhatsApp image message. */
   imageAssetId: z.uuid().nullable(),
   linkUrl: z
@@ -303,8 +349,31 @@ export const CampaignCreateSchema = z.object({
   /** `.default('whatsapp')` so a client written before this field existed —
    *  and every stored campaign — still parses as what it actually was. */
   channel: CampaignChannelSchema.default('whatsapp'),
-});
+  /** «كود خصم لكل يوم» — see `marketing/daily-coupon.ts`. `null` = no code. */
+  dailyCoupon: DailyCouponSchema.nullable().default(null),
+})
+  .refine((value) => !isCourseAware(value) || value.linkUrl === null, {
+    message: 'اللينك بيتعمل لوحده لكل طالب في الحملة دي — خانة اللينك تفضل فاضية',
+    path: ['linkUrl'],
+  })
+  .refine((value) => !value.audience.missingMonths || value.audience.courseIds.length > 0, {
+    message: 'اختار الكورس اللي هنشوف الشهور الناقصة فيه',
+    path: ['audience', 'courseIds'],
+  });
 export type CampaignCreate = z.infer<typeof CampaignCreateSchema>;
+
+/**
+ * A campaign whose `{{اللينك}}` is per recipient — their course's subscribe
+ * page, their first missing month, the day's code. Either half makes it so:
+ * a code needs a page to be typed into, and «ناقصك الشهر التالت» needs a link
+ * that opens on the third month.
+ */
+export function isCourseAware(campaign: {
+  audience: Pick<Audience, 'missingMonths'>;
+  dailyCoupon: unknown;
+}): boolean {
+  return campaign.dailyCoupon !== null || campaign.audience.missingMonths;
+}
 
 /**
  * What a draft may still have changed.
@@ -319,7 +388,8 @@ export type CampaignCreate = z.infer<typeof CampaignCreateSchema>;
 export const CampaignPatchSchema = z
   .object({
     name: CampaignCreateSchema.shape.name,
-    body: CampaignCreateSchema.shape.body,
+    body: BodySchema,
+    bodyPartial: BodySchema.nullable(),
     imageAssetId: CampaignCreateSchema.shape.imageAssetId,
     linkUrl: CampaignCreateSchema.shape.linkUrl,
     pacing: PacingSchema,
@@ -368,8 +438,25 @@ export const CampaignRowSchema = z.object({
 });
 export type CampaignRow = z.infer<typeof CampaignRowSchema>;
 
+/** One day's code, as the campaign screen lists it. */
+export const CampaignDayCouponSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  /** The Cairo send day it was made for, `YYYY-MM-DD`. */
+  day: z.string(),
+  endsAt: z.iso.datetime().nullable(),
+  usesCount: z.number().int(),
+});
+export type CampaignDayCoupon = z.infer<typeof CampaignDayCouponSchema>;
+
 export const CampaignDetailSchema = CampaignRowSchema.extend({
   body: z.string(),
+  bodyPartial: z.string().nullable().default(null),
+  dailyCoupon: DailyCouponSchema.nullable().default(null),
+  /** The codes this campaign has made so far, newest first. */
+  dayCoupons: z.array(CampaignDayCouponSchema).default([]),
+  /** `bodyPartial` rendered for the same next recipient; `null` without one. */
+  previewPartial: z.string().nullable().default(null),
   imageAssetId: z.uuid().nullable(),
   imageUrl: z.string().nullable(),
   linkUrl: z.string().nullable(),
