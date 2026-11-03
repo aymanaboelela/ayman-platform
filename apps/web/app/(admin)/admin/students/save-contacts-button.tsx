@@ -63,6 +63,8 @@ export function SaveContactsButton({ kind = 'student' }: { kind?: ContactExportK
         role: state.role,
         access: state.access ?? null,
         stream: state.stream ?? null,
+        // The file is exactly the rows the filter shows — «مكلّمنيش» included.
+        waChat: state.waChat ?? null,
         includeSaved,
         kind,
       });
