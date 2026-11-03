@@ -1,6 +1,12 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { normalizeCouponCode } from '@ayman/contracts/coupon-code';
-import { couponDiscountCents, type CouponKind, type CouponRefusal } from '@ayman/contracts/coupons';
+import {
+  couponDiscountCents,
+  planAmountsOf,
+  type CouponKind,
+  type CouponRefusal,
+} from '@ayman/contracts/coupons';
+import type { PaymentPlan } from '@ayman/contracts/payments';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -43,6 +49,10 @@ interface CouponFacts {
   kind: CouponKind;
   percentOff: number | null;
   amountOffCents: number | null;
+  monthlyOffCents: number | null;
+  quarterlyOffCents: number | null;
+  termOffCents: number | null;
+  yearlyOffCents: number | null;
   allCourses: boolean;
   startsAt: Date | null;
   endsAt: Date | null;
@@ -50,6 +60,8 @@ interface CouponFacts {
   maxUsesPerStudent: number | null;
   usesCount: number;
   isActive: boolean;
+  /** «كود خصم لكل يوم» — set on a campaign's day code. */
+  campaignId: string | null;
   courses: readonly { courseId: string }[];
 }
 
@@ -66,6 +78,11 @@ export interface CouponRequest {
   code: string;
   userId: string;
   courseId: string;
+  /** The plan being bought — a `per_plan` coupon's amount is read off it. */
+  plan: PaymentPlan;
+  /** Curriculum months in this purchase (1 for anything that is not a month
+   *  purchase) — a `per_plan` month amount comes off once per month. */
+  monthCount: number;
   /** The price `resolvePurchase` derived — never a number from the client. */
   originalCents: number;
   now: Date;
@@ -80,6 +97,10 @@ function factsSelect(courseId: string) {
     kind: true,
     percentOff: true,
     amountOffCents: true,
+    monthlyOffCents: true,
+    quarterlyOffCents: true,
+    termOffCents: true,
+    yearlyOffCents: true,
     allCourses: true,
     startsAt: true,
     endsAt: true,
@@ -87,6 +108,7 @@ function factsSelect(courseId: string) {
     maxUsesPerStudent: true,
     usesCount: true,
     isActive: true,
+    campaignId: true,
     courses: { where: { courseId }, select: { courseId: true } },
   } as const;
 }
@@ -94,15 +116,17 @@ function factsSelect(courseId: string) {
 /**
  * Why this coupon does not apply right now, or `null`. The order is the order
  * a student is told: switched off before not-yet, not-yet before over, over
- * before used up. `usesCount` is read as given — the claim passes the count
- * from BEFORE its own increment.
+ * before used up, then the course, then the plan — «مش على الكورس ده» is the
+ * truer sentence when both are wrong. `usesCount` is read as given — the
+ * claim passes the count from BEFORE its own increment.
  */
-export function couponRefusal(coupon: CouponFacts, now: Date): CouponRefusal | null {
+export function couponRefusal(coupon: CouponFacts, now: Date, plan: PaymentPlan): CouponRefusal | null {
   if (!coupon.isActive) return 'inactive';
   if (coupon.startsAt !== null && coupon.startsAt > now) return 'not_started';
   if (coupon.endsAt !== null && coupon.endsAt <= now) return 'expired';
   if (coupon.maxUses !== null && coupon.usesCount >= coupon.maxUses) return 'exhausted';
   if (!coupon.allCourses && coupon.courses.length === 0) return 'not_for_course';
+  if (coupon.kind === 'per_plan' && (planAmountsOf(coupon)?.[plan] ?? null) === null) return 'not_for_plan';
   return null;
 }
 
@@ -111,8 +135,18 @@ export function couponRefusal(coupon: CouponFacts, now: Date): CouponRefusal | n
  * A discount of zero (10% of a 5-pound price floors to nothing) is refused the
  * same way: a code that changes nothing is not something to record a use of.
  */
-export function priceWithCoupon(coupon: CouponFacts, originalCents: number): CouponPrice {
-  const discountCents = couponDiscountCents(coupon, originalCents);
+export function priceWithCoupon(
+  coupon: CouponFacts,
+  originalCents: number,
+  plan: PaymentPlan,
+  monthCount = 1,
+): CouponPrice {
+  const discountCents = couponDiscountCents(
+    { ...coupon, planAmounts: planAmountsOf(coupon) },
+    originalCents,
+    plan,
+    monthCount,
+  );
   if (discountCents <= 0 || discountCents >= originalCents) {
     throw new CouponRefusedError('exceeds_price');
   }
@@ -130,6 +164,14 @@ async function perStudentRefusal(
   coupon: CouponFacts,
   userId: string,
 ): Promise<CouponRefusal | null> {
+  // A campaign's day codes are ONE offer: each day has its own code, and a
+  // student who redeemed Monday's must not redeem Tuesday's as well.
+  if (coupon.campaignId !== null) {
+    const fromCampaign = await client.couponRedemption.count({
+      where: { userId, releasedAt: null, couponId: { not: coupon.id }, coupon: { campaignId: coupon.campaignId } },
+    });
+    if (fromCampaign > 0) return 'campaign_used';
+  }
   if (coupon.maxUsesPerStudent === null) return null;
   // Released uses (a rejected claim) do not count — the student never got
   // anything for them.
@@ -149,9 +191,10 @@ export async function quoteCoupon(client: CouponReader, request: CouponRequest):
     select: factsSelect(request.courseId),
   });
   if (!coupon) throw new CouponRefusedError('not_found');
-  const refusal = couponRefusal(coupon, request.now) ?? (await perStudentRefusal(client, coupon, request.userId));
+  const refusal =
+    couponRefusal(coupon, request.now, request.plan) ?? (await perStudentRefusal(client, coupon, request.userId));
   if (refusal) throw new CouponRefusedError(refusal);
-  return priceWithCoupon(coupon, request.originalCents);
+  return priceWithCoupon(coupon, request.originalCents, request.plan, request.monthCount);
 }
 
 /**
@@ -183,13 +226,24 @@ export async function claimCoupon(
     where: { code },
     select: factsSelect(request.courseId),
   });
+  /*
+    A campaign day code: the once-per-campaign rule counts redemptions of the
+    campaign's OTHER codes, whose row locks this claim does not hold. Lock the
+    campaign row too, so two claims by one student on two days' codes are
+    serialised and the second one's count sees the first. Lock order on this
+    path: coupon → campaign → wallet; nothing takes them the other way.
+  */
+  if (locked.campaignId !== null) {
+    await tx.$queryRaw`SELECT 1 FROM "app"."marketing_campaigns" WHERE "id" = ${locked.campaignId}::uuid FOR UPDATE`;
+  }
   // The count from before this claim's own increment, so the shared rule
   // reads it the way `quoteCoupon` does. (The ceiling itself was already
   // decided by the UPDATE.)
   const before = { ...locked, usesCount: locked.usesCount - 1 };
-  const refusal = couponRefusal(before, request.now) ?? (await perStudentRefusal(tx, before, request.userId));
+  const refusal =
+    couponRefusal(before, request.now, request.plan) ?? (await perStudentRefusal(tx, before, request.userId));
   if (refusal) throw new CouponRefusedError(refusal);
-  return priceWithCoupon(before, request.originalCents);
+  return priceWithCoupon(before, request.originalCents, request.plan, request.monthCount);
 }
 
 /** The redemption row, beside the claim it priced — same transaction. */

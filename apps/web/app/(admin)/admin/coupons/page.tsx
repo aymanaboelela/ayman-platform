@@ -21,6 +21,8 @@ import {
 } from '@ayman/contracts/admin/coupons';
 import { AdminUnlockCourseOptionsSchema } from '@ayman/contracts/admin/unlock-codes';
 import { adminCouponsCopy as c } from '@ayman/contracts/copy/admin-coupons';
+import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
+import { PaymentPlanSchema } from '@ayman/contracts/payments';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { adminGet } from '@/lib/admin-api';
@@ -55,6 +57,13 @@ const STATUS_META: Record<AdminCouponStatus, { icon: LucideIcon; hue: string }> 
 const tint = (hue: string, percent: number) => `color-mix(in oklab, ${hue} ${percent}%, var(--color-surface-1))`;
 
 function discountLabel(row: AdminCouponRow): string {
+  if (row.kind === 'per_plan') {
+    // «الشهر ٥١ · الترم ١٥٠» — only the plans the code applies to.
+    const parts = PaymentPlanSchema.options
+      .filter((plan) => row.planAmounts?.[plan] != null)
+      .map((plan) => `${offerCopy.plan[plan]} ${formatEGP(row.planAmounts?.[plan] ?? 0)}`);
+    return `${offerCopy.perPlanLabel}: ${parts.join(' · ')}`;
+  }
   return row.kind === 'percent'
     ? formatCopy(c.percentLabel, { percent: String(row.percentOff ?? 0) })
     : formatCopy(c.fixedLabel, { amount: formatEGP(row.amountOffCents ?? 0) });
@@ -246,6 +255,14 @@ export default async function AdminCouponsPage({
                     {row.note ? <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{row.note}</p> : null}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+                        {row.campaign ? (
+                          <>
+                            <Link href={`/admin/marketing/campaigns/${row.campaign.id}`} className="text-accent underline">
+                              {formatCopy(offerCopy.fromCampaign, { name: row.campaign.name })}
+                            </Link>
+                            {' · '}
+                          </>
+                        ) : null}
                         {row.createdBy ? formatCopy(c.createdBy, { name: row.createdBy.name }) : null}
                         {row.createdBy ? ' · ' : null}
                         {DATE.format(new Date(row.createdAt))}

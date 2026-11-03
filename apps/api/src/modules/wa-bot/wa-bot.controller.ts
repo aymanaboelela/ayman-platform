@@ -25,6 +25,7 @@ import {
   type LeadList,
   type LeadRow,
   type WaChatDetail,
+  type WaStudentChat,
   type WaChatRow,
 } from '@ayman/contracts/wa-bot/schemas';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
@@ -225,6 +226,13 @@ export class WaBotController {
     const parsed = parseRequest(WaChatFilterSchema, filter || undefined, 'filter');
     const list = parseRequest(ListQuerySchema, { page, perPage: perPage ?? '50' }, 'list query');
     return this.chats.listChats(parsed, list.page, list.perPage);
+  }
+
+  /** `userId` is a better-auth nanoid, not a UUID — no `ParseUUIDPipe`. */
+  @RequirePermission('marketing:read')
+  @Get('students/:userId/chat')
+  async studentChat(@Param('userId') userId: string): Promise<WaStudentChat> {
+    return { id: await this.chats.chatIdForStudent(userId) };
   }
 
   @RequirePermission('marketing:read')

@@ -1,5 +1,7 @@
 import { firstNameOf } from '@ayman/contracts/outreach/compose';
 import { LINK_TOKEN, NAME_TOKEN } from '@ayman/contracts/marketing/campaign';
+import { COUPON_TOKEN, LAST_DAY_TOKEN } from '@ayman/contracts/marketing/daily-coupon';
+import { MISSING_MONTHS_TOKEN } from '@ayman/contracts/marketing/missing-months';
 
 /**
  * One campaign template + one recipient → the exact text that leaves the
@@ -27,6 +29,15 @@ export interface RenderInput {
   /** Full name; the first word is used. `null` for a pasted number. */
   name: string | null;
   linkUrl: string | null;
+  /**
+   * «كود خصم لكل يوم» — the day's code and its last day, already written out
+   * («الخميس ٦ نوفمبر»). Absent or `null`: the two tokens are removed and the
+   * space tidied, the same as a missing name — a message is never sent with a
+   * literal `{{الكود}}` in it.
+   */
+  coupon?: { code: string; lastDay: string } | null;
+  /** «الشهر التاني والتالت» for `{{الشهور_الناقصة}}`; absent = removed. */
+  missingMonths?: string | null;
 }
 
 /**
@@ -42,9 +53,14 @@ function tidy(text: string): string {
     .trim();
 }
 
-export function renderCampaignBody({ body, name, linkUrl }: RenderInput): string {
-  const first = name ? firstNameOf(name) : '';
-  let text = body.split(NAME_TOKEN).join(first);
+export function renderCampaignBody({ body, name, linkUrl, coupon, missingMonths }: RenderInput): string {
+  // The name is the one value a STUDENT typed, so it goes in LAST — after
+  // every other token is already gone — and without braces: a name spelled
+  // «{{الكود}}» or «{{اللينك}}» must never expand into a code or a link.
+  const first = name ? firstNameOf(name).replace(/[{}]/gu, '') : '';
+  let text = body.split(COUPON_TOKEN).join(coupon?.code ?? '');
+  text = text.split(LAST_DAY_TOKEN).join(coupon?.lastDay ?? '');
+  text = text.split(MISSING_MONTHS_TOKEN).join(missingMonths ?? '');
 
   if (text.includes(LINK_TOKEN)) {
     text = text.split(LINK_TOKEN).join(linkUrl ?? '');
@@ -54,6 +70,7 @@ export function renderCampaignBody({ body, name, linkUrl }: RenderInput): string
     text = `${text}\n\n${linkUrl}`;
   }
 
+  text = text.split(NAME_TOKEN).join(first);
   return tidy(text);
 }
 

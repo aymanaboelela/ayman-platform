@@ -3100,7 +3100,9 @@ export const copy = {
       expired: 'مدة الكود ده انتهت.',
       exhausted: 'الكود ده اتستخدم لآخر مرة متاحة.',
       per_student_limit: 'الكود ده اتستخدم على الحساب ده قبل كده.',
+      campaign_used: 'العرض ده اتستخدم على الحساب ده قبل كده بكود تاني.',
       not_for_course: 'الكود ده مش على الكورس ده.',
+      not_for_plan: 'الكود ده مش على نوع الاشتراك ده — بيطبّق على أنواع تانية بس.',
       exceeds_price: 'الكود ده مابينفعش على الاختيار ده.',
       unavailable: 'أكواد الخصم مش متاحة دلوقتي.',
       generic: 'الكود ماتأكدش دلوقتي — نجرّب تاني.',
@@ -3991,6 +3993,12 @@ export const copy = {
        * the masdar as the same instruction. Same rule as the outreach pools.
        */
       cta: 'اشتراك',
+    },
+    facebookGroup: {
+      title: 'جروب الفيسبوك',
+      lead: 'اسألوا وساعدوا بعض، وكل ورشة ومراجعة جديدة بتنزل هناك.',
+      /** «انضمام», not «انضم» — the masdar, same reason as `whatsappChannel.cta`. */
+      cta: 'انضمام للجروب',
     },
 
     /**

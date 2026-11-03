@@ -18,6 +18,11 @@ import { Prisma } from '../../generated/prisma/client';
  * three fragments below, so a count and the list it links to cannot describe
  * two different sets.
  *
+ * `students`, `paidGrants` and `fits` are exported for the campaign audience
+ * «ناقصه شهور» (`marketing/course-offer.service.ts`): that audience is this
+ * report's «مين مشترك في الشهر ده» asked the other way round, and two copies
+ * of "who belongs to a course" would drift the first time one was fixed.
+ *
  * Single statements, not a fetch-and-filter in Node: the list is paginated,
  * and filtering a page that was already cut gives page one of the wrong
  * answer (`FollowUpService` says the same about its selection).
@@ -54,7 +59,7 @@ function reportedCourses(courseId: string | undefined): Prisma.Sql {
  * screen was asked for — is in large part exactly those accounts.
  * `FollowUpService.idleSelection` makes the same call for the same reason.
  */
-function students(year: number | undefined, q: string): Prisma.Sql {
+export function students(year: number | undefined, q: string): Prisma.Sql {
   const yearFilter = year === undefined ? Prisma.empty : Prisma.sql`AND pr."year" = ${year}`;
   const digits = q.replace(/\D/g, '');
   const search =
@@ -88,7 +93,7 @@ function students(year: number | undefined, q: string): Prisma.Sql {
  * screen. `live` is `grantLiveness() === 'live'` in SQL: not revoked, started,
  * and an open-ended or future `valid_until`.
  */
-function paidGrants(now: Date): Prisma.Sql {
+export function paidGrants(now: Date): Prisma.Sql {
   return Prisma.sql`
     pg AS (
       SELECT g."user_id", g."course_id", g."scope", g."month_id",
@@ -109,7 +114,7 @@ function paidGrants(now: Date): Prisma.Sql {
  * year fits nothing — see the contract's header for why that is a refusal to
  * guess rather than an omission.
  */
-function fits(s: string, k: string): Prisma.Sql {
+export function fits(s: string, k: string): Prisma.Sql {
   const S = Prisma.raw(s);
   const K = Prisma.raw(k);
   return Prisma.sql`(

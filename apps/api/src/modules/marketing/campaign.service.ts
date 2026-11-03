@@ -12,9 +12,21 @@ import type {
   RecipientRow,
   RecipientFilter,
 } from '@ayman/contracts/marketing/campaign';
-import { AudienceSchema } from '@ayman/contracts/marketing/campaign';
+import { AudienceSchema, isCourseAware } from '@ayman/contracts/marketing/campaign';
+import {
+  DailyCouponSchema,
+  SAMPLE_DAILY_SUFFIX,
+  dailyCouponCode,
+  dailyCouponLastDay,
+  formatArabicDay,
+  type DailyCoupon,
+} from '@ayman/contracts/marketing/daily-coupon';
+import { missingMonthsPhrase } from '@ayman/contracts/marketing/missing-months';
+import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
+import { isFeatureEnabled } from '../../common/entitlements';
 import {
   DEFAULT_PACING,
+  cairoParts,
   estimateMinutes,
   withinWindow,
   type Pacing,
@@ -27,7 +39,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
 import { AudienceService } from './audience.service';
-import type { MarketingCampaign, Prisma } from '../../generated/prisma/client';
+import { CourseOfferService } from './course-offer.service';
+import { Prisma, type MarketingCampaign } from '../../generated/prisma/client';
 
 /**
  * Everything a person does to a campaign. The runner does the sending; this
@@ -63,6 +76,7 @@ export class CampaignService {
     private readonly audience: AudienceService,
     private readonly audit: AuditService,
     @InjectMediaUrl() private readonly mediaUrl: MediaUrlResolver,
+    private readonly offers: CourseOfferService,
   ) {}
 
   // ── reads ──────────────────────────────────────────────────────────────
@@ -90,12 +104,32 @@ export class CampaignService {
     const next = await this.prisma.marketingRecipient.findFirst({
       where: { campaignId: id, status: 'pending' },
       orderBy: { position: 'asc' },
-      select: { name: true },
+      select: { name: true, userId: true },
+    });
+
+    const audience = AudienceSchema.parse(campaign.audience);
+    const dailyCoupon = campaign.dailyCoupon === null ? null : DailyCouponSchema.parse(campaign.dailyCoupon);
+    const previews = await this.previews(campaign, audience, dailyCoupon, next);
+    const dayCoupons = await this.prisma.coupon.findMany({
+      where: { campaignId: id },
+      orderBy: [{ campaignDay: 'desc' }, { id: 'desc' }],
+      take: 60,
+      select: { id: true, code: true, campaignDay: true, endsAt: true, usesCount: true },
     });
 
     return {
       ...this.row(campaign, counts),
       body: campaign.body,
+      bodyPartial: campaign.bodyPartial,
+      dailyCoupon,
+      dayCoupons: dayCoupons.map((coupon) => ({
+        id: coupon.id,
+        code: coupon.code,
+        day: coupon.campaignDay ?? '',
+        endsAt: coupon.endsAt?.toISOString() ?? null,
+        usesCount: coupon.usesCount,
+      })),
+      previewPartial: previews.partial,
       imageAssetId: campaign.imageAssetId,
       imageUrl: campaign.image ? this.mediaUrl.resolve(campaign.image.storageKey) : null,
       linkUrl: campaign.linkUrl,
@@ -104,11 +138,48 @@ export class CampaignService {
       channel: campaign.channel,
       sentToday: campaign.sentToday,
       estimateMinutes: estimateMinutes(counts.pending, pacingOf(campaign)),
-      preview: renderCampaignBody({
-        body: campaign.body,
-        name: next?.name ?? null,
-        linkUrl: campaign.linkUrl,
-      }),
+      preview: previews.main,
+    };
+  }
+
+  /**
+   * What the next recipient will read — and on a course-aware campaign, what
+   * the «partial» text reads too.
+   *
+   * The next recipient's real course and months when there is one; the code
+   * is the one the runner made today, or — before the first send of the day —
+   * what today's code WILL be. Nothing is created here: a preview that wrote a
+   * coupon would make a code on a day the campaign never sends.
+   */
+  private async previews(
+    campaign: MarketingCampaign,
+    audience: Audience,
+    dailyCoupon: DailyCoupon | null,
+    next: { name: string | null; userId: string | null } | null,
+  ): Promise<{ main: string; partial: string | null }> {
+    const name = next?.name ?? null;
+    if (!isCourseAware({ audience, dailyCoupon })) {
+      return { main: renderCampaignBody({ body: campaign.body, name, linkUrl: campaign.linkUrl }), partial: null };
+    }
+
+    const courseIds = audience.missingMonths ? audience.courseIds : (dailyCoupon?.courseIds ?? []);
+    const courses = await this.offers.courses(courseIds);
+    const offer = await this.offers.offerFor(next?.userId ?? null, courses);
+    const coupon = dailyCoupon ? await this.todaysCoupon(campaign.id, dailyCoupon) : null;
+    const link = this.offers.linkFor(offer, coupon?.code ?? null);
+    const phrase = offer ? missingMonthsPhrase(offer.missing.map((m) => m.monthIndex), offer.openCount) : null;
+
+    const render = (body: string, months: string | null) =>
+      renderCampaignBody({ body, name, linkUrl: link, coupon, missingMonths: months });
+    // Each text with the next recipient's own months when that text is the one
+    // they would get, and a sample («الشهور التلاتة» / «الشهر التاني
+    // والتالت») otherwise — so both previews always read as a real message.
+    const sampleAll = missingMonthsPhrase(offerCopy.sampleMonthsAll, offerCopy.sampleMonthsAll.length);
+    const samplePartial = missingMonthsPhrase(offerCopy.sampleMonthsPartial, offerCopy.sampleMonthsAll.length);
+    const partialText = campaign.bodyPartial;
+    return {
+      main: render(campaign.body, offer && (!offer.holdsSome || partialText === null) ? phrase : sampleAll),
+      partial: partialText === null ? null : render(partialText, offer?.holdsSome ? phrase : samplePartial),
     };
   }
 
@@ -208,6 +279,7 @@ export class CampaignService {
   // ── writes ─────────────────────────────────────────────────────────────
 
   async create(input: CampaignCreate, actorId: string): Promise<CampaignRow> {
+    if (input.dailyCoupon !== null) await this.assertDailyCoupon(input.dailyCoupon);
     const resolved = await this.audience.resolve(input.audience);
     if (resolved.recipients.length === 0) {
       throw new BadRequestException('مفيش حد في الجمهور ده — راجع الفلاتر');
@@ -218,6 +290,8 @@ export class CampaignService {
         data: {
           name: input.name,
           body: input.body,
+          bodyPartial: input.bodyPartial,
+          dailyCoupon: input.dailyCoupon === null ? Prisma.DbNull : (input.dailyCoupon as unknown as Prisma.InputJsonValue),
           imageAssetId: input.imageAssetId,
           linkUrl: input.linkUrl,
           audience: input.audience as unknown as Prisma.InputJsonValue,
@@ -254,6 +328,8 @@ export class CampaignService {
         unreachable: resolved.unreachable,
         optedOut: resolved.optedOut,
         audience: input.audience,
+        dailyCoupon: input.dailyCoupon,
+        twoTexts: input.bodyPartial !== null,
       },
     });
 
@@ -285,6 +361,7 @@ export class CampaignService {
       data: {
         ...(input.name === undefined ? {} : { name: input.name }),
         ...(input.body === undefined ? {} : { body: input.body }),
+        ...(input.bodyPartial === undefined ? {} : { bodyPartial: input.bodyPartial }),
         ...(input.imageAssetId === undefined ? {} : { imageAssetId: input.imageAssetId }),
         ...(input.linkUrl === undefined ? {} : { linkUrl: input.linkUrl }),
         ...(input.pacing ?? {}),
@@ -467,6 +544,30 @@ export class CampaignService {
 
   // ── helpers ────────────────────────────────────────────────────────────
 
+  /** Today's code if the runner made it, otherwise what it will look like. */
+  private async todaysCoupon(campaignId: string, config: DailyCoupon): Promise<{ code: string; lastDay: string }> {
+    const sample = sampleCoupon(config);
+    const made = await this.prisma.coupon.findUnique({
+      where: { campaignId_campaignDay: { campaignId, campaignDay: cairoParts(new Date()).day } },
+      select: { code: true },
+    });
+    return made ? { ...sample, code: made.code } : sample;
+  }
+
+  /**
+   * A daily code is refused at creation, not discovered at the first send:
+   * the switches must be open on this stack, and every course must exist.
+   * (The runner re-checks the switches per send — they can close mid-run.)
+   */
+  private async assertDailyCoupon(config: DailyCoupon): Promise<void> {
+    if (!isFeatureEnabled('campaignCoupons') || !isFeatureEnabled('coupons')) {
+      throw new BadRequestException(offerCopy.couponOff);
+    }
+    const ids = [...new Set(config.courseIds)];
+    const found = await this.prisma.course.count({ where: { id: { in: ids } } });
+    if (found !== ids.length) throw new BadRequestException('a selected course does not exist');
+  }
+
   private async require(id: string): Promise<MarketingCampaign> {
     const campaign = await this.prisma.marketingCampaign.findUnique({ where: { id } });
     if (!campaign) throw new NotFoundException();
@@ -545,5 +646,15 @@ export function pacingOf(campaign: MarketingCampaign): Pacing {
     dailyCap: campaign.dailyCap ?? DEFAULT_PACING.dailyCap,
     windowStartHour: campaign.windowStartHour ?? DEFAULT_PACING.windowStartHour,
     windowEndHour: campaign.windowEndHour ?? DEFAULT_PACING.windowEndHour,
+  };
+}
+
+/** Today's code as it WILL look, for a preview — nothing is written, and the
+ *  random tail is a sample (`SAMPLE_DAILY_SUFFIX`). */
+function sampleCoupon(config: DailyCoupon): { code: string; lastDay: string } {
+  const day = cairoParts(new Date()).day;
+  return {
+    code: dailyCouponCode(config.prefix, day, SAMPLE_DAILY_SUFFIX),
+    lastDay: formatArabicDay(dailyCouponLastDay(day, config.validDays)),
   };
 }

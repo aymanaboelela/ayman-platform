@@ -59,6 +59,18 @@ const STATUS_TIMEOUT_MS = 4000;
 const LINK_TIMEOUT_MS = 20_000;
 /** A send uploads an image and waits on WhatsApp's own ack. */
 const SEND_TIMEOUT_MS = 45_000;
+/**
+ * One existence lookup and one app-state write, behind whatever send is
+ * queued ahead of it on the sidecar. The sidecar gives the write itself 20s.
+ */
+const CONTACT_TIMEOUT_MS = 45_000;
+
+/** What saving one WhatsApp-only contact came to. */
+export interface ContactSaveResult {
+  saved: boolean;
+  onWhatsApp: boolean;
+  lid: string | null;
+}
 
 export interface SendInput {
   /** E.164, with the `+`. The sidecar strips it. */
@@ -169,6 +181,14 @@ export class WhatsappRestrictedError extends Error {
   ) {
     super(`whatsapp is not allowing new chats (${reason ?? 'unknown'})`);
     this.name = 'WhatsappRestrictedError';
+  }
+}
+
+/** No sender configured, or the sidecar has no connected device. */
+export class DeviceOfflineError extends Error {
+  constructor() {
+    super('whatsapp device is not connected');
+    this.name = 'DeviceOfflineError';
   }
 }
 
@@ -343,6 +363,39 @@ export class WhatsappDeviceService {
       serverJid: body.serverJid ?? null,
       lid: body.lid ?? null,
     };
+  }
+
+  /**
+   * «احفظهم في واتساب» — one WhatsApp-only contact on the linked account
+   * (`services/wa/src/contact-save.mjs`). Not a message: nothing is recorded
+   * in `whatsapp_sends` and nothing counts against the number's ceiling.
+   *
+   * Throws for anything that is not a clean answer, typed where the caller
+   * pauses differently: `WhatsappRestrictedError` for the timelock,
+   * `DeviceOfflineError` when there is no connected device.
+   */
+  async saveContact(phone: string, name: string): Promise<ContactSaveResult> {
+    let body: { saved?: boolean; onWhatsApp?: boolean; lid?: string | null };
+    try {
+      body = (await this.call(
+        '/contacts',
+        { method: 'POST', body: JSON.stringify({ phone, name }) },
+        CONTACT_TIMEOUT_MS,
+      )) as typeof body;
+    } catch (error) {
+      if (error instanceof SidecarError && error.status === 423) {
+        const until = typeof error.body?.until === 'string' ? new Date(error.body.until) : null;
+        throw new WhatsappRestrictedError('timelock', until && !Number.isNaN(until.getTime()) ? until : null);
+      }
+      if (error instanceof SidecarError && error.status === 409) throw new DeviceOfflineError();
+      if (error instanceof ServiceUnavailableException) throw new DeviceOfflineError();
+      throw error;
+    }
+    if (body.onWhatsApp === false) return { saved: false, onWhatsApp: false, lid: null };
+    // Anything short of an explicit yes is not a save — the runner must not
+    // mark a row done on a body it does not understand.
+    if (body.saved !== true) throw new Error('wa /contacts answered without saving');
+    return { saved: true, onWhatsApp: true, lid: typeof body.lid === 'string' ? body.lid : null };
   }
 
   /**

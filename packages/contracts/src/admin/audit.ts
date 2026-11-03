@@ -282,6 +282,10 @@ export const AUDIT_ACTIONS = [
   // any campaign, and because the `lid` it records is the one fact anybody
   // will want back when asking why a campaign delivered to nobody.
   'whatsapp:test-send',
+  // «احفظهم في واتساب» — starting or stopping a run that writes thousands of
+  // contacts into the linked number's own account. The run, not each contact.
+  'whatsapp:contacts-start',
+  'whatsapp:contacts-pause',
   // «الرد الآلي». The settings and the answers are what the bot SAYS from
   // the instructor's number, so a change to either is worth a row; a reply
   // typed in the WhatsApp inbox is a message to a real person, audited for the

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -11,6 +12,8 @@ import type {
 } from '@ayman/contracts/marketing/campaign';
 import { RECIPIENT_FILTERS } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
+import { formatArabicDay } from '@ayman/contracts/marketing/daily-coupon';
 import { formatCopy } from '@ayman/contracts/format';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
@@ -211,12 +214,53 @@ export function CampaignDetailView({
         <CardHeader>
           <CardTitle>{c.previewTitle}</CardTitle>
         </CardHeader>
-        <CardBody>
+        <CardBody className="flex flex-col gap-3">
+          {campaign.previewPartial ? (
+            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.previewNone}</p>
+          ) : null}
           <div className="whitespace-pre-wrap rounded-[var(--r-lg)] border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)]">
             {campaign.preview || campaign.body}
           </div>
+          {campaign.previewPartial ? (
+            <>
+              <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{offerCopy.previewPartial}</p>
+              <div className="whitespace-pre-wrap rounded-[var(--r-lg)] border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)]">
+                {campaign.previewPartial}
+              </div>
+            </>
+          ) : null}
         </CardBody>
       </Card>
+
+      {/* «أكواد الحملة» — one per Cairo day it sent, made with that day's
+          first message. Each links to its row on /admin/coupons. */}
+      {campaign.dailyCoupon ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{offerCopy.dayCouponsTitle}</CardTitle>
+          </CardHeader>
+          <CardBody>
+            {campaign.dayCoupons.length === 0 ? (
+              <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{offerCopy.dayCouponsEmpty}</p>
+            ) : (
+              <ul className="flex flex-col gap-2 text-[length:var(--fs-text-sm)]">
+                {campaign.dayCoupons.map((coupon) => (
+                  <li key={coupon.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Link
+                      href={`/admin/coupons?q=${encodeURIComponent(coupon.code)}`}
+                      className="mono font-semibold text-accent underline [direction:ltr] [unicode-bidi:isolate]"
+                    >
+                      {coupon.code}
+                    </Link>
+                    <span className="text-fg-muted">{coupon.day ? formatArabicDay(coupon.day) : null}</span>
+                    <span className="text-fg-muted">{formatCopy(offerCopy.dayCouponUses, { n: coupon.usesCount })}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

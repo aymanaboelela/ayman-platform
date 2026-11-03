@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isFeatureEnabled } from '../../common/entitlements';
 import type { Prisma } from '../../generated/prisma/client';
 import { neverSubscribedWhere } from '../auto-outreach/auto-outreach.rules';
+import { CourseOfferService } from './course-offer.service';
 import { chattedPhones } from '../wa-history/wa-history.queries';
 
 /**
@@ -51,7 +52,10 @@ export interface ResolvedAudience {
 
 @Injectable()
 export class AudienceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly offers: CourseOfferService,
+  ) {}
 
   async resolve(audience: Audience): Promise<ResolvedAudience> {
     const byPhone = new Map<string, ResolvedRecipient>();
@@ -188,14 +192,26 @@ export class AudienceService {
       audience.schoolStreams.length > 0 ? { schoolStream: { in: audience.schoolStreams } } : {};
     const hasProfileFilter = audience.years.length > 0 || audience.schoolStreams.length > 0;
 
+    /*
+     * «ناقصهم شهور في الكورس المختار» — resolved to an id list first, by the
+     * subscribers report's own SQL (`CourseOfferService.usersMissingMonths`),
+     * then ANDed with every other axis like the rest. With it on, `courseIds`
+     * names the course to be missing months OF, not an enrolment filter: most
+     * of these students never enrolled (see the schema field's own note).
+     */
+    const missingMonths = audience.missingMonths && audience.courseIds.length > 0;
+    const missingIds = missingMonths ? [...(await this.offers.usersMissingMonths(audience.courseIds))] : [];
+
     const rows = await this.prisma.user.findMany({
       where: {
         role: 'student',
         bannedAt: null,
         ...(hasProfileFilter ? { studentProfile: { ...yearFilter, ...streamFilter } } : {}),
-        ...(audience.courseIds.length > 0
-          ? { enrollments: { some: { courseId: { in: audience.courseIds } } } }
-          : {}),
+        ...(missingMonths
+          ? { id: { in: missingIds } }
+          : audience.courseIds.length > 0
+            ? { enrollments: { some: { courseId: { in: audience.courseIds } } } }
+            : {}),
         ...this.bookOrderFilter(audience),
         /*
          * «من غير اشتراك في أي كورس» — the exact predicate the automatic
