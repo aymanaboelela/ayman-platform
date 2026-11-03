@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import makeWASocket, {
   Browsers,
   fetchLatestBaileysVersion,
@@ -9,6 +9,7 @@ import makeWASocket, {
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { clearAuthDir } from './auth-store.mjs';
+import { saveContact } from './contact-save.mjs';
 import { fenceAuthState } from './auth-fence.mjs';
 import { HistoryChats, historyUrl, httpSender } from './history-chats.mjs';
 import { ConnectWatchdog } from './connect-watchdog.mjs';
@@ -827,6 +828,41 @@ async function send({ phone: to, text, imageUrl }) {
 }
 
 /**
+ * «احفظهم في واتساب» — one contact into the account's own list. See
+ * `contact-save.mjs` for what is written and why `saveOnPrimaryAddressbook`
+ * is false. Serialised on the same queue as `/send`: one socket, one thing on
+ * the wire at a time.
+ */
+async function saveOneContact({ phone: to, name }) {
+  const socket = sock;
+  if (state !== 'connected' || !socket) throw httpError(409, 'device is not connected');
+
+  const jid = jidFor(to);
+  await refreshLimits(socket).catch(() => undefined);
+  const result = await saveContact(
+    socket,
+    { jid, name },
+    {
+      // The timelock only: it is enforcement against this account. The
+      // new-chat CAP is an ordinary monthly quota that campaigns run into,
+      // and it says nothing about contacts.
+      blocked: () => {
+        const blocked = limits.blocksNewChats();
+        return blocked?.reason === 'timelock' ? blocked : null;
+      },
+      lidFor: (pn) => withTimeout(socket.signalRepository?.lidMapping?.getLIDForPN?.(pn), 1000, null),
+    },
+  );
+  // A run saves thousands of students, so the number itself never reaches the
+  // log: a short hash correlates a row with the API's ledger when debugging
+  // (sha256 of `<digits>@s.whatsapp.net`, first 12 hex), and the LID is not
+  // a phone number.
+  const ref = createHash('sha256').update(jid).digest('hex').slice(0, 12);
+  logger.info({ ref, saved: result.saved, onWhatsApp: result.onWhatsApp, lid: result.lid }, 'contact');
+  return result;
+}
+
+/**
  * Forget the paired device: log it out, stop everything it could still do,
  * and empty the auth directory.
  *
@@ -1035,6 +1071,25 @@ const server = createServer((request, response) => {
         const result = await (queue = queue.then(
           () => send(body),
           () => send(body),
+        ));
+        json(response, 200, result);
+        return;
+      }
+
+      case 'POST /contacts': {
+        const body = await readBody(request);
+        if (!body.phone || typeof body.name !== 'string') {
+          json(response, 400, { error: 'phone and name are required' });
+          return;
+        }
+        const digits = digitsOf(body.phone);
+        if (digits.length < 10 || digits.length > 15) {
+          json(response, 400, { error: 'phone must be the full international number' });
+          return;
+        }
+        const result = await (queue = queue.then(
+          () => saveOneContact(body),
+          () => saveOneContact(body),
         ));
         json(response, 200, result);
         return;

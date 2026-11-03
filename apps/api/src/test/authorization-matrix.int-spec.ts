@@ -72,6 +72,8 @@ import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
+import { WaContactsController } from '../modules/marketing/wa-contacts.controller';
+import { WaContactsService } from '../modules/marketing/wa-contacts.service';
 import { CheckoutIntentsController } from '../modules/auto-outreach/checkout-intents.controller';
 import { AdminAutoOutreachController } from '../modules/auto-outreach/admin-auto-outreach.controller';
 import { CheckoutIntentsService } from '../modules/auto-outreach/checkout-intents.service';
@@ -248,6 +250,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         DiagnosticsController,
         AdminErrorsController,
         MarketingController,
+        // «احفظهم في واتساب». Its service is in `providers`; its runner is NOT
+        // (a cron, and it injects the global Redis — same as `CampaignRunner`).
+        WaContactsController,
         WhatsappInboundController,
         // «رسايل الواتساب التلقائية». The controllers and their services, not
         // `AutoOutreachModule`: that module also provides the sweeper, which
@@ -450,6 +455,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         CampaignService,
         AudienceService,
         WhatsappDeviceService,
+        WaContactsService,
         CheckoutIntentsService,
         AutoOutreachCandidates,
         AutoOutreachOverviewService,
@@ -1533,6 +1539,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing test-send: student', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'student', status: 403, body: () => ({ phone: '+201000000000' }) },
     { label: 'marketing test-send receipt: anonymous', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'anonymous', status: 401 },
     { label: 'marketing test-send receipt: student', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'student', status: 403 },
+
+    // «احفظهم في واتساب» — reading is `marketing:read`; starting and stopping
+    // are `marketing:device`, since a run writes into the linked number's own
+    // account. Behind `whatsapp.contacts`, open here because the fixture runs
+    // as Ayman's stack. No admin `start` row: with no sidecar configured it
+    // answers 409 by design, and it must never reach a real device from a test.
+    { label: 'wa-contacts status: anonymous', method: 'get', path: () => '/api/admin/marketing/wa-contacts', actor: 'anonymous', status: 401 },
+    { label: 'wa-contacts status: student', method: 'get', path: () => '/api/admin/marketing/wa-contacts', actor: 'student', status: 403 },
+    { label: 'wa-contacts status: admin', method: 'get', path: () => '/api/admin/marketing/wa-contacts', actor: 'admin', status: 200 },
+    { label: 'wa-contacts start: anonymous', method: 'post', path: () => '/api/admin/marketing/wa-contacts/start', actor: 'anonymous', status: 401, body: () => ({ limit: 5 }) },
+    { label: 'wa-contacts start: student', method: 'post', path: () => '/api/admin/marketing/wa-contacts/start', actor: 'student', status: 403, body: () => ({ limit: 5 }) },
+    { label: 'wa-contacts pause: anonymous', method: 'post', path: () => '/api/admin/marketing/wa-contacts/pause', actor: 'anonymous', status: 401 },
+    { label: 'wa-contacts pause: student', method: 'post', path: () => '/api/admin/marketing/wa-contacts/pause', actor: 'student', status: 403 },
 
     { label: 'marketing opt-outs: anonymous', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'anonymous', status: 401 },
     { label: 'marketing opt-outs: student', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'student', status: 403 },
