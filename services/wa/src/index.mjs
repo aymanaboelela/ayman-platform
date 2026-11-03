@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import makeWASocket, {
   Browsers,
   fetchLatestBaileysVersion,
@@ -822,7 +822,12 @@ async function saveOneContact({ phone: to, name }) {
       lidFor: (pn) => withTimeout(socket.signalRepository?.lidMapping?.getLIDForPN?.(pn), 1000, null),
     },
   );
-  logger.info({ jid, saved: result.saved, onWhatsApp: result.onWhatsApp, lid: result.lid }, 'contact');
+  // A run saves thousands of students, so the number itself never reaches the
+  // log: a short hash correlates a row with the API's ledger when debugging
+  // (sha256 of `<digits>@s.whatsapp.net`, first 12 hex), and the LID is not
+  // a phone number.
+  const ref = createHash('sha256').update(jid).digest('hex').slice(0, 12);
+  logger.info({ ref, saved: result.saved, onWhatsApp: result.onWhatsApp, lid: result.lid }, 'contact');
   return result;
 }
 
