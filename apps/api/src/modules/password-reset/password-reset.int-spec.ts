@@ -448,6 +448,19 @@ describe('PasswordResetService (real database)', () => {
       expect(device.send).not.toHaveBeenCalled();
     });
 
+    it('sends when WhatsApp reports no cap at all (0/0, NONE) — what the live number answers', async () => {
+      const device = fakeDevice({
+        status: jest.fn(async () => ({
+          state: 'connected',
+          limits: { restricted: false, reason: null, quotaTotal: 0, quotaUsed: 0, capStatus: 'NONE' },
+        })),
+      });
+      const svc = service(device);
+      const known = await student();
+      expect((await ask(svc, known.phone)).status).toBe('accepted');
+      expect(device.sent).toHaveLength(1);
+    });
+
     it('sends with eleven new chats left — the reserve is ten', async () => {
       const device = fakeDevice({
         status: jest.fn(async () => ({ state: 'connected', limits: { restricted: false, reason: null, quotaTotal: 50, quotaUsed: 39 } })),

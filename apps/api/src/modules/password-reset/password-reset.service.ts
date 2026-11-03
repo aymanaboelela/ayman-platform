@@ -277,9 +277,14 @@ export class PasswordResetService {
     if (device.state !== 'connected') return false;
     const limits = device.limits;
     if (limits?.restricted) return false;
+    // A zero total is "no cap on this account", not "cap spent": WhatsApp
+    // sends `0/0` with status `NONE` to numbers it does not cap, and reading
+    // that as exhausted shut the form for every student on the live number.
+    // `new-chat-limits.mjs` draws the same line.
     if (
       limits &&
       typeof limits.quotaTotal === 'number' &&
+      limits.quotaTotal > 0 &&
       typeof limits.quotaUsed === 'number' &&
       limits.quotaTotal - limits.quotaUsed <= this.limits.newChatQuotaReserve
     ) {
