@@ -11,6 +11,9 @@ import { MarketingController } from './marketing.controller';
 import { WhatsappInboundController } from './whatsapp-inbound.controller';
 import { WhatsappReceiptController } from './whatsapp-receipt.controller';
 import { WhatsappDeviceService } from './whatsapp-device.service';
+import { WaContactsController } from './wa-contacts.controller';
+import { WaContactsRunner } from './wa-contacts-runner.service';
+import { WaContactsService } from './wa-contacts.service';
 
 /**
  * التسويق — outbound WhatsApp.
@@ -32,13 +35,16 @@ import { WhatsappDeviceService } from './whatsapp-device.service';
   // `WaBotModule` for the inbound webhook: every message a phone sends back is
   // also the auto-reply bot's to record (behind its own entitlement).
   imports: [AuditModule, OutreachModule, WaBotModule],
-  controllers: [MarketingController, WhatsappInboundController, WhatsappReceiptController],
+  // «احفظهم في واتساب» rides here because it is the same linked device.
+  controllers: [MarketingController, WhatsappInboundController, WhatsappReceiptController, WaContactsController],
   providers: [
     CampaignService,
     AudienceService,
     WhatsappDeviceService,
     CampaignRunner,
     CourseOfferService,
+    WaContactsService,
+    WaContactsRunner,
     { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver },
   ],
   // `WhatsappDeviceService` is exported for `BookOrdersModule`'s shipping

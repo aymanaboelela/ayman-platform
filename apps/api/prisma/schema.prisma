@@ -6213,6 +6213,59 @@ model WhatsappSend {
   @@schema("app")
 }
 
+/// «احفظهم في واتساب» — one row per number the linked WhatsApp account has
+/// been asked to save as a WhatsApp-only contact. Keyed by the E.164 number,
+/// so two accounts sharing one phone are one contact, and a second «ابدأ»
+/// never writes anybody twice. See `wa-contacts.service.ts`.
+model WhatsappContactSave {
+  phone     String    @id @db.VarChar(20)
+  /// The student it was queued for. No foreign key on purpose: a deleted
+  /// student's row must survive as the record that the number WAS saved, and
+  /// a pending one is skipped at save time when the profile is gone.
+  userId    String?   @map("user_id")
+  /// The platform name at queue time — what WhatsApp shows.
+  name      String
+  /// `pending` | `saved` | `not_on_whatsapp` | `failed` | `skipped`. CHECKed.
+  status    String    @default("pending") @db.VarChar(16)
+  attempts  Int       @default(0)
+  lastError String?   @map("last_error")
+  lid       String?
+  savedAt   DateTime? @map("saved_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  /// The runner's «next pending one».
+  @@index([status, createdAt])
+  @@map("whatsapp_contact_saves")
+  @@schema("app")
+}
+
+/// The one contacts run. A singleton: there is one linked number.
+model WhatsappContactSync {
+  id           Int       @id @default(1)
+  /// `idle` | `running` | `paused` | `done`. CHECKed.
+  state        String    @default("idle") @db.VarChar(16)
+  /// `WA_CONTACTS_PAUSE_CODES`. CHECKed.
+  pauseCode    String?   @map("pause_code") @db.VarChar(16)
+  lastError    String?   @map("last_error")
+  /// `null` is the whole list; 5 is the trial.
+  runLimit     Int?      @map("run_limit")
+  savedThisRun Int       @default(0) @map("saved_this_run")
+  /// The pacing counters (`RunState`). Kept across runs: pressing «ابدأ» again
+  /// must not hand the number a fresh daily cap.
+  sentInBatch  Int       @default(0) @map("sent_in_batch")
+  savedToday   Int       @default(0) @map("saved_today")
+  dayKey       String?   @map("day_key") @db.VarChar(10)
+  nextAt       DateTime? @map("next_at")
+  startedAt    DateTime? @map("started_at")
+  startedBy    String?   @map("started_by")
+  lastSavedAt  DateTime? @map("last_saved_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("whatsapp_contact_sync")
+  @@schema("app")
+}
+
 /// «قف» — a number that must never be messaged again.
 ///
 /// Global rather than per campaign, and consulted both when an audience is

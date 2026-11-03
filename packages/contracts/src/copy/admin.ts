@@ -3297,6 +3297,8 @@ const admin = {
      * wrong person a message about their own child.
      */
     whatsapp: 'مراسلته على واتساب',
+    /** Opens the same number's thread in «صندوق الوارد ← واتساب», inside the dashboard. */
+    whatsappChat: 'المحادثة',
     whatsappFather: 'واتساب ولي الأمر',
     whatsappMother: 'واتساب الأم',
     schoolStream: 'المدرسة',

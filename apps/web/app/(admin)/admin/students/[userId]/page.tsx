@@ -10,9 +10,10 @@ import { AdminSubscriptionRowSchema } from '@ayman/contracts/admin/payments';
 import { z } from 'zod';
 import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
+import { WaStudentChatSchema } from '@ayman/contracts/wa-bot/schemas';
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
-import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
+import { adminGet, adminGetOrForbidden, adminGetOrNull } from '@/lib/admin-api';
 import { can, getSession } from '@/lib/session';
 import { SessionDeviceListSchema } from '@ayman/contracts/sessions';
 import { StudentRecord } from '@/components/admin/students/student-record';
@@ -95,6 +96,31 @@ async function StudentRecordSection({ userId }: { userId: string }) {
   }
 
   return <StudentRecord detail={record} />;
+}
+
+/**
+ * «المحادثة» — this number's thread in «صندوق الوارد ← واتساب», beside the
+ * button that opens WhatsApp itself. Absent, not disabled, when the number
+ * never wrote to the linked device, when the stack has no bot
+ * (`whatsapp.bot` → 404) or when the operator's role cannot read the inbox:
+ * none of those is something to act on from here.
+ */
+async function StudentChatLink({ userId }: { userId: string }) {
+  let chat;
+  try {
+    chat = await adminGetOrNull(`/api/admin/wa-bot/students/${encodeURIComponent(userId)}/chat`, WaStudentChatSchema);
+  } catch {
+    return null;
+  }
+  if (!chat?.id) return null;
+  return (
+    <Link
+      href={`/admin/inbox/whatsapp/${chat.id}`}
+      className="inline-flex min-h-11 items-center rounded-lg border border-line px-4 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors duration-[160ms] ease-out hover:bg-surface-2"
+    >
+      {copy.admin.students.whatsappChat}
+    </Link>
+  );
 }
 
 /** The shape of the record's first screen — eight tiles over a wide card — so
@@ -304,6 +330,9 @@ export default async function StudentDetailPage({
         </h1>
         <span className="mono text-[length:var(--fs-text-sm)] text-fg-muted">{student.phone}</span>
         <WhatsappButton phone={student.phone} label={copy.admin.students.whatsapp} />
+        <Suspense fallback={null}>
+          <StudentChatLink userId={userId} />
+        </Suspense>
         {/* «الترتيب في الدفعة» — نفس رقم «ترتيبي» عند الطالب. في boundary
             لوحده ومن غير fallback: قراية زيادة، والفورم تحت مايستناهاش. */}
         <Suspense fallback={null}>

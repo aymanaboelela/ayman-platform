@@ -342,6 +342,19 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like everything new — and closed for a second reason:
+     * it writes into the account of a REAL WhatsApp number, thousands of
+     * times. A teacher opens it when they have a linked number and want it.
+     * It carries nothing of his: names and numbers come from that stack's
+     * own students.
+     */
+    key: 'whatsapp.contacts',
+    nameAr: 'حفظ الطلبة في واتساب',
+    descriptionAr: 'الطلبة بيتحفظوا جهات اتصال في واتساب الرقم المربوط بس، مش في التليفون، عشان الاستوري توصلهم.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first", like everything new. It makes discount codes on its own
      * and sends them from the WhatsApp number, so it only does anything on a
      * stack where `marketing.whatsapp` and `coupons` are open too — the runner
