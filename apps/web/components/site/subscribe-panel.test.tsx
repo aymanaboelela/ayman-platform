@@ -4,6 +4,7 @@ import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
 import type { CourseMonth } from '@ayman/contracts/months';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
+import { formatEGP } from '@/lib/price';
 import { SubscribePanel } from './subscribe-panel';
 
 /**
@@ -40,6 +41,11 @@ vi.mock('@/lib/api', async () => {
 vi.mock('@/lib/upload-client', () => ({
   uploadPaymentScreenshot: vi.fn(),
 }));
+
+// One object for the whole file — the panel's load effect lists `router` in its
+// dependencies, so a fresh one per render would re-run it on every render.
+const router = { push: vi.fn(), replace: vi.fn() };
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 // jsdom implements neither, and `handleFileChange` calls both to build the
 // thumbnail the student sees after picking a screenshot.
@@ -176,6 +182,8 @@ function Panel(props: Partial<React.ComponentProps<typeof SubscribePanel>> = {})
 beforeEach(() => {
   apiGet.mockReset();
   apiPost.mockReset();
+  router.push.mockReset();
+  router.replace.mockReset();
 });
 
 afterEach(() => {
@@ -797,5 +805,311 @@ describe('coupon code', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.subscribe.couponApply }));
 
     expect(await screen.findByText(copy.subscribe.couponRefused.expired)).toBeTruthy();
+  });
+
+  it('sends a press with no session to log in, carrying the typed code back', async () => {
+    window.history.replaceState({}, '', `/courses/${SLUG}/subscribe`);
+    await openMonthlyForm(true);
+    const { ApiRequestError } = await import('@/lib/api');
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.couponToggle) }));
+    fireEvent.change(screen.getByLabelText(copy.subscribe.couponLabel), { target: { value: 'SAVE25' } });
+    apiPost.mockRejectedValueOnce(new ApiRequestError(401, '/api/payments/coupon-quote'));
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.couponApply }));
+
+    await waitFor(() => expect(router.push).toHaveBeenCalledTimes(1));
+    const target = new URL(router.push.mock.calls[0]![0] as string, 'https://x.test');
+    expect(target.pathname).toBe('/login');
+    expect(target.searchParams.get('next')).toBe(`/courses/${SLUG}/subscribe?coupon=SAVE25`);
+    // Not «الكود مش موجود» — the code was never the problem.
+    expect(screen.queryByText(copy.subscribe.couponRefused.not_found)).toBeNull();
+    expect(screen.queryByText(copy.subscribe.couponRefused.generic)).toBeNull();
+    window.history.replaceState({}, '', '/');
+  });
+});
+
+/**
+ * «اللينك فيه الكود» — a WhatsApp campaign sends
+ * `/courses/:slug/subscribe?coupon=CODE`. The student lands with the box open
+ * and filled, the code is priced by the SERVER the moment a plan is chosen, and
+ * all that is left is paying.
+ */
+describe('a coupon named in the link', () => {
+  const SUBSCRIBE_PATH = `/courses/${SLUG}/subscribe`;
+  const QUOTE = { code: 'SAVE25', originalCents: 20000, discountCents: 5000, finalCents: 15000 };
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  async function chooseMonthly() {
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) }));
+    await screen.findByText(copy.subscribe.railQuestion);
+  }
+
+  /** Every quote answered by what was asked, so the order requests happen to
+   *  go out in does not decide the figures. An `Error` is a refusal. */
+  function quoteWith(answer: (body: Record<string, unknown>) => unknown) {
+    apiPost.mockImplementation((path: string, _schema: unknown, body: Record<string, unknown>) => {
+      if (path !== '/api/payments/coupon-quote') return Promise.reject(new Error(`unexpected ${path}`));
+      const result = answer(body);
+      return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
+    });
+  }
+
+  /** «كود الخصم ‹CODE› متطبّق» — one sentence across a `<bdi>`, so matched on
+   *  the whole line rather than a text node. */
+  function findBanner(code: string) {
+    const line = `${copy.subscribe.couponBannerLead} ${code} ${copy.subscribe.couponBannerApplied}`;
+    return screen.findByText((_, element) => element?.tagName === 'SPAN' && element.textContent === line);
+  }
+
+  it('opens the box filled and applies the code as soon as a plan is chosen', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=%20save25%20`);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
+    apiPost.mockResolvedValueOnce(QUOTE);
+
+    render(<Panel />);
+    await chooseMonthly();
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
+    const [quotePath, , quoteBody] = apiPost.mock.calls[0]! as [string, unknown, Record<string, unknown>];
+    expect(quotePath).toBe('/api/payments/coupon-quote');
+    // Trimmed and upper-cased the way codes are stored; priced for what was picked.
+    expect(quoteBody).toMatchObject({ code: 'SAVE25', courseId: COURSE_ID, plan: 'monthly', termId: null, monthIds: [] });
+    // The SERVER's figure is the one asked for — nothing pressed but the plan.
+    expect((await screen.findAllByText(formatCopy(copy.subscribe.priceLine, { price: '150' }))).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('SAVE25').length).toBeGreaterThan(0);
+    expect(screen.queryByText(copy.subscribe.couponToggle)).toBeNull();
+  });
+
+  it('applies it to the months the same link named', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?month=${MONTH_ONE.id}&coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+      couponsOn: true,
+    });
+    apiPost.mockResolvedValueOnce(QUOTE);
+
+    render(<Panel />);
+    await screen.findByText(copy.subscribe.chooseMonthsTitle);
+
+    // Priced on the picker itself, before «كمّل».
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
+    expect(apiPost.mock.calls[0]![2]).toMatchObject({ code: 'SAVE25', plan: 'monthly', monthIds: [MONTH_ONE.id] });
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.monthsContinue) }));
+    await screen.findByText(copy.subscribe.railQuestion);
+    // The payment step opens on the answer the picker already had.
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('SAVE25').length).toBeGreaterThan(0);
+  });
+
+  it('says why the code was refused instead of dropping it', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=OLDCODE`);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
+    const { ApiRequestError } = await import('@/lib/api');
+    apiPost.mockRejectedValueOnce(
+      new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_expired', message: 'expired' }),
+    );
+
+    render(<Panel />);
+    await chooseMonthly();
+
+    expect(await screen.findByText(copy.subscribe.couponRefused.expired)).toBeTruthy();
+    // Still in the box, so the student can see which code it was.
+    expect(screen.getByLabelText(copy.subscribe.couponLabel)).toHaveValue('OLDCODE');
+    // The full price, not a discount the server did not give.
+    expect(screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: '200' })).length).toBeGreaterThan(0);
+  });
+
+  it('re-prices the code for the new plan on a change of plan, never carrying the old figure', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+    respondWith({ course: liveCourse({ yearlyPriceCents: 150000 }), settings: liveSettings(), couponsOn: true });
+    quoteWith((body) =>
+      body.plan === 'yearly'
+        ? { code: 'SAVE25', originalCents: 150000, discountCents: 30000, finalCents: 120000 }
+        : QUOTE,
+    );
+
+    render(<Panel />);
+    await chooseMonthly();
+    await screen.findAllByText(formatCopy(copy.subscribe.priceLine, { price: '150' }));
+
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.back }));
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(copy.subscribe.planYearlyLabel) }));
+    await screen.findByText(copy.subscribe.railQuestion);
+
+    // The year's own quote from the server — the month's 150 is nowhere.
+    expect((await screen.findAllByText(formatCopy(copy.subscribe.priceLine, { price: formatEGP(120000) }))).length).toBeGreaterThan(0);
+    expect(screen.queryByText(formatCopy(copy.subscribe.priceLine, { price: '150' }))).toBeNull();
+    expect(apiPost.mock.calls.some((call) => (call[2] as { plan?: string }).plan === 'yearly')).toBe(true);
+  });
+
+  it('prices every plan card on the first step and says the code is applied', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ yearlyPriceCents: 150000, terms: [TERM] }),
+      settings: liveSettings(),
+      couponsOn: true,
+    });
+    const { ApiRequestError } = await import('@/lib/api');
+    quoteWith((body) =>
+      body.plan === 'monthly'
+        ? QUOTE
+        : body.plan === 'term'
+          ? { code: 'SAVE25', originalCents: 30000, discountCents: 5000, finalCents: 25000 }
+          : new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_exceeds_price', message: 'no' }),
+    );
+
+    render(<Panel />);
+
+    expect(await findBanner('SAVE25')).toBeTruthy();
+    // The month and the term: struck regular price, the server's price, what came off.
+    const monthly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) });
+    expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '150' }));
+    expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.saleSave, { amount: '50' }));
+    expect(monthly.querySelector('s')?.textContent).toBe(formatCopy(copy.subscribe.priceLine, { price: '200' }));
+    const term = screen.getByRole('button', { name: new RegExp(copy.subscribe.planTermLabel) });
+    expect(term.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '250' }));
+    // The code does not apply to the year, so its card says nothing about it.
+    const yearly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planYearlyLabel) });
+    expect(yearly.querySelector('s')).toBeNull();
+    expect(yearly.textContent).not.toContain('SAVE25');
+    expect(apiPost).toHaveBeenCalledTimes(3);
+
+    // The payment step opens on the card's quote, without asking again.
+    fireEvent.click(monthly);
+    await screen.findByText(copy.subscribe.railQuestion);
+    expect(screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: '150' })).length).toBeGreaterThan(0);
+    expect(apiPost).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows the refusal on the first step when the code applies to nothing there', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=OLDCODE`);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
+    const { ApiRequestError } = await import('@/lib/api');
+    quoteWith(
+      () => new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_expired', message: 'expired' }),
+    );
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.couponRefused.expired)).toBeTruthy();
+    const monthly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) });
+    expect(monthly.querySelector('s')).toBeNull();
+    expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '200' }));
+  });
+
+  it('re-quotes the month total on every change of months, debounced, from the server only', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?month=${MONTH_ONE.id}&coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+      couponsOn: true,
+    });
+    // A deliberately odd discount per selection, so a client-side
+    // calculation could not land on the same figures.
+    quoteWith((body) => {
+      const count = (body.monthIds as string[]).length;
+      return count === 1
+        ? { code: 'SAVE25', originalCents: 20000, discountCents: 5000, finalCents: 15000 }
+        : { code: 'SAVE25', originalCents: 40000, discountCents: 7000, finalCents: 33000 };
+    });
+
+    render(<Panel />);
+
+    expect(await findBanner('SAVE25')).toBeTruthy();
+    expect(await screen.findByText(formatCopy(copy.subscribe.monthsTotal, { price: '150' }), { exact: false })).toBeTruthy();
+    expect(document.querySelector('.bco-total__was')?.textContent).toContain(
+      formatCopy(copy.subscribe.priceLine, { price: '200' }),
+    );
+    // The summary box carries the same two figures.
+    expect(document.querySelector('.bco-sum__was')?.textContent).toContain('200');
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(MONTH_TWO.title) }));
+    // Untouched until the server answers for the new selection — the plain total.
+    expect(screen.getByText(formatCopy(copy.subscribe.monthsTotal, { price: '400' }))).toBeTruthy();
+    expect(await screen.findByText(formatCopy(copy.subscribe.monthsTotal, { price: '330' }), { exact: false })).toBeTruthy();
+    expect(apiPost).toHaveBeenCalledTimes(2);
+    expect(apiPost.mock.calls[1]![2]).toMatchObject({
+      plan: 'monthly',
+      monthIds: [MONTH_ONE.id, MONTH_TWO.id].sort(),
+    });
+  });
+
+  it('asks once for a burst of month taps, not once per tap', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?month=${MONTH_ONE.id}&coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+      couponsOn: true,
+    });
+    quoteWith(() => QUOTE);
+
+    render(<Panel />);
+    await screen.findByText(copy.subscribe.chooseMonthsTitle);
+    const two = screen.getByRole('button', { name: new RegExp(MONTH_TWO.title) });
+    fireEvent.click(two);
+    fireEvent.click(two);
+    fireEvent.click(two);
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    // One month ticked after three taps, priced once.
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    expect(apiPost.mock.calls[0]![2]).toMatchObject({ monthIds: [MONTH_ONE.id, MONTH_TWO.id].sort() });
+  });
+
+  it('is ignored on a stack where coupons are off', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: false });
+
+    render(<Panel />);
+    await chooseMonthly();
+
+    expect(screen.queryByLabelText(copy.subscribe.couponLabel)).toBeNull();
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it('sends a signed-out visitor to log in first, with the code still on the way back', async () => {
+    window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
+    const { ApiRequestError } = await import('@/lib/api');
+    const signedIn = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path === '/api/payments/submissions/me'
+        ? Promise.reject(new ApiRequestError(401, path))
+        : signedIn(path),
+    );
+
+    render(<Panel />);
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledTimes(1));
+    const target = new URL(router.replace.mock.calls[0]![0] as string, 'https://x.test');
+    expect(target.pathname).toBe('/login');
+    expect(target.searchParams.get('next')).toBe(`${SUBSCRIBE_PATH}?coupon=SAVE25`);
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('keeps a signed-out visitor on the page when the link carries no code', async () => {
+    window.history.replaceState({}, '', SUBSCRIBE_PATH);
+    respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: true });
+    const { ApiRequestError } = await import('@/lib/api');
+    const signedIn = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path === '/api/payments/submissions/me'
+        ? Promise.reject(new ApiRequestError(401, path))
+        : signedIn(path),
+    );
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.planMonthlyLabel)).toBeTruthy();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });
