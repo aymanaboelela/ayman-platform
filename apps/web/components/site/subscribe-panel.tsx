@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpen,
@@ -28,6 +29,7 @@ import { activeSalePrice } from '@ayman/contracts/sale';
 import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contracts/wallet';
 import { EntitlementsResponseSchema } from '@ayman/contracts/admin/entitlements';
 import { CouponQuoteSchema, CouponRefusalSchema, type CouponQuote } from '@ayman/contracts/coupons';
+import { normalizeCouponCode } from '@ayman/contracts/coupon-code';
 // The SUBPATH, never the root barrel — `lib/client-barrel.test.ts` fails the
 // build on a root-barrel import from a `'use client'` file.
 import type { CourseMonth, SellablePaymentPlan } from '@ayman/contracts/months';
@@ -38,6 +40,7 @@ import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
 import { formatSaleDay } from '@/lib/sale-day';
+import { withNext } from '@/lib/safe-next';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
 import {
@@ -122,6 +125,39 @@ function requestedMonthIds(months: readonly { id: string }[], owned: readonly st
     .map((month) => month.id)
     .filter((id) => asked.has(id) && !owned.includes(id));
 }
+
+/**
+ * `?coupon=CODE` — a campaign link names the code, so the box opens filled and
+ * the code is applied the moment there is a selection to price it against
+ * (`applyLinkCoupon`). Normalised the way the server stores codes, and NOT
+ * checked against the pattern: a malformed code is the server's to refuse,
+ * and the student then reads why instead of finding the box quietly empty.
+ */
+function couponFromLocation(): string | null {
+  const raw = new URLSearchParams(window.location.search).get('coupon');
+  if (!raw) return null;
+  // The input's own `maxLength` — longer is no code the server stores.
+  const code = normalizeCouponCode(raw).slice(0, 32);
+  return code === '' ? null : code;
+}
+
+/**
+ * The sign-in form, coming back to THIS page with the code still on it.
+ *
+ * A quote needs a session (`payment:submit`), so a signed-out visitor is sent
+ * to log in or register first — and `?next=` carries the whole path AND query,
+ * through `/register`, `/onboarding` and `/welcome` (see `safeNext`), so the
+ * link's `?coupon=` and `?month=` are both there on the way back. A code the
+ * student TYPED is written onto that URL too, so it is not lost to the detour.
+ */
+function loginKeepingCoupon(code: string | null): string {
+  const url = new URL(window.location.href);
+  if (code) url.searchParams.set('coupon', code);
+  return withNext('/login', `${url.pathname}${url.search}`);
+}
+
+/** Exactly what a quote prices — the plan, term and months of one purchase. */
+type CouponSelection = { plan: SellablePaymentPlan; termId: string | null; monthIds: string[] };
 
 type Step =
   | 'checking'
@@ -515,6 +551,23 @@ export function SubscribePanel({
   const [coupon, setCoupon] = useState<CouponQuote | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
+  /**
+   * The link's `?coupon=` until it has been applied ONCE — on the first arrival
+   * at the payment step. After that it is an ordinary typed code: a change of
+   * plan drops the quote and keeps the code in the box, one press from
+   * re-applying, exactly as for a code the student typed.
+   */
+  const linkCouponRead = useRef(false);
+  const pendingLinkCoupon = useRef<string | null>(null);
+  /**
+   * Bumped by every `dropCoupon`, so a quote still in flight for the PREVIOUS
+   * selection lands on nothing. Without it, an auto-applied quote that
+   * answered after a quick «رجوع» to another plan would show its discount
+   * against a purchase it was not made for — the one thing `coupon` promises
+   * never happens.
+   */
+  const couponSeq = useRef(0);
+  const router = useRouter();
   // The native file input is visually hidden (`sr-only`) — this is what the
   // styled dropzone button actually clicks, since a plain browser "Choose
   // File" control reads as nothing selectable on the smaller, older devices
@@ -578,7 +631,35 @@ export function SubscribePanel({
         ]);
       if (cancelled) return;
 
-      setCouponsOn(featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true);
+      const couponsLive = featuresResult.status === 'fulfilled' && featuresResult.value.features.coupons === true;
+      setCouponsOn(couponsLive);
+      // Read once per mount: a «جرّب تاني» must not put the link's code back
+      // over one the student has since changed or removed.
+      if (couponsLive && !linkCouponRead.current) {
+        linkCouponRead.current = true;
+        const linkCode = couponFromLocation();
+        if (linkCode) {
+          pendingLinkCoupon.current = linkCode;
+          setCouponInput(linkCode);
+          setCouponOpen(true);
+        }
+      }
+      /*
+       * A campaign link opened with no session. The code cannot be priced
+       * without one, so the visitor signs in FIRST, rather than choosing a plan
+       * and only then being sent away. `replace`, not `push`: «رجوع» from the
+       * login form must not land on a page that sends them straight back.
+       * 401 and only 401 — anything else is not "signed out".
+       */
+      if (
+        pendingLinkCoupon.current &&
+        mineResult.status === 'rejected' &&
+        mineResult.reason instanceof ApiRequestError &&
+        mineResult.reason.status === 401
+      ) {
+        router.replace(loginKeepingCoupon(null));
+        return;
+      }
 
       setWalletBalance(walletResult.status === 'fulfilled' ? walletResult.value.balanceCents : null);
 
@@ -672,7 +753,7 @@ export function SubscribePanel({
     return () => {
       cancelled = true;
     };
-  }, [courseId, slug, attempt]);
+  }, [courseId, slug, attempt, router]);
 
   /*
    * The live answer where there is one, the cached prop where there is not.
@@ -951,8 +1032,20 @@ export function SubscribePanel({
   /** The quote belonged to the previous selection — see `coupon`. The typed
    *  code stays, so re-applying it is one press. */
   function dropCoupon() {
+    couponSeq.current += 1;
     setCoupon(null);
     setCouponError(null);
+    setCouponBusy(false);
+  }
+
+  /** The link's code, on the first arrival at the payment step — see
+   *  `pendingLinkCoupon`. Handed the selection explicitly: it runs in the same
+   *  handler that sets it, before the state above has caught up. */
+  function applyLinkCoupon(selection: CouponSelection) {
+    const code = pendingLinkCoupon.current;
+    if (!code) return;
+    pendingLinkCoupon.current = null;
+    void applyCoupon(code, selection);
   }
 
   function choosePlan(next: SellablePaymentPlan) {
@@ -990,6 +1083,7 @@ export function SubscribePanel({
       if (terms.length === 1) {
         setTermId(terms[0]!.id);
         setStep('form');
+        applyLinkCoupon({ plan: 'term', termId: terms[0]!.id, monthIds: [] });
       } else {
         setTermId(null);
         setStep('chooseTerm');
@@ -998,6 +1092,7 @@ export function SubscribePanel({
     }
     setTermId(null);
     setStep('form');
+    applyLinkCoupon({ plan: next, termId: null, monthIds: [] });
   }
 
   function chooseTerm(next: CatalogCourseTerm) {
@@ -1005,6 +1100,7 @@ export function SubscribePanel({
     setError(null);
     dropCoupon();
     setStep('form');
+    applyLinkCoupon({ plan: 'term', termId: next.id, monthIds: [] });
   }
 
   /** Multi-select, because a student buys several months in ONE transfer —
@@ -1035,21 +1131,30 @@ export function SubscribePanel({
    * carry, and no transfer. The server re-derives the price and re-checks
    * everything `submit` is checked for; this only says what was picked.
    */
-  /** «تطبيق» — asks the server what this exact purchase costs with the code. */
-  async function applyCoupon() {
-    if (!plan || !couponInput.trim()) return;
+  /** Asks the server what this exact purchase costs with the code. */
+  async function applyCoupon(raw: string, selection: CouponSelection) {
+    const code = raw.trim();
+    if (!code) return;
+    const seq = ++couponSeq.current;
     setCouponBusy(true);
     setCouponError(null);
     try {
       const quote = await apiPost('/api/payments/coupon-quote', CouponQuoteSchema, {
-        code: couponInput.trim(),
+        code,
         courseId,
-        plan,
-        termId,
-        monthIds: selectedMonthIds,
+        plan: selection.plan,
+        termId: selection.termId,
+        monthIds: selection.monthIds,
       });
+      if (seq !== couponSeq.current) return;
       setCoupon(quote);
     } catch (caught) {
+      if (seq !== couponSeq.current) return;
+      // No session — a refusal sentence would blame the code for it.
+      if (caught instanceof ApiRequestError && caught.status === 401) {
+        router.push(loginKeepingCoupon(code));
+        return;
+      }
       setCoupon(null);
       setCouponError(
         couponRefusalSentence(caught) ??
@@ -1058,8 +1163,13 @@ export function SubscribePanel({
             : copy.subscribe.couponRefused.generic),
       );
     } finally {
-      setCouponBusy(false);
+      if (seq === couponSeq.current) setCouponBusy(false);
     }
+  }
+
+  /** «تطبيق» — the typed code, against what is on screen. */
+  function applyTypedCoupon() {
+    if (plan) void applyCoupon(couponInput, { plan, termId, monthIds: selectedMonthIds });
   }
 
   /**
@@ -1464,7 +1574,10 @@ export function SubscribePanel({
           <Button
             type="button"
             className="bco-primary"
-            onClick={() => setStep('form')}
+            onClick={() => {
+              setStep('form');
+              applyLinkCoupon({ plan: 'monthly', termId: null, monthIds: selectedMonthIds });
+            }}
             disabled={nothingChosen}
           >
             {copy.subscribe.monthsContinue}
@@ -1593,7 +1706,7 @@ export function SubscribePanel({
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault();
-                      void applyCoupon();
+                      applyTypedCoupon();
                     }
                   }}
                   disabled={couponBusy || submitting}
@@ -1601,7 +1714,7 @@ export function SubscribePanel({
                 <Button
                   type="button"
                   className="bco-coupon__apply"
-                  onClick={() => void applyCoupon()}
+                  onClick={applyTypedCoupon}
                   disabled={couponBusy || submitting || !couponInput.trim()}
                 >
                   {couponBusy ? (
