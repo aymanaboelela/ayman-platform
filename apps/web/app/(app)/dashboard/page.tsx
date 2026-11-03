@@ -50,6 +50,7 @@ import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
 import { GuardianCodeCard } from '@/components/dashboard/guardian-code-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
+import { FacebookGroupCard } from '@/components/dashboard/facebook-group-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { TodayStrip } from '@/components/engagement/today-strip';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
@@ -787,6 +788,10 @@ export default async function DashboardPage() {
             button leaves the product.
           */}
           <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
+
+          {/* «جروب الفيسبوك» right under it: the other place students are
+              reached off the platform, so the two read as a pair. */}
+          <FacebookGroupCard href={settings.contact.facebookGroup} />
 
           {/*
             «النهارده» — «سؤال اليوم», the plan's share for today, and the
