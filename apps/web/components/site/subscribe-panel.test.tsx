@@ -1079,6 +1079,88 @@ describe('a coupon named in the link', () => {
     expect(apiPost.mock.calls[0]![2]).toMatchObject({ monthIds: [MONTH_ONE.id, MONTH_TWO.id].sort() });
   });
 
+  /*
+   * The «شهر» card of a course sold by curriculum month names no month, so it
+   * is priced as one: the student scanning the cards has to see the month is
+   * discounted too, not only the term.
+   */
+  describe('the «شهر» card on a course sold by month', () => {
+    const ONE_MONTH = { code: 'SAVE25', originalCents: 20000, discountCents: 5100, finalCents: 14900 };
+
+    it('shows one month at the server\'s price, «للشهر», and the picker reuses that quote', async () => {
+      window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+      respondWith({
+        course: liveCourse({ months: [MONTH_ONE, MONTH_TWO], terms: [TERM] }),
+        settings: liveSettings(),
+        ownedMonthIds: [],
+        couponsOn: true,
+      });
+      quoteWith((body) =>
+        body.plan === 'term' ? { code: 'SAVE25', originalCents: 30000, discountCents: 15000, finalCents: 15000 } : ONE_MONTH,
+      );
+
+      render(<Panel />);
+      expect(await findBanner('SAVE25')).toBeTruthy();
+      const monthly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) });
+      await waitFor(() =>
+        expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.couponPerMonth, { price: '149' })),
+      );
+      expect(monthly.querySelector('s')?.textContent).toBe(formatCopy(copy.subscribe.priceLine, { price: '200' }));
+      expect(monthly.textContent).toContain('SAVE25');
+      const monthQuote = apiPost.mock.calls.find((call) => (call[2] as { plan?: string }).plan === 'monthly');
+      expect(monthQuote![2]).toMatchObject({ plan: 'monthly', termId: null, monthIds: [MONTH_ONE.id] });
+      expect(apiPost).toHaveBeenCalledTimes(2);
+
+      // Ticking that month in the picker is the same purchase — no second ask.
+      fireEvent.click(monthly);
+      fireEvent.click(await screen.findByRole('button', { name: new RegExp(MONTH_ONE.title) }));
+      expect(
+        await screen.findByText(formatCopy(copy.subscribe.monthsTotal, { price: '149' }), { exact: false }),
+      ).toBeTruthy();
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      expect(apiPost).toHaveBeenCalledTimes(2);
+    });
+
+    it('prices a month the student does not already hold', async () => {
+      window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+      respondWith({
+        course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+        settings: liveSettings(),
+        ownedMonthIds: [MONTH_ONE.id],
+        couponsOn: true,
+      });
+      quoteWith(() => ONE_MONTH);
+
+      render(<Panel />);
+      await findBanner('SAVE25');
+      expect(apiPost.mock.calls[0]![2]).toMatchObject({ monthIds: [MONTH_TWO.id] });
+    });
+
+    it('stays plain when the code does not apply to months', async () => {
+      window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
+      respondWith({
+        course: liveCourse({ months: [MONTH_ONE, MONTH_TWO], terms: [TERM] }),
+        settings: liveSettings(),
+        ownedMonthIds: [],
+        couponsOn: true,
+      });
+      const { ApiRequestError } = await import('@/lib/api');
+      quoteWith((body) =>
+        body.plan === 'term'
+          ? { code: 'SAVE25', originalCents: 30000, discountCents: 15000, finalCents: 15000 }
+          : new ApiRequestError(422, '/api/payments/coupon-quote', { code: 'coupon_not_for_plan', message: 'no' }),
+      );
+
+      render(<Panel />);
+      expect(await findBanner('SAVE25')).toBeTruthy();
+      await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(2));
+      const monthly = screen.getByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) });
+      expect(monthly.querySelector('s')).toBeNull();
+      expect(monthly.textContent).not.toContain('SAVE25');
+      expect(monthly.getAttribute('aria-label')).toContain(formatCopy(copy.subscribe.priceLine, { price: '200' }));
+    });
+  });
+
   it('is ignored on a stack where coupons are off', async () => {
     window.history.replaceState({}, '', `${SUBSCRIBE_PATH}?coupon=SAVE25`);
     respondWith({ course: liveCourse(), settings: liveSettings(), couponsOn: false });
