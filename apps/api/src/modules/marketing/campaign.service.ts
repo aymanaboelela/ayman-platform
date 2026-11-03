@@ -15,6 +15,7 @@ import type {
 import { AudienceSchema, isCourseAware } from '@ayman/contracts/marketing/campaign';
 import {
   DailyCouponSchema,
+  SAMPLE_DAILY_SUFFIX,
   dailyCouponCode,
   dailyCouponLastDay,
   formatArabicDay,
@@ -164,7 +165,7 @@ export class CampaignService {
     const courseIds = audience.missingMonths ? audience.courseIds : (dailyCoupon?.courseIds ?? []);
     const courses = await this.offers.courses(courseIds);
     const offer = await this.offers.offerFor(next?.userId ?? null, courses);
-    const coupon = dailyCoupon ? sampleCoupon(dailyCoupon) : null;
+    const coupon = dailyCoupon ? await this.todaysCoupon(campaign.id, dailyCoupon) : null;
     const link = this.offers.linkFor(offer, coupon?.code ?? null);
     const phrase = offer ? missingMonthsPhrase(offer.missing.map((m) => m.monthIndex), offer.openCount) : null;
 
@@ -543,6 +544,16 @@ export class CampaignService {
 
   // ── helpers ────────────────────────────────────────────────────────────
 
+  /** Today's code if the runner made it, otherwise what it will look like. */
+  private async todaysCoupon(campaignId: string, config: DailyCoupon): Promise<{ code: string; lastDay: string }> {
+    const sample = sampleCoupon(config);
+    const made = await this.prisma.coupon.findUnique({
+      where: { campaignId_campaignDay: { campaignId, campaignDay: cairoParts(new Date()).day } },
+      select: { code: true },
+    });
+    return made ? { ...sample, code: made.code } : sample;
+  }
+
   /**
    * A daily code is refused at creation, not discovered at the first send:
    * the switches must be open on this stack, and every course must exist.
@@ -638,11 +649,12 @@ export function pacingOf(campaign: MarketingCampaign): Pacing {
   };
 }
 
-/** Today's code as it WILL be, for a preview — nothing is written. */
+/** Today's code as it WILL look, for a preview — nothing is written, and the
+ *  random tail is a sample (`SAMPLE_DAILY_SUFFIX`). */
 function sampleCoupon(config: DailyCoupon): { code: string; lastDay: string } {
   const day = cairoParts(new Date()).day;
   return {
-    code: dailyCouponCode(config.prefix, day),
+    code: dailyCouponCode(config.prefix, day, SAMPLE_DAILY_SUFFIX),
     lastDay: formatArabicDay(dailyCouponLastDay(day, config.validDays)),
   };
 }

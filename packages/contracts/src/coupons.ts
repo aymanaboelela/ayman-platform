@@ -76,6 +76,8 @@ export function hasAnyPlanAmount(amounts: CouponPlanAmounts): boolean {
  * - `exceeds_price` — the discount would make the purchase free or less; a
  *   transfer of zero is not a payment, and a free subscription is an admin's
  *   decision on the student's page, not a code.
+ * - `campaign_used` — this account already redeemed a code from the same
+ *   campaign (each send-day has its own code; the OFFER is once per student).
  * - `not_for_plan` — a `per_plan` coupon with no amount for the plan picked
  *   (the month and the term are discounted, the year is not).
  * - `unavailable` — the feature is off on this stack.
@@ -87,6 +89,7 @@ export const CouponRefusalSchema = z.enum([
   'expired',
   'exhausted',
   'per_student_limit',
+  'campaign_used',
   'not_for_course',
   'not_for_plan',
   'exceeds_price',

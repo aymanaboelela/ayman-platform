@@ -19,7 +19,15 @@ import {
 } from '@ayman/contracts/marketing/campaign';
 import type { Pacing } from '@ayman/contracts/marketing/pacing';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
-import { COUPON_TOKEN, LAST_DAY_TOKEN, dailyCouponCode, dailyCouponLastDay, formatArabicDay } from '@ayman/contracts/marketing/daily-coupon';
+import {
+  COUPON_TOKEN,
+  DAILY_COUPON_PREFIX_MAX,
+  LAST_DAY_TOKEN,
+  SAMPLE_DAILY_SUFFIX,
+  dailyCouponCode,
+  dailyCouponLastDay,
+  formatArabicDay,
+} from '@ayman/contracts/marketing/daily-coupon';
 import { MISSING_MONTHS_TOKEN, missingMonthsPhrase } from '@ayman/contracts/marketing/missing-months';
 import { cairoParts } from '@ayman/contracts/marketing/pacing';
 import { adminCampaignOffer as offerCopy } from '@ayman/contracts/copy/admin-campaign-offer';
@@ -178,7 +186,7 @@ export function CampaignForm({ courses, siteUrl }: { courses: CourseOption[]; si
   const sampleCoupon =
     couponsOn && couponOn
       ? {
-          code: dailyCouponCode(couponPrefix.trim() || 'CODE', today),
+          code: dailyCouponCode(couponPrefix.trim() || 'CODE', today, SAMPLE_DAILY_SUFFIX),
           lastDay: formatArabicDay(dailyCouponLastDay(today, couponDays)),
         }
       : null;
@@ -762,7 +770,7 @@ export function CampaignForm({ courses, siteUrl }: { courses: CourseOption[]; si
                       id="marketing-coupon-prefix"
                       dir="ltr"
                       className="mono uppercase"
-                      maxLength={28}
+                      maxLength={DAILY_COUPON_PREFIX_MAX}
                       value={couponPrefix}
                       onChange={(e) => setCouponPrefix(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                     />

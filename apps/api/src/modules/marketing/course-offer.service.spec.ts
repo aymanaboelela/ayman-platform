@@ -5,7 +5,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { HttpException } from '@nestjs/common';
 import { EMPTY_AUDIENCE } from '@ayman/contracts/marketing/campaign';
 import { cairoParts } from '@ayman/contracts/marketing/pacing';
-import { dailyCouponCode, type DailyCoupon } from '@ayman/contracts/marketing/daily-coupon';
+import { COUPON_CODE_PATTERN } from '@ayman/contracts/coupon-code';
+import type { DailyCoupon } from '@ayman/contracts/marketing/daily-coupon';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -13,7 +14,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import type { MediaService } from '../media/media.service';
 import { PaymentsService } from '../payments/payments.service';
 import { AudienceService } from './audience.service';
-import { CourseOfferService, DayCouponTakenError } from './course-offer.service';
+import { CourseOfferService, randomSuffix } from './course-offer.service';
 import { CampaignRunner } from './campaign-runner.service';
 import type { WhatsappDeviceService } from './whatsapp-device.service';
 import type { OutreachService } from '../outreach/outreach.service';
@@ -85,6 +86,16 @@ describe('course offers', () => {
   }
 
   const ids: Record<string, string> = {};
+
+  /** The code the runner made for `id` today — read back, never derived:
+   *  its tail is random on purpose. */
+  const todaysCode = async (id: string) =>
+    (
+      await prisma.coupon.findUniqueOrThrow({
+        where: { campaignId_campaignDay: { campaignId: id, campaignDay: cairoParts(new Date()).day } },
+        select: { code: true },
+      })
+    ).code;
 
   const config = (overrides: Partial<DailyCoupon> = {}): DailyCoupon => ({
     prefix,
@@ -245,8 +256,12 @@ describe('course offers', () => {
       const now = new Date();
       const campaign = { id: campaignId, name: 'cof', createdById: adminId };
       const results = await Promise.all([1, 2, 3, 4].map(() => offers.ensureDayCoupon(campaign, config(), now)));
-      const code = dailyCouponCode(prefix, cairoParts(now).day);
+      const code = await todaysCode(campaignId);
       expect(new Set(results.map((r) => r.code))).toEqual(new Set([code]));
+      // PREFIX + DDMM + '-' + four random characters, within the stored shape.
+      const [, month, date] = cairoParts(now).day.split('-');
+      expect(code).toMatch(new RegExp(`^${prefix}${date}${month}-[A-Z2-9]{4}$`));
+      expect(code).toMatch(COUPON_CODE_PATTERN);
       expect(await prisma.coupon.count({ where: { campaignId } })).toBe(1);
 
       // …and a later tick the same day finds the same row.
@@ -262,17 +277,19 @@ describe('course offers', () => {
       expect(row.endsAt!.getTime() - now.getTime()).toBeLessThanOrEqual(4 * 86_400_000);
     });
 
-    it('refuses to reuse a code that already belongs to another coupon', async () => {
+    it('cannot be guessed: the same prefix on the same day is a different code for another campaign', async () => {
       const now = new Date();
-      // `campaignId` already owns today's code from the test above.
-      await expect(
-        offers.ensureDayCoupon({ id: otherCampaignId, name: 'other', createdById: adminId }, config(), now),
-      ).rejects.toBeInstanceOf(DayCouponTakenError);
-      expect(await prisma.coupon.count({ where: { campaignId: otherCampaignId } })).toBe(0);
+      const other = await offers.ensureDayCoupon({ id: otherCampaignId, name: 'other', createdById: adminId }, config(), now);
+      expect(other.code).not.toBe(await todaysCode(campaignId));
+      expect(other.code.startsWith(prefix)).toBe(true);
+      // The tail is drawn from the CSPRNG over [A-Z2-9].
+      const tails = new Set(Array.from({ length: 50 }, () => randomSuffix()));
+      expect(tails.size).toBeGreaterThan(45);
+      for (const tail of tails) expect(tail).toMatch(/^[A-Z2-9]{4}$/);
     });
 
     it('prices per plan at the checkout: 150 → 99 a month, 450 → 300 a term, refused on the year', async () => {
-      const code = dailyCouponCode(prefix, cairoParts(new Date()).day);
+      const code = await todaysCode(campaignId);
       const studentId = ids.month1!;
       const month = await payments.quoteCoupon(studentId, {
         code,
@@ -317,7 +334,7 @@ describe('course offers', () => {
     });
 
     it('files a two-month claim at 2 × 99, under the lock, and records the per-month discount', async () => {
-      const code = dailyCouponCode(prefix, cairoParts(new Date()).day);
+      const code = await todaysCode(campaignId);
       const submission = await payments.submit(ids.month1!, {
         courseId: general.id,
         plan: 'monthly',
@@ -330,6 +347,54 @@ describe('course offers', () => {
       expect(submission.amountCents).toBe(19_800);
       const redemption = await prisma.couponRedemption.findUniqueOrThrow({ where: { submissionId: submission.id } });
       expect(redemption).toMatchObject({ originalCents: 30_000, discountCents: 10_200 });
+    });
+
+    it('is one offer per student across the whole campaign — another day\'s code is refused', async () => {
+      // A second day's code for the SAME campaign, as the runner would make
+      // tomorrow (written directly: the spec cannot wait a day).
+      const tomorrow = await prisma.coupon.create({
+        data: {
+          code: `${prefix}NEXT-${randomSuffix()}`,
+          kind: 'per_plan',
+          monthlyOffCents: 5_100,
+          termOffCents: 15_000,
+          allCourses: false,
+          maxUsesPerStudent: 1,
+          campaignId,
+          campaignDay: '2099-01-01',
+          courses: { createMany: { data: [{ courseId: general.id }, { courseId: languages.id }] } },
+        },
+      });
+      // On «لغات»: `month1` has a claim in review on «عربي», which would
+      // (rightly) block any second claim there before the coupon is read.
+      const quote = (userId: string) =>
+        payments
+          .quoteCoupon(userId, {
+            code: tomorrow.code,
+            courseId: languages.id,
+            plan: 'monthly',
+            termId: null,
+            monthIds: [languages.months[1]!],
+          })
+          .then((q) => q.finalCents, codeOf);
+
+      // `month1` redeemed today's code in the test above.
+      expect(await quote(ids.month1!)).toBe('coupon_campaign_used');
+      // …and the claim itself refuses it under the lock, writing nothing.
+      const claim = payments
+        .purchaseFromWallet(ids.month1!, {
+          courseId: languages.id,
+          plan: 'monthly',
+          termId: null,
+          monthIds: [languages.months[1]!],
+          idempotencyKey: randomUUID(),
+          couponCode: tomorrow.code,
+        })
+        .then(() => undefined, codeOf);
+      expect(await claim).toBe('coupon_campaign_used');
+      expect((await prisma.coupon.findUniqueOrThrow({ where: { id: tomorrow.id } })).usesCount).toBe(0);
+      // A student who never used the campaign's codes still gets it.
+      expect(await quote(ids.lapsed!)).toBe(9_900);
     });
   });
 
@@ -416,7 +481,7 @@ describe('course offers', () => {
       await runner.tick();
 
       expect(sent).toHaveLength(2);
-      const code = dailyCouponCode(`R${stamp}`.slice(0, 20), cairoParts(new Date()).day);
+      const code = await todaysCode(id);
       const [partial, none] = sent.map((row) => row.text);
 
       expect(partial).toContain('كمّلنا مع بعض! فاضل الشهر التاني والتالت');

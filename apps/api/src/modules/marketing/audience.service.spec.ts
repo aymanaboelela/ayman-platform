@@ -5,7 +5,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { EMPTY_AUDIENCE, type Audience } from '@ayman/contracts/marketing/campaign';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
 import { AudienceService } from './audience.service';
+import { CourseOfferService } from './course-offer.service';
 
 /**
  * Integration test against the real database — the same reasoning
@@ -35,7 +37,7 @@ describe('AudienceService', () => {
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
     }) as unknown as PrismaService;
     await prisma.$connect();
-    service = new AudienceService(prisma);
+    service = new AudienceService(prisma, new CourseOfferService(prisma, new AuditService(prisma)));
 
     const stamp = Date.now();
     const suffix = stamp.toString(36);

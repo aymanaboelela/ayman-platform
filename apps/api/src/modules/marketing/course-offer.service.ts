@@ -1,6 +1,9 @@
+import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { cairoParts, fromCairoWall } from '@ayman/contracts/marketing/pacing';
 import {
+  DAILY_COUPON_SUFFIX_ALPHABET,
+  DAILY_COUPON_SUFFIX_LENGTH,
   addCairoDays,
   dailyCouponCode,
   dailyCouponLastDay,
@@ -250,11 +253,11 @@ export class CourseOfferService {
    * The runner holds a Redis lock across a tick, so the race needs two API
    * containers AND a lock lost to its TTL — rare, and harmless by this.
    *
-   * The one P2002 that is NOT a race is the CODE already belonging to some
-   * other coupon — one made by hand, or another campaign with the same prefix
-   * on the same day. That throws `DayCouponTakenError`, and the runner pauses
-   * the campaign and says which code: re-using a stranger's coupon would send
-   * its amounts and its window under this campaign's message.
+   * The other P2002 is the CODE already belonging to some other coupon. The
+   * random tail makes that almost impossible; it is retried with a new tail,
+   * and only five collisions in a row throw `DayCouponTakenError` (the runner
+   * pauses and says which code). A stranger's coupon is never reused: it
+   * would send its amounts and its window under this campaign's message.
    */
   async ensureDayCoupon(
     campaign: { id: string; name: string; createdById: string | null },
@@ -266,10 +269,31 @@ export class CourseOfferService {
     const found = await this.findDayCoupon(campaign.id, day);
     if (found) return { code: found, lastDay: formatArabicDay(lastDay) };
 
-    const code = dailyCouponCode(config.prefix, day);
     const after = addCairoDays(lastDay, 1).split('-').map(Number) as [number, number, number];
     // The close of `lastDay`, Cairo time — midnight that begins the next day.
     const endsAt = fromCairoWall(after[0], after[1], after[2], 0);
+
+    // A fresh random tail per attempt: a code that collides with some other
+    // coupon (34⁴ ≈ 1.3M tails a day, so: almost never) is retried rather
+    // than reused. A collision on the (campaign, day) key is a race another
+    // worker won — re-read and use its row.
+    let code = '';
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      code = dailyCouponCode(config.prefix, day, randomSuffix());
+      const made = await this.createDayCoupon(campaign, config, { code, day, endsAt, now });
+      if (made === 'created') return { code, lastDay: formatArabicDay(lastDay) };
+      const raced = await this.findDayCoupon(campaign.id, day);
+      if (raced) return { code: raced, lastDay: formatArabicDay(lastDay) };
+    }
+    throw new DayCouponTakenError(code);
+  }
+
+  /** One INSERT of the day's coupon; `'taken'` on any unique violation. */
+  private async createDayCoupon(
+    campaign: { id: string; name: string; createdById: string | null },
+    config: DailyCoupon,
+    { code, day, endsAt, now }: { code: string; day: string; endsAt: Date; now: Date },
+  ): Promise<'created' | 'taken'> {
     try {
       const created = await this.prisma.coupon.create({
         data: {
@@ -314,12 +338,9 @@ export class CourseOfferService {
       });
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
-      // Lost the race to another worker — use what it made.
-      const raced = await this.findDayCoupon(campaign.id, day);
-      if (raced) return { code: raced, lastDay: formatArabicDay(lastDay) };
-      throw new DayCouponTakenError(code);
+      return 'taken';
     }
-    return { code, lastDay: formatArabicDay(lastDay) };
+    return 'created';
   }
 
   private async findDayCoupon(campaignId: string, day: string): Promise<string | null> {
@@ -329,6 +350,15 @@ export class CourseOfferService {
     });
     return row?.code ?? null;
   }
+}
+
+/** Four characters of `DAILY_COUPON_SUFFIX_ALPHABET`, from the CSPRNG. */
+export function randomSuffix(): string {
+  let out = '';
+  for (let i = 0; i < DAILY_COUPON_SUFFIX_LENGTH; i += 1) {
+    out += DAILY_COUPON_SUFFIX_ALPHABET[randomInt(DAILY_COUPON_SUFFIX_ALPHABET.length)];
+  }
+  return out;
 }
 
 /**

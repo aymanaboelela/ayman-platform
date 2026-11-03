@@ -70,6 +70,8 @@ import { FollowUpService } from '../modules/follow-up/follow-up.service';
 import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
+import { CourseOfferService } from '../modules/marketing/course-offer.service';
+import { EMPTY_AUDIENCE } from '@ayman/contracts/marketing/campaign';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
 import { CheckoutIntentsController } from '../modules/auto-outreach/checkout-intents.controller';
 import { AdminAutoOutreachController } from '../modules/auto-outreach/admin-auto-outreach.controller';
@@ -445,6 +447,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
          */
         CampaignService,
         AudienceService,
+        // «ناقصهم شهور» / «كود خصم لكل يوم» — injected by both services above.
+        CourseOfferService,
         WhatsappDeviceService,
         CheckoutIntentsService,
         AutoOutreachCandidates,
@@ -775,6 +779,28 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
 
   type Actor = 'anonymous' | 'student' | 'other' | 'admin';
   const apps = { anonymous: () => anonApp, student: () => studentApp, other: () => otherApp, admin: () => adminApp };
+
+  /** A campaign body with a daily code, on a course that does not exist. */
+  const dailyCouponCampaign = () => ({
+    name: 'عرض',
+    body: 'أهلاً {{الاسم}} {{الكود}}',
+    audience: { ...EMPTY_AUDIENCE, extraPhones: ['01012345678'] },
+    pacing: {
+      minDelaySeconds: 30,
+      maxDelaySeconds: 90,
+      batchSize: 30,
+      batchPauseMinutes: 10,
+      dailyCap: 200,
+      windowStartHour: 10,
+      windowEndHour: 22,
+    },
+    dailyCoupon: {
+      prefix: 'WELCOME',
+      validDays: 3,
+      courseIds: [MISSING_UUID],
+      planAmounts: { monthly: 5_100, quarterly: null, term: 15_000, yearly: null },
+    },
+  });
 
   interface Row {
     label: string;
@@ -1544,6 +1570,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing campaigns: admin', method: 'get', path: () => '/api/admin/marketing/campaigns', actor: 'admin', status: 200 },
     { label: 'marketing campaign create: anonymous', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'anonymous', status: 401 },
     { label: 'marketing campaign create: student', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'student', status: 403 },
+    /*
+      «كود خصم لكل يوم» — a body carrying `dailyCoupon` also needs
+      `payment:review` (the controller checks it on top of the guard; the
+      staff-without-it case is `marketing.controller.coupon-permission.spec`).
+      The admin row proves it passes authorization: the course id is absent,
+      so the service answers 400, not 403.
+    */
+    { label: 'marketing campaign create with daily coupon: anonymous', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'anonymous', status: 401, body: () => dailyCouponCampaign() },
+    { label: 'marketing campaign create with daily coupon: student', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'student', status: 403, body: () => dailyCouponCampaign() },
+    { label: 'marketing campaign create with daily coupon: admin', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'admin', status: 400, body: () => dailyCouponCampaign() },
     { label: 'marketing campaign detail: anonymous', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
     { label: 'marketing campaign detail: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
     // 404, not 200: the id is deliberately one that does not exist. What this

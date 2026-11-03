@@ -4,6 +4,7 @@ import {
   ConflictException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -29,6 +30,7 @@ import { RECIPIENT_FILTERS, type RecipientFilter } from '@ayman/contracts/market
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { userHasPermission } from '../../auth/permissions';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { AuditService } from '../../audit/audit.service';
 import { CampaignService } from './campaign.service';
@@ -283,7 +285,19 @@ export class MarketingController {
   @RequirePermission('marketing:write')
   @RequireCsrf()
   @Post('campaigns')
-  create(@Body() body: CampaignCreateDto, @CurrentUser() user: AuthenticatedUser): Promise<CampaignRow> {
+  async create(@Body() body: CampaignCreateDto, @CurrentUser() user: AuthenticatedUser): Promise<CampaignRow> {
+    /*
+      A daily code IS a coupon — the runner mints one every day it sends — and
+      making a coupon by hand needs `payment:review` (`AdminCouponsController`).
+      `marketing:write` alone must not be a way round that, so the body decides
+      the permission here, through the same override-aware check the guard
+      uses (a per-user «اقفل» on `payment:review` wins). The patch route cannot
+      set `dailyCoupon` at all — `CampaignPatchSchema` has no such key and is
+      not strict, so the key is stripped.
+    */
+    if (body.dailyCoupon !== null && !userHasPermission(user.id, user.role, 'payment:review')) {
+      throw new ForbiddenException({ code: 'coupon_permission', message: 'payment:review required for a daily coupon' });
+    }
     return this.campaigns.create(body, user.id);
   }
 

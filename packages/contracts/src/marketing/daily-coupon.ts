@@ -22,20 +22,35 @@ import { CouponPlanAmountsSchema, hasAnyPlanAmount } from '@ayman/contracts/coup
  * No relative imports — same rule as every other leaf module in this package.
  */
 
-/** The code itself — `WELCOME` + `0311` for 3 November. */
+/** The code itself — `WELCOME0311-K7QM` for 3 November. */
 export const COUPON_TOKEN = '{{الكود}}';
 /** The Cairo date the code stops working, written out in Arabic. */
 export const LAST_DAY_TOKEN = '{{آخر_يوم}}';
 
 /**
- * A code is `prefix + DDMM`, at most 32 characters with the stored pattern
- * `[A-Z0-9_-]`, so the prefix stops at 28. Letters and digits only here: a
- * `-` at the end of a prefix reads as part of the date to anybody typing it.
+ * A code is `PREFIX` + `DDMM` + `-` + four random characters — at most 32 with
+ * the stored pattern `[A-Z0-9_-]`, so the prefix stops at 23. Letters and
+ * digits only in the prefix: a `-` there would read as the separator.
+ *
+ * ## Why the random tail
+ *
+ * `PREFIX + DDMM` alone is guessable: anybody who got Tuesday's code can
+ * type Wednesday's before it reaches them, and one student could redeem a
+ * fresh code every day of the campaign. The tail makes a day's code
+ * knowable only from that day's message; once-per-student across the WHOLE
+ * campaign is enforced in the ledger (`perStudentRefusal`, `campaign_used`).
  */
+export const DAILY_COUPON_PREFIX_MAX = 23;
+/** No 0/1 — a code read off a phone screen and typed by hand. */
+export const DAILY_COUPON_SUFFIX_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789';
+export const DAILY_COUPON_SUFFIX_LENGTH = 4;
+/** What a preview shows in place of the tail it cannot know yet. */
+export const SAMPLE_DAILY_SUFFIX = 'K7QM';
+
 const PrefixSchema = z
   .string()
   .trim()
-  .regex(/^[A-Za-z0-9]{2,28}$/, 'البادئة حروف إنجليزي وأرقام بس، من ٢ لـ ٢٨')
+  .regex(/^[A-Za-z0-9]{2,23}$/, 'البادئة حروف إنجليزي وأرقام بس، من ٢ لـ ٢٣')
   .transform((raw) => raw.toUpperCase());
 
 export const DailyCouponSchema = z
@@ -54,10 +69,10 @@ export const DailyCouponSchema = z
   });
 export type DailyCoupon = z.infer<typeof DailyCouponSchema>;
 
-/** `YYYY-MM-DD` (the pacing's Cairo day key) → `DDMM`. */
-export function dailyCouponCode(prefix: string, cairoDay: string): string {
+/** `YYYY-MM-DD` (the pacing's Cairo day key) + tail → `PREFIXDDMM-TAIL`. */
+export function dailyCouponCode(prefix: string, cairoDay: string, suffix: string): string {
   const [, month, date] = cairoDay.split('-');
-  return `${prefix.toUpperCase()}${date}${month}`;
+  return `${prefix.toUpperCase()}${date}${month}-${suffix.toUpperCase()}`;
 }
 
 /** Calendar arithmetic on a `YYYY-MM-DD`, in UTC so no offset can shift it. */

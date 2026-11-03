@@ -60,6 +60,8 @@ interface CouponFacts {
   maxUsesPerStudent: number | null;
   usesCount: number;
   isActive: boolean;
+  /** «كود خصم لكل يوم» — set on a campaign's day code. */
+  campaignId: string | null;
   courses: readonly { courseId: string }[];
 }
 
@@ -106,6 +108,7 @@ function factsSelect(courseId: string) {
     maxUsesPerStudent: true,
     usesCount: true,
     isActive: true,
+    campaignId: true,
     courses: { where: { courseId }, select: { courseId: true } },
   } as const;
 }
@@ -161,6 +164,14 @@ async function perStudentRefusal(
   coupon: CouponFacts,
   userId: string,
 ): Promise<CouponRefusal | null> {
+  // A campaign's day codes are ONE offer: each day has its own code, and a
+  // student who redeemed Monday's must not redeem Tuesday's as well.
+  if (coupon.campaignId !== null) {
+    const fromCampaign = await client.couponRedemption.count({
+      where: { userId, releasedAt: null, couponId: { not: coupon.id }, coupon: { campaignId: coupon.campaignId } },
+    });
+    if (fromCampaign > 0) return 'campaign_used';
+  }
   if (coupon.maxUsesPerStudent === null) return null;
   // Released uses (a rejected claim) do not count — the student never got
   // anything for them.
@@ -215,6 +226,16 @@ export async function claimCoupon(
     where: { code },
     select: factsSelect(request.courseId),
   });
+  /*
+    A campaign day code: the once-per-campaign rule counts redemptions of the
+    campaign's OTHER codes, whose row locks this claim does not hold. Lock the
+    campaign row too, so two claims by one student on two days' codes are
+    serialised and the second one's count sees the first. Lock order on this
+    path: coupon → campaign → wallet; nothing takes them the other way.
+  */
+  if (locked.campaignId !== null) {
+    await tx.$queryRaw`SELECT 1 FROM "app"."marketing_campaigns" WHERE "id" = ${locked.campaignId}::uuid FOR UPDATE`;
+  }
   // The count from before this claim's own increment, so the shared rule
   // reads it the way `quoteCoupon` does. (The ceiling itself was already
   // decided by the UPDATE.)

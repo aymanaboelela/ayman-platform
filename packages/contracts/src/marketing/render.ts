@@ -54,9 +54,11 @@ function tidy(text: string): string {
 }
 
 export function renderCampaignBody({ body, name, linkUrl, coupon, missingMonths }: RenderInput): string {
-  const first = name ? firstNameOf(name) : '';
-  let text = body.split(NAME_TOKEN).join(first);
-  text = text.split(COUPON_TOKEN).join(coupon?.code ?? '');
+  // The name is the one value a STUDENT typed, so it goes in LAST — after
+  // every other token is already gone — and without braces: a name spelled
+  // «{{الكود}}» or «{{اللينك}}» must never expand into a code or a link.
+  const first = name ? firstNameOf(name).replace(/[{}]/gu, '') : '';
+  let text = body.split(COUPON_TOKEN).join(coupon?.code ?? '');
   text = text.split(LAST_DAY_TOKEN).join(coupon?.lastDay ?? '');
   text = text.split(MISSING_MONTHS_TOKEN).join(missingMonths ?? '');
 
@@ -68,6 +70,7 @@ export function renderCampaignBody({ body, name, linkUrl, coupon, missingMonths 
     text = `${text}\n\n${linkUrl}`;
   }
 
+  text = text.split(NAME_TOKEN).join(first);
   return tidy(text);
 }
 

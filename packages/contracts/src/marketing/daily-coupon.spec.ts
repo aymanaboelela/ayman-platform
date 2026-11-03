@@ -6,7 +6,9 @@ import {
   EMPTY_AUDIENCE,
   isCourseAware,
 } from '@ayman/contracts/marketing/campaign';
+import { COUPON_CODE_PATTERN, normalizeCouponCode } from '@ayman/contracts/coupon-code';
 import {
+  DAILY_COUPON_PREFIX_MAX,
   DailyCouponSchema,
   addCairoDays,
   dailyCouponCode,
@@ -22,8 +24,13 @@ const PLAN_AMOUNTS = { monthly: 5_100, quarterly: null, term: 15_000, yearly: nu
 
 describe('the day code', () => {
   it('is the prefix plus DDMM of the Cairo send day', () => {
-    expect(dailyCouponCode('welcome', '2026-11-03')).toBe('WELCOME0311');
-    expect(dailyCouponCode('WELCOME', '2027-01-09')).toBe('WELCOME0901');
+    expect(dailyCouponCode('welcome', '2026-11-03', 'k7qm')).toBe('WELCOME0311-K7QM');
+    expect(dailyCouponCode('WELCOME', '2027-01-09', 'AB23')).toBe('WELCOME0901-AB23');
+    // The longest prefix still fits the stored code shape.
+    const longest = dailyCouponCode('X'.repeat(DAILY_COUPON_PREFIX_MAX), '2026-11-03', 'K7QM');
+    expect(longest.length).toBeLessThanOrEqual(32);
+    expect(longest).toMatch(COUPON_CODE_PATTERN);
+    expect(normalizeCouponCode(longest)).toBe(longest);
   });
 
   it('works for N days after the day it reached the student, across a month end', () => {
@@ -42,7 +49,8 @@ describe('the day code', () => {
     const base = { prefix: 'WELCOME', validDays: 3, courseIds: [COURSE], planAmounts: PLAN_AMOUNTS };
     expect(DailyCouponSchema.parse(base).prefix).toBe('WELCOME');
     expect(DailyCouponSchema.safeParse({ ...base, prefix: 'WEL-COME' }).success).toBe(false);
-    expect(DailyCouponSchema.safeParse({ ...base, prefix: 'X'.repeat(29) }).success).toBe(false);
+    expect(DailyCouponSchema.safeParse({ ...base, prefix: 'X'.repeat(23) }).success).toBe(true);
+    expect(DailyCouponSchema.safeParse({ ...base, prefix: 'X'.repeat(24) }).success).toBe(false);
     expect(DailyCouponSchema.safeParse({ ...base, courseIds: [] }).success).toBe(false);
     expect(
       DailyCouponSchema.safeParse({
@@ -143,6 +151,20 @@ describe('rendering the offer tokens', () => {
         missingMonths: 'الشهر التاني والتالت',
       }),
     ).toBe('ناقصك الشهر التاني والتالت — الكود WELCOME0311 لحد الجمعة ٦ نوفمبر');
+  });
+
+  it('fills the name LAST, so a name spelled like a token expands into nothing', () => {
+    const out = renderCampaignBody({
+      body: 'أهلاً {{الاسم}} — الكود {{الكود}}',
+      name: '{{الكود}}{{اللينك}} أحمد',
+      linkUrl: 'https://x.test/l',
+      coupon: { code: 'WELCOME0311-K7QM', lastDay: 'الجمعة' },
+    });
+    // One code in the message — the body's — and the name contributes no
+    // braces, no code and no link.
+    expect(out.split('WELCOME0311-K7QM')).toHaveLength(2);
+    expect(out).not.toContain('{{');
+    expect(out.startsWith('أهلاً الكوداللينك — الكود WELCOME0311-K7QM')).toBe(true);
   });
 
   it('never sends a literal token when there is no code or no months', () => {
