@@ -327,6 +327,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'سعر عرض للشهر والترم والسنة لكل الطلبة، لوقت محدد أو مفتوح، والسعر الأصلي ظاهر جنبه متشطّب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new — and closed for a second reason:
+     * it writes into the account of a REAL WhatsApp number, thousands of
+     * times. A teacher opens it when they have a linked number and want it.
+     * It carries nothing of his: names and numbers come from that stack's
+     * own students.
+     */
+    key: 'whatsapp.contacts',
+    nameAr: 'حفظ الطلبة في واتساب',
+    descriptionAr: 'الطلبة بيتحفظوا جهات اتصال في واتساب الرقم المربوط بس، مش في التليفون، عشان الاستوري توصلهم.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

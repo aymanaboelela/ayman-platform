@@ -4,6 +4,7 @@ import 'dotenv/config';
 import type { PrismaService } from '../../prisma/prisma.service';
 import {
   DeviceCeilingError,
+  DeviceOfflineError,
   NotOnWhatsAppError,
   WhatsappDeviceService,
   WhatsappRestrictedError,
@@ -215,6 +216,55 @@ describe('WhatsappDeviceService', () => {
     fetchMock.mockImplementation(() => respond(200, { state: 'connected', phone: '+201110000000', qr: null, detail: null }));
     const device = await new WhatsappDeviceService(fakePrisma().prisma).status();
     expect(device).toEqual(expect.objectContaining({ state: 'connected', limits: null, pairingCode: null }));
+  });
+
+  describe('saveContact', () => {
+    it('posts the number and name, and is not a message: nothing reaches the ledger', async () => {
+      const { prisma, created } = fakePrisma();
+      fetchMock.mockImplementation(() => respond(200, { saved: true, onWhatsApp: true, jid: 'j', lid: '9@lid' }));
+
+      const result = await new WhatsappDeviceService(prisma).saveContact('+201001234567', 'أحمد محمد');
+
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('http://wa:3400/contacts');
+      expect(JSON.parse(String(init.body))).toEqual({ phone: '+201001234567', name: 'أحمد محمد' });
+      expect(result).toEqual({ saved: true, onWhatsApp: true, lid: '9@lid' });
+      expect(created).toEqual([]);
+    });
+
+    it('a number with no account is an answer, not an error', async () => {
+      fetchMock.mockImplementation(() => respond(200, { saved: false, onWhatsApp: false, jid: 'j', lid: null }));
+      const result = await new WhatsappDeviceService(fakePrisma().prisma).saveContact('+201001234567', 'x');
+      expect(result).toEqual({ saved: false, onWhatsApp: false, lid: null });
+    });
+
+    it('423 is the timelock, typed', async () => {
+      fetchMock.mockImplementation(() => respond(423, { error: 'x', code: 'timelock', until: '2026-11-04T10:00:00.000Z' }));
+      const error = await new WhatsappDeviceService(fakePrisma().prisma)
+        .saveContact('+201001234567', 'x')
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(WhatsappRestrictedError);
+      expect((error as WhatsappRestrictedError).until?.toISOString()).toBe('2026-11-04T10:00:00.000Z');
+    });
+
+    it('409 and an unconfigured sender are «the device is away»', async () => {
+      fetchMock.mockImplementation(() => respond(409, { error: 'device is not connected' }));
+      await expect(new WhatsappDeviceService(fakePrisma().prisma).saveContact('+201001234567', 'x')).rejects.toBeInstanceOf(
+        DeviceOfflineError,
+      );
+      delete process.env.WA_SERVICE_URL;
+      delete process.env.WA_SERVICE_TOKEN;
+      await expect(new WhatsappDeviceService(fakePrisma().prisma).saveContact('+201001234567', 'x')).rejects.toBeInstanceOf(
+        DeviceOfflineError,
+      );
+    });
+
+    it('a body that does not say saved is never taken as a save', async () => {
+      fetchMock.mockImplementation(() => respond(200, { onWhatsApp: true }));
+      await expect(new WhatsappDeviceService(fakePrisma().prisma).saveContact('+201001234567', 'x')).rejects.toThrow(
+        /without saving/,
+      );
+    });
   });
 });
 

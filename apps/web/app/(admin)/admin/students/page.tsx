@@ -8,6 +8,9 @@ import { can, getSession } from '@/lib/session';
 import { StudentsTable } from './students-table';
 import { studentsCache } from './search-params';
 import { SaveContactsButton } from './save-contacts-button';
+import { WaContactsButton } from './wa-contacts-button';
+import { featureEnabled } from '@/lib/entitlements';
+import { WA_CONTACTS_PACING, WA_CONTACTS_TRIAL } from '@ayman/contracts/marketing/wa-contacts';
 import { formatCopy } from '@ayman/contracts/format';
 
 const ResponseSchema = listResponse(AdminStudentRowSchema);
@@ -68,9 +71,11 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
    * it is turn codes into filter labels — so `null` costs an empty filter
    * dropdown for up to a minute, not a broken screen.
    */
-  const [data, taxonomy] = await Promise.all([
+  const [data, taxonomy, session, waContacts] = await Promise.all([
     adminGet(`/api/admin/students?${params.toString()}`, ResponseSchema),
     getTaxonomyOrNull(),
+    getSession(),
+    featureEnabled('whatsapp.contacts'),
   ]);
 
   const governorateOptions = (taxonomy?.governorates ?? [])
@@ -102,6 +107,20 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
           {formatCopy(copy.admin.students.matchingCount, { n: data.rowCount.toLocaleString('en') })}
         </span>
         <div className="ms-auto flex flex-wrap items-center gap-2">
+          {/* «احفظهم في واتساب» — its status loads when the dialog opens, so a
+              sidecar slow to answer never slows this list down. */}
+          {waContacts && can(session, 'marketing:read') ? (
+            <WaContactsButton
+              canRun={can(session, 'marketing:device')}
+              pace={{
+                batchSize: WA_CONTACTS_PACING.batchSize,
+                dailyCap: WA_CONTACTS_PACING.dailyCap,
+                windowStartHour: WA_CONTACTS_PACING.windowStartHour,
+                windowEndHour: WA_CONTACTS_PACING.windowEndHour,
+                trial: WA_CONTACTS_TRIAL,
+              }}
+            />
+          ) : null}
           <SaveContactsButton />
           <SaveContactsButton kind="parents" />
         </div>
@@ -113,7 +132,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         governorateOptions={governorateOptions}
         trackOptions={trackOptions}
         yearOptions={yearOptions}
-        canDelete={can(await getSession(), 'student:delete')}
+        canDelete={can(session, 'student:delete')}
       />
     </>
   );

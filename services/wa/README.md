@@ -112,3 +112,19 @@ To read it off the running container directly:
 ```
 docker logs --since 336h <wa> 2>&1 | grep -E 'received error in ack|error 463|whatsapp refused|new-chat limits' | tail -40
 ```
+
+## Contacts
+
+`POST /contacts { phone, name }` adds ONE contact to the account's own
+WhatsApp contact list: a `contactAction` app-state patch
+(`sock.addOrEditContact`), the same write WhatsApp Web makes. It sends no
+message and does not notify the person. `saveOnPrimaryAddressbook: false`
+asks WhatsApp to keep the contact in WhatsApp only, out of the phone's address
+book. On the phone, «الخصوصية ← جهات الاتصال ← جهات اتصال واتساب» has to be ON
+for that choice to exist.
+
+It answers `{ saved, onWhatsApp, jid, lid }`. A number with no account is
+`saved: false` and nothing is written. It refuses with 423 during a reach-out
+timelock. Pacing and «stop on the first error» are the API's job
+(`wa-contacts-runner.service.ts`), like everything else about WHEN. See
+`src/contact-save.mjs`.
