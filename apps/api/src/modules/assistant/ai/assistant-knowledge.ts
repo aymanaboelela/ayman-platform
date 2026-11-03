@@ -3,6 +3,8 @@ import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { IS_AYMAN, TEACHES_CODE, tenantName } from '../../../common/tenant';
 import { bySubject } from '../../../common/tenant-subject';
 import { tenantSentence } from '../../../common/tenant-copy';
+import { isFeatureEnabled } from '../../../common/entitlements';
+import { passwordResetCopy } from '@ayman/contracts/copy/password-reset';
 import {
   ASSISTANT_NODES,
   ASSISTANT_ROOT,
@@ -126,7 +128,7 @@ function writtenFacts(): KnowledgeEntry[] {
     .map((entry) => ({
       id: entry.id,
       question: tenantSentence(entry.q),
-      answer: tenantSentence(entry.a),
+      answer: tenantSentence(passwordResetAnswer(entry.id, entry.a)),
     }));
 }
 
@@ -178,6 +180,32 @@ function platformFacts(): KnowledgeEntry[] {
   ];
 }
 
+/**
+ * «نسيت كلمة السر» — the one answer that depends on what THIS stack can do.
+ *
+ * Where `passwordReset` is off, the answers in `copy.assistant` are the truth:
+ * there is no reset link and the instructor sets a new password. Where it is
+ * on, that same sentence would talk a locked-out student OUT of the page that
+ * fixes it in a minute — the exact failure `accountPassword`'s comment in
+ * `copy/ar.ts` records from the last time this answer described the wrong
+ * product. So the two password entries are swapped for
+ * `passwordResetCopy.assistant`, and nothing else is.
+ *
+ * Read when the corpus is built, at module load. On Ayman's stack the
+ * entitlement is already true at that moment (`common/entitlements.ts` starts
+ * from `allEnabled()` there). On another stack it is the declared default —
+ * off — until `loadEntitlements` resolves, so a teacher the owner opens it for
+ * keeps the «الفريق بيغيّرها» answer until the API next restarts. That is the
+ * safe direction to be stale in: the old answer still works, it is just the
+ * slower way.
+ */
+function passwordResetAnswer(id: string, fallback: string): string {
+  if (!isFeatureEnabled('passwordReset')) return fallback;
+  if (id === 'passwordLost') return passwordResetCopy.assistant.passwordLost;
+  if (id === 'accountPassword') return passwordResetCopy.assistant.accountPassword;
+  return fallback;
+}
+
 /** The written answers, straight out of the guided tree. */
 function scriptEntries(): KnowledgeEntry[] {
   const questionFor = new Map<AssistantNodeId, string>();
@@ -217,7 +245,7 @@ function scriptEntries(): KnowledgeEntry[] {
       // Eight of these paragraphs end at «أوصّلك لأيمن». They are the answers
       // المساعد quotes most often, because the tree is what a student walks
       // when they do not know what to type.
-      answer: tenantSentence(copy.assistant.script[id]),
+      answer: tenantSentence(passwordResetAnswer(id, copy.assistant.script[id])),
     });
   }
   return entries;

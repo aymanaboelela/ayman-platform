@@ -27,12 +27,14 @@ const c = copy.auth.guardian;
 export function LoginTabs({
   next,
   supportHref,
+  forgotHref,
 }: {
   // نفس أنواع `LoginForm` بالحرف — دي بتتمرّر ليه زي ما هي، وتضييقها هنا
   // كان هيخلّي الصفحة تكتب `?? ''` عشان تعدّي، وده بيحوّل «مفيش وجهة»
   // لـ«الوجهة سلسلة فاضية».
   next?: string | null;
   supportHref?: string | null;
+  forgotHref?: string | null;
 }) {
   const [tab, setTab] = useState<'student' | 'guardian'>('student');
 
@@ -60,7 +62,7 @@ export function LoginTabs({
           يرمي اللي اتكتب — اللي كتب كود في تبويب ولي الأمر وبعدين رجع لتبويب
           الطالب مش عايز الكود يستناه هناك. */}
       {tab === 'student' ? (
-        <LoginForm next={next} supportHref={supportHref} />
+        <LoginForm next={next} supportHref={supportHref} forgotHref={forgotHref} />
       ) : (
         <GuardianCodeForm />
       )}

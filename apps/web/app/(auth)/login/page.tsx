@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { LoginTabs } from '@/components/auth/login-tabs';
 import { safeNext, withNext } from '@/lib/safe-next';
+import { featureEnabled } from '@/lib/entitlements';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
@@ -83,7 +84,13 @@ export default async function LoginPage({
    * to nothing at all, never to Ayman's. With neither, the link is not
    * rendered and the sentence still stands on its own.
    */
-  const settings = await getPublicSettingsOrDefaults();
+  const [settings, resetOpen] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    // «نسيت كلمة السر؟» only where the stack has it AND a Turnstile key —
+    // see `forgot-password/page.tsx`.
+    featureEnabled('passwordReset'),
+  ]);
+  const resetLink = resetOpen && Boolean(process.env.TURNSTILE_SITE_KEY?.trim());
   const supportHref = waMeHref(settings.contact.whatsapp ?? TENANT_CONTACT_FALLBACK.whatsapp);
 
   return (
@@ -118,7 +125,7 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <LoginTabs next={next} supportHref={supportHref} />
+      <LoginTabs next={next} supportHref={supportHref} forgotHref={resetLink ? '/forgot-password' : null} />
 
       <p className="auth-switch">
         {copy.auth.switch.noAccount}{' '}

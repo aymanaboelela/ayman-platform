@@ -59,7 +59,13 @@ function loadTurnstile(): Promise<TurnstileApi> {
   return scriptPromise;
 }
 
-export function useTurnstile(siteKey: string | null | undefined) {
+/**
+ * `action` labels the token with the form it was solved on. The API checks it
+ * for the forms that ask (`createTurnstileCheck`'s expectations), so a token
+ * from one form cannot be spent on another. Omitted: no label, which is the
+ * register form as it always was.
+ */
+export function useTurnstile(siteKey: string | null | undefined, action?: string) {
   // State, not a ref, so the hook hands back a plain callback: a returned ref
   // object makes the React compiler treat everything the form does with this
   // hook as reading a ref during render.
@@ -79,6 +85,7 @@ export function useTurnstile(siteKey: string | null | undefined) {
           sitekey: siteKey,
           execution: 'execute',
           appearance: 'interaction-only',
+          ...(action ? { action } : {}),
           language: 'ar',
           callback: (token: string) => {
             pendingRef.current?.resolve(token);
@@ -101,7 +108,7 @@ export function useTurnstile(siteKey: string | null | undefined) {
       if (widgetRef.current && window.turnstile) window.turnstile.remove(widgetRef.current);
       widgetRef.current = null;
     };
-  }, [siteKey, container]);
+  }, [siteKey, container, action]);
 
   /** A fresh token, or null when the stack has no Turnstile. Rejects on failure. */
   const getToken = useCallback(async (): Promise<string | null> => {

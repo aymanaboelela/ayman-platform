@@ -58,6 +58,10 @@ export const PHONE_SIGN_UP_PATH = '/sign-up/email';
  *
  * When a WhatsApp Business number can deliver codes, remove the path from here
  * in the same change that implements `sendOTP` — never before.
+ *
+ * «نسيت كلمة السر» now exists and does NOT reopen any of these: it is
+ * `modules/password-reset`, which sends first and stores a keyed hash only
+ * after the message is on the wire — the order this plugin gets backwards.
  */
 export const OTP_PATHS_WITHOUT_DELIVERY = [
   '/phone-number/send-otp',

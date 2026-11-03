@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginSchema, resolveLoginIdentifier, type Login } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
+import { passwordResetCopy } from '@ayman/contracts/copy/password-reset';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -65,9 +67,16 @@ function lockedMessage(retryAfterSeconds: number | undefined): string {
 export function LoginForm({
   next,
   supportHref,
+  forgotHref,
 }: {
   next?: string | null;
   supportHref?: string | null;
+  /**
+   * «نسيت كلمة السر؟» — `/forgot-password`, passed only where the stack has
+   * `passwordReset`. Absent, the link is not rendered: a link to a page that
+   * 404s is worse than the old way (a message to the instructor) it hides.
+   */
+  forgotHref?: string | null;
 }) {
   const [formError, setFormError] = useState<FormRefusal | null>(null);
   const {
@@ -240,6 +249,14 @@ export function LoginForm({
         errorMessage={errors.password?.message}
         {...register('password')}
       />
+      {forgotHref ? (
+        // Under the field it is about, at the reading end of the line — and
+        // BEFORE the error, so a student told «البريد أو كلمة المرور مش
+        // مظبوطين» finds the way out directly above the message.
+        <p className="auth-forgot">
+          <Link href={forgotHref}>{passwordResetCopy.loginLink}</Link>
+        </p>
+      ) : null}
 
       {formError && (
         /*

@@ -291,16 +291,22 @@ describe('matchKnowledge — the answer when there is no model', () => {
   /*
    * Two spellings of one question, landing on two different entries — and
    * BOTH are right, which is why this is asserted as a set rather than as an
-   * id. The tree's node and the written corpus both answer "you cannot reset
-   * it yourself"; which one wins is a scoring detail, and pinning it would
-   * make an honest re-wording of either look like a regression.
+   * id; which one wins is a scoring detail.
+   *
+   * This file runs as Ayman's stack, where `passwordReset` is open, so both
+   * entries now describe «نسيت كلمة السر؟» and the WhatsApp code — and still
+   * keep the human way out for a code that never arrives. Where the
+   * entitlement is off they are the old «no reset link» answers; that half is
+   * `assistant-knowledge.tenant.spec.ts`.
    */
   it.each(['انا نسيت الباسورد', 'نسيت كلمة السر', 'ضاعت مني كلمه السر'])(
-    '«%s» reaches an answer that says a reset link does not exist',
+    '«%s» reaches an answer that sends the student to the reset page',
     (asked) => {
       const hit = matchKnowledge(asked);
       expect(['accountPassword', 'passwordLost']).toContain(hit?.id);
-      expect(hit?.answer).toContain('أيمن');
+      expect(hit?.answer).toContain('«نسيت كلمة السر؟»');
+      expect(hit?.answer).toContain('الواتساب');
+      expect(hit?.answer).toContain('فريق');
     },
   );
 });

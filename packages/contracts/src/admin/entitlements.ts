@@ -367,6 +367,22 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'الحملة تعمل كود خصم لكل يوم بتبعت فيه، بخصم لكل نوع اشتراك، ولينك لصفحة الاشتراك والكود مكتوب فيها.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". Sends a code FROM the stack's linked WhatsApp number to
+     * any registered student who asks, so it also needs `marketing.whatsapp`
+     * (the device) AND a Turnstile key pair on the stack — without either,
+     * the request step answers «إرسال الكود واقف» for everyone and nothing
+     * leaves (fail closed: no human check means no codes). Off by default
+     * because every code to a student who never wrote to the number is a new
+     * chat on THAT teacher's personal account, and that is his to agree to.
+     */
+    key: 'passwordReset',
+    nameAr: 'نسيت كلمة السر',
+    descriptionAr:
+      'الطالب يغيّر كلمة السر لوحده بكود بيوصله على الواتساب من رقم المنصة المرتبط. محتاج «حملات الواتساب» ومفتاح Turnstile على الستاك — من غيرهم الصفحة بتقول «إرسال الكود واقف».',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

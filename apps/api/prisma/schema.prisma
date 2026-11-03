@@ -6190,7 +6190,8 @@ model WhatsappSend {
   id          String    @id @default(uuid(7)) @db.Uuid
   /// WhatsApp's message id — what a receipt arrives carrying.
   messageId   String    @unique @map("message_id") @db.VarChar(64)
-  /// `campaign` | `shipping` | `test` | `other`. CHECKed in the migration.
+  /// `campaign` | `shipping` | `test` | `other` | `outreach` | `bot` |
+  /// `inbox` | `otp`. CHECKed in the migration.
   source      String    @db.VarChar(16)
   /// E.164 of the recipient.
   toPhone     String    @map("to_phone") @db.VarChar(20)
@@ -6210,6 +6211,69 @@ model WhatsappSend {
   /// The warm-up ramp: the first send of a given number.
   @@index([fromPhone, sentAt])
   @@map("whatsapp_sends")
+  @@schema("app")
+}
+
+/// «نسيت كلمة السر» — one row per request for a code, whether or not an
+/// account owns the number (`modules/password-reset`).
+///
+/// ## Why every request is a row, account or not
+///
+/// The per-number and per-client limits are COUNTS over this table. Counting
+/// only the numbers that have an account would make a limit fire for a
+/// registered number and never for a made-up one — an oracle for exactly the
+/// question the request step refuses to answer. So `no_account` rows exist,
+/// and they are what make "too many requests" mean the same thing for both.
+///
+/// ## Why the code is not here until it has been delivered
+///
+/// Better Auth's own phone OTP writes a usable code BEFORE it tries to send
+/// it, which is why those routes are closed (`OTP_PATHS_WITHOUT_DELIVERY`). A
+/// row here holds no `code_hash` while it is `queued` or `sending`; the hash is
+/// written in the same statement that marks it `sent`, after the sidecar has
+/// put the message on the wire. A send that fails, times out or crashes the
+/// process leaves a row that can never verify — there is nothing in it to
+/// guess against.
+///
+/// `code_hash` is an HMAC (keyed with `BETTER_AUTH_SECRET`, salted with the
+/// row id) rather than a bare hash: six digits are a million values, and an
+/// unkeyed SHA-256 of one is reversed by trying all of them.
+///
+/// `user_id` is deliberately NOT a foreign key. A row is dead ten minutes
+/// after it is sent, and a cascade from `users` would be one more table every
+/// user-deleting teardown has to know about. The confirm step re-reads the
+/// user before writing anything.
+model PasswordResetRequest {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  /// E.164, as normalised from what was typed.
+  phone     String    @db.VarChar(20)
+  /// `clientIpFromRequest` — IPv6 already folded to its /64.
+  ipBucket  String    @map("ip_bucket") @db.VarChar(64)
+  /// Set by the delivery half once an account turns out to own `phone`.
+  userId    String?   @map("user_id")
+  /// SHA-256 of the handle `request` returned — `confirm` matches on it, so a
+  /// code can only be tried by whoever asked for it.
+  handleHash String   @map("handle_hash") @db.Char(64)
+  /// No chat existed with this number when the code went out (`newChatSendsPerDay`).
+  newChat    Boolean  @default(false) @map("new_chat")
+  /// queued | no_account | capped | sending | sent | failed | used | spent |
+  /// superseded. CHECKed in the migration. `capped` = the stack's daily SEND
+  /// cap was reached, so nothing was put on the wire.
+  status    String    @db.VarChar(16)
+  codeHash  String?   @map("code_hash") @db.Char(64)
+  attempts  Int       @default(0)
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  sentAt    DateTime? @map("sent_at")
+  usedAt    DateTime? @map("used_at")
+
+  /// The per-number limits and the confirm step's "latest live code".
+  @@index([phone, createdAt(sort: Desc)])
+  /// The per-client limits.
+  @@index([ipBucket, createdAt])
+  /// The stack-wide send caps.
+  @@index([createdAt])
+  @@map("password_reset_requests")
   @@schema("app")
 }
 

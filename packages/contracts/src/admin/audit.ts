@@ -207,6 +207,12 @@ export const AUDIT_ACTIONS = [
    * `permissions.ts` وفي `StudentsService.setStaffPassword`.
    */
   'staff:set-password',
+  /**
+   * «نسيت كلمة السر» — the student changed their own password with a code
+   * sent to their WhatsApp. `actorUserId` is the student themself; metadata
+   * never carries the code or the password, same rule as `student:set-password`.
+   */
+  'user:password-reset',
   'staff:update',
   /**
    * «سجّل خروج» من صفحة الطالب، وحد الأجهزة بتاعه.
