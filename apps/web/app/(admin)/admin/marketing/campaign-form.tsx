@@ -18,6 +18,8 @@ import {
   type CampaignChannel,
 } from '@ayman/contracts/marketing/campaign';
 import type { Pacing } from '@ayman/contracts/marketing/pacing';
+import { noFasterThan, type WaHistorySummary } from '@ayman/contracts/marketing/wa-history';
+import { copy as historyCopy } from '@ayman/contracts/copy/wa-history';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminAutoOutreach as autoCopy } from '@ayman/contracts/copy/admin-auto-outreach';
@@ -36,6 +38,7 @@ import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
 import { createCampaignAction, listMediaForPickerAction, previewAudienceAction } from './actions';
 import { formatEstimate } from './format-estimate';
+import { WaHistoryAudience } from './wa-history-audience';
 
 const c = copy.marketing;
 
@@ -65,10 +68,19 @@ const PREVIEW_DEBOUNCE_MS = 400;
  *  cannot be added to the enum and silently never appear on the form. */
 const CHANNEL_OPTIONS = CampaignChannelSchema.options;
 
-export function CampaignForm({ courses }: { courses: CourseOption[] }) {
+export function CampaignForm({
+  courses,
+  waHistorySummary = null,
+}: {
+  courses: CourseOption[];
+  /** «كلّموني / مكلّمونيش» counts — `null` off the feature or on a failed read. */
+  waHistorySummary?: WaHistorySummary | null;
+}) {
   const router = useRouter();
   // «المهتمين» only where the bot runs — the API resolves it to nobody elsewhere.
   const botOn = useFeature('whatsapp.bot');
+  // «كلّموني / مكلّمونيش» only where the history feature runs, same rule.
+  const historyOn = useFeature('whatsapp.history');
   const [pending, startTransition] = useTransition();
 
   const [name, setName] = useState('');
@@ -477,6 +489,23 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
               </div>
             )}
           </div>
+
+          {historyOn ? (
+            <WaHistoryAudience
+              value={audience.waHistory}
+              onChange={(waHistory) => setAudience((a) => ({ ...a, waHistory }))}
+              onRisky={() => {
+                // Never STARTS fast — see the component's note. Only slows a
+                // field down, and says so when it did.
+                const slowed = noFasterThan(pacing, DEFAULT_PACING_INPUT);
+                if (JSON.stringify(slowed) !== JSON.stringify(pacing)) {
+                  setPacing(slowed);
+                  toast(historyCopy.audience.pacingSlowed);
+                }
+              }}
+              summary={waHistorySummary}
+            />
+          ) : null}
 
           <div className="rounded-sm border border-line-subtle bg-surface-2 px-3 py-2 text-[length:var(--fs-text-sm)]">
             {previewLoading ? (

@@ -377,6 +377,18 @@ export class WhatsappDeviceService {
   }
 
   /**
+   * The number's daily ceiling right now — what the warm-up ramp allows today
+   * and how much of it is spent. For a caller that must budget its OWN share
+   * of the day («نسيت كلمة السر» takes at most a fraction of it), rather than
+   * only learn at `send()` that the whole ceiling is gone. `null` without a
+   * database (unit specs).
+   */
+  async dailyCeiling(now = new Date()): Promise<{ limit: number; usedToday: number } | null> {
+    const ceiling = await this.ceiling(null, now);
+    return ceiling ? { limit: ceiling.limit, usedToday: ceiling.usedToday } : null;
+  }
+
+  /**
    * A receipt for any message the number sent — the ledger half of
    * `WhatsappReceiptController`. Highest-status-wins: each timestamp is only
    * ever set once, and a refusal never overwrites a delivery.

@@ -57,6 +57,8 @@ describe('PasswordResetController — the gate', () => {
   });
 });
 
+const HANDLE = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
 describe('PasswordResetController — outcomes', () => {
   function make(outcome: unknown) {
     const resets = {
@@ -70,10 +72,10 @@ describe('PasswordResetController — outcomes', () => {
   }
 
   it('passes the client bucket, the raw address and the Turnstile token to the service', async () => {
-    const { controller, resets, response, request } = make({ status: 'accepted' });
+    const { controller, resets, response, request } = make({ status: 'accepted', handle: HANDLE });
     await expect(
       controller.request({ phoneNumber: '+201012345678' }, request as never, response as never),
-    ).resolves.toEqual({ status: 'accepted' });
+    ).resolves.toEqual({ status: 'accepted', handle: HANDLE });
     expect(resets.request).toHaveBeenCalledWith({
       phone: '+201012345678',
       ipBucket: '203.0.113.9',
@@ -110,7 +112,7 @@ describe('PasswordResetController — outcomes', () => {
   it('answers every failed confirm with the one code', async () => {
     const { controller } = make({ status: 'invalid' });
     const error = await controller
-      .confirm({ phoneNumber: '+201012345678', code: '123456', newPassword: 'whatever-1' })
+      .confirm({ phoneNumber: '+201012345678', handle: HANDLE, code: '123456', newPassword: 'whatever-1' })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(BadRequestException);
     expect((error as BadRequestException).getResponse()).toMatchObject({ code: PASSWORD_RESET_INVALID_CODE });
@@ -118,10 +120,11 @@ describe('PasswordResetController — outcomes', () => {
 
   it('passes `reset` and `google` through', async () => {
     for (const status of ['reset', 'google'] as const) {
-      const { controller } = make({ status });
+      const { controller, resets } = make({ status });
       await expect(
-        controller.confirm({ phoneNumber: '+201012345678', code: '123456', newPassword: 'whatever-1' }),
+        controller.confirm({ phoneNumber: '+201012345678', handle: HANDLE, code: '123456', newPassword: 'whatever-1' }),
       ).resolves.toEqual({ status });
+      expect(resets.confirm).toHaveBeenCalledWith(expect.objectContaining({ handle: HANDLE }));
     }
   });
 });

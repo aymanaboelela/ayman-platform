@@ -1,5 +1,5 @@
 import { PASSWORD_RESET_LIMITS } from '@ayman/contracts/password-reset';
-import { codeMatches, generateCode, hashCode, renderMessage } from './password-reset-code';
+import { codeMatches, generateCode, generateHandle, hashCode, hashHandle, renderMessage } from './password-reset-code';
 
 const SECRET = 'x'.repeat(40);
 
@@ -37,5 +37,13 @@ describe('password reset code', () => {
     expect(text).toContain('204913');
     expect(text).toContain(String(PASSWORD_RESET_LIMITS.codeTtlSeconds / 60));
     expect(text).not.toMatch(/\{\w+\}/);
+  });
+
+  it('hands out a 43-character random handle, stored only as its hash', () => {
+    const a = generateHandle();
+    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(generateHandle()).not.toBe(a);
+    expect(hashHandle(a)).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashHandle(a)).not.toContain(a);
   });
 });

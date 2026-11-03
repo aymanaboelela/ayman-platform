@@ -43,4 +43,33 @@ describe('createTurnstileCheck', () => {
     const broken = fakeFetch(() => json({ success: true }, 500));
     await expect(createTurnstileCheck('s', broken.impl).verify('tok', null)).resolves.toBe(false);
   });
+
+  describe('expectations — action and hostname', () => {
+    const expectations = { action: 'password-reset', hostname: 'aymanaboelela.com' };
+
+    it('passes a token minted for this form on this host', async () => {
+      const { impl } = fakeFetch(() => json({ success: true, action: 'password-reset', hostname: 'aymanaboelela.com' }));
+      await expect(createTurnstileCheck('s', impl, expectations).verify('tok', null)).resolves.toBe(true);
+    });
+
+    it('refuses a valid token solved on another form', async () => {
+      const { impl } = fakeFetch(() => json({ success: true, action: 'signup', hostname: 'aymanaboelela.com' }));
+      await expect(createTurnstileCheck('s', impl, expectations).verify('tok', null)).resolves.toBe(false);
+    });
+
+    it('refuses a valid token solved on another host', async () => {
+      const { impl } = fakeFetch(() => json({ success: true, action: 'password-reset', hostname: 'evil.example' }));
+      await expect(createTurnstileCheck('s', impl, expectations).verify('tok', null)).resolves.toBe(false);
+    });
+
+    it('refuses when Cloudflare leaves the fields out', async () => {
+      const { impl } = fakeFetch(() => json({ success: true }));
+      await expect(createTurnstileCheck('s', impl, expectations).verify('tok', null)).resolves.toBe(false);
+    });
+
+    it('checks neither field when none is asked for — sign-up is unchanged', async () => {
+      const { impl } = fakeFetch(() => json({ success: true, action: 'anything', hostname: 'anywhere' }));
+      await expect(createTurnstileCheck('s', impl).verify('tok', null)).resolves.toBe(true);
+    });
+  });
 });

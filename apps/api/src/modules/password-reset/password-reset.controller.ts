@@ -67,10 +67,12 @@ export class PasswordResetController {
   constructor(private readonly resets: PasswordResetService) {}
 
   /**
-   * 200 `{ status: 'accepted' }` for every number that clears the limits,
-   * registered or not. 200 `{ status: 'unavailable' }` when the STACK cannot
-   * send. 429 for a limit, 403 for a failed human check — neither of which
-   * depends on whether the number has an account.
+   * 200 `{ status: 'accepted', handle }` for every number that clears the
+   * limits, registered or not — the handle is minted for every one of them.
+   * 200 `{ status: 'unavailable' }` when the STACK cannot send (no device, no
+   * Turnstile, WhatsApp refusing new chats). 429 for a limit, 403 for a
+   * failed human check — none of which depends on whether the number has an
+   * account.
    */
   @Public()
   @RequireCsrf()
@@ -103,7 +105,7 @@ export class PasswordResetController {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    return { status: outcome.status };
+    return outcome.status === 'accepted' ? { status: 'accepted', handle: outcome.handle } : { status: 'unavailable' };
   }
 
   /**
@@ -118,6 +120,7 @@ export class PasswordResetController {
   async confirm(@Body() body: PasswordResetConfirmDto): Promise<PasswordResetConfirmResult> {
     const outcome = await this.resets.confirm({
       phone: body.phoneNumber,
+      handle: body.handle,
       code: body.code,
       newPassword: body.newPassword,
     });

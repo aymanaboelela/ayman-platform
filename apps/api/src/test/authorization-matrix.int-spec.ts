@@ -45,6 +45,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { PromoBannersModule } from '../modules/promo-banners/promo-banners.module';
 import { SubscribersModule } from '../modules/subscribers/subscribers.module';
+import { WaHistoryModule } from '../modules/wa-history/wa-history.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
 import { PdfsModule } from '../modules/pdfs/pdfs.module';
@@ -383,6 +384,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «البانرات الترويجية» — Prisma and `AuditService` only, both already here.
         PromoBannersModule,
         SubscribersModule,
+        // «مين كلّمني على واتساب» — Prisma and its own identity lookup only.
+        // Open here because the fixture runs as Ayman's stack.
+        WaHistoryModule,
         // لوحة الشرف بالإيد. بيجرّ `NotificationsModule` معاه (الصف بيبعت
         // إشعار للطالب)، وهو موجود هنا أصلاً من `OutreachModule` تحت.
         AdminHonorBoardModule,
@@ -1303,14 +1307,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // The refusals these rows pin are on SHAPE (400) and on the CODE (400
     // with one error code), never on identity: a signed-in student reaches
     // the same routes and gets the same answers. `request` answers 200
-    // `unavailable` here because this fixture has no WhatsApp device — which
-    // is also the answer every caller gets on a stack that cannot send.
+    // `unavailable` here because this fixture has no WhatsApp device and no
+    // Turnstile key — which is also the answer every caller gets on a stack
+    // that cannot send.
     { label: 'password reset request: anonymous, a stack with no device says unavailable (200)', method: 'post', path: () => '/api/password-reset/request', actor: 'anonymous', status: 200, body: () => ({ phoneNumber: '01012345678' }) },
     { label: 'password reset request: a malformed number is refused on SHAPE (400)', method: 'post', path: () => '/api/password-reset/request', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '12' }) },
     { label: 'password reset request: a signed-in student is not turned away', method: 'post', path: () => '/api/password-reset/request', actor: 'student', status: 200, body: () => ({ phoneNumber: '01012345678' }) },
-    { label: 'password reset confirm: anonymous with a code nobody was sent is 400, not 403', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', code: '123456', newPassword: 'matrix-pass-1' }) },
-    { label: 'password reset confirm: a five-digit code is refused on SHAPE (400)', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', code: '12345', newPassword: 'matrix-pass-1' }) },
-    { label: 'password reset confirm: a signed-in student gets the same 400', method: 'post', path: () => '/api/password-reset/confirm', actor: 'student', status: 400, body: () => ({ phoneNumber: '01012345678', code: '123456', newPassword: 'matrix-pass-1' }) },
+    { label: 'password reset confirm: anonymous with a code nobody was sent is 400, not 403', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', handle: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM', code: '123456', newPassword: 'matrix-pass-1' }) },
+    { label: 'password reset confirm: a five-digit code is refused on SHAPE (400)', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', handle: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM', code: '12345', newPassword: 'matrix-pass-1' }) },
+    { label: 'password reset confirm: no handle is refused on SHAPE (400)', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', code: '123456', newPassword: 'matrix-pass-1' }) },
+    { label: 'password reset confirm: a signed-in student gets the same 400', method: 'post', path: () => '/api/password-reset/confirm', actor: 'student', status: 400, body: () => ({ phoneNumber: '01012345678', handle: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM', code: '123456', newPassword: 'matrix-pass-1' }) },
 
     { label: 'guardian sign-in: anonymous with a wrong code is 401, not 403', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 401, body: () => ({ code: 'AB2#CD' }) },
     { label: 'guardian sign-in: a malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 400, body: () => ({ code: 'short' }) },
@@ -2171,6 +2177,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'subscribers meta csv: student', method: 'get', path: () => '/api/admin/subscribers/export/meta.csv', actor: 'student', status: 403 },
     { label: 'subscribers xlsx: anonymous', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'anonymous', status: 401 },
     { label: 'subscribers xlsx: student', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'student', status: 403 },
+
+    // ── «مين كلّمني على واتساب» — counts of the linked number's old chats,
+    // `marketing:read` like the device status. The ingest beside it is the
+    // sidecar's (`KNOWN_GAPS`). ──
+    { label: 'wa-history summary: anonymous', method: 'get', path: () => '/api/admin/wa-history/summary', actor: 'anonymous', status: 401 },
+    { label: 'wa-history summary: student', method: 'get', path: () => '/api/admin/wa-history/summary', actor: 'student', status: 403 },
+    { label: 'wa-history summary: admin', method: 'get', path: () => '/api/admin/wa-history/summary', actor: 'admin', status: 200 },
 
     // ── «البانرات الترويجية» — one public read, admin-only on `home:*` ──
     // Behind `promoBanners`, open here because the fixture runs as Ayman's stack.
@@ -3461,6 +3474,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // check and every status branch are exercised directly in
       // `whatsapp-receipt.controller.spec.ts`.
       'POST /api/marketing/wa/receipt',
+      // «مين كلّمني على واتساب» — the sidecar reporting the linked number's
+      // old chats, same actor and same shared secret as the two relays above.
+      // Its token check is exercised in `wa-history-ingest.controller.spec.ts`;
+      // the admin read it feeds (`GET /api/admin/wa-history/summary`) IS
+      // covered above.
+      'POST /api/marketing/wa/history',
     ]);
 
     /**
@@ -3666,6 +3685,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // forged call achieves is stamping `deliveredAt` on a row whose
           // WhatsApp message id the caller already had to know.
           'POST /api/marketing/wa/receipt',
+          // The history report, public for the identical reason — same caller,
+          // same `x-wa-token`. A forged call can only mark a number «كلّمني»;
+          // it writes no inbox row and sends nothing.
+          'POST /api/marketing/wa/history',
           /*
            * «التحويلات الواردة» — the Android handset that received the money,
            * forwarding each InstaPay push as it appears. Public for exactly the

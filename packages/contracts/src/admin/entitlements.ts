@@ -329,16 +329,31 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like everything new: built for HIS main number, the one
+     * students have been writing to for years. Off on every other stack until
+     * the owner opens it. It reads only what that stack's own linked number
+     * sends on link, and carries nothing of his — but like `whatsapp.bot` it
+     * needs `marketing.whatsapp` (the linked device) to receive anything.
+     */
+    key: 'whatsapp.history',
+    nameAr: 'مين كلّمني على واتساب',
+    descriptionAr: 'المحادثات اللي كانت على الرقم قبل ربطه — فلتر «كلّمني / مكلّمنيش» في الطلبة والحملات.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first". Sends a code FROM the stack's linked WhatsApp number to
      * any registered student who asks, so it also needs `marketing.whatsapp`
-     * (the device) to send anything — without it the page says «الفريق
-     * بيغيّر كلمة السر» and nothing leaves. Off by default because every code
-     * to a student who never wrote to the number is a new chat on THAT
-     * teacher's personal account, and that is his to agree to.
+     * (the device) AND a Turnstile key pair on the stack — without either,
+     * the request step answers «إرسال الكود واقف» for everyone and nothing
+     * leaves (fail closed: no human check means no codes). Off by default
+     * because every code to a student who never wrote to the number is a new
+     * chat on THAT teacher's personal account, and that is his to agree to.
      */
     key: 'passwordReset',
     nameAr: 'نسيت كلمة السر',
-    descriptionAr: 'الطالب يغيّر كلمة السر لوحده بكود بيوصله على الواتساب من رقم المنصة المرتبط.',
+    descriptionAr:
+      'الطالب يغيّر كلمة السر لوحده بكود بيوصله على الواتساب من رقم المنصة المرتبط. محتاج «حملات الواتساب» ومفتاح Turnstile على الستاك — من غيرهم الصفحة بتقول «إرسال الكود واقف».',
     defaultForTenant: false,
   },
 ] as const satisfies readonly FeatureDeclaration[];

@@ -11,6 +11,12 @@
 -- still closed. A CHECK below holds that: no live state carries a hash it was
 -- never sent with.
 --
+-- `handle_hash` binds a code to the request that asked for it: `confirm`
+-- matches number AND handle, so nobody else can spend a student's guesses.
+-- `superseded` is allowed by the CHECK but no longer written: with handles,
+-- several live codes for one number are each usable only by their requester.
+-- Rows older than 30 days are pruned daily by the service.
+--
 -- `whatsapp_sends.source` gains `otp`, so the device page counts codes against
 -- the number like every other message.
 --
@@ -22,6 +28,12 @@ CREATE TABLE "app"."password_reset_requests" (
   "phone"      VARCHAR(20) NOT NULL,
   "ip_bucket"  VARCHAR(64) NOT NULL,
   "user_id"    TEXT,
+  -- SHA-256 of the handle `request` returned. `confirm` matches on it, so a
+  -- code can only be tried by whoever asked for it.
+  "handle_hash" CHAR(64) NOT NULL,
+  -- The linked account had no chat with this number when the code went out —
+  -- the sends that count against `newChatSendsPerDay`.
+  "new_chat"   BOOLEAN NOT NULL DEFAULT false,
   "status"     VARCHAR(16) NOT NULL,
   "code_hash"  CHAR(64),
   "attempts"   INTEGER NOT NULL DEFAULT 0,

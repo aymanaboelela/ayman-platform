@@ -11,6 +11,7 @@ import {
   STUDENT_STREAM_FILTERS,
   STUDENT_LIST_QUERY_SORT_KEYS,
 } from '@ayman/contracts/admin/students';
+import { WA_HISTORY_FILTERS } from '@ayman/contracts/marketing/wa-history';
 
 /**
  * ONE definition, imported by both the RSC page (`.parse(await searchParams)`)
@@ -47,6 +48,9 @@ export const studentsSearchParams = {
   /** عربي / لغات / مش متسجّل — three values, because `school_stream` is
    *  nullable and a two-value filter would hide those students entirely. */
   stream: parseAsStringLiteral(STUDENT_STREAM_FILTERS).withOptions({ shallow: false }),
+  /** «كلّمني على واتساب» / «مكلّمنيش» — null is no filter. The API ignores it
+   *  on a stack without `whatsapp.history`, and the control is hidden there. */
+  waChat: parseAsStringLiteral(WA_HISTORY_FILTERS).withOptions({ shallow: false }),
 };
 
 export const studentsCache = createSearchParamsCache(studentsSearchParams);

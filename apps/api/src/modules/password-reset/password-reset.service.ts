@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import * as argon2 from 'argon2';
+import { deviceCeiling } from '@ayman/contracts/marketing/device-ceiling';
 import {
   PASSWORD_RESET_LIMITS,
+  PASSWORD_RESET_TURNSTILE_ACTION,
   type PasswordResetConfirmResult,
   type PasswordResetRequestResult,
 } from '@ayman/contracts/password-reset';
@@ -21,7 +24,14 @@ import { loadEnv } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappDeviceService } from '../marketing/whatsapp-device.service';
-import { codeMatches, generateCode, hashCode, renderMessage } from './password-reset-code';
+import {
+  codeMatches,
+  generateCode,
+  generateHandle,
+  hashCode,
+  hashHandle,
+  renderMessage,
+} from './password-reset-code';
 
 /**
  * «نسيت كلمة السر» — a six-digit code on WhatsApp from the stack's linked
@@ -33,26 +43,32 @@ import { codeMatches, generateCode, hashCode, renderMessage } from './password-r
  * (`OTP_PATHS_WITHOUT_DELIVERY`), and the reason they are closed is the reason
  * this is separate: it writes a usable code BEFORE it calls `sendOTP`, keeps
  * it in plain text, and answers `/request-password-reset` differently for a
- * number it knows. Making it safe would mean wrapping all three of those from
- * outside a library whose internals are not ours to pin. Here the order is the
- * other way round by construction — see `deliver()` — and the routes stay
- * closed.
+ * number it knows. Here the order is the other way round by construction —
+ * see `deliver()` — and the routes stay closed.
  *
  * ## The two halves, and why the line between them is where it is
  *
  * `request()` answers the browser. It does only what is the same for every
  * number: the human check, whether the STACK can send at all, the limits
  * (which count every request, registered or not) and one insert. Then it
- * answers `accepted` — for a student, for a made-up number, for a Google-only
- * account alike.
+ * answers `accepted` with a fresh handle — for a student, for a made-up
+ * number, for a Google-only account alike.
  *
  * `deliver()` runs after that answer has left, on its own turn of the event
  * loop. It is the first code that asks whether an account owns the number, so
- * nothing it does — the lookup, the send, a failure, WhatsApp being slow —
- * can change what the browser saw or how long it waited. There is no sleep
- * anywhere in this file: equal timing comes from there being nothing
+ * nothing it does — the lookup, the send, a cap, a failure, WhatsApp being
+ * slow — can change what the browser saw or how long it waited. There is no
+ * sleep anywhere in this file: equal timing comes from there being nothing
  * per-account on the request path to time, not from padding (a padded login
  * was found to be a DoS primitive — every attempt held a socket open).
+ *
+ * ## The handle: a code belongs to the request that asked for it
+ *
+ * `confirm()` matches the row by number AND handle. Without that, anybody who
+ * knows a student's number could spend the student's five guesses against
+ * the student's own live code and lock them out of it. With it, a stranger's
+ * guesses can only land on rows the stranger created — for which the codes
+ * went to the student's phone, not to them.
  *
  * ## What protects the number
  *
@@ -60,22 +76,23 @@ import { codeMatches, generateCode, hashCode, renderMessage } from './password-r
  * a code to a student who never wrote to it is a NEW chat — the thing
  * WhatsApp restricts and bans personal accounts for. So, in order:
  *
- *   1. only a registered STUDENT's number is ever messaged — a made-up number,
+ *   1. no Turnstile on the stack → nothing is sent at all (fail closed);
+ *   2. only a registered STUDENT's number is ever messaged — a made-up number,
  *      a staff account and a banned one get the same `accepted` and nothing;
- *   2. Turnstile, before anything is counted;
- *   3. the device must be connected and NOT under a new-chat restriction, and
- *      the number's own new-chat quota must have room — refused for everyone
- *      before the wire, the rule `new-chat-limits.mjs` states;
- *   4. per number: one request a minute, 3 an hour, 5 a day; per client: 6
- *      an hour, 20 a day;
- *   5. for the whole stack: 30 requests an hour and 120 a day, past which
- *      everybody is told the sending is off — and, separately and invisibly,
- *      8 codes an hour and 25 a day actually SENT, under the warm-up ramp's
- *      floor of 40 so campaigns and notices keep their room; then the
- *      device's own daily ceiling on top, which `send()` enforces.
+ *   3. the device must be connected, NOT under a new-chat restriction, with
+ *      more than `newChatQuotaReserve` of WhatsApp's own new-chat quota left —
+ *      refused for everyone before the wire, the rule `new-chat-limits.mjs`
+ *      states;
+ *   4. per number and per client, counted over every request;
+ *   5. for the whole stack, invisibly in `deliver()`: at most
+ *      `sendsShareOfCeiling` of the device's CURRENT daily ceiling, at most
+ *      `newChatSendsPerDay` to numbers with no chat yet, `sendsPerHour` as a
+ *      burst limit — and the device's own ceiling on top, which `send()`
+ *      enforces.
  *
- * The two stack-wide caps are split on purpose: see `requestsPerDay` in
- * `@ayman/contracts/password-reset` for the oracle a visible sends cap is.
+ * The visible stack-wide cap counts REQUESTS, not sends: see
+ * `requestsPerDay` in `@ayman/contracts/password-reset` for the oracle a
+ * visible sends cap is.
  */
 
 export interface PasswordResetOptions {
@@ -83,7 +100,11 @@ export interface PasswordResetOptions {
   limits?: Partial<Record<keyof typeof PASSWORD_RESET_LIMITS, number>>;
   /** The HMAC key. Defaults to `BETTER_AUTH_SECRET`. */
   secret?: string;
-  /** `null` = no Turnstile on this stack. Defaults to `TURNSTILE_SECRET_KEY`. */
+  /**
+   * `null` = no Turnstile on this stack, which makes every request
+   * `unavailable`. Defaults to `TURNSTILE_SECRET_KEY`, pinned to this form's
+   * action and to `APP_URL`'s host.
+   */
   humanCheck?: HumanCheck | null;
 }
 
@@ -106,25 +127,29 @@ export interface RequestInput {
   captchaToken: string | null;
 }
 
+export interface ConfirmInput {
+  phone: string;
+  handle: string;
+  code: string;
+  newPassword: string;
+}
+
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 /**
- * Leave this many of WhatsApp's new-chat quota untouched. A code is not worth
- * the LAST new chat the number is allowed — a campaign reply or a shipping
- * notice to someone who asked for it is.
- */
-const NEW_CHAT_RESERVE = 3;
-
-/**
- * Every request serialises on this, so two simultaneous requests cannot both
- * read "2 sent this hour" and both send the third. `hashtext` of a fixed
- * label, so the key is stable and cannot collide with the audit chain's.
+ * Every request and every delivery serialises on this, so two at once cannot
+ * both read "one slot left" and both take it. `hashtext` of a fixed label, so
+ * the key is stable and cannot collide with the audit chain's.
  */
 const LOCK_LABEL = 'password_reset_requests';
 
 /** Statuses that mean a message was (or was about to be) put on the wire. */
 const SEND_STATUSES = ['sending', 'sent', 'failed', 'used', 'spent', 'superseded'] as const;
+
+/** The daily prune deletes in batches this size, and at most this many batches per run. */
+const PRUNE_BATCH = 500;
+const PRUNE_MAX_BATCHES = 40;
 
 interface Counts {
   phone_hour: number;
@@ -160,7 +185,12 @@ export class PasswordResetService {
       options?.humanCheck !== undefined
         ? options.humanCheck
         : env!.TURNSTILE_SECRET_KEY
-          ? createTurnstileCheck(env!.TURNSTILE_SECRET_KEY)
+          ? createTurnstileCheck(env!.TURNSTILE_SECRET_KEY, fetch, {
+              // A token solved on the sign-up form, or on any page that
+              // embeds this site key somewhere else, is not a token for this.
+              action: PASSWORD_RESET_TURNSTILE_ACTION,
+              hostname: new URL(env!.APP_URL).hostname,
+            })
           : null;
   }
 
@@ -170,12 +200,21 @@ export class PasswordResetService {
    * await it. The controller never does.
    */
   async request(input: RequestInput, now = new Date()): Promise<{ outcome: RequestOutcome; delivery: Promise<void> | null }> {
-    if (this.humanCheck && !(await this.humanCheck.verify(input.captchaToken, input.remoteIp))) {
+    /*
+     * FAIL CLOSED. With no Turnstile on the stack, a script could walk every
+     * number in a leaked list at the speed of the per-client limits, each one
+     * a new chat on the instructor's own account. So no human check means no
+     * codes — said as `unavailable`, which is a fact about the stack and the
+     * same for every caller. The entitlement's description says so too.
+     */
+    if (!this.humanCheck) return { outcome: { status: 'unavailable' }, delivery: null };
+    if (!(await this.humanCheck.verify(input.captchaToken, input.remoteIp))) {
       return { outcome: { status: 'human_check' }, delivery: null };
     }
 
     if (!(await this.stackCanSend())) return { outcome: { status: 'unavailable' }, delivery: null };
 
+    const handle = generateHandle();
     const decided = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LOCK_LABEL}))`;
       const counts = await this.counts(tx, input.phone, input.ipBucket, now);
@@ -194,6 +233,9 @@ export class PasswordResetService {
         data: {
           phone: input.phone,
           ipBucket: input.ipBucket.slice(0, 64),
+          // Every accepted request gets one, registered number or not — the
+          // handle is in every `accepted` answer, so it cannot be a tell.
+          handleHash: hashHandle(handle),
           status: 'queued',
           // A placeholder until a code exists; `deliver()` restarts the clock
           // at the moment the message actually leaves.
@@ -219,7 +261,7 @@ export class PasswordResetService {
           .finally(resolve);
       });
     });
-    return { outcome: { status: 'accepted' }, delivery };
+    return { outcome: { status: 'accepted', handle }, delivery };
   }
 
   /**
@@ -239,7 +281,7 @@ export class PasswordResetService {
       limits &&
       typeof limits.quotaTotal === 'number' &&
       typeof limits.quotaUsed === 'number' &&
-      limits.quotaTotal - limits.quotaUsed <= NEW_CHAT_RESERVE
+      limits.quotaTotal - limits.quotaUsed <= this.limits.newChatQuotaReserve
     ) {
       return false;
     }
@@ -291,6 +333,25 @@ export class PasswordResetService {
   }
 
   /**
+   * How many codes the stack may send in a rolling day: a share of what the
+   * device's warm-up ramp allows TODAY. Derived, so a freshly linked number
+   * (ceiling 40) gives codes 8 and a warmed one (250) gives them 50.
+   */
+  private async dailySendBudget(now: Date): Promise<number> {
+    const ceiling = (await this.device.dailyCeiling(now))?.limit ?? deviceCeiling(null, now).limit;
+    return Math.max(1, Math.floor(ceiling * this.limits.sendsShareOfCeiling));
+  }
+
+  /** Whether the linked account already has a chat with this number. */
+  private async hasExistingChat(phone: string): Promise<boolean> {
+    const [inbox, history] = await Promise.all([
+      this.prisma.waChat.count({ where: { phone } }),
+      this.prisma.waHistoryChat.count({ where: { phone, hasChat: true } }),
+    ]);
+    return inbox > 0 || history > 0;
+  }
+
+  /**
    * The half nobody waits for: find the account, send the code, and only then
    * make the code verifiable.
    *
@@ -331,37 +392,48 @@ export class PasswordResetService {
       return;
     }
 
+    const now = new Date();
+    const [dayBudget, existingChat] = await Promise.all([
+      this.dailySendBudget(now),
+      this.hasExistingChat(row.phone),
+    ]);
+    const newChat = !existingChat;
+
     const claimed = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LOCK_LABEL}))`;
-      const now = new Date();
-      // The cap that protects the number, enforced HERE and nowhere a caller
-      // can see: past it the row is marked `capped` with no code, the browser
-      // has long since been told `accepted`, and the page's «لو الكود موصلش»
-      // line is the way out. Under the lock, so two deliveries racing for the
-      // last slot cannot both take it.
-      const [sendsHour, sendsDay] = await Promise.all([
-        tx.passwordResetRequest.count({
-          where: { id: { not: id }, status: { in: [...SEND_STATUSES] }, createdAt: { gt: new Date(now.getTime() - HOUR_MS) } },
-        }),
-        tx.passwordResetRequest.count({
-          where: { id: { not: id }, status: { in: [...SEND_STATUSES] }, createdAt: { gt: new Date(now.getTime() - DAY_MS) } },
-        }),
+      /*
+       * The caps that protect the number, enforced HERE and nowhere a caller
+       * can see: past one the row is marked `capped` with no code, the browser
+       * has long since been told `accepted`, and the page's «لو الكود موصلش»
+       * line is the way out. Under the lock, so two deliveries racing for the
+       * last slot cannot both take it.
+       */
+      const sent = { id: { not: id }, status: { in: [...SEND_STATUSES] } };
+      const [sendsHour, sendsDay, newChatsDay] = await Promise.all([
+        tx.passwordResetRequest.count({ where: { ...sent, createdAt: { gt: new Date(now.getTime() - HOUR_MS) } } }),
+        tx.passwordResetRequest.count({ where: { ...sent, createdAt: { gt: new Date(now.getTime() - DAY_MS) } } }),
+        newChat
+          ? tx.passwordResetRequest.count({
+              where: { ...sent, newChat: true, createdAt: { gt: new Date(now.getTime() - DAY_MS) } },
+            })
+          : Promise.resolve(0),
       ]);
-      if (sendsHour >= this.limits.sendsPerHour || sendsDay >= this.limits.sendsPerDay) {
+      if (
+        sendsHour >= this.limits.sendsPerHour ||
+        sendsDay >= dayBudget ||
+        (newChat && newChatsDay >= this.limits.newChatSendsPerDay)
+      ) {
         // `capped`, not `failed`: it never reached the wire, so it must not
-        // count as a send and hold the cap shut for longer than the sends did.
-        await tx.passwordResetRequest.updateMany({ where: { id, status: 'queued' }, data: { status: 'capped', userId: user.id } });
+        // count as a send and hold the caps shut for longer than the sends did.
+        await tx.passwordResetRequest.updateMany({
+          where: { id, status: 'queued' },
+          data: { status: 'capped', userId: user.id, newChat },
+        });
         return false;
       }
-      // One live code per number. An older one that is still in the chat
-      // stops working the moment a newer one is on its way.
-      await tx.passwordResetRequest.updateMany({
-        where: { phone: row.phone, status: 'sent' },
-        data: { status: 'superseded' },
-      });
       const moved = await tx.passwordResetRequest.updateMany({
         where: { id, status: 'queued' },
-        data: { status: 'sending', userId: user.id },
+        data: { status: 'sending', userId: user.id, newChat },
       });
       return moved.count === 1;
     });
@@ -402,28 +474,39 @@ export class PasswordResetService {
   }
 
   /**
-   * The code and the new password, together.
+   * The handle, the code and the new password, together.
    *
-   * ONE answer for everything that is not a right code on a live row: a wrong
-   * guess, an expired code, a used one, a burned one, a superseded one, a
+   * ONE answer for everything that is not a right code on the caller's own
+   * live row: a wrong guess, a wrong or stale handle, an expired code, a used
+   * one, a burned one, a number past its daily wrong-guess allowance, a
    * number that was never sent anything. And ONE statement before that answer
    * is known — the attempt is counted and the row read in the same `UPDATE`,
-   * whether or not a row matches — so a number with a live code does not take
-   * a measurably different path from a number without one.
+   * whether or not a row matches.
+   *
+   * The attempt lands only on the row the handle names, so nobody but the
+   * requester can spend that row's guesses. The per-number allowance
+   * (`maxWrongGuessesPerPhonePerDay`) is wrong guesses summed over the
+   * number's rows — again only rows a handle reached — so a stranger with a
+   * made-up handle cannot use it up either.
    */
-  async confirm(input: { phone: string; code: string; newPassword: string }, now = new Date()): Promise<ConfirmOutcome> {
+  async confirm(input: ConfirmInput, now = new Date()): Promise<ConfirmOutcome> {
     const max = this.limits.maxAttempts;
+    const maxWrong = this.limits.maxWrongGuessesPerPhonePerDay;
+    const dayAgo = new Date(now.getTime() - DAY_MS);
     const rows = await this.prisma.$queryRaw<{ id: string; user_id: string | null; code_hash: string | null }[]>`
       UPDATE app.password_reset_requests
       SET attempts = attempts + 1,
           status = CASE WHEN attempts + 1 >= ${max} THEN 'spent' ELSE status END
-      WHERE id = (
-        SELECT id FROM app.password_reset_requests
-        WHERE phone = ${input.phone} AND status = 'sent' AND expires_at > ${now} AND attempts < ${max}
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      )
-        AND status = 'sent' AND attempts < ${max}
+      WHERE phone = ${input.phone}
+        AND handle_hash = ${hashHandle(input.handle)}
+        AND status = 'sent'
+        AND expires_at > ${now}
+        AND attempts < ${max}
+        AND (
+          SELECT coalesce(sum(attempts), 0) - count(*) FILTER (WHERE status = 'used')
+          FROM app.password_reset_requests
+          WHERE phone = ${input.phone} AND created_at > ${dayAgo}
+        ) < ${maxWrong}
       RETURNING id::text AS id, user_id, code_hash`;
 
     const row = rows[0];
@@ -463,6 +546,35 @@ export class PasswordResetService {
 
     await this.writePassword(user, input.newPassword);
     return { status: 'reset' };
+  }
+
+  /**
+   * Rows older than `retentionDays` go, in small batches. Nothing reads them
+   * — the longest window any limit looks at is a day — and they are a list of
+   * numbers and client addresses that has no reason to be kept.
+   *
+   * Batched so a backlog (a stack that was down, or the first run after a
+   * long one) is a few hundred short deletes rather than one long lock on the
+   * table every request writes to. Capped per run; tomorrow continues.
+   */
+  @Cron('40 3 * * *', { timeZone: 'Africa/Cairo' })
+  async prune(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - this.limits.retentionDays * DAY_MS);
+    let removed = 0;
+    for (let batch = 0; batch < PRUNE_MAX_BATCHES; batch += 1) {
+      const deleted = await this.prisma.$executeRaw`
+        DELETE FROM app.password_reset_requests
+        WHERE id IN (
+          SELECT id FROM app.password_reset_requests
+          WHERE created_at < ${cutoff}
+          ORDER BY created_at
+          LIMIT ${PRUNE_BATCH}
+        )`;
+      removed += deleted;
+      if (deleted < PRUNE_BATCH) break;
+    }
+    if (removed > 0) this.logger.log(`password reset prune: removed ${removed} row(s) older than ${this.limits.retentionDays} days`);
+    return removed;
   }
 
   /**

@@ -15,9 +15,10 @@ export const metadata: Metadata = { title: passwordResetCopy.title };
 /**
  * «نسيت كلمة السر» — `/forgot-password`, beside `/login` in the same shell.
  *
- * `notFound()` where `passwordReset` is off: the API 404s both routes there,
- * and a page whose only button can only fail is worse than no page. The same
- * entitlement decides whether `/login` links here at all.
+ * `notFound()` where `passwordReset` is off (the API 404s both routes there)
+ * or where the stack has no Turnstile site key (the API refuses every request
+ * there): a page whose only button can only fail is worse than no page. The
+ * same two conditions decide whether `/login` links here at all.
  *
  * `connection()` first: the Turnstile key is per stack and read per request
  * (`register/page.tsx` reads it the same way, for the same reason), and that
@@ -30,9 +31,12 @@ export const metadata: Metadata = { title: passwordResetCopy.title };
  */
 export default async function ForgotPasswordPage() {
   await connection();
-  if (!(await featureEnabled('passwordReset'))) notFound();
-
   const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY?.trim() || null;
+  // No Turnstile on the stack = the API answers every request `unavailable`
+  // (fail closed — `PasswordResetService.request`). A page whose only button
+  // can only say «واقف» is not shown at all.
+  if (!turnstileSiteKey || !(await featureEnabled('passwordReset'))) notFound();
+
   const settings = await getPublicSettingsOrDefaults();
   const supportHref = waMeHref(settings.contact.whatsapp ?? TENANT_CONTACT_FALLBACK.whatsapp);
 

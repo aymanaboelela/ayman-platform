@@ -16,7 +16,7 @@ import { CSRF_HEADER, readCsrfToken } from '@/lib/csrf';
  */
 
 export type RequestCodeResult =
-  | { kind: 'accepted' }
+  | { kind: 'accepted'; handle: string }
   | { kind: 'unavailable' }
   | { kind: 'limited'; retryAfterSeconds: number }
   | { kind: 'human_check' }
@@ -60,8 +60,12 @@ export async function requestResetCode(phoneNumber: string, captchaToken: string
       captchaToken ? { 'x-captcha-response': captchaToken } : {},
     );
     if (response.ok) {
-      const status = (payload as { status?: unknown } | null)?.status;
-      return status === 'unavailable' ? { kind: 'unavailable' } : status === 'accepted' ? { kind: 'accepted' } : { kind: 'failed' };
+      const body = (payload ?? {}) as { status?: unknown; handle?: unknown };
+      if (body.status === 'unavailable') return { kind: 'unavailable' };
+      // The handle binds the code to THIS request — without it the next step
+      // cannot succeed, so an `accepted` with none is treated as a failure.
+      if (body.status === 'accepted' && typeof body.handle === 'string') return { kind: 'accepted', handle: body.handle };
+      return { kind: 'failed' };
     }
     const error = (payload ?? {}) as ErrorBody;
     if (response.status === 429) {
@@ -79,6 +83,7 @@ export async function requestResetCode(phoneNumber: string, captchaToken: string
 
 export async function confirmReset(input: {
   phoneNumber: string;
+  handle: string;
   code: string;
   newPassword: string;
 }): Promise<ConfirmResetResult> {

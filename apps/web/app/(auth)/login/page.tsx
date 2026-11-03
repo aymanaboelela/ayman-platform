@@ -86,9 +86,11 @@ export default async function LoginPage({
    */
   const [settings, resetOpen] = await Promise.all([
     getPublicSettingsOrDefaults(),
-    // «نسيت كلمة السر؟» only where the stack has it — see `forgot-password/page.tsx`.
+    // «نسيت كلمة السر؟» only where the stack has it AND a Turnstile key —
+    // see `forgot-password/page.tsx`.
     featureEnabled('passwordReset'),
   ]);
+  const resetLink = resetOpen && Boolean(process.env.TURNSTILE_SITE_KEY?.trim());
   const supportHref = waMeHref(settings.contact.whatsapp ?? TENANT_CONTACT_FALLBACK.whatsapp);
 
   return (
@@ -123,7 +125,7 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <LoginTabs next={next} supportHref={supportHref} forgotHref={resetOpen ? '/forgot-password' : null} />
+      <LoginTabs next={next} supportHref={supportHref} forgotHref={resetLink ? '/forgot-password' : null} />
 
       <p className="auth-switch">
         {copy.auth.switch.noAccount}{' '}

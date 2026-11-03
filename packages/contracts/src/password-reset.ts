@@ -23,6 +23,15 @@ export const PASSWORD_RESET_LIMITS = {
   codeTtlSeconds: 10 * 60,
   /** Wrong guesses before the code is burned. */
   maxAttempts: 5,
+  /**
+   * Wrong guesses for one NUMBER across every code it was sent, per rolling
+   * day. Without it, five codes a day at five guesses each is 25 tries; with
+   * it, 10. Only guesses against a real row bound to the caller's handle
+   * count — a guess with a made-up handle touches no row, so a stranger
+   * cannot spend a student's allowance without first being sent codes of
+   * their own for that number (which the per-number limits already bound).
+   */
+  maxWrongGuessesPerPhonePerDay: 10,
   /** Minimum gap between two requests for the same number. */
   resendCooldownSeconds: 60,
   /**
@@ -49,22 +58,45 @@ export const PASSWORD_RESET_LIMITS = {
    * what every caller can cause equally, and the sends cap below is enforced
    * where nobody can watch it.
    */
-  requestsPerHour: 30,
-  requestsPerDay: 120,
+  requestsPerHour: 200,
+  requestsPerDay: 1000,
   /**
-   * Messages actually put on the wire, for the whole stack. THIS is the limit
-   * that protects the number: every code to a student who never chatted with
-   * it is a NEW chat, and a burst of new chats is exactly what gets a personal
-   * WhatsApp account restricted or banned. Well under the warm-up ramp's
-   * floor (`DEVICE_WARMUP`, 40 a day) so campaigns and notices keep room.
+   * Messages actually put on the wire — THESE are the limits that protect the
+   * number. Every code to a student who never chatted with it is a NEW chat,
+   * and a burst of new chats is exactly what gets a personal WhatsApp account
+   * restricted or banned.
    *
-   * Enforced only in the delivery half, after the response: a request past it
-   * is answered `accepted` like any other and simply sends nothing, which is
-   * what the page's «لو الكود موصلش» line is for.
+   *   · `sendsShareOfCeiling` — all codes together may use at most this share
+   *     of the device's CURRENT daily ceiling (`deviceCeiling`, which ramps
+   *     40 → 250 over a new number's first two weeks). Derived, never a fixed
+   *     count, so codes cannot eat a warming number's budget: 8 a day on day
+   *     one, 50 once the ramp is done.
+   *   · `newChatSendsPerDay` — of those, codes to a number with NO existing
+   *     chat on the linked account (`wa_chats` / `wa_history_chats`).
+   *   · `sendsPerHour` — a burst ceiling under both.
+   *
+   * Enforced only in the delivery half, after the response: a request past
+   * any of them is answered `accepted` like any other and simply sends
+   * nothing, which is what the page's «لو الكود موصلش» line is for.
    */
+  sendsShareOfCeiling: 0.2,
+  newChatSendsPerDay: 5,
   sendsPerHour: 8,
-  sendsPerDay: 25,
+  /**
+   * Leave this many of WhatsApp's own new-chat quota untouched; below it the
+   * request step says «إرسال الكود واقف» to everyone. A code is not worth one
+   * of the last new chats the number is allowed.
+   */
+  newChatQuotaReserve: 10,
+  /** Rows older than this are deleted by the daily prune. */
+  retentionDays: 30,
 } as const;
+
+/**
+ * What `request` hands back for every accepted request, and `confirm` needs
+ * beside the code. 32 random bytes, base64url — 43 characters.
+ */
+export const PasswordResetHandleSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'الطلب ده انتهى');
 
 /** The code as typed: Arabic-Indic digits and stray spaces are the student's keyboard, not a typo. */
 export const PasswordResetCodeSchema = z
@@ -82,6 +114,7 @@ export type PasswordResetRequest = z.infer<typeof PasswordResetRequestSchema>;
 export const PasswordResetConfirmSchema = z
   .object({
     phoneNumber: egyptianPhone('رقم الموبايل مطلوب'),
+    handle: PasswordResetHandleSchema,
     code: PasswordResetCodeSchema,
     newPassword: AuthPasswordSchema,
   })
@@ -95,13 +128,20 @@ export type PasswordResetConfirm = z.infer<typeof PasswordResetConfirmSchema>;
  * not, deliverable or not. The send happens after the response, so there is
  * nothing per-account for this answer to carry even by accident.
  *
- * `unavailable` is a fact about the STACK (no linked device, WhatsApp is
- * refusing new chats, the day's sends are spent) and is said to everyone
- * alike, before any account is looked at.
+ * `accepted` always carries a `handle`: a random token bound to THIS request's
+ * row, registered number or not — a row exists for every accepted request, so
+ * the handle is never a tell. The confirm step needs it beside the code, which
+ * is what stops a third party who knows a student's number from spending that
+ * student's attempts: their guesses can only ever land on rows they created.
+ *
+ * `unavailable` is a fact about the STACK (no linked device, no human check
+ * configured, WhatsApp refusing new chats, the day's requests spent) and is
+ * said to everyone alike, before any account is looked at.
  */
-export const PasswordResetRequestResultSchema = z.object({
-  status: z.enum(['accepted', 'unavailable']),
-});
+export const PasswordResetRequestResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('accepted'), handle: PasswordResetHandleSchema }),
+  z.object({ status: z.literal('unavailable') }),
+]);
 export type PasswordResetRequestResult = z.infer<typeof PasswordResetRequestResultSchema>;
 
 /**
@@ -114,6 +154,13 @@ export const PasswordResetConfirmResultSchema = z.object({
   status: z.enum(['reset', 'google']),
 });
 export type PasswordResetConfirmResult = z.infer<typeof PasswordResetConfirmResultSchema>;
+
+/**
+ * The Turnstile `action` the reset page renders its widget with, and the
+ * only one the API accepts for it — a token solved on the sign-up form is not
+ * a token for this one. `[a-z0-9_-]`, at most 32 characters (Cloudflare's rule).
+ */
+export const PASSWORD_RESET_TURNSTILE_ACTION = 'password-reset';
 
 /** The one error code the confirm step answers with, whatever was wrong. */
 export const PASSWORD_RESET_INVALID_CODE = 'PASSWORD_RESET_INVALID_CODE';

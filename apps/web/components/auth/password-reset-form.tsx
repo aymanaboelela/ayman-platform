@@ -8,6 +8,7 @@ import { passwordResetCopy as c } from '@ayman/contracts/copy/password-reset';
 import { formatCopy } from '@ayman/contracts/format';
 import {
   PASSWORD_RESET_LIMITS,
+  PASSWORD_RESET_TURNSTILE_ACTION,
   PasswordResetCodeSchema,
   PasswordResetRequestSchema,
 } from '@ayman/contracts/password-reset';
@@ -56,6 +57,12 @@ export function PasswordResetForm({
   const [step, setStep] = useState<Step>('phone');
   const [typedPhone, setTypedPhone] = useState('');
   const [phone, setPhone] = useState<string | null>(null);
+  /**
+   * The handle the server minted for the request the code belongs to. Kept in
+   * component state only — it lives exactly as long as the two steps do, and a
+   * reload starts over with a new request, which is what a reload should do.
+   */
+  const [handle, setHandle] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -63,7 +70,10 @@ export function PasswordResetForm({
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [pending, setPending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const { setContainer: setTurnstileBox, getToken, reset: resetTurnstile } = useTurnstile(turnstileSiteKey);
+  const { setContainer: setTurnstileBox, getToken, reset: resetTurnstile } = useTurnstile(
+    turnstileSiteKey,
+    PASSWORD_RESET_TURNSTILE_ACTION,
+  );
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -91,6 +101,7 @@ export function PasswordResetForm({
 
     if (result.kind === 'accepted') {
       setPhone(number);
+      setHandle(result.handle);
       setCode('');
       setStep('code');
       setCooldown(PASSWORD_RESET_LIMITS.resendCooldownSeconds);
@@ -124,7 +135,7 @@ export function PasswordResetForm({
 
   async function onCodeSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!phone) return;
+    if (!phone || !handle) return;
     const errors: typeof fieldError = {};
     const parsedCode = PasswordResetCodeSchema.safeParse(code);
     if (!parsedCode.success) errors.code = parsedCode.error.issues[0]?.message;
@@ -136,7 +147,12 @@ export function PasswordResetForm({
 
     setRefusal(null);
     setPending(true);
-    const result = await confirmReset({ phoneNumber: phone, code: parsedCode.data, newPassword: password });
+    const result = await confirmReset({
+      phoneNumber: phone,
+      handle,
+      code: parsedCode.data,
+      newPassword: password,
+    });
     setPending(false);
 
     if (result.kind === 'reset') {

@@ -43,6 +43,8 @@ import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
 import { SessionDeviceService } from '../../sessions/session-device.service';
+import { isFeatureEnabled } from '../../../common/entitlements';
+import { studentIdsWithWaChat } from '../../wa-history/wa-history.queries';
 
 export interface StudentListQuery {
   page: number;
@@ -60,6 +62,8 @@ export interface StudentListQuery {
    *  automatic `platform` grant is deliberately not one of them. */
   access: 'never_paid' | 'hand_opened' | 'comped' | 'paid' | null;
   stream: 'general' | 'languages' | 'unset' | null;
+  /** «كلّمني على واتساب» / «مكلّمنيش» — see `StudentListQuerySchema.waChat`. */
+  waChat?: 'chatted' | 'never' | null;
 }
 
 const DETAIL_SELECT = {
@@ -372,9 +376,27 @@ export class StudentsService {
    * so the file on the phone is exactly the rows the filter shows.
    */
   private async listWhere(
-    query: Pick<StudentListQuery, 'q' | 'role' | 'governorate' | 'year' | 'track' | 'stream' | 'access'>,
+    query: Pick<StudentListQuery, 'q' | 'role' | 'governorate' | 'year' | 'track' | 'stream' | 'access' | 'waChat'>,
   ): Promise<Prisma.StudentProfileWhereInput> {
     const foldedNames = query.q ? await this.foldedNameMatches(query.q) : [];
+    /*
+     * «كلّمني / مكلّمنيش» — resolved to ids in its own query (the chat tables
+     * have no relation to `student_profiles`; the match is by phone), then
+     * folded into the same `AND` as the role filter so neither can overwrite
+     * the other. Ignored on a stack without `whatsapp.history`, rather than
+     * narrowing to nobody.
+     */
+    const waChatIds =
+      query.waChat && isFeatureEnabled('whatsapp.history') ? await studentIdsWithWaChat(this.prisma) : null;
+    const and: Prisma.StudentProfileWhereInput[] = [
+      ...(query.role === 'staff' ? [{ user: { role: { not: 'student' as const } } }] : []),
+      ...(query.role === 'student' ? [{ user: { role: 'student' as const } }] : []),
+      ...(waChatIds === null
+        ? []
+        : query.waChat === 'chatted'
+          ? [{ userId: { in: waChatIds } }]
+          : [{ userId: { notIn: waChatIds } }]),
+    ];
 
     return {
       ...(query.q
@@ -403,8 +425,7 @@ export class StudentsService {
        * بيرجّع `{ user: … }` هو كمان، والـspread التاني كان بيمسح الأول —
        * `role=student&access=paid` كان هيرجّع المساعدين اللي دافعين.
        */
-      ...(query.role === 'staff' ? { AND: [{ user: { role: { not: 'student' } } }] } : {}),
-      ...(query.role === 'student' ? { AND: [{ user: { role: 'student' } }] } : {}),
+      ...(and.length > 0 ? { AND: and } : {}),
       ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
       ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
       ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),

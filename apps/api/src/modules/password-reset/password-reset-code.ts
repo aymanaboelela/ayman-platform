@@ -1,4 +1,4 @@
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { passwordResetCopy } from '@ayman/contracts/copy/password-reset';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -20,6 +20,24 @@ import { tenantName } from '../../common/tenant';
 export function generateCode(): string {
   const space = 10 ** PASSWORD_RESET_LIMITS.codeLength;
   return String(randomInt(0, space)).padStart(PASSWORD_RESET_LIMITS.codeLength, '0');
+}
+
+/**
+ * The request's handle: 32 random bytes, base64url (43 characters). Handed to
+ * the browser for every accepted request and needed again at confirm, so a
+ * code can only be tried by whoever asked for it.
+ */
+export function generateHandle(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+/**
+ * SHA-256, hex. Unkeyed on purpose — unlike the code, the handle carries 256
+ * bits of its own entropy, so there is nothing for a key to protect, and what
+ * is stored is useless without the value only the browser holds.
+ */
+export function hashHandle(handle: string): string {
+  return createHash('sha256').update(handle).digest('hex');
 }
 
 /**
