@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isFeatureEnabled } from '../../common/entitlements';
 import type { Prisma } from '../../generated/prisma/client';
 import { neverSubscribedWhere } from '../auto-outreach/auto-outreach.rules';
+import { chattedPhones } from '../wa-history/wa-history.queries';
 
 /**
  * Who a campaign is for, resolved ONCE into a list of numbers.
@@ -117,6 +118,23 @@ export class AudienceService {
       select: { phone: true },
     });
     for (const row of optedOutRows) byPhone.delete(row.phone);
+
+    /*
+     * «كلّموني / مكلّمونيش» — LAST, per number, over everything merged above.
+     * The question is about the phone the message goes to: a parent's number
+     * is judged by the parent's own chat, a pasted number by its own. See
+     * `marketing/wa-history.ts` for why this is the axis WhatsApp cares about.
+     *
+     * A stack without `whatsapp.history` ignores it — an old form, not a
+     * request to narrow to nobody — the same rule `leads` follows.
+     */
+    if (audience.waHistory && isFeatureEnabled('whatsapp.history')) {
+      const chatted = await chattedPhones(this.prisma, [...byPhone.keys()]);
+      const keep = audience.waHistory === 'chatted';
+      for (const phone of [...byPhone.keys()]) {
+        if (chatted.has(phone) !== keep) byPhone.delete(phone);
+      }
+    }
 
     return {
       recipients: [...byPhone.values()],

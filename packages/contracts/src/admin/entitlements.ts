@@ -327,6 +327,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'سعر عرض للشهر والترم والسنة لكل الطلبة، لوقت محدد أو مفتوح، والسعر الأصلي ظاهر جنبه متشطّب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new: built for HIS main number, the one
+     * students have been writing to for years. Off on every other stack until
+     * the owner opens it. It reads only what that stack's own linked number
+     * sends on link, and carries nothing of his — but like `whatsapp.bot` it
+     * needs `marketing.whatsapp` (the linked device) to receive anything.
+     */
+    key: 'whatsapp.history',
+    nameAr: 'مين كلّمني على واتساب',
+    descriptionAr: 'المحادثات اللي كانت على الرقم قبل ربطه — فلتر «كلّمني / مكلّمنيش» في الطلبة والحملات.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

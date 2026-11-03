@@ -8,6 +8,9 @@ import {
   type StudentListQuery,
 } from '@ayman/contracts/admin/students';
 import { copy } from '@ayman/contracts/copy/admin';
+import { copy as historyCopy } from '@ayman/contracts/copy/wa-history';
+import { WA_HISTORY_FILTERS } from '@ayman/contracts/marketing/wa-history';
+import { useFeature } from '@/components/admin/entitlements-context';
 import { useDataTable } from '@/components/admin/data-table/use-data-table';
 import { DataTable } from '@/components/admin/data-table/data-table';
 import { DataTableBulkBar } from '@/components/admin/data-table/data-table-bulk-bar';
@@ -51,6 +54,12 @@ const STREAM_OPTIONS: FacetedFilterOption[] = STUDENT_STREAM_FILTERS.map((value)
   label: copy.admin.students.streamFilterLabels[value],
 }));
 
+/** «كلّمني على واتساب» / «مكلّمنيش» — same discipline as `ACCESS_OPTIONS`. */
+const WA_CHAT_OPTIONS: FacetedFilterOption[] = WA_HISTORY_FILTERS.map((value) => ({
+  value,
+  label: historyCopy.filterLabels[value],
+}));
+
 export function StudentsTable({
   rows,
   rowCount,
@@ -61,6 +70,7 @@ export function StudentsTable({
   canDelete,
 }: StudentsTableProps) {
   const [state, setState] = useQueryStates(studentsSearchParams);
+  const historyOn = useFeature('whatsapp.history');
 
   const { table } = useDataTable({
     data: rows,
@@ -83,7 +93,8 @@ export function StudentsTable({
     state.year.length > 0 ||
     state.track.length > 0 ||
     state.access !== null ||
-    state.stream !== null;
+    state.stream !== null ||
+    state.waChat !== null;
 
   const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
 
@@ -122,7 +133,7 @@ export function StudentsTable({
         onSearchChange={(value) => void setState({ q: value, page: 1 })}
         hasActiveFilters={hasActiveFilters}
         onClearFilters={() =>
-          void setState({ governorate: [], year: [], track: [], access: null, stream: null, page: 1 })
+          void setState({ governorate: [], year: [], track: [], access: null, stream: null, waChat: null, page: 1 })
         }
       >
         <FacetedFilter
@@ -180,6 +191,24 @@ export function StudentsTable({
             })
           }
         />
+        {/*
+          «الطلاب اللي مكلمونيش» — single-select like the two above: a student
+          either has a chat with the linked number or not, and «كلّمني OR
+          مكلّمنيش» is everybody. Only where the history feature runs.
+        */}
+        {historyOn ? (
+          <FacetedFilter
+            title={historyCopy.filterTitle}
+            options={WA_CHAT_OPTIONS}
+            selected={state.waChat ? [state.waChat] : []}
+            onChange={(next) =>
+              void setState({
+                waChat: (next.at(-1) as (typeof WA_HISTORY_FILTERS)[number] | undefined) ?? null,
+                page: 1,
+              })
+            }
+          />
+        ) : null}
       </DataTableToolbar>
       <DataTable table={table} columnCount={studentColumns.length} />
       <DataTablePagination table={table} />
