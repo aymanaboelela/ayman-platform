@@ -327,6 +327,20 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'سعر عرض للشهر والترم والسنة لكل الطلبة، لوقت محدد أو مفتوح، والسعر الأصلي ظاهر جنبه متشطّب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". Sends a code FROM the stack's linked WhatsApp number to
+     * any registered student who asks, so it also needs `marketing.whatsapp`
+     * (the device) to send anything — without it the page says «الفريق
+     * بيغيّر كلمة السر» and nothing leaves. Off by default because every code
+     * to a student who never wrote to the number is a new chat on THAT
+     * teacher's personal account, and that is his to agree to.
+     */
+    key: 'passwordReset',
+    nameAr: 'نسيت كلمة السر',
+    descriptionAr: 'الطالب يغيّر كلمة السر لوحده بكود بيوصله على الواتساب من رقم المنصة المرتبط.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

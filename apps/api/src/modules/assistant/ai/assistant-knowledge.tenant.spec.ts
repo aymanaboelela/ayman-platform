@@ -1,3 +1,4 @@
+import { passwordResetCopy } from '@ayman/contracts/copy/password-reset';
 import { copy } from '@ayman/contracts/copy';
 
 /**
@@ -73,6 +74,13 @@ afterEach(() => {
 });
 
 describe('the corpus on another instructor’s stack', () => {
+  it('keeps «no reset link» for a lost password — `passwordReset` is off there', () => {
+    const { KNOWLEDGE } = loadWith(OTHER);
+    for (const id of ['passwordLost', 'accountPassword']) {
+      expect(KNOWLEDGE.find((entry) => entry.id === id)?.answer).not.toContain('«نسيت كلمة السر؟»');
+    }
+  });
+
   it('carries no spelling of his name, in any entry, question or answer', () => {
     // Collected rather than asserted one at a time: jest's `expect` takes no
     // message argument, and a bare `false` tells you nothing about WHICH entry.
@@ -123,7 +131,18 @@ describe('the corpus on his own stack', () => {
     for (const written of copy.assistant.knowledge) {
       const entry = KNOWLEDGE.find((candidate) => candidate.id === written.id);
       expect(entry?.question).toBe(written.q);
-      expect(entry?.answer).toBe(written.a);
+      // The one deliberate exception: «نسيت كلمة السر» describes the reset
+      // page on a stack that has it, and his does (`passwordReset`).
+      expect(entry?.answer).toBe(
+        written.id === 'passwordLost' ? passwordResetCopy.assistant.passwordLost : written.a,
+      );
+    }
+  });
+
+  it('describes the reset page for a lost password — the flow is on here', () => {
+    const { KNOWLEDGE } = loadWith({});
+    for (const id of ['passwordLost', 'accountPassword']) {
+      expect(KNOWLEDGE.find((entry) => entry.id === id)?.answer).toContain('«نسيت كلمة السر؟»');
     }
   });
 

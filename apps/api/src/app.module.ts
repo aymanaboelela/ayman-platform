@@ -71,6 +71,7 @@ import { SocialPostsModule } from './modules/social-posts/social-posts.module';
 import { YoutubeStudioModule } from './modules/youtube-studio/youtube-studio.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { AdminProfileModule } from './modules/admin/profile/admin-profile.module';
+import { PasswordResetModule } from './modules/password-reset/password-reset.module';
 
 @Module({
   imports: [
@@ -221,6 +222,8 @@ import { AdminProfileModule } from './modules/admin/profile/admin-profile.module
     EngagementModule,
     // الملف الشخصي وإدارة حساب الأدمن وتغيير كلمة المرور
     AdminProfileModule,
+    // «نسيت كلمة السر» — a code on WhatsApp from the linked number (`passwordReset`).
+    PasswordResetModule,
   ],
   controllers: [HealthController],
   providers: [

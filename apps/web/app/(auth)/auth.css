@@ -136,6 +136,66 @@
   border-bottom-color: var(--a-9);
 }
 
+/* ------------------------------------------------------ «نسيت كلمة السر» */
+
+/* Under the password field on /login, at the reading end. Pulled up into the
+   form's 20px rhythm so it reads as belonging to the field above it, not as a
+   row of its own. */
+.auth-forgot {
+  margin-block-start: -0.75rem;
+  text-align: end;
+  font-size: var(--fs-text-sm);
+}
+
+.auth-forgot a,
+.password-reset-hint a {
+  color: var(--a-11);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--a-9), transparent 60%);
+}
+
+.auth-forgot a:hover,
+.password-reset-hint a:hover {
+  border-bottom-color: var(--a-9);
+}
+
+/* Six digits, read and typed left to right inside an RTL page — and spaced
+   so a student copying them off another screen can count them. */
+.password-reset-code {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: center;
+  letter-spacing: 0.35em;
+  font-size: var(--fs-title-4);
+}
+
+.password-reset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.password-reset-hint {
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--n-11);
+  text-align: center;
+}
+
+.password-reset-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0;
+}
+
+.password-reset-result__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+}
+
 /* ----------------------------------------------------------- the dark panel */
 
 .auth-aside {

@@ -5438,6 +5438,8 @@ export const copy = {
         a: 'أيوة، عادي خالص. الإيميل اختياري بالكامل، والمنصة أصلاً مابتبعتش إيميلات — الرقم هو اللي بيتم الدخول بيه.',
       },
       {
+        // Where `passwordReset` is on, `assistant-knowledge.ts` swaps this
+        // answer for `passwordResetCopy.assistant.passwordLost`.
         id: 'passwordLost',
         q: 'نسيت كلمة السر',
         a: 'مفيش لينك استرجاع، لأن المنصة مابتبعتش إيميلات ولا رسايل. أيمن هو اللي بيرجّع كلمة السر — من زرار «أكلّم م. أيمن» تحت، أو على الواتساب. الاتنين بيوصلوا ليه.',
@@ -5711,9 +5713,14 @@ export const copy = {
        * message, so they wait instead of asking, and the one thing that could
        * actually help them is the thing the answer talked them out of.
        *
-       * So it says what is true, and the node escalates. When the WhatsApp
-       * Business number lands and `/phone-number/reset-password` is turned on
-       * (see `auth.config.ts`), this is the first copy to rewrite.
+       * So it says what is true, and the node escalates.
+       *
+       * It is STILL the truth on a stack where `passwordReset` is off, which
+       * is why it stays. Where it is on («نسيت كلمة السر؟» on /login, a code
+       * on WhatsApp — `modules/password-reset`), `assistant-knowledge.ts`
+       * answers with `passwordResetCopy.assistant.accountPassword` instead.
+       * Better Auth's `/phone-number/reset-password` is still closed; that is
+       * not the flow.
        */
       accountPassword:
         'مفيش لينك «نسيت كلمة السر» في المنصة، لأن المنصة مابتبعتش إيميلات ولا رسايل. والطريق اللي بيشتغل فعلاً خطوتين: رسالة لأيمن من هنا أو على الواتساب فيها الاسم ورقم الموبايل بتاع الحساب، وهو بيظبّط كلمة السر ويبعتها — وبعدها الدخول عادي من صفحة الدخول بالرقم وكلمة السر الجديدة. وفيه حالة واحدة مالهاش دعوة بالكلام ده كله: الحساب اللي اتعمل بجوجل مافيهوش كلمة سر من الأساس، والدخول بيتم من زرار «المتابعة بحساب جوجل» على نفس الصفحة.',

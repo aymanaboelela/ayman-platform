@@ -30,6 +30,7 @@ import { CatalogModule } from '../modules/catalog/catalog.module';
 import { PlayerModule } from '../modules/player/player.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
 import { GuardianModule } from '../modules/guardian/guardian.module';
+import { PasswordResetModule } from '../modules/password-reset/password-reset.module';
 import { UnlockCodesModule } from '../modules/unlock-codes/unlock-codes.module';
 import { CentersModule } from '../modules/centers/centers.module';
 import { SettingsModule } from '../modules/admin/settings/settings.module';
@@ -359,6 +360,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // فصف في المصفوفة من غير موديوله بيرجّع 404 — «الراوت مش موجود» مش
         // «الحارس رفضه»، وهو بالظبط العكس اللي الصف بيتأكد منه.
         GuardianModule,
+        // «نسيت كلمة السر» — Prisma, `AuditService` and the sidecar client.
+        // CI sets no `WA_SERVICE_URL`, so every request here answers
+        // `unavailable` and nothing reaches a WhatsApp socket.
+        PasswordResetModule,
         // «أكواد الفتح» — موديول كامل لنفس السبب اللي فوق: `UnlockAttemptsService`
         // محتاج ريديس، والموديول بيجيبه من غير ما الفيكستشر يعرف.
         UnlockCodesModule,
@@ -1293,6 +1298,20 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     //
     // والطالب المسجّل دخوله بيوصل نفس الراوت: الأب بيستعمل تليفون ابنه كتير،
     // وجلسة موجودة مالهاش تمنع بوابة تانية على نفس المتصفح.
+    // ── «نسيت كلمة السر»: عامة عن قصد — اللي بيطلبها مش قادر يدخل ─────────
+    //
+    // The refusals these rows pin are on SHAPE (400) and on the CODE (400
+    // with one error code), never on identity: a signed-in student reaches
+    // the same routes and gets the same answers. `request` answers 200
+    // `unavailable` here because this fixture has no WhatsApp device — which
+    // is also the answer every caller gets on a stack that cannot send.
+    { label: 'password reset request: anonymous, a stack with no device says unavailable (200)', method: 'post', path: () => '/api/password-reset/request', actor: 'anonymous', status: 200, body: () => ({ phoneNumber: '01012345678' }) },
+    { label: 'password reset request: a malformed number is refused on SHAPE (400)', method: 'post', path: () => '/api/password-reset/request', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '12' }) },
+    { label: 'password reset request: a signed-in student is not turned away', method: 'post', path: () => '/api/password-reset/request', actor: 'student', status: 200, body: () => ({ phoneNumber: '01012345678' }) },
+    { label: 'password reset confirm: anonymous with a code nobody was sent is 400, not 403', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', code: '123456', newPassword: 'matrix-pass-1' }) },
+    { label: 'password reset confirm: a five-digit code is refused on SHAPE (400)', method: 'post', path: () => '/api/password-reset/confirm', actor: 'anonymous', status: 400, body: () => ({ phoneNumber: '01012345678', code: '12345', newPassword: 'matrix-pass-1' }) },
+    { label: 'password reset confirm: a signed-in student gets the same 400', method: 'post', path: () => '/api/password-reset/confirm', actor: 'student', status: 400, body: () => ({ phoneNumber: '01012345678', code: '123456', newPassword: 'matrix-pass-1' }) },
+
     { label: 'guardian sign-in: anonymous with a wrong code is 401, not 403', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 401, body: () => ({ code: 'AB2#CD' }) },
     { label: 'guardian sign-in: a malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 400, body: () => ({ code: 'short' }) },
     { label: 'guardian sign-in: a signed-in student is not turned away', method: 'post', path: () => '/api/guardian/sign-in', actor: 'student', status: 401, body: () => ({ code: 'AB2#CD' }) },
@@ -3517,6 +3536,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'POST /api/guardian/sign-in',
           'POST /api/guardian/sign-out',
           'GET /api/guardian/me',
+          /*
+           * «نسيت كلمة السر». Public because the caller is, by definition,
+           * somebody who cannot sign in. Both are `@RequireCsrf()` writes,
+           * both 404 where `passwordReset` is off, and neither tells a caller
+           * anything about an account: `request` answers alike for every
+           * number and sends after the response; `confirm` has one refusal
+           * for everything that is not a right, live code.
+           */
+          'POST /api/password-reset/request',
+          'POST /api/password-reset/confirm',
           'GET /api/taxonomy',
           'GET /api/catalog/courses',
           'GET /api/catalog/courses/:slug',

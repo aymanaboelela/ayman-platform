@@ -448,9 +448,11 @@ export type WhatsappDevice = z.infer<typeof WhatsappDeviceSchema>;
  * and the signup nudge (`AutoOutreachSweeper`). Its own source so the device
  * page can tell an automatic message from a campaign one. `bot` is the
  * auto-reply bot's answer and `inbox` a reply typed in the WhatsApp inbox —
- * both into a chat the other side opened (`wa_chats`).
+ * both into a chat the other side opened (`wa_chats`). `otp` is a «نسيت
+ * كلمة السر» code (`modules/password-reset`) — counted against the number like
+ * everything else, and never a reason for the bot or outreach to follow up.
  */
-export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'outreach', 'test', 'other', 'bot', 'inbox'] as const;
+export const WHATSAPP_SEND_SOURCES = ['campaign', 'shipping', 'outreach', 'test', 'other', 'bot', 'inbox', 'otp'] as const;
 export type WhatsappSendSource = (typeof WHATSAPP_SEND_SOURCES)[number];
 
 /**
