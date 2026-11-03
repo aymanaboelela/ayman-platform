@@ -2288,6 +2288,8 @@ details[open] > .unit__head .unit__chevron,
 /* WhatsApp's own green, written onto the card link as `--wa` by
    `WhatsappChannelCard` — a brand mark, not a palette step. */
 .panel-head[data-hue='wa'] { --ph-hue: var(--wa); }
+/* Facebook's blue, written as `--fb` by `FacebookGroupCard` — same reasoning. */
+.panel-head[data-hue='fb'] { --ph-hue: var(--fb); }
 
 /* The medallion: the hue at full strength, lit like the badge discs — an
    angled ramp and a bright top edge — so it reads as an object, not a dot. */

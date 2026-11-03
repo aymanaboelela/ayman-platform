@@ -3992,6 +3992,12 @@ export const copy = {
        */
       cta: 'اشتراك',
     },
+    facebookGroup: {
+      title: 'جروب الفيسبوك',
+      lead: 'اسألوا وساعدوا بعض، وكل ورشة ومراجعة جديدة بتنزل هناك.',
+      /** «انضمام», not «انضم» — the masdar, same reason as `whatsappChannel.cta`. */
+      cta: 'انضمام للجروب',
+    },
 
     /**
      * «رسالة من م. أيمن» — the unread outreach card at the top of the home
