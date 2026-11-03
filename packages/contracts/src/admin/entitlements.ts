@@ -329,6 +329,19 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first", like everything new: built for HIS main number, the one
+     * students have been writing to for years. Off on every other stack until
+     * the owner opens it. It reads only what that stack's own linked number
+     * sends on link, and carries nothing of his — but like `whatsapp.bot` it
+     * needs `marketing.whatsapp` (the linked device) to receive anything.
+     */
+    key: 'whatsapp.history',
+    nameAr: 'مين كلّمني على واتساب',
+    descriptionAr: 'المحادثات اللي كانت على الرقم قبل ربطه — فلتر «كلّمني / مكلّمنيش» في الطلبة والحملات.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * "Ayman first", like everything new — and closed for a second reason:
      * it writes into the account of a REAL WhatsApp number, thousands of
      * times. A teacher opens it when they have a linked number and want it.

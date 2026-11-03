@@ -6466,6 +6466,42 @@ model WaBotSettings {
   @@schema("app")
 }
 
+/// «مين كلّمني على واتساب» — one row per phone number that already had a chat
+/// with the linked number when it was linked, from the one-time history sync
+/// WhatsApp pushes to a new companion device. Counts and timestamps only: the
+/// sidecar never sends a message body, and there is no column for one.
+///
+/// A table of its own rather than rows in `wa_chats`: `wa_chats` IS the bot's
+/// inbox. Every row there is a chat the replier may answer, the leads list may
+/// show and the conversion sweep may touch, and it requires a first/last
+/// message body. Thousands of years-old chats landing there on link would fill
+/// the inbox and «المهتمين» with people who wrote in 2024. This table is only
+/// ever read as "does this phone have a chat".
+///
+/// `user_id`/`who` are a phone-match cache taken at ingest by the same
+/// `WaBotIdentityService.identify` the inbox uses — no foreign key, for the
+/// same reason `wa_chats.user_id` has none.
+model WaHistoryChat {
+  /// E.164 for an Egyptian number; `+<digits>` for any other — `chatPhone()`.
+  phone         String    @id @db.VarChar(20)
+  userId        String?   @map("user_id")
+  who           WaChatWho @default(lead)
+  hasChat       Boolean   @default(true) @map("has_chat")
+  /// A message FROM them was in the synced window (recent messages only).
+  theyWrote     Boolean   @default(false) @map("they_wrote")
+  inboundCount  Int       @default(0) @map("inbound_count")
+  lastMessageAt DateTime? @map("last_message_at")
+  lastInboundAt DateTime? @map("last_inbound_at")
+  /// When the last batch mentioning this phone landed.
+  syncedAt      DateTime  @default(now()) @map("synced_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([syncedAt(sort: Desc)])
+  @@map("wa_history_chats")
+  @@schema("app")
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // «الألعاب» — الإعدادات لكل لعبة، والجولات، والإجابات
 // ═══════════════════════════════════════════════════════════════════════

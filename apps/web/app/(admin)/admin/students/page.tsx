@@ -42,6 +42,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   // «عربي / لغات» — the filter changed the URL and nothing else until this
   // line: the API has read `stream` all along, the page never sent it.
   if (query.stream) params.set('stream', query.stream);
+  if (query.waChat) params.set('waChat', query.waChat);
 
   /**
    * ⚠️ `getTaxonomyOrNull()`, NOT `apiGet('/api/taxonomy', …)`.

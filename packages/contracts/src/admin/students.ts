@@ -2,6 +2,7 @@ import { z } from '@ayman/contracts/zod';
 import { AttendanceModeSchema, StudyTypeSchema } from '@ayman/contracts/centers';
 import { egyptianPhone, isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { DEVICE_LIMIT_CEILING, DEVICE_LIMIT_FLOOR } from '@ayman/contracts/device-limit';
+import { WaHistoryFilterSchema } from '@ayman/contracts/marketing/wa-history';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -711,6 +712,13 @@ export const StudentListQuerySchema = z.object({
    * while quietly implying they are one or the other.
    */
   stream: z.enum(STUDENT_STREAM_FILTERS).nullable().default(null),
+  /**
+   * «كلّمني على واتساب» / «مكلّمنيش» — whether the student's own number has a
+   * chat with the linked WhatsApp number (`marketing/wa-history.ts`). `null`
+   * is no filter. Ignored on a stack without the `whatsapp.history`
+   * entitlement, rather than narrowing the list to nobody.
+   */
+  waChat: WaHistoryFilterSchema.nullable().default(null),
 });
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;

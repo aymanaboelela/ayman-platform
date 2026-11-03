@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { CatalogListSchema } from '@ayman/contracts/catalog';
 import { copy } from '@ayman/contracts/copy/admin';
+import { WaHistorySummarySchema } from '@ayman/contracts/marketing/wa-history';
 import { adminGet } from '@/lib/admin-api';
+import { getEntitlements } from '@/lib/entitlements';
 import { CampaignForm } from '../../campaign-form';
 
 const c = copy.marketing;
@@ -16,6 +18,11 @@ export const metadata = { title: c.newCampaign };
  */
 export default async function NewCampaignPage() {
   const { courses } = await adminGet('/api/catalog/courses', CatalogListSchema);
+  // «كلّموني / مكلّمونيش» counts. Best effort: a failed read leaves the radios
+  // working without the numbers rather than taking the form down.
+  const waHistorySummary = (await getEntitlements())['whatsapp.history']
+    ? await adminGet('/api/admin/wa-history/summary', WaHistorySummarySchema).catch(() => null)
+    : null;
 
   return (
     <>
@@ -29,7 +36,10 @@ export default async function NewCampaignPage() {
 
       <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.newCampaign}</h1>
 
-      <CampaignForm courses={courses.map((course) => ({ id: course.id, title: course.title }))} />
+      <CampaignForm
+        courses={courses.map((course) => ({ id: course.id, title: course.title }))}
+        waHistorySummary={waHistorySummary}
+      />
     </>
   );
 }
