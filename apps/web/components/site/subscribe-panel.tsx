@@ -312,6 +312,7 @@ function PlanCard({
   price: listedPrice,
   deal: saleDeal = null,
   coupon = null,
+  perMonth = false,
   onClick,
 }: {
   icon: ReactNode;
@@ -330,10 +331,17 @@ function PlanCard({
    * it rather than guess.
    */
   coupon?: CouponQuote | null;
+  /** The «شهر» card of a course sold by curriculum month: its quote is for ONE
+   *  month, so the discounted price says «للشهر». */
+  perMonth?: boolean;
   onClick: () => void;
 }) {
   const deal = coupon ? { wasCents: coupon.originalCents, nowCents: coupon.finalCents } : saleDeal;
-  const price = coupon ? formatCopy(copy.subscribe.priceLine, { price: formatEGP(coupon.finalCents) }) : listedPrice;
+  const price = coupon
+    ? formatCopy(perMonth ? copy.subscribe.couponPerMonth : copy.subscribe.priceLine, {
+        price: formatEGP(coupon.finalCents),
+      })
+    : listedPrice;
   const saved = deal
     ? formatCopy(copy.subscribe.saleSave, { amount: formatEGP(deal.wasCents - deal.nowCents) })
     : null;
@@ -922,19 +930,39 @@ export function SubscribePanel({
 
   /*
    * What the plan step asks the server to price the carried code against — one
-   * selection per card that names a single purchase (the rolling «شهر», a
+   * selection per card that names a single purchase (the «شهر» card as above, a
    * course's only term, the year), each term on the term screen, and the
    * months ticked so far on the month picker. The «من …» card of a
    * several-term course names no one purchase, so it is not priced.
    */
+  /*
+   * What the «شهر» card is priced as. The rolling month is one purchase. On a
+   * course sold by curriculum month the card names no month at all, so it is
+   * priced as ONE month — the first the link already ticked, else the first
+   * open one the student does not hold — and drawn «للشهر». The same key the
+   * picker uses for that month alone, so ticking it there asks nothing new.
+   */
+  const representativeMonth =
+    months.length === 0 || coversAll
+      ? null
+      : (months.find((month) => selectedMonthIds.includes(month.id) && !ownedMonthIds.includes(month.id)) ??
+        months.find((month) => !ownedMonthIds.includes(month.id)) ??
+        null);
+  const monthCardSelection: CouponSelection | null =
+    monthlyPriceCents === null
+      ? null
+      : months.length === 0
+        ? { plan: 'monthly', termId: null, monthIds: [] }
+        : representativeMonth
+          ? { plan: 'monthly', termId: null, monthIds: [representativeMonth.id] }
+          : null;
+
   const stepOneSelections: CouponSelection[] =
     !couponsOn || !activeCode
       ? []
       : step === 'choose'
         ? [
-            ...(monthlyPriceCents !== null && months.length === 0
-              ? [{ plan: 'monthly' as const, termId: null, monthIds: [] }]
-              : []),
+            ...(monthCardSelection ? [monthCardSelection] : []),
             ...(terms.length === 1 ? [{ plan: 'term' as const, termId: terms[0]!.id, monthIds: [] }] : []),
             ...(yearlyPriceCents !== null ? [{ plan: 'yearly' as const, termId: null, monthIds: [] }] : []),
           ]
@@ -1657,9 +1685,8 @@ export function SubscribePanel({
                 name={copy.subscribe.planMonthlyLabel}
                 price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
                 deal={dealOf(monthlyWasCents, monthlyPriceCents)}
-                coupon={
-                  months.length === 0 ? cardCoupon({ plan: 'monthly', termId: null, monthIds: [] }) : null
-                }
+                coupon={monthCardSelection ? cardCoupon(monthCardSelection) : null}
+                perMonth={months.length > 0}
                 onClick={() => choosePlan('monthly')}
               />
             ) : null}

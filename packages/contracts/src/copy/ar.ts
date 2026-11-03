@@ -3090,6 +3090,9 @@ export const copy = {
      *  carried code discounts any of them. Same split as `couponAppliedLead`. */
     couponBannerLead: 'كود الخصم',
     couponBannerApplied: 'متطبّق',
+    /** The «شهر» card's discounted price on a course sold by curriculum
+     *  month — the server's quote for one month. */
+    couponPerMonth: '{price} جنيه للشهر',
     couponOriginal: 'السعر قبل الخصم',
     couponDiscount: 'الخصم',
     /** One sentence per `CouponRefusal`, plus a fallback for anything else. */
