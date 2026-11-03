@@ -23,7 +23,12 @@ describe('token-cipher', () => {
   it('refuses a tampered or foreign value', () => {
     const key = tokenKey(SECRET);
     const sealed = sealToken('EAAB-page-token', key);
-    const flipped = `${sealed.slice(0, -2)}${sealed.endsWith('A') ? 'B' : 'A'}${sealed.slice(-1)}`;
+    // Flip the character being REPLACED, not the last one: deciding on the
+    // last character turned an 'A' into an 'A' about once in 64 runs, and the
+    // "tampered" value was then the original.
+    const target = sealed.at(-2);
+    const flipped = `${sealed.slice(0, -2)}${target === 'A' ? 'B' : 'A'}${sealed.slice(-1)}`;
+    expect(flipped).not.toBe(sealed);
     expect(openToken(flipped, key)).toBeNull();
     expect(openToken('EAAB-plaintext', key)).toBeNull();
     expect(openToken('v1.', key)).toBeNull();
