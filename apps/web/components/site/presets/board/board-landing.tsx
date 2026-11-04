@@ -14,6 +14,7 @@ import { BoardCourses } from './board-courses';
 import { BoardBooks } from './board-books';
 import { BoardInstructor } from './board-instructor';
 import { BoardHonors } from './board-honors';
+import { BoardMotion } from './board-motion';
 import { BoardAbout } from './board-about';
 import { BoardStats } from './board-stats';
 import { BoardQuotes } from './board-quotes';
@@ -131,6 +132,9 @@ export default async function BoardLanding({
    */
   return (
     <main data-preset="board">
+      {/* The reading-progress line and the cursor / count-up layer — see
+          `board-motion.tsx`. Decorative; it renders no content of its own. */}
+      <BoardMotion />
       {/*
         The last resort, and it should never render.
 

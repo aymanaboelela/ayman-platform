@@ -91,6 +91,7 @@ const { BoardInstructor } = await import('./board-instructor');
 const { BoardHonors } = await import('./board-honors');
 const { BoardYears } = await import('./board-years');
 const { BoardMark } = await import('./board-mark');
+const { BoardMotion } = await import('./board-motion');
 
 afterEach(cleanup);
 
@@ -224,7 +225,12 @@ const BOOKS: HomeBlockProps = {
 function sectionsOf(page: ReactElement): ReactElement[] {
   const children = (page.props as { children: unknown }).children;
   const flat = (Array.isArray(children) ? children : [children]).flat(3);
-  return flat.filter((child): child is ReactElement => Boolean(child) && typeof child === 'object');
+  // `<BoardMotion>` is the page's decorative layer (progress line, cursor
+  // light), not a block — it takes no heading and is not a section.
+  return flat.filter(
+    (child): child is ReactElement =>
+      Boolean(child) && typeof child === 'object' && (child as ReactElement).type !== BoardMotion,
+  );
 }
 
 /** The Nth section, asserted present — `noUncheckedIndexedAccess` is on. */

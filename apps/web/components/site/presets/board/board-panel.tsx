@@ -2,7 +2,12 @@ import { ThemedImage } from '@/components/themed-image';
 import { keyPair } from '@/lib/brand-image';
 import Link from 'next/link';
 import type { BrandingRead } from '@ayman/contracts/admin/settings';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { BoardMark } from './board-mark';
+
+/** The tokens around the portrait on a programming stack. Code, not copy:
+ *  nothing here is a sentence, so it does not belong in a copy table. */
+const CODE_GLYPHS = ['</>', '{ }', 'if ( )', 'print()', '01', '#'] as const;
 
 /**
  * The opener of «اللوح»: one solid block of the brand colour with a curved
@@ -203,6 +208,17 @@ export function BoardPanel({
             معلومة في الصورة إن قارئ الشاشة محتاجها.
           */
           <div className="board-portrait" aria-hidden="true">
+            {/* Code tokens drifting around the photograph — on a programming
+                stack only, where they describe the subject; on any other
+                subject they would be a costume (the same rule `neon` follows
+                in `(site)/page.tsx`). Inside the `aria-hidden` wrapper. */}
+            {TEACHES_CODE
+              ? CODE_GLYPHS.map((glyph, index) => (
+                  <span className={`board-glyph board-glyph--${index + 1}`} key={glyph}>
+                    {glyph}
+                  </span>
+                ))
+              : null}
             <ThemedImage
               className="board-portrait__img"
               image={keyPair(branding.heroKey, branding.heroDarkKey, 900, 1104)}
