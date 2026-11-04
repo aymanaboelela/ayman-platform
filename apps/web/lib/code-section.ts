@@ -1,7 +1,7 @@
 import type { StudentSection } from '@ayman/contracts/onboarding';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { FIXED_SYSTEM_SLUG, fixedSectionFor } from '@/lib/section-defaults';
-import { ASKS_GRADE } from '@/lib/tenant-grades';
+import { ASKS_GRADE, asksGrade, gradesOf } from '@/lib/tenant-grades';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 /**
@@ -34,12 +34,17 @@ import { TEACHES_CODE } from '@/lib/tenant-subject';
  */
 export const CODE_ASKS_GRADE = TEACHES_CODE && ASKS_GRADE;
 
+/** `CODE_ASKS_GRADE` for the stack's live grades (`gradesOf(taxonomy)`). */
+export function codeAsksGrade(taxonomy: Taxonomy | null | undefined): boolean {
+  return TEACHES_CODE && asksGrade(gradesOf(taxonomy));
+}
+
 /** The section a programming stack writes for what the student chose. */
 export function codeSectionFor(
   taxonomy: Taxonomy,
   values: { system?: string; year: number },
 ): StudentSection {
-  if (CODE_ASKS_GRADE && values.system !== undefined && values.system !== FIXED_SYSTEM_SLUG) {
+  if (codeAsksGrade(taxonomy) && values.system !== undefined && values.system !== FIXED_SYSTEM_SLUG) {
     const system = taxonomy.systems.find((s) => s.slug === values.system);
     if (system) {
       return {

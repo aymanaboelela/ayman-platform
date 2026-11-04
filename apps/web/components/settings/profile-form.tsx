@@ -11,7 +11,7 @@ import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { offeredYearOptions } from '@/lib/section-defaults';
-import { CODE_ASKS_GRADE, codeSectionFor } from '@/lib/code-section';
+import { codeAsksGrade, codeSectionFor } from '@/lib/code-section';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { sectionFieldErrors, subjectSectionFor } from '@/lib/subject-section';
 import { SectionPickers } from '@/components/onboarding/section-pickers';
@@ -152,7 +152,7 @@ export function ProfileForm({
       ...(TEACHES_CODE
         ? // The grade card reads the system (`lib/code-section.ts`); the track
           // stays out for the reason `system` above gives.
-          CODE_ASKS_GRADE
+          codeAsksGrade(taxonomy)
           ? { system: defaults.system }
           : {}
         : { system: defaults.system, trackId: defaults.trackId ?? undefined }),
@@ -196,7 +196,7 @@ export function ProfileForm({
 
   /** The system and the track, where they are asked — see the wizard's twin. */
   function checkSectionFields(): boolean {
-    if (CODE_ASKS_GRADE) {
+    if (codeAsksGrade(taxonomy)) {
       const message = sectionFieldErrors(getValues(), taxonomy).system;
       if (message === undefined) return true;
       setError('system', { type: 'required', message });
@@ -355,7 +355,7 @@ export function ProfileForm({
       <Group title={c.groupSection}>
         {/* Where the subject is code, the year and a note stating the rest;
             anywhere else the three questions the wizard asked there. */}
-        {TEACHES_CODE && !CODE_ASKS_GRADE ? (
+        {TEACHES_CODE && !codeAsksGrade(taxonomy) ? (
           <SelectField
             label={copy.onboarding.year}
             placeholder={copy.onboarding.yearPlaceholder}
@@ -375,7 +375,7 @@ export function ProfileForm({
         )}
         {/* «الباقي إحنا عارفينه» states the programming platform's one
             system, track and subject — true only where they are not asked. */}
-        {TEACHES_CODE && !CODE_ASKS_GRADE ? <FixedSectionNote /> : null}
+        {TEACHES_CODE && !codeAsksGrade(taxonomy) ? <FixedSectionNote /> : null}
         <p className="rounded-lg border border-line bg-surface-2 px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
           {c.keepsProgress}
         </p>

@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { yearPages } from '@/lib/grade-pages';
+import { getStackGrades } from '@/lib/stack-grades';
 
 import { StudioHeading } from './studio-heading';
 import { studioCopy } from './studio-copy';
@@ -28,7 +29,7 @@ export async function StudioTracks({ level }: { level: 1 | 2 }) {
 
   // `yearPages()` is the three years on every stack but one with
   // `TENANT_GRADES`, where it is the stack's grades (`lib/grade-pages.ts`).
-  const YEARS = yearPages().map((page) => ({
+  const YEARS = yearPages(await getStackGrades()).map((page) => ({
     key: page.segment,
     year: page.n,
     label: page.title,

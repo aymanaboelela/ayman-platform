@@ -1,6 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { BookShippingRatesSchema } from '@ayman/contracts/books';
 import { SocialCountsSchema } from '@ayman/contracts/admin/social-counts';
+import { GradesSettingsSchema } from '@ayman/contracts/grades-settings';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a
@@ -767,6 +768,9 @@ export const SiteSettingsSchema = z
     /** «عدد السوشيال ميديا» — see `admin/social-counts.ts`, and why it is
      *  stored here but is NOT one of `SETTINGS_SECTIONS`. */
     socialCounts: SocialCountsSchema.prefault({}),
+    /** «الصفوف» — see `GradesSettingsSchema`. Public through `/api/taxonomy`
+     *  (as the resolved list), not through `PublicSettingsSchema`. */
+    grades: GradesSettingsSchema.prefault({}),
   })
   .strict();
 
@@ -791,7 +795,7 @@ export const PublicSettingsReadSchema = z
 
 export type PublicSettingsRead = z.infer<typeof PublicSettingsReadSchema>;
 
-export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach', 'store', 'about'] as const;
+export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach', 'store', 'about', 'grades'] as const;
 export const SettingsSectionSchema = z.enum(SETTINGS_SECTIONS);
 export type SettingsSection = z.infer<typeof SettingsSectionSchema>;
 
@@ -816,4 +820,6 @@ export const SECTION_SCHEMAS = {
    */
   store: StoreSettingsSchema,
   about: AboutSettingsSchema,
+  /** «الصفوف اللي بتدرّسها». Saved here, read back resolved on `/api/taxonomy`. */
+  grades: GradesSettingsSchema,
 } as const;

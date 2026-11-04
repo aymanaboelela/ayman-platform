@@ -25,7 +25,7 @@ import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { offeredYearOptions } from '@/lib/section-defaults';
-import { CODE_ASKS_GRADE, codeSectionFor } from '@/lib/code-section';
+import { codeAsksGrade, codeSectionFor } from '@/lib/code-section';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { sectionFieldErrors, subjectSectionFor } from '@/lib/subject-section';
 import { SectionPickers } from './section-pickers';
@@ -64,11 +64,12 @@ const PARENT_PHONE_NOTE_ID = 'father-phone-why';
  * code, the system, the year and the track on any other — see
  * `lib/subject-section.ts` for why the three come back there.
  */
-const SECTION_FIELDS: ReadonlyArray<keyof Onboarding> = CODE_ASKS_GRADE
-  ? ['system', 'year']
-  : TEACHES_CODE
-    ? ['year']
-    : ['system', 'year', 'trackId'];
+function sectionFields(codeAsks: boolean): ReadonlyArray<keyof Onboarding> {
+  return codeAsks ? ['system', 'year'] : TEACHES_CODE ? ['year'] : ['system', 'year', 'trackId'];
+}
+
+/** Step 3's own fields beside the section — see `STEPS`. */
+const STEP3_EXTRA_FIELDS = ['studyType', 'attendanceMode', 'centerSlotId'] as const;
 
 /**
  * Which fields each step owns, so "can I move forward" can be answered by
@@ -79,7 +80,7 @@ const SECTION_FIELDS: ReadonlyArray<keyof Onboarding> = CODE_ASKS_GRADE
  * the elective subject are filled from the taxonomy on submit
  * (`@/lib/section-defaults`) — that platform has one answer for each of them —
  * so there is nothing on that step for `trigger` to gate on for those. On any
- * other stack the system and the track are asked too (`SECTION_FIELDS`).
+ * other stack the system and the track are asked too (`sectionFields`).
  *
  * The three centre fields are listed so `trigger` re-checks their SHAPE, but
  * the schema has them optional; whether they are answered is
@@ -93,7 +94,9 @@ const STEPS = [
   },
   {
     title: copy.onboarding.step3Title,
-    fields: [...SECTION_FIELDS, 'studyType', 'attendanceMode', 'centerSlotId'],
+    // The section half is the stack's LIVE grades' call (`sectionFields`),
+    // so it is added at validation time — see `goNext`.
+    fields: [...STEP3_EXTRA_FIELDS],
   },
   { title: copy.onboarding.step4Title, fields: ['fatherPhone'] },
 ] as const satisfies ReadonlyArray<{
@@ -208,6 +211,10 @@ export function OnboardingForm({
     },
   });
 
+  // Whether this programming stack asks a GRADE — its admin's «الصفوف»,
+  // carried on the taxonomy (`lib/code-section.ts`).
+  const codeAsks = codeAsksGrade(taxonomy);
+
   useOnboardingDraft(watch);
 
   // Shared with the profile editor — see `@/lib/profile-options`, which is
@@ -277,7 +284,7 @@ export function OnboardingForm({
   function checkSectionFields(): boolean {
     // A programming stack with grades asks the grade, which IS the system —
     // the track is never asked there (`lib/code-section.ts`).
-    if (CODE_ASKS_GRADE) {
+    if (codeAsks) {
       const message = sectionFieldErrors(getValues(), taxonomy).system;
       if (message === undefined) return true;
       setError('system', { type: 'required', message });
@@ -299,7 +306,11 @@ export function OnboardingForm({
    * "المحافظة مطلوبة" under a step they have not reached.
    */
   async function goNext() {
-    const valid = await trigger([...STEPS[stepIndex]!.fields]);
+    const step = STEPS[stepIndex]!;
+    const valid = await trigger([
+      ...(stepIndex === CENTER_STEP ? sectionFields(codeAsks) : []),
+      ...step.fields,
+    ]);
     // After `trigger`, which clears these fields' errors when their shape is
     // fine — the «is it answered» check has to land on top of that.
     const centersValid = stepIndex !== CENTER_STEP || checkCenterFields();
@@ -602,7 +613,7 @@ export function OnboardingForm({
           <div hidden={stepIndex !== 2} className="space-y-5">
             {/* The year alone where the subject is code; the system, the year
                 and the track anywhere else — `<SectionPickers>`. */}
-            {TEACHES_CODE && !CODE_ASKS_GRADE ? (
+            {TEACHES_CODE && !codeAsks ? (
               <SelectField
                 variant="pill"
                 icon={GraduationCap}

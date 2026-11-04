@@ -11,6 +11,7 @@ import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { JsonLd } from '@/components/seo/json-ld';
 import { PERSON_ID, SITE_URL, WEBSITE_ID, breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
 import { isYearPageIndexable, legacyGradeSegment, yearPageOf } from '@/lib/grade-pages';
+import { getStackGrades } from '@/lib/stack-grades';
 import { CourseCard } from '@/components/site/course-card';
 import { courseCountLabel, groupBySubject } from '@/lib/course-groups';
 
@@ -33,7 +34,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   // The segment is a number (`/years/2`) or, on a stack with grades, a grade
   // slug (`/years/prep3`) — `lib/grade-pages.ts`.
-  const page = yearPageOf((await params).year);
+  const page = yearPageOf((await params).year, await getStackGrades());
   // An unparseable segment calls `notFound()` in the page below. `noindex`
   // rather than `{}` so a bad inbound link (`/years/9`) cannot leave an
   // indexable URL behind — `{}` inherits the root's `index: true`.
@@ -129,9 +130,10 @@ export default async function YearPage({
   searchParams: Promise<{ filter?: string }>;
 }) {
   const segment = (await params).year;
-  const page = yearPageOf(segment);
+  const grades = await getStackGrades();
+  const page = yearPageOf(segment, grades);
   if (!page) {
-    const moved = legacyGradeSegment(segment);
+    const moved = legacyGradeSegment(segment, grades);
     if (moved) permanentRedirect(`/years/${moved}`);
     notFound();
   }

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { courseYearLabel } from '@/lib/grade-pages';
-import { ASKS_GRADE } from '@/lib/tenant-grades';
+import type { Grade } from '@ayman/contracts/grades';
+import { getStackGrades } from '@/lib/stack-grades';
 import { z } from 'zod';
 import { CalendarClock, Layers, Lock } from 'lucide-react';
 import { Badge, cn } from '@ayman/ui';
@@ -57,8 +58,8 @@ const dateFormatter = new Intl.DateTimeFormat('ar-EG', {
 });
 const numberFormatter = new Intl.NumberFormat('ar-EG');
 
-function courseGradeLabel(systemNameAr: string, year: number): string | null {
-  return ASKS_GRADE ? courseYearLabel({ systemNameAr, year }) : null;
+function courseGradeLabel(systemNameAr: string, year: number, grades: readonly Grade[]): string | null {
+  return grades.length > 0 ? courseYearLabel({ systemNameAr, year }, grades) : null;
 }
 
 function yearLabel(year: number): string {
@@ -97,6 +98,8 @@ export default async function AdminCoursesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  // The stack's live «الصفوف» — a row's year reads «الصف الثالث الإعدادي».
+  const grades = await getStackGrades();
   const one = (key: string): string => {
     const value = Array.isArray(params[key]) ? params[key][0] : params[key];
     return typeof value === 'string' ? value : '';
@@ -207,7 +210,7 @@ export default async function AdminCoursesPage({
             const meta = [
               // A stack with grades names the grade («الصف الأول الإعدادي»):
               // the number's «بكالوريا» spelling is wrong for two of its systems.
-              courseGradeLabel(course.system.nameAr, course.year) ?? yearLabel(course.year),
+              courseGradeLabel(course.system.nameAr, course.year, grades) ?? yearLabel(course.year),
               course.system.nameAr,
               course.track?.labelAr,
               course.subject.nameAr,

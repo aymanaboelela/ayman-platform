@@ -51,6 +51,12 @@ export const GRADES = [
 export type Grade = (typeof GRADES)[number];
 export type GradeSlug = Grade['slug'];
 
+/** Slugs → grades, in the canonical order of `GRADES` (prep → sec → bac),
+ *  whatever order they were saved in; unknown slugs are dropped. */
+export function gradesFromSlugs(slugs: readonly string[]): Grade[] {
+  return GRADES.filter((grade) => slugs.includes(grade.slug));
+}
+
 /** The preparatory stage's system slug — seeded only on a stack that teaches it. */
 export const PREPARATORY_SYSTEM = {
   slug: 'preparatory',

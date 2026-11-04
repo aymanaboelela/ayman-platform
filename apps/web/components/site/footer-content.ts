@@ -6,7 +6,8 @@ import type { SocialKey } from '@/components/site/social-icons';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { IS_AYMAN } from '@/lib/tenant';
 import { tenantName } from '@/lib/tenant';
-import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
+import type { Grade } from '@ayman/contracts/grades';
+import { TENANT_GRADES } from '@/lib/tenant-grades';
 import { practiceCopy } from '@ayman/contracts/copy/practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
 
@@ -141,13 +142,20 @@ export const PAGE_LINKS = [
   { href: '/pdfs', label: pdfsCopy.footerLink },
 ] as const;
 
-/** On a stack with `TENANT_GRADES`, one link per grade page (`lib/grade-pages.ts`). */
-export const YEAR_LINKS: readonly { href: string; label: string }[] = ASKS_GRADE
-  ? TENANT_GRADES.map((grade) => ({ href: `/years/${grade.slug}`, label: grade.labelAr }))
-  : ([
-      { href: '/years/1', label: c.trackYear1Title },
-      { href: '/years/2', label: c.trackYear2Title },
-    ] as const);
+/** On a stack with grades, one link per grade page (`lib/grade-pages.ts`).
+ *  `grades` is the stack's LIVE list (`getStackGrades()`); the build-time one
+ *  is only the default. */
+export function yearLinks(grades: readonly Grade[] = TENANT_GRADES): readonly { href: string; label: string }[] {
+  return grades.length > 0
+    ? grades.map((grade) => ({ href: `/years/${grade.slug}`, label: grade.labelAr }))
+    : [
+        { href: '/years/1', label: c.trackYear1Title },
+        { href: '/years/2', label: c.trackYear2Title },
+      ];
+}
+
+/** The build-time default, for a caller with no live list to hand. */
+export const YEAR_LINKS = yearLinks();
 
 export const ACCOUNT_LINKS = [
   { href: '/register', label: c.footerRegister },
@@ -252,9 +260,12 @@ export function footerSocial(
 export function footerContent({
   contact,
   features,
+  grades = TENANT_GRADES,
 }: {
   contact: PublicSettingsRead['contact'];
   features: Entitlements;
+  /** The stack's live grades — see `yearLinks`. */
+  grades?: readonly Grade[];
 }): FooterContent {
   const whatsappHref = waMeHref(contact.whatsapp);
 
@@ -279,7 +290,7 @@ export function footerContent({
       // wordings for one column, which is a difference a reader can only
       // notice with a screen reader open. The presets are new, so they get the
       // simpler version rather than inheriting the discrepancy.
-      { key: 'years', label: copy.onboarding.year, links: YEAR_LINKS },
+      { key: 'years', label: copy.onboarding.year, links: yearLinks(grades) },
       { key: 'account', label: copy.nav.dashboard, links: ACCOUNT_LINKS },
     ],
     whatsapp: whatsappHref ? { href: whatsappHref, label: c.footerWhatsapp } : null,
