@@ -875,6 +875,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // no business writing is a 400 before any handler runs. This is the row
     // that would catch someone "helpfully" relaxing that.
     { label: 'profile section: rejects a field outside the section', method: 'patch', path: () => '/api/profile/section', actor: 'student', status: 400, body: () => ({ year: 1, fullName: 'مش من حقه' }) },
+    // «تغيير كلمة السر» on the student's own page. The student row is a 400,
+    // not a 200: the fixture's password is not this test's to know, and a
+    // wrong CURRENT password is refused by the handler — which is only reached
+    // once the guard has let a signed-in student through.
+    { label: 'profile change password: anonymous', method: 'post', path: () => '/api/profile/change-password', actor: 'anonymous', status: 401, body: () => ({ currentPassword: 'old', newPassword: 'new-password-1' }) },
+    { label: 'profile change password: student, wrong current', method: 'post', path: () => '/api/profile/change-password', actor: 'student', status: 400, body: () => ({ currentPassword: 'not-the-password', newPassword: 'new-password-1' }) },
 
     // ── Sessions/devices — self-scoped; a 404 on someone else's device id ──
     { label: 'sessions list: anonymous', method: 'get', path: () => '/api/sessions', actor: 'anonymous', status: 401 },

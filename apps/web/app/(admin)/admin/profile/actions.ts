@@ -12,6 +12,7 @@ import {
 } from '@ayman/contracts/admin/profile';
 import { adminAccount } from '@ayman/contracts/copy/admin-account';
 import { AdminApiError, adminSend } from '@/lib/admin-api';
+import type { ChangePasswordResult } from '@/components/account/change-password-form';
 
 const a = adminAccount;
 
@@ -46,11 +47,6 @@ export async function updateAdminProfileAction(
     return { ok: false, message: a.saveFailed };
   }
 }
-
-export type ChangePasswordResult =
-  | { ok: true; revokedSessions: number }
-  /** `field` names the box the refusal is about, so the form can mark it. */
-  | { ok: false; field: 'current' | 'next' | 'confirm' | null; message: string };
 
 /**
  * «تغيير كلمة السر» — verified against the CURRENT password server-side

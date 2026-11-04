@@ -213,6 +213,12 @@ export const AUDIT_ACTIONS = [
    * never carries the code or the password, same rule as `student:set-password`.
    */
   'user:password-reset',
+  /**
+   * «تغيير كلمة السر» من صفحة الطالب نفسه — بكلمة السر الحالية، مش بكود.
+   * Same body as `staff:set-password`'s self-change (`auth/change-own-password.ts`);
+   * metadata carries only whether other devices were signed out.
+   */
+  'user:password-change',
   'staff:update',
   /**
    * «سجّل خروج» من صفحة الطالب، وحد الأجهزة بتاعه.

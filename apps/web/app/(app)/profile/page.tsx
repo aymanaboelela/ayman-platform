@@ -17,6 +17,8 @@ import { StatTile } from '@/components/dashboard/stat-tile';
 import { ActivityFeed } from '@/components/profile/activity-feed';
 import { AvatarForm } from '@/components/profile/avatar-form';
 import { DevicesList } from '@/components/settings/devices-list';
+import { StudentChangePasswordForm } from '@/components/profile/change-password-form';
+import { featureEnabled } from '@/lib/entitlements';
 import { QuizScoreBars } from '@/components/profile/quiz-score-bars';
 import { ScoreTrend } from '@/components/results/score-trend';
 import { AttendanceCard } from '@/components/centers/attendance-card';
@@ -141,10 +143,26 @@ export default function ProfilePage() {
           </h2>
           <p className="mb-4 text-[length:var(--fs-text-sm)] text-fg-muted">{c.devicesSubtitle}</p>
           <DevicesList />
+
+          <Suspense fallback={null}>
+            <PasswordSection />
+          </Suspense>
         </aside>
       </div>
     </main>
   );
+}
+
+/**
+ * «تغيير كلمة السر», under the devices — the two things on this page about
+ * who can get into the account. The «نسيت كلمة السر الحالية؟» link follows
+ * the login page's rule exactly (`login/page.tsx`): only where the stack has
+ * the feature AND a Turnstile key, since `/forgot-password` is a 404 without
+ * them.
+ */
+async function PasswordSection() {
+  const resetOpen = (await featureEnabled('passwordReset')) && Boolean(process.env.TURNSTILE_SITE_KEY?.trim());
+  return <StudentChangePasswordForm forgotHref={resetOpen ? '/forgot-password' : null} />;
 }
 
 /** Name, email, photo, and the onboarding facts. */

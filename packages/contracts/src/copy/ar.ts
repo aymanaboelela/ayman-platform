@@ -4926,6 +4926,10 @@ export const copy = {
     // ── devices ────────────────────────────────────────────────────────
     devicesTitle: 'أجهزتك',
     devicesSubtitle: 'لو فيه جهاز مش بتاعك، اقفله من هنا.',
+    /** Under «تغيير كلمة السر» on `/profile`, only where «نسيت كلمة السر» is
+     *  open on the stack. The form's own sentences are `adminAccount.password`
+     *  — none of them names who is changing it. */
+    forgotCurrent: 'كلمة السر الحالية مش في البال؟ نبعتلك كود على الواتساب',
     // ── charts (added; nothing above renamed) ────────────────────────────
     chartsTitle: 'أرقامك',
     chartsSubtitle: 'درجاتك في كل اختبار خلّصته، ومسارها مع الوقت.',

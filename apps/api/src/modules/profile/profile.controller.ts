@@ -14,15 +14,25 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { MAX_AVATAR_BYTES } from '@ayman/contracts/admin/media';
+import type { AdminChangePasswordResult } from '@ayman/contracts/admin/profile';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
+import { CurrentSession, type AuthenticatedSession } from '../../auth/decorators/current-session.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { changeOwnPassword } from '../../auth/change-own-password';
+import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import { ChangeOwnPasswordDto } from './change-password.dto';
 import { OnboardingDto, StudentSectionDto } from './onboarding.dto';
 import { ProfileService, type ProfileMeResponse } from './profile.service';
 import type { StudentProfile } from '../../generated/prisma/client';
 
 @Controller('profile')
 export class ProfileController {
-  constructor(private readonly profile: ProfileService) {}
+  constructor(
+    private readonly profile: ProfileService,
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   @RequirePermission('profile:read')
   @Get('me')
@@ -126,5 +136,36 @@ export class ProfileController {
   @HttpCode(204)
   async whatsappOpened(@CurrentUser() user: AuthenticatedUser): Promise<void> {
     await this.profile.markWhatsappOpened(user.id);
+  }
+
+  /**
+   * «تغيير كلمة السر» — the student's own, with the CURRENT password.
+   *
+   * The admin's `/admin/profile` form and this one run the same body
+   * (`auth/change-own-password.ts`), so the rules cannot drift: this device
+   * stays signed in, other devices leave only when asked, and an old-password
+   * lockout is cleared. A student who no longer knows the current password is
+   * sent to `/forgot-password` by the form instead — that door proves the
+   * phone, this one proves the password.
+   *
+   * `profile:write` for the same reason as the routes above: it writes the
+   * caller's own account, named by the session and never by the body.
+   */
+  @RequirePermission('profile:write')
+  @Post('change-password')
+  @HttpCode(200)
+  @UsePipes(ZodValidationPipe)
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @CurrentSession() session: AuthenticatedSession,
+    @Body() body: ChangeOwnPasswordDto,
+  ): Promise<AdminChangePasswordResult> {
+    return changeOwnPassword(
+      { prisma: this.prisma, audit: this.audit },
+      user.id,
+      session?.id,
+      body,
+      'user:password-change',
+    );
   }
 }
