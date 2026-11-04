@@ -8,7 +8,7 @@ import {
 } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { cairoDayStart, ceilingResumesAt, deviceCeiling } from '@ayman/contracts/marketing/device-ceiling';
+import { cairoDayStart, ceilingForSource, ceilingResumesAt, deviceCeiling } from '@ayman/contracts/marketing/device-ceiling';
 import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
 import { waErrorFor } from '@ayman/contracts/marketing/wa-errors';
 import { loadEnv } from '../../config/env';
@@ -315,7 +315,7 @@ export class WhatsappDeviceService {
 
     // The number's ceiling, before anything reaches the wire. A test send is
     // never refused by it — see `SendInput.source`.
-    if (source !== 'test') await this.assertWithinCeiling();
+    if (source !== 'test') await this.assertWithinCeiling(new Date(), source);
 
     let body: {
       messageId?: string | null;
@@ -422,9 +422,11 @@ export class WhatsappDeviceService {
    * about the ceiling only at the WhatsApp leg would post that platform
    * message again every day the campaign is held back.
    */
-  async assertWithinCeiling(now = new Date()): Promise<void> {
+  async assertWithinCeiling(now = new Date(), source: WhatsappSendSource = 'other'): Promise<void> {
     const ceiling = await this.ceiling(null, now);
-    if (ceiling && ceiling.usedToday >= ceiling.limit) {
+    // Bulk senders stop short of the ceiling (`REPLY_RESERVE_SHARE`) so a
+    // code or a reply asked for late in the day still has room.
+    if (ceiling && ceiling.usedToday >= ceilingForSource(ceiling.limit, source)) {
       throw new DeviceCeilingError(ceiling.limit, ceilingResumesAt(now, DEFAULT_PACING));
     }
   }

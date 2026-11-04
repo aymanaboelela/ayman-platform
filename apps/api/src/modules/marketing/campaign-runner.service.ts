@@ -273,7 +273,7 @@ export class CampaignRunner {
     // every day the campaign is held back. `send()` checks again.
     if (wantsWhatsapp) {
       try {
-        await this.device.assertWithinCeiling(now);
+        await this.device.assertWithinCeiling(now, 'campaign');
       } catch (error) {
         // Anything else (a database blip) fails the tick, not the recipient.
         if (!(error instanceof DeviceCeilingError)) throw error;

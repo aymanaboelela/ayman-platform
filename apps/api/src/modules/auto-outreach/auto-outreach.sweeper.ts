@@ -141,7 +141,7 @@ export class AutoOutreachSweeper {
     // at the send: `send()` would refuse anyway, but only after the chat copy
     // had been composed for a student who then gets nothing.
     try {
-      await this.device.assertWithinCeiling(now);
+      await this.device.assertWithinCeiling(now, 'outreach');
     } catch (error) {
       if (error instanceof DeviceCeilingError) return 'blocked';
       throw error;
