@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
   FolderInput,
   Pause,
   Pencil,
+  Play,
   Search,
   Trash2,
   X,
@@ -112,6 +113,9 @@ export function MontageInbox({
   const [deleting, setDeleting] = useState<MontageVideo | null>(null);
   const [publishing, setPublishing] = useState<MontageVideo | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [watching, setWatching] = useState<MontageVideo | null>(null);
+  // Stable: the player's fetch depends on it, and this screen re-renders on every upload tick.
+  const closeWatch = useCallback(() => setWatching(null), []);
   const picker = useRef<HTMLInputElement>(null);
   const resumePicker = useRef<HTMLInputElement>(null);
   const resumeFor = useRef<MontageVideo | null>(null);
@@ -339,6 +343,7 @@ export function MontageInbox({
                 canPublish={canPublish}
                 downloading={downloading === video.id}
                 onDownload={() => void download(video)}
+                onWatch={() => setWatching(video)}
                 onPublish={() => setPublishing(video)}
                 onEdit={() => setEditing(video)}
                 onDelete={() => setDeleting(video)}
@@ -353,6 +358,7 @@ export function MontageInbox({
         )}
       </section>
 
+      <WatchDialog video={watching} onClose={closeWatch} />
       <EditDialog
         video={editing}
         onClose={() => setEditing(null)}
@@ -393,6 +399,7 @@ function VideoRow({
   canPublish,
   downloading,
   onDownload,
+  onWatch,
   onPublish,
   onEdit,
   onDelete,
@@ -404,6 +411,7 @@ function VideoRow({
   canPublish: boolean;
   downloading: boolean;
   onDownload: () => void;
+  onWatch: () => void;
   onPublish: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -509,6 +517,10 @@ function VideoRow({
                 {c.publish}
               </Button>
             ) : null}
+            <Button size="sm" variant="secondary" onClick={onWatch}>
+              <Play className="size-4" aria-hidden="true" />
+              {c.watch}
+            </Button>
             <Button size="sm" variant="secondary" onClick={onDownload} disabled={downloading}>
               <Download className="size-4" aria-hidden="true" />
               {downloading ? c.downloading : c.download}
@@ -537,6 +549,67 @@ function VideoRow({
         ) : null}
       </div>
     </li>
+  );
+}
+
+/**
+ * «شوف» — the original, played as uploaded. The link is fetched when the
+ * dialog opens (it expires in an hour, so it is never kept on the row), and
+ * closing the dialog unmounts the element, which is what stops the stream.
+ */
+function WatchDialog({ video, onClose }: { video: MontageVideo | null; onClose: () => void }) {
+  return (
+    <Dialog open={video !== null} onOpenChange={(open) => (open ? null : onClose())}>
+      <DialogContent closeLabel={c.close} className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle className="break-words">{video?.title}</DialogTitle>
+          <DialogDescription className="sr-only">{video?.fileName}</DialogDescription>
+        </DialogHeader>
+        {/* Keyed so another video starts from a clean «بيحمّل» instead of the last one's link. */}
+        {video !== null ? <WatchPlayer key={video.id} id={video.id} onFailed={onClose} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WatchPlayer({ id, onFailed }: { id: string; onFailed: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
+  useEffect(() => {
+    let live = true;
+    montageApi.watch(id).then(
+      (link) => {
+        if (live) setUrl(link.url);
+      },
+      (error: unknown) => {
+        if (!live) return;
+        toast.error(errorText(error));
+        onFailed();
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [id, onFailed]);
+
+  return (
+    <div className="grid aspect-video w-full place-items-center overflow-hidden rounded-xl bg-black">
+      {unsupported ? (
+        <p className="px-4 text-center text-[length:var(--fs-text-sm)] text-white/80">{c.watchUnsupported}</p>
+      ) : url === null ? (
+        <p className="text-[length:var(--fs-text-sm)] text-white/80">{c.watchLoading}</p>
+      ) : (
+        <video
+          src={url}
+          controls
+          autoPlay
+          playsInline
+          preload="metadata"
+          onError={() => setUnsupported(true)}
+          className="size-full object-contain"
+        />
+      )}
+    </div>
   );
 }
 

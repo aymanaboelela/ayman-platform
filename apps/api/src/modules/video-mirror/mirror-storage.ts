@@ -683,14 +683,24 @@ export class MirrorStorage {
    * not a `fetch`, so the bucket's CORS rule and the site's `connect-src`
    * never come into it.
    */
-  async presignDownload(key: string, fileName: string, expiresInSeconds: number): Promise<string> {
+  /**
+   * `inline` is the montage screen's «شوف»: the same object, but played in a
+   * <video> instead of saved — `attachment` would not stop the element from
+   * playing it, yet opening the link in a tab would download 8 GB.
+   */
+  async presignDownload(
+    key: string,
+    fileName: string,
+    expiresInSeconds: number,
+    disposition: 'attachment' | 'inline' = 'attachment',
+  ): Promise<string> {
     const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
     return getSignedUrl(
       this.s3,
       new GetObjectCommand({
         Bucket: this.config.bucket,
         Key: key,
-        ResponseContentDisposition: `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        ResponseContentDisposition: `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       }),
       { expiresIn: expiresInSeconds },
     );

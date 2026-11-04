@@ -85,6 +85,7 @@ export const montageApi = {
     send('PATCH', at(id), input, MontageVideoSchema),
   remove: (id: string): Promise<void> => send('DELETE', at(id), undefined, null),
   download: (id: string): Promise<MontageDownload> => send('GET', `${at(id)}/download`, undefined, MontageDownloadSchema),
+  watch: (id: string): Promise<MontageDownload> => send('GET', `${at(id)}/watch`, undefined, MontageDownloadSchema),
   targets: (): Promise<MontageTargets> => send('GET', '/api/admin/montage/targets', undefined, MontageTargetsSchema),
   editors: (): Promise<MontageEditors> => send('GET', '/api/admin/montage/editors', undefined, MontageEditorsSchema),
   createEditor: (input: MontageEditorCreate): Promise<MontageEditor> =>

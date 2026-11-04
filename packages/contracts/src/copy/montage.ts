@@ -45,6 +45,9 @@ export const montageCopy = {
   remaining: 'فاضل {eta}',
 
   download: 'نزّل',
+  watch: 'شوف',
+  watchLoading: 'بيحمّل…',
+  watchUnsupported: 'المتصفح مش عارف يشغّل الملف ده — نزّله وشوفه على الجهاز.',
   downloading: 'بيجهّز…',
   publish: 'حطه في درس',
   rename: 'تعديل',

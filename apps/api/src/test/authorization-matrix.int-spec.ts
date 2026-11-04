@@ -2428,6 +2428,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'montage delete: student', method: 'delete', path: () => `/api/montage/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'montage download: anonymous', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'anonymous', status: 401 },
     { label: 'montage download: student', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'student', status: 403 },
+    { label: 'montage watch: anonymous', method: 'get', path: () => `/api/montage/${randomUUID()}/watch`, actor: 'anonymous', status: 401 },
+    { label: 'montage watch: student', method: 'get', path: () => `/api/montage/${randomUUID()}/watch`, actor: 'student', status: 403 },
     { label: 'montage targets: anonymous', method: 'get', path: () => '/api/admin/montage/targets', actor: 'anonymous', status: 401 },
     { label: 'montage targets: student', method: 'get', path: () => '/api/admin/montage/targets', actor: 'student', status: 403 },
     { label: 'montage publish: anonymous', method: 'post', path: () => `/api/admin/montage/${randomUUID()}/publish`, actor: 'anonymous', status: 401, body: () => ({ lessonId: randomUUID() }) },
@@ -2449,6 +2451,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'montage targets: admin', method: 'get', path: () => '/api/admin/montage/targets', actor: 'admin', status: 200 },
     { label: 'montage download: admin, unknown', method: 'get', path: () => `/api/montage/${randomUUID()}/download`, actor: 'admin', status: 404 },
     { label: 'montage download: admin, not a uuid', method: 'get', path: () => '/api/montage/not-a-uuid/download', actor: 'admin', status: 404 },
+    { label: 'montage watch: admin, unknown', method: 'get', path: () => `/api/montage/${randomUUID()}/watch`, actor: 'admin', status: 404 },
     // «اختبارات مجانية» — two public reads, and the admin side on the question
     // bank's own permissions (`question:read` / `question:write`).
     { label: 'practice public list: anonymous', method: 'get', path: () => '/api/practice/sets', actor: 'anonymous', status: 200 },

@@ -712,7 +712,12 @@ function sharedCspDirectives(dev: boolean): string[] {
     // here). Safari, which plays HLS natively, does the opposite: no blob at
     // all, the origin directly in `media-src`. Naming one and not the other
     // breaks exactly half the phones in the country.
-    ['media-src', "'self'", 'blob:', MEDIA_ORIGIN, VIDEO_ORIGIN].filter(Boolean).join(' '),
+    //
+    // `VIDEO_UPLOAD_ORIGIN` is the montage screen's «شوف»: the editor's
+    // original is played straight off a presigned S3 link (the public host
+    // would make it a permanent URL; the presign expires in an hour). It is
+    // this account's own endpoint, so it widens nothing beyond our bucket.
+    ['media-src', "'self'", 'blob:', MEDIA_ORIGIN, VIDEO_ORIGIN, VIDEO_UPLOAD_ORIGIN].filter(Boolean).join(' '),
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "object-src 'none'",
