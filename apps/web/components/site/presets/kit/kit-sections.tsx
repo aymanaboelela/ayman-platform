@@ -31,6 +31,7 @@ import { tenantName } from '@/lib/tenant';
 import { formatEGP } from '@/lib/price';
 import { courseCountLabel } from '@/lib/course-groups';
 import { yearPages } from '@/lib/grade-pages';
+import { getStackGrades } from '@/lib/stack-grades';
 import { CourseArt } from '@/components/course-art';
 import { StreamBadge } from '@/components/stream-badge';
 import { initials } from '@/components/app/user-avatar';
@@ -180,7 +181,7 @@ export async function KitGrades({ preset, level }: { preset: KitPreset; level: L
   const { courses } = await getCatalogOrEmpty();
   // `yearPages()`: the stack's grades with `TENANT_GRADES`, the three
   // secondary years without — the same pages the footer and sitemap list.
-  const pages = yearPages();
+  const pages = yearPages(await getStackGrades());
 
   return (
     <section className="pk-band pk-band--grades" id="years">

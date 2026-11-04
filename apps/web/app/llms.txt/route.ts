@@ -13,6 +13,7 @@ import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { yearPages } from '@/lib/grade-pages';
+import { getStackGrades } from '@/lib/stack-grades';
 
 /**
  * `/llms.txt` — llmstxt.org.
@@ -211,7 +212,7 @@ export async function GET(): Promise<Response> {
      * This file is read verbatim, so naming the alternates once here is worth
      * more than any amount of prose around it.
      */
-    ...yearPages().map(
+    ...yearPages(await getStackGrades()).map(
       (page) =>
         `- [${page.title}](${url(`/years/${page.segment}.md`)}): ${copy.llms.alsoWritten} ${page.aliases
           .slice(1)

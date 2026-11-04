@@ -23,6 +23,10 @@ import { currentActor } from '../../../audit/audit-context';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AUDIT_RESOURCES, SITE_SETTINGS_ID } from '../admin.constants';
+import { PREPARATORY_SYSTEM, gradesFromSlugs } from '@ayman/contracts/grades';
+import type { GradesSettings } from '@ayman/contracts/grades-settings';
+import { ensurePreparatorySystem } from '../../../common/preparatory-system';
+import { STACK_SUBJECT_SLUG } from '../../../common/tenant-subject';
 
 /**
  * One lookup, expressed once. `null` covers both "no asset chosen" and "the
@@ -154,6 +158,17 @@ export class SettingsService {
     const parsed = result.data;
 
     const next = await this.persist(section, parsed);
+
+    // «الصفوف»: a prep grade ticked on a stack that never had the stage gets
+    // its system, years and offering NOW — otherwise the course form would
+    // offer the grade and refuse every course saved under it until the next
+    // boot's seed ran.
+    if (section === 'grades') {
+      const { slugs } = parsed as GradesSettings;
+      if (slugs !== null && gradesFromSlugs(slugs).some((g) => g.system === PREPARATORY_SYSTEM.slug)) {
+        await ensurePreparatorySystem(this.prisma, STACK_SUBJECT_SLUG);
+      }
+    }
 
     // Issued after the transaction commits, not inside it: `AuditService.record`
     // opens its own transaction to take the advisory lock, and nesting would

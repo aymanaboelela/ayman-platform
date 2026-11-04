@@ -10,6 +10,7 @@ import { INSTRUCTOR_PHOTOS } from '@/lib/seo/instructor-photos';
 import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
 import { isYearPageIndexable, yearPages } from '@/lib/grade-pages';
+import { getStackGrades } from '@/lib/stack-grades';
 
 /**
  * The date the copy on the hand-written pages last changed — `/about`,
@@ -249,7 +250,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
      * Self-healing in both directions: publish a year-3 course and its page
      * returns here on the next build, with no code change.
      */
-    ...yearPages()
+    ...yearPages(await getStackGrades())
       .filter((page) => isYearPageIndexable(courses, page))
       .map((page) => ({
         url: `${SITE_URL}/years/${page.segment}`,

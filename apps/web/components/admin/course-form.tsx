@@ -9,6 +9,7 @@ import {
   streamChoiceOf,
 } from '@ayman/contracts/content';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
+import { gradesOf } from '@/lib/tenant-grades';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -425,9 +426,34 @@ export function CourseForm({
   saleOn = false,
   termsOnSale = false,
 }: Props) {
+  /*
+   * «الصفوف» — the grades this stack teaches, its admin's live choice
+   * (`gradesOf`). With a list, the system and year selects offer ONLY those
+   * grades: Adel teaches تالتة إعدادي + أولى/تانية بكالوريا, and the form used
+   * to offer every year of every system the taxonomy holds (2026-11-04). A
+   * course already saved under a grade since unticked keeps its own value in
+   * the list, so editing it never silently moves it. Without a list —
+   * nothing saved and no `TENANT_GRADES` — every option, as before.
+   */
+  const grades = gradesOf(taxonomy);
+  const offersSystem = (candidate: Taxonomy['systems'][number]): boolean =>
+    grades.length === 0 ||
+    grades.some((grade) => grade.system === candidate.slug) ||
+    candidate.id === defaults?.systemId;
+  const offersYear = (candidate: Taxonomy['systems'][number] | undefined, year: number): boolean =>
+    grades.length === 0 ||
+    grades.some((grade) => grade.system === candidate?.slug && grade.year === year) ||
+    (candidate?.id === defaults?.systemId && year === defaults?.year);
+  const firstYearOf = (systemId: string): number | undefined => {
+    const candidate = taxonomy.systems.find((option) => option.id === systemId);
+    return candidate?.years.find((option) => offersYear(candidate, option.year))?.year;
+  };
+
   const [draft, setDraft] = useState<Draft>(() => {
-    const initialSystemId = defaults?.systemId ?? taxonomy.systems[0]?.id ?? '';
-    const initialYear = defaults?.year ?? 2;
+    const firstGradeSystem =
+      grades.length > 0 ? taxonomy.systems.find((option) => option.slug === grades[0]!.system) : undefined;
+    const initialSystemId = defaults?.systemId ?? firstGradeSystem?.id ?? taxonomy.systems[0]?.id ?? '';
+    const initialYear = defaults?.year ?? (firstGradeSystem ? grades[0]!.year : 2);
     return {
       title: defaults?.title ?? '',
       slug: defaults?.slug ?? initialSlug ?? '',
@@ -732,14 +758,21 @@ export function CourseForm({
               id="systemId"
               name="systemId"
               value={draft.systemId}
-              onChange={(event) =>
+              onChange={(event) => {
+                const systemId = event.target.value;
+                // A year this system is not taught in snaps to the first one
+                // that is — «الصف الأول» of a system Adel only teaches year 3
+                // of would otherwise sit in the year select as a blank.
+                const nextSystem = taxonomy.systems.find((option) => option.id === systemId);
+                const year = offersYear(nextSystem, draft.year) ? draft.year : (firstYearOf(systemId) ?? draft.year);
                 update({
-                  systemId: event.target.value,
-                  trackId: firstTrackIdOrEmpty(taxonomy, event.target.value, draft.year),
-                })
-              }
+                  systemId,
+                  year,
+                  trackId: firstTrackIdOrEmpty(taxonomy, systemId, year),
+                });
+              }}
             >
-              {taxonomy.systems.map((option) => (
+              {taxonomy.systems.filter(offersSystem).map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.nameAr}
                 </option>
@@ -767,7 +800,7 @@ export function CourseForm({
                 });
               }}
             >
-              {(system?.years ?? []).map((option) => (
+              {(system?.years ?? []).filter((option) => offersYear(system, option.year)).map((option) => (
                 <option key={option.year} value={String(option.year)}>
                   {option.labelAr}
                 </option>

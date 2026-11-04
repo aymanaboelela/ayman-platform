@@ -19,6 +19,8 @@ import {
   type TrackPatch,
 } from '@ayman/contracts/admin/taxonomy';
 import { z } from 'zod';
+import { GradesSettingsSchema } from '@ayman/contracts/grades-settings';
+import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminSend } from '@/lib/admin-api';
 import { tags } from '@/lib/cache-tags';
@@ -134,5 +136,24 @@ export async function deleteSubjectAction(id: string): Promise<ActionResult> {
           ? error.message
           : 'unknown';
     return { ok: false, message };
+  }
+}
+
+/**
+ * «الصفوف» — saves the grades this platform teaches through the generic
+ * settings section, then expires the taxonomy tag: `/api/taxonomy` is where
+ * the saved list is read back resolved, and every surface that follows it
+ * (signup, profile, home page tiles, footer, year pages, the course form)
+ * reads it through `getTaxonomyOrNull()` under that one tag.
+ */
+export async function updateGradesAction(slugs: readonly string[]): Promise<ActionResult> {
+  try {
+    const body = GradesSettingsSchema.parse({ slugs: [...slugs] });
+    await adminSend('PATCH', '/api/admin/settings/grades', body, SiteSettingsSchema);
+    updateTag(tags.taxonomy());
+    revalidatePath('/', 'layout');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : copy.admin.taxonomy.gradesFailed };
   }
 }

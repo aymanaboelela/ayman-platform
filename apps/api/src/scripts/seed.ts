@@ -19,7 +19,9 @@ import { SEEDS_OFFICIAL_SEO, TENANT_CONTACT_SEED } from './seed-data/tenant-cont
 import { tenantBrandingDefaults } from '@ayman/contracts/admin/tenant-branding';
 import { STACK_SUBJECT_SLUG } from '../common/tenant-subject';
 import { TEACHES_PREPARATORY } from '../common/tenant';
-import { GRADES, PREPARATORY_SYSTEM } from '@ayman/contracts/grades';
+import { ensurePreparatorySystem } from '../common/preparatory-system';
+import { resolveStackGrades } from '../common/stack-grades';
+import { PREPARATORY_SYSTEM } from '@ayman/contracts/grades';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -214,41 +216,20 @@ async function main(): Promise<void> {
    * year-1 block below gives), because `assertOfferingExists` refuses a
    * course whose (system, year, subject) has no offering.
    */
-  if (TEACHES_PREPARATORY) {
-    const preparatory = await prisma.educationSystem.upsert({
-      where: { slug: PREPARATORY_SYSTEM.slug },
-      // `totalMarks` must be positive — `EducationSystemSchema` refuses 0, and
-      // one refused system empties the whole taxonomy the onboarding reads.
-      // 280 is الشهادة الإعدادية's total.
-      update: { nameAr: PREPARATORY_SYSTEM.nameAr, totalMarks: 280 },
-      create: {
-        slug: PREPARATORY_SYSTEM.slug,
-        nameAr: PREPARATORY_SYSTEM.nameAr,
-        totalMarks: 280,
-        passPercent: 50,
-        allowsRetakes: false,
-        sortOrder: -1,
-      },
-    });
-    for (const grade of GRADES.filter((g) => g.system === PREPARATORY_SYSTEM.slug)) {
-      await prisma.academicYear.upsert({
-        where: { systemId_year: { systemId: preparatory.id, year: grade.year } },
-        update: { labelAr: grade.labelAr, badgeAr: grade.year === 3 ? 'سنة شهادة' : 'سنة نقل' },
-        create: {
-          systemId: preparatory.id,
-          year: grade.year,
-          labelAr: grade.labelAr,
-          badgeAr: grade.year === 3 ? 'سنة شهادة' : 'سنة نقل',
-          sortOrder: grade.year,
-        },
-      });
-      if (STACK_SUBJECT_SLUG === null) continue;
-      const where = { systemId: preparatory.id, year: grade.year, trackId: null, subjectId: subjectId(STACK_SUBJECT_SLUG) };
-      const existing = await prisma.subjectOffering.findFirst({ where, select: { id: true } });
-      if (!existing) {
-        await prisma.subjectOffering.create({ data: { ...where, countsTowardTotal: true, sortOrder: 0 } });
-      }
-    }
+  // The body moved to `ensurePreparatorySystem` so `PATCH /admin/settings/grades`
+  // can run the same thing the moment an admin ticks a prep grade. Here it
+  // runs for the build-time `TENANT_GRADES` OR a saved «الصفوف» that names one.
+  const savedGrades = await prisma.siteSetting.findUnique({
+    where: { id: SITE_SETTINGS_ID },
+    select: { data: true },
+  });
+  const teachesPreparatory =
+    TEACHES_PREPARATORY ||
+    resolveStackGrades((savedGrades?.data as { grades?: unknown } | null)?.grades).some(
+      (g) => g.system === PREPARATORY_SYSTEM.slug,
+    );
+  if (teachesPreparatory) {
+    await ensurePreparatorySystem(prisma, STACK_SUBJECT_SLUG);
   }
 
   // ── tracks ──────────────────────────────────────────────────────────
