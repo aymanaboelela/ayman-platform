@@ -5,6 +5,7 @@ import {
   LessonKindSchema,
   LessonResourceKindSchema,
 } from '@ayman/contracts';
+import { FeatureFlagListSchema } from '@ayman/contracts/admin/flags';
 import { copy } from '@ayman/contracts/copy/admin';
 import { AdminCourseMonthSchema, type AdminCourseMonth } from '@ayman/contracts/months';
 import { VideoMirrorStatusSchema, VideoProviderSchema } from '@ayman/contracts/video';
@@ -228,6 +229,24 @@ async function monthsOrNull(courseId: string): Promise<AdminCourseMonth[] | null
   }
 }
 
+/**
+ * Whether this stack sells each month as its own course — the
+ * `payments.monthlyNeverExpires` switch (`CourseEditor`'s `monthsAreCourses`).
+ *
+ * A failed read answers `true`: the only thing it hides is «خلّي الكورس
+ * بالشهور», and hiding it for one render on a stack that sells curriculum
+ * months costs nothing, while drawing it on a stack that doesn't is one press
+ * from splitting a paid month into ten closed ones.
+ */
+async function monthsAreCourses(): Promise<boolean> {
+  try {
+    const flags = await apiGetAuthed('/api/flags', FeatureFlagListSchema);
+    return flags.some((flag) => flag.key === 'payments.monthlyNeverExpires' && flag.enabled);
+  } catch {
+    return true;
+  }
+}
+
 export const metadata = { title: copy.admin.course.edit };
 
 export default async function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
@@ -240,12 +259,15 @@ export default async function EditCoursePage({ params }: { params: Promise<{ id:
      all, which is the whole point after a restart emptied the shared
      rate-limit bucket and the bare `apiGet` here would have thrown. See
      `lib/taxonomy.ts` and `admin/students/page.tsx`. */
-  const [course, taxonomy, months] = await Promise.all([
+  const [course, taxonomy, months, monthCourses] = await Promise.all([
     apiGetAuthedOrNotFound(`/api/admin/courses/${id}`, AdminCourseDetailSchema),
     getTaxonomyOrNull().then((t) => t ?? getTaxonomyLiveOrNull()),
     monthsOrNull(id),
+    monthsAreCourses(),
   ]);
   if (!taxonomy) throw new Error('GET /api/taxonomy is unavailable');
 
-  return <CourseEditor course={course} taxonomy={taxonomy} months={months} />;
+  return (
+    <CourseEditor course={course} taxonomy={taxonomy} months={months} monthsAreCourses={monthCourses} />
+  );
 }

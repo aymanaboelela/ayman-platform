@@ -266,9 +266,19 @@ export function CourseEditor({
   course,
   taxonomy,
   months,
+  monthsAreCourses = false,
 }: {
   course: AdminCourseDetail;
   taxonomy: Taxonomy;
+  /**
+   * `payments.monthlyNeverExpires` is on: this stack sells each month as its
+   * own course («كورس الشهر التالت»), so the thirty-day plan IS the month and
+   * never lapses. «خلّي الكورس بالشهور» would split that one month into ten
+   * closed ones and move its price — Adel pressed it on 2026-11-03 and his
+   * 84 subscribers' course turned into «الشهر الأول» … «الشهر العاشر». The
+   * press, and its «٣٠ يوم» sentence that is false there, are not drawn.
+   */
+  monthsAreCourses?: boolean;
   /**
    * شهور المنهج, or `null` when the request for them failed — see
    * `monthsOrNull` in the page. `null` is not «مفيش شهور»: the panel would
@@ -445,7 +455,10 @@ export function CourseEditor({
                 {/* Only on a course that actually sells a monthly plan — on a
                     free, yearly-only or term-only course «الاشتراك الشهري العادي»
                     is not true, and turning it over to months means nothing. */}
-                {months !== null && months.length === 0 && course.monthlyPriceCents !== null ? (
+                {months !== null &&
+                months.length === 0 &&
+                course.monthlyPriceCents !== null &&
+                !monthsAreCourses ? (
                   <StartByMonth courseId={course.id} />
                 ) : null}
               </>
