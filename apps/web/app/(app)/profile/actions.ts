@@ -1,7 +1,15 @@
 'use server';
 
 import { refresh, revalidatePath } from 'next/cache';
+import {
+  AdminChangePasswordResultSchema,
+  AdminChangePasswordSchema,
+  type AdminChangePasswordInput,
+} from '@ayman/contracts/admin/profile';
+import { adminAccount } from '@ayman/contracts/copy/admin-account';
 import { callerSignedIn } from '@/lib/action-gate';
+import { ApiSendError, apiSend, refusalReason } from '@/lib/api-server';
+import type { ChangePasswordResult } from '@/components/account/change-password-form';
 
 /**
  * Re-reads the pages that show the student's photo, after the browser has
@@ -65,4 +73,42 @@ export async function refreshAvatarAction(): Promise<void> {
   if (!(await callerSignedIn())) return;
   revalidatePath('/profile');
   refresh();
+}
+
+const p = adminAccount.password;
+
+/**
+ * «تغيير كلمة السر» from the student's own `/profile` — the same form, the
+ * same rules and the same refusal codes as the admin's
+ * (`changeAdminPasswordAction`), against `/api/profile/change-password`,
+ * which runs the same body (`auth/change-own-password.ts`).
+ *
+ * Revalidates `/profile` only when other devices DID sign out: «أجهزتك» on
+ * that page is the one thing a password change can move.
+ */
+export async function changeOwnPasswordAction(input: AdminChangePasswordInput): Promise<ChangePasswordResult> {
+  const body = AdminChangePasswordSchema.safeParse(input);
+  if (!body.success) {
+    const onNext = body.error.issues.some((issue) => issue.path[0] === 'newPassword');
+    return onNext
+      ? { ok: false, field: 'next', message: p.errors.tooShort }
+      : { ok: false, field: 'current', message: p.errors.currentRequired };
+  }
+
+  try {
+    const result = await apiSend('POST', '/api/profile/change-password', AdminChangePasswordResultSchema, body.data);
+    if (result.revokedSessions > 0) revalidatePath('/profile');
+    return { ok: true, revokedSessions: result.revokedSessions };
+  } catch (error) {
+    switch (error instanceof ApiSendError ? refusalReason(error.payload) : null) {
+      case 'current_password_incorrect':
+        return { ok: false, field: 'current', message: p.errors.wrongCurrent };
+      case 'password_unchanged':
+        return { ok: false, field: 'next', message: p.errors.sameAsCurrent };
+      case 'no_credential_account':
+        return { ok: false, field: null, message: p.errors.noCredential };
+      default:
+        return { ok: false, field: null, message: p.errors.failed };
+    }
+  }
 }
