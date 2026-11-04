@@ -5696,6 +5696,25 @@ const admin = {
     systemsTitle: 'الأنظمة الدراسية',
     tracksTitle: 'المسارات',
     subjectsTitle: 'المواد',
+    /**
+     * «الصفوف» — the grades this platform teaches, chosen by its own admin
+     * (`/admin/taxonomy/grades`, owner 2026-11-04: «هو اللي يقدر يحدد مين
+     * عنده»). What is ticked is what the student is asked at signup, what the
+     * home page and footer list, and what the course form offers.
+     */
+    gradesTitle: 'الصفوف',
+    gradesLead:
+      'علّم على الصفوف اللي بتدرّسها. هي دي اللي الطالب هيختار منها وهو بيسجّل، واللي هتظهر في الصفحة الرئيسية، واللي هتقدر تعمل لها كورسات.',
+    gradesNote:
+      'لو شلت صف، الكورسات والطلبة اللي فيه بيفضلوا زي ما هما — بس الصف ده مش هيتعرض على طالب جديد.',
+    gradesStagePrep: 'المرحلة الإعدادية',
+    gradesStageSec: 'الثانوية العامة',
+    gradesStageBac: 'البكالوريا المصرية',
+    gradesSave: 'احفظ الصفوف',
+    gradesSaved: 'اتحفظت الصفوف — التغيير باين على المنصة دلوقتي.',
+    gradesFailed: 'ماقدرناش نحفظ الصفوف، جرّب تاني.',
+    /** Shown while nothing is ticked: saving it brings back the old questions. */
+    gradesNone: 'مفيش صف متعلّم عليه — الطالب هيتسأل عن النظام والسنة زي زمان.',
     columnName: 'الاسم',
     columnSlug: 'المُعرّف',
     columnRegion: 'المنطقة',

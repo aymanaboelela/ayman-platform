@@ -1,4 +1,10 @@
-import { PREPARATORY_SYSTEM, parseTenantGrades, stageWords, type Grade } from '@ayman/contracts/grades';
+import {
+  PREPARATORY_SYSTEM,
+  gradesFromSlugs,
+  parseTenantGrades,
+  stageWords,
+  type Grade,
+} from '@ayman/contracts/grades';
 import { IS_AYMAN } from '@/lib/tenant';
 
 /**
@@ -27,3 +33,22 @@ export const TEACHES_PREPARATORY = TENANT_GRADES.some((g) => g.system === PREPAR
 
 /** The `{stage}` words of `copy/subject.ts`; the old literal on every other stack. */
 export const STAGE_WORDS = stageWords(TENANT_GRADES);
+
+/**
+ * The grades a taxonomy payload carries — the stack's LIVE choice, which its
+ * admin can change from «الصفوف» without a deploy (`/api/taxonomy` resolves
+ * the saved setting against the build-time list).
+ *
+ * Absent `grades` (an API one deploy older) falls back to the build-time
+ * `TENANT_GRADES`, so a rolling deploy never flips the onboarding's mode.
+ * Everything above this function is that build-time default, kept for the
+ * places that only use it for wording (`STAGE_WORDS`).
+ */
+export function gradesOf(taxonomy: { grades?: readonly string[] } | null | undefined): readonly Grade[] {
+  return taxonomy?.grades ? gradesFromSlugs(taxonomy.grades) : TENANT_GRADES;
+}
+
+/** `ASKS_GRADE` for a live list. */
+export function asksGrade(grades: readonly Grade[]): boolean {
+  return grades.length > 0;
+}

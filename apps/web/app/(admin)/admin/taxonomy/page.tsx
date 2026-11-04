@@ -5,6 +5,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 export const metadata = { title: copy.admin.taxonomy.title };
 
 const SECTIONS = [
+  { href: '/admin/taxonomy/grades', label: () => copy.admin.taxonomy.gradesTitle },
   { href: '/admin/taxonomy/governorates', label: () => copy.admin.taxonomy.governoratesTitle },
   { href: '/admin/taxonomy/systems', label: () => copy.admin.taxonomy.systemsTitle },
   { href: '/admin/taxonomy/tracks', label: () => copy.admin.taxonomy.tracksTitle },

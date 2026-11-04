@@ -3,7 +3,8 @@ import { StudentSectionSchema, type Taxonomy } from '@ayman/contracts';
 import { parseTenantGrades } from '@ayman/contracts/grades';
 
 vi.mock('@/lib/tenant-subject', () => ({ TEACHES_CODE: true }));
-vi.mock('@/lib/tenant-grades', () => ({
+vi.mock('@/lib/tenant-grades', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tenant-grades')>()),
   ASKS_GRADE: true,
   TENANT_GRADES: parseTenantGrades('prep3,bac1,bac2'),
 }));
@@ -28,6 +29,8 @@ const system = (id: string, slug: string, nameAr: string, tracks: unknown[] = []
 const taxonomy = {
   governorates: [],
   pinnedGovernorateCodes: [],
+  // The stack's live grades ride on the taxonomy (`gradesOf`).
+  grades: ['prep3', 'bac1', 'bac2'],
   systems: [
     system('sys-prep', 'preparatory', 'المرحلة الإعدادية'),
     system('sys-bac', 'bacalorya', 'البكالوريا المصرية', [

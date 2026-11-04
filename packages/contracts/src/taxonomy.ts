@@ -104,6 +104,17 @@ export const TaxonomySchema = z.object({
   /** Codes pinned to the top of the dropdown; the rest follow in code order. */
   pinnedGovernorateCodes: z.array(z.string().length(2)),
   systems: z.array(EducationSystemSchema),
+  /**
+   * The grades this stack teaches RIGHT NOW — the admin's saved choice
+   * (`GradesSettingsSchema`), or the build-time `TENANT_GRADES` when nothing
+   * was saved. Slugs from `@ayman/contracts/grades`.
+   *
+   * Optional, not defaulted: a web container that reads an API one deploy
+   * older gets `undefined` and keeps its own build-time list, where a `[]`
+   * default would flip a grades stack back to the old questions for the
+   * length of a rolling deploy.
+   */
+  grades: z.array(z.string()).optional(),
 });
 
 export type Region = z.infer<typeof RegionSchema>;

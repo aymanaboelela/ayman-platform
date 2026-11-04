@@ -58,6 +58,9 @@ const getBranding = vi.fn<() => Promise<BrandingRead>>();
 
 vi.mock('@/lib/catalog', () => ({ getCatalogOrEmpty: () => getCatalogOrEmpty() }));
 vi.mock('@/lib/books', () => ({ getBookCatalogOrEmpty: () => getBookCatalogOrEmpty() }));
+/* The stack's live «الصفوف» come off the cached taxonomy loader, which needs
+   Next's cache runtime; these stacks have none saved, so `[]`. */
+vi.mock('@/lib/stack-grades', () => ({ getStackGrades: async () => [] }));
 /* `getPublicSettingsOrDefaults` كمان: `MediaSlot` بقى بيقرا صورة المدرّس من
    الإعدادات، والموك اللي بيستبدل المودیول كله لازم يوفّر اللي بيتنده. */
 vi.mock('@/lib/settings', () => ({

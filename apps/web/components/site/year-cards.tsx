@@ -5,7 +5,8 @@ import { ArrowLeft } from 'lucide-react';
 import { fillSubject, subjectCopy } from '@ayman/contracts/copy/subject';
 import { ElectricCard } from '@/components/site/electric-card';
 import { useRampHex } from '@/lib/ramp-color';
-import { ASKS_GRADE, STAGE_WORDS, TENANT_GRADES } from '@/lib/tenant-grades';
+import type { Grade } from '@ayman/contracts/grades';
+import { STAGE_WORDS, TENANT_GRADES } from '@/lib/tenant-grades';
 
 const s = subjectCopy.landing;
 
@@ -13,19 +14,24 @@ const s = subjectCopy.landing;
  * The cards: the three secondary years, or — on a stack with `TENANT_GRADES`
  * — one per grade, linking to that grade's page (`lib/grade-pages.ts`).
  */
-const CARDS: readonly { key: string; href: string; title: string; body: string }[] = ASKS_GRADE
-  ? TENANT_GRADES.map((grade) => ({
+function cardsFor(
+  grades: readonly Grade[],
+): readonly { key: string; href: string; title: string; body: string }[] {
+  if (grades.length > 0) {
+    return grades.map((grade) => ({
       key: grade.slug,
       href: `/years/${grade.slug}`,
       title: grade.labelAr,
       body: fillSubject(s.gradeBody, { grade: grade.labelAr }),
-    }))
-  : s.trackYearTitles.map((title, index) => ({
-      key: String(index + 1),
-      href: `/years/${index + 1}`,
-      title,
-      body: fillSubject(s.trackYearBody, { year: title }),
     }));
+  }
+  return s.trackYearTitles.map((title, index) => ({
+    key: String(index + 1),
+    href: `/years/${index + 1}`,
+    title,
+    body: fillSubject(s.trackYearBody, { year: title }),
+  }));
+}
 
 /** `.track`'s `--r-lg`, in pixels — the same number `year-tracks.tsx` keeps. */
 const TRACK_RADIUS = 12;
@@ -63,8 +69,10 @@ const BORDER = '#D25C10';
  * because both are client modules a tab may hold from the previous build — see
  * `lib/tenant-subject.ts`.
  */
-export function YearCards() {
+export function YearCards({ grades = TENANT_GRADES }: { grades?: readonly Grade[] }) {
   const border = useRampHex(600, BORDER);
+  // The stack's LIVE grades (its admin's «الصفوف»), handed down by the page.
+  const CARDS = cardsFor(grades);
 
   return (
     <section

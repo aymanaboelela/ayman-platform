@@ -1,3 +1,4 @@
+import { getStackGrades } from '@/lib/stack-grades';
 import Link from 'next/link';
 import { ArrowLeft, ArrowUp, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts';
@@ -12,7 +13,7 @@ import { FooterDragons } from '@/components/site/footer-dragons';
  */
 import {
   ACCOUNT_LINKS,
-  YEAR_LINKS,
+  yearLinks,
   footerContent,
   footerPageLinks,
   footerSocial,
@@ -42,15 +43,21 @@ const c = copy.landing;
  * own because it redraws the frames the tracks section already fetched.
  */
 export async function SiteFooter() {
-  const [{ contact }, features, branding] = await Promise.all([
+  const [{ contact }, features, branding, grades] = await Promise.all([
     getPublicSettingsOrDefaults(),
     getEntitlements(),
     /* الثالثة مجانية عمليًا: `getBranding()` هو `'use cache'` ومتقري أصلًا في
        الروت لايوت وفي `page.tsx`، فده إدخال كاش دافي في نفس الرندر. */
     getBranding(),
+    // The stack's live «الصفوف» — the year column links to its grade pages.
+    getStackGrades(),
   ]);
 
   const pageLinks = footerPageLinks(features);
+  // Named as the module constant it replaces, so the classic JSX below is
+  // the same bytes (`landing-preset.test.ts` digests it): the live list on a
+  // stack with grades, the two old links everywhere else.
+  const YEAR_LINKS = yearLinks(grades);
   const social = footerSocial(contact);
 
   /*
@@ -99,47 +106,47 @@ export async function SiteFooter() {
    */
   if (branding.landingPreset === 'neon' && TEACHES_CODE) {
     const { default: NeonFooter } = await import('@/components/site/presets/neon/neon-footer');
-    return <NeonFooter content={footerContent({ contact, features })} />;
+    return <NeonFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'board') {
     const { default: BoardFooter } = await import('@/components/site/presets/board/board-footer');
-    return <BoardFooter content={footerContent({ contact, features })} />;
+    return <BoardFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'studio') {
     const { default: StudioFooter } = await import('@/components/site/presets/studio/studio-footer');
-    return <StudioFooter content={footerContent({ contact, features })} />;
+    return <StudioFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'ruqaa') {
     const { default: RuqaaFooter } = await import('@/components/site/presets/ruqaa/ruqaa-footer');
-    return <RuqaaFooter content={footerContent({ contact, features })} />;
+    return <RuqaaFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'kurrasa') {
     const { default: KurrasaFooter } = await import('@/components/site/presets/kurrasa/kurrasa-footer');
-    return <KurrasaFooter content={footerContent({ contact, features })} />;
+    return <KurrasaFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'taif') {
     const { default: TaifFooter } = await import('@/components/site/presets/taif/taif-footer');
-    return <TaifFooter content={footerContent({ contact, features })} />;
+    return <TaifFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'sabboora') {
     const { default: SabbooraFooter } = await import('@/components/site/presets/sabboora/sabboora-footer');
-    return <SabbooraFooter content={footerContent({ contact, features })} />;
+    return <SabbooraFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'rihla') {
     const { default: RihlaFooter } = await import('@/components/site/presets/rihla/rihla-footer');
-    return <RihlaFooter content={footerContent({ contact, features })} />;
+    return <RihlaFooter content={footerContent({ contact, features, grades })} />;
   }
 
   if (branding.landingPreset === 'nujoom') {
     const { default: NujoomFooter } = await import('@/components/site/presets/nujoom/nujoom-footer');
-    return <NujoomFooter content={footerContent({ contact, features })} />;
+    return <NujoomFooter content={footerContent({ contact, features, grades })} />;
   }
 
   return (

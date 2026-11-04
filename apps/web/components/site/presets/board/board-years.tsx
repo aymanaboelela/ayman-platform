@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { courseCountLabel } from '@/lib/course-groups';
-import { ASKS_GRADE } from '@/lib/tenant-grades';
 import { yearPages } from '@/lib/grade-pages';
+import { getStackGrades } from '@/lib/stack-grades';
 import { BoardHeading } from './board-heading';
 import { boardCopy } from './board-copy';
 
@@ -98,8 +98,9 @@ export async function BoardYears({ level }: { level: 1 | 2 }) {
    * grade page (`/years/prep1`), with the stage word as the eyebrow so two
    * «1» tiles («أولى إعدادي», «أولى ثانوي») cannot be mistaken for each other.
    */
-  const tiles = ASKS_GRADE
-    ? yearPages().map((page) => ({
+  const grades = await getStackGrades();
+  const tiles = grades.length > 0
+    ? yearPages(grades).map((page) => ({
         key: page.segment,
         href: `/years/${page.segment}`,
         n: page.n,

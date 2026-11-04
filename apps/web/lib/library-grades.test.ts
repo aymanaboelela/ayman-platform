@@ -7,9 +7,15 @@ import { parseTenantGrades } from '@ayman/contracts/grades';
  * where year 1 is two grades. `lib/tenant-grades.ts` reads the env at import,
  * so the module is replaced rather than the variable set.
  */
-vi.mock('@/lib/tenant-grades', () => {
+vi.mock('@/lib/tenant-grades', async (importOriginal) => {
   const grades = parseTenantGrades('prep1,prep2,prep3,sec1');
-  return { ASKS_GRADE: true, TENANT_GRADES: grades, TEACHES_PREPARATORY: true, STAGE_WORDS: {} };
+  return {
+    ...(await importOriginal<typeof import('@/lib/tenant-grades')>()),
+    ASKS_GRADE: true,
+    TENANT_GRADES: grades,
+    TEACHES_PREPARATORY: true,
+    STAGE_WORDS: {},
+  };
 });
 
 const { buildLibrary } = await import('./library');
@@ -17,6 +23,8 @@ const { buildLibrary } = await import('./library');
 const taxonomy = {
   governorates: [],
   pinnedGovernorateCodes: [],
+  // The stack's live grades ride on the taxonomy (`gradesOf`).
+  grades: ['prep1', 'prep2', 'prep3', 'sec1'],
   systems: [
     {
       id: 'sys-prep',

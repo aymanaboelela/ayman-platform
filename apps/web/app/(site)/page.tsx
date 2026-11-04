@@ -19,7 +19,7 @@ import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
 import { BooksStrip } from '@/components/site/books-strip';
 import { InstructorProfile } from '@/components/site/instructor-profile';
-import { YearTracks } from '@/components/site/year-tracks';
+import { LiveYearTracks } from '@/components/site/live-year-tracks';
 import { HonorBoardSection } from '@/components/site/honor-board-section';
 import { AboutInstructor } from '@/components/site/about-instructor';
 import { SiteStats } from '@/components/site/site-stats';
@@ -329,7 +329,7 @@ function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], branding: 
 
     case 'yearTracks':
       return (
-        <YearTracks
+        <LiveYearTracks
           key={block.id}
           posters={{
             trackEssentials: brandImage(branding, 'trackEssentials'),

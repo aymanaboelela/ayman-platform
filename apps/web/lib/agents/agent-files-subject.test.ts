@@ -23,6 +23,9 @@ vi.mock('next/server', async (importOriginal) => ({
 }));
 vi.mock('@/lib/catalog', () => ({ getCatalogOrEmpty: async () => ({ courses: [] }) }));
 vi.mock('@/lib/news', () => ({ getNewsListOrEmpty: async () => ({ posts: [] }) }));
+/* The stack's live «الصفوف» come off the cached taxonomy loader, which needs
+   Next's cache runtime; these stacks have none saved, so `[]`. */
+vi.mock('@/lib/stack-grades', () => ({ getStackGrades: async () => [] }));
 vi.mock('@/lib/entitlements', () => ({ getEntitlements: async () => ({ books: true }) }));
 
 const KEYS = ['TENANT_KEY', 'TENANT_DISPLAY_NAME', 'TENANT_SUBJECT'] as const;

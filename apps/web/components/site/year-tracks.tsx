@@ -13,7 +13,8 @@ import { DRAGON_IGNITES_AT, DRAGON_RIDE } from '@/lib/brand-assets';
 import { useRampHex } from '@/lib/ramp-color';
 import { IS_AYMAN } from '@/lib/tenant';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
-import { ASKS_GRADE } from '@/lib/tenant-grades';
+import type { Grade } from '@ayman/contracts/grades';
+import { TENANT_GRADES } from '@/lib/tenant-grades';
 import { YearCards } from '@/components/site/year-cards';
 
 const c = copy.landing;
@@ -162,11 +163,23 @@ const GLYPHS: readonly [number, number, number, number, number, string][] = [
  * A programming stack renders `<CodeYearTracks>` exactly as `YearTracks` was
  * rendered before this wrapper existed: same element, same props, same DOM.
  */
-export function YearTracks({ posters }: { posters?: TrackPosters }) {
+export function YearTracks({
+  posters,
+  grades = TENANT_GRADES,
+}: {
+  posters?: TrackPosters;
+  /** The stack's live grades (`getStackGrades()`), from the server page —
+   *  `TENANT_GRADES` when a caller does not pass them. */
+  grades?: readonly Grade[];
+}) {
   // A programming stack with `TENANT_GRADES` gets the grade cards too: the
   // editor windows are hard-wired to `/years/1`–`/years/3`, which a stack
   // with grades does not have (`lib/grade-pages.ts`).
-  return TEACHES_CODE && !ASKS_GRADE ? <CodeYearTracks posters={posters} /> : <YearCards />;
+  return TEACHES_CODE && grades.length === 0 ? (
+    <CodeYearTracks posters={posters} />
+  ) : (
+    <YearCards grades={grades} />
+  );
 }
 
 /**

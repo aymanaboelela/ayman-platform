@@ -20,8 +20,8 @@ import {
   trackOptionsFor,
   yearOptionsFor,
 } from '@/lib/subject-section';
-import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
-import { CODE_ASKS_GRADE } from '@/lib/code-section';
+import { asksGrade, gradesOf } from '@/lib/tenant-grades';
+import { codeAsksGrade } from '@/lib/code-section';
 import { SelectField } from './select-field';
 
 /** `useSyncExternalStore` with nothing to subscribe to — see `live` below. */
@@ -92,12 +92,15 @@ export function SectionPickers({
   const shownSystem = live ? system : undefined;
   const shownYear = live ? year : undefined;
 
+  // The stack's LIVE grades — its admin's «الصفوف», carried on the taxonomy.
+  const grades = gradesOf(taxonomy);
+
   const years = yearOptionsFor(taxonomy, shownSystem);
   const tracks = trackOptionsFor(taxonomy, shownSystem, shownYear);
 
   // Never on a programming stack: its track is fixed (`lib/code-section.ts`).
   const trackSelect =
-    tracks.length > 0 && !CODE_ASKS_GRADE ? (
+    tracks.length > 0 && !codeAsksGrade(taxonomy) ? (
       <SelectField
         key={`tracks-${shownSystem ?? 'none'}-${shownYear ?? 'none'}`}
         variant={variant}
@@ -119,8 +122,8 @@ export function SectionPickers({
    * that a grade exists. The track select still follows, for a grade whose
    * system has tracks that year (none of الإعدادية's do).
    */
-  if (ASKS_GRADE) {
-    const options = gradeOptions(taxonomy, TENANT_GRADES);
+  if (asksGrade(grades)) {
+    const options = gradeOptions(taxonomy, grades);
     return (
       <>
         <SelectField
@@ -132,9 +135,9 @@ export function SectionPickers({
           options={options}
           errorMessage={errors.year?.message ?? errors.system?.message}
           name="grade"
-          value={gradeValueOf(TENANT_GRADES, shownSystem, shownYear)}
+          value={gradeValueOf(grades, shownSystem, shownYear)}
           onChange={(event) => {
-            const grade = TENANT_GRADES.find((g) => g.slug === event.target.value);
+            const grade = grades.find((g) => g.slug === event.target.value);
             const touched = { shouldDirty: true, shouldValidate: true } as const;
             setValue('system', grade?.system, touched);
             setValue('year', grade?.year as number, touched);

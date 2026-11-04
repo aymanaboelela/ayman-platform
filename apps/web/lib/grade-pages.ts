@@ -1,6 +1,6 @@
 import { PREPARATORY_SYSTEM, type Grade } from '@ayman/contracts/grades';
 import { copy } from '@ayman/contracts';
-import { ASKS_GRADE, TENANT_GRADES } from '@/lib/tenant-grades';
+import { TENANT_GRADES } from '@/lib/tenant-grades';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
 
@@ -78,14 +78,14 @@ function numberPage(year: number): YearPage {
 }
 
 /** Every year page this stack has, in order. */
-export function yearPages(): YearPage[] {
-  return ASKS_GRADE ? TENANT_GRADES.map(gradePage) : [1, 2, 3].map(numberPage);
+export function yearPages(grades: readonly Grade[] = TENANT_GRADES): YearPage[] {
+  return grades.length > 0 ? grades.map(gradePage) : [1, 2, 3].map(numberPage);
 }
 
 /** The page a URL segment names, or null for a 404. */
-export function yearPageOf(raw: string): YearPage | null {
-  if (ASKS_GRADE) {
-    const grade = TENANT_GRADES.find((g) => g.slug === raw);
+export function yearPageOf(raw: string, grades: readonly Grade[] = TENANT_GRADES): YearPage | null {
+  if (grades.length > 0) {
+    const grade = grades.find((g) => g.slug === raw);
     return grade ? gradePage(grade) : null;
   }
   // `Number('')` is 0 and `Number(' 1 ')` is 1 — neither is a valid segment,
@@ -102,10 +102,10 @@ export function yearPageOf(raw: string): YearPage | null {
  * meant a secondary year, so it moves to the ONE secondary grade with that
  * year; two candidates (`sec2` and `bac2`) or none is a 404, as before.
  */
-export function legacyGradeSegment(raw: string): string | null {
-  if (!ASKS_GRADE || !/^[123]$/.test(raw)) return null;
+export function legacyGradeSegment(raw: string, grades: readonly Grade[] = TENANT_GRADES): string | null {
+  if (grades.length === 0 || !/^[123]$/.test(raw)) return null;
   const year = Number(raw);
-  const candidates = TENANT_GRADES.filter((g) => g.system !== PREPARATORY_SYSTEM.slug && g.year === year);
+  const candidates = grades.filter((g) => g.system !== PREPARATORY_SYSTEM.slug && g.year === year);
   return candidates.length === 1 ? candidates[0]!.slug : null;
 }
 
@@ -133,9 +133,9 @@ const SEEDED_SYSTEM_NAMES: Record<string, string> = {
   bacalorya: 'البكالوريا المصرية',
 };
 
-function courseGrade(course: CourseYear): Grade | undefined {
-  if (!ASKS_GRADE) return undefined;
-  return TENANT_GRADES.find(
+function courseGrade(course: CourseYear, grades: readonly Grade[]): Grade | undefined {
+  if (grades.length === 0) return undefined;
+  return grades.find(
     (g) =>
       g.year === course.year &&
       (course.systemSlug !== undefined
@@ -149,15 +149,18 @@ function courseGrade(course: CourseYear): Grade | undefined {
  * stack with grades, `yearLabelAr` (the stack's historical spelling)
  * everywhere else.
  */
-export function courseYearLabel(course: CourseYear): string {
-  return courseGrade(course)?.labelAr ?? yearLabelAr(course.year);
+export function courseYearLabel(course: CourseYear, grades: readonly Grade[] = TENANT_GRADES): string {
+  return courseGrade(course, grades)?.labelAr ?? yearLabelAr(course.year);
 }
 
 /** The title prefix every year page carries — «كورسات». */
 export const YEAR_PAGE_PREFIX = copy.years.title;
 
 /** `yearAliasesAr` for a course — its grade's spellings on a stack with grades. */
-export function courseYearAliases(course: CourseYear): readonly string[] {
-  const grade = courseGrade(course);
+export function courseYearAliases(
+  course: CourseYear,
+  grades: readonly Grade[] = TENANT_GRADES,
+): readonly string[] {
+  const grade = courseGrade(course, grades);
   return grade ? gradeAliases(grade) : yearAliasesAr(course.year);
 }

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Taxonomy } from '@ayman/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveStackGrades } from '../../common/stack-grades';
+import { SITE_SETTINGS_ID } from '../admin/admin.constants';
 
 /** Codes pinned to the top of the governorate dropdown for UX. */
 const PINNED_GOVERNORATE_CODES = ['01', '21', '02'];
@@ -15,7 +17,7 @@ export class TaxonomyService {
    * only add waterfalls.
    */
   async getTaxonomy(): Promise<Taxonomy> {
-    const [governorates, systems] = await Promise.all([
+    const [governorates, systems, settings] = await Promise.all([
       this.prisma.governorate.findMany({
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -84,11 +86,16 @@ export class TaxonomyService {
           },
         },
       }),
+      // «الصفوف» — the admin's saved choice, resolved against the build-time
+      // `TENANT_GRADES` (`common/stack-grades.ts`). One column of the
+      // singleton, so it rides the same round trip as the systems.
+      this.prisma.siteSetting.findUnique({ where: { id: SITE_SETTINGS_ID }, select: { data: true } }),
     ]);
 
     return {
       governorates,
       pinnedGovernorateCodes: PINNED_GOVERNORATE_CODES,
+      grades: resolveStackGrades((settings?.data as { grades?: unknown } | null)?.grades).map((g) => g.slug),
       systems: systems.map(({ offerings, ...system }) => ({
         ...system,
         // Prisma returns Decimal for numeric columns; the contract says number.
