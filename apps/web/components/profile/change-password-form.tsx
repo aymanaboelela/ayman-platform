@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { changeOwnPasswordAction } from '@/app/(app)/profile/actions';
 import { ChangePasswordForm } from '@/components/account/change-password-form';
 
