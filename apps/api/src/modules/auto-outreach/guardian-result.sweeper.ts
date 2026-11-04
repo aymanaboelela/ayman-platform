@@ -144,7 +144,7 @@ export class GuardianResultSweeper {
     if (last && now.getTime() - last.createdAt.getTime() < gapAfter(last.id)) return 'blocked';
 
     try {
-      await this.device.assertWithinCeiling(now);
+      await this.device.assertWithinCeiling(now, 'outreach');
     } catch (error) {
       if (error instanceof DeviceCeilingError) return 'blocked';
       throw error;

@@ -65,6 +65,27 @@ export function deviceCeiling(firstSendAt: Date | null, now: Date): DeviceCeilin
   return { limit, day, warmingUp: day < last.fromDay };
 }
 
+/**
+ * The share of the day's ceiling that BULK senders may never reach — kept for
+ * the messages a student is waiting on right now: a «نسيت كلمة السر» code,
+ * the bot answering someone who wrote in, a shipping notice.
+ *
+ * Without it, a campaign on a warming number spent all 40 of day one by early
+ * afternoon (2026-11-04, `usedToday: 40, limit: 40`), and every code asked for
+ * after that died at `send()` — the page said «بنبعت» and nothing came. 20%
+ * matches `PASSWORD_RESET_LIMITS.sendsShareOfCeiling`, so the codes' own
+ * budget always fits inside what bulk leaves behind.
+ */
+export const REPLY_RESERVE_SHARE = 0.2;
+
+/** The senders that wait for tomorrow rather than eat the reserve. */
+export const BULK_SEND_SOURCES: ReadonlySet<string> = new Set(['campaign', 'outreach']);
+
+/** Where `source` must stop today: the whole ceiling, or bulk's share of it. */
+export function ceilingForSource(limit: number, source: string): number {
+  return BULK_SEND_SOURCES.has(source) ? limit - Math.ceil(limit * REPLY_RESERVE_SHARE) : limit;
+}
+
 /** The `YYYY-MM-DD` the ceiling is counted against, and when that day began. */
 export function cairoDayStart(now: Date): Date {
   const p = cairoParts(now);
