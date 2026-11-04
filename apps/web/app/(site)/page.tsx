@@ -9,7 +9,7 @@ import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { JsonLd } from '@/components/seo/json-ld';
 import { buildMetadata, SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
-import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
+import { getHomeBlocks, getHonorBoard, getHonorBoardRounds } from '@/lib/home-blocks';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { IS_AYMAN } from '@/lib/tenant';
 import { PracticeInvite } from '@/components/practice/practice-invite';
@@ -176,7 +176,11 @@ export default async function HomePage() {
 
   if (branding.landingPreset === 'board') {
     const { default: BoardLanding } = await import('@/components/site/presets/board/board-landing');
-    return <BoardLanding blocks={blocks} honorBoard={honorBoard} />;
+    // The WHOLE newest board, not the landing's four: this preset draws a
+    // podium and then every other name on it (`board-honors.tsx`). Same cached
+    // read `getHonorBoard` narrows, so this is no second request.
+    const { entries: fullHonorBoard } = await getHonorBoardRounds();
+    return <BoardLanding blocks={blocks} honorBoard={fullHonorBoard} />;
   }
 
   if (branding.landingPreset === 'studio') {
