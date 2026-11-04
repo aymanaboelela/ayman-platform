@@ -570,6 +570,33 @@ describe('BoardHonors — the empty board', () => {
   });
 
   /*
+   * «كل الناس اللي هيضافوا» (2026-11-04): the landing used to stop at four
+   * while the board held thirteen. Every name reaches the page — three on the
+   * podium, the rest in the roll, each place once.
+   */
+  it('draws every name on the board, the first three on the podium', () => {
+    const entries = Array.from({ length: 13 }, (_, index) => ({
+      studentName: `طالب ${index + 1}`,
+      avatarKey: null,
+      photoKey: null,
+      title: 'امتحان الشهر',
+      courseLabel: 'برمجة — تانية بكالوريا',
+      rank: index + 1,
+      scaledScore: 40,
+      gradeOutOf: 50,
+      percent: 80,
+    }));
+    const { container } = render(<BoardHonors entries={entries} level={2} />);
+
+    expect(container.querySelectorAll('.board-honor')).toHaveLength(13);
+    expect(container.querySelectorAll('.board-podium .board-honor')).toHaveLength(3);
+    expect(container.querySelectorAll('.board-roll .board-honor')).toHaveLength(10);
+    expect(container.querySelector('[data-place="1"]')?.textContent).toContain('طالب 1');
+    // The course is said once for the group, not on each of the thirteen cards.
+    expect(screen.getAllByText('برمجة — تانية بكالوريا')).toHaveLength(1);
+  });
+
+  /*
    * The board names a minor on the one page a stranger reads, and the owner
    * asked for the face not to go with the name. `avatarKey` stays in the
    * contract so instructor screens can still show who a row is, which means
