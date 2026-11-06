@@ -54,8 +54,8 @@ export default async function AdminWalletActivityPage({
       <p className="mt-1 max-w-[46rem] text-[length:var(--fs-text-sm)] text-fg-muted">{c.activityLead}</p>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <StatTile label={c.activityCredited} value={egp(activity.totals.creditedCents)} tint="var(--ok)" accent />
-        <StatTile label={c.activityDebited} value={egp(activity.totals.debitedCents)} tint="var(--err)" />
+        <StatTile money label={c.activityCredited} value={egp(activity.totals.creditedCents)} tint="var(--ok)" accent />
+        <StatTile money label={c.activityDebited} value={egp(activity.totals.debitedCents)} tint="var(--err)" />
       </div>
 
       <div role="group" aria-label={c.activityTitle} className="mt-5 flex flex-wrap gap-2">

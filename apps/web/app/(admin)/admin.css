@@ -2115,3 +2115,24 @@ div.unit[data-open] > .unit__head:hover {
     transform: none;
   }
 }
+
+/* ── «الفلوس مقفولة» ─────────────────────────────────────────────────────
+   Every money figure carries `.money`; `MoneyPrivacyProvider` sets
+   `data-money` on the admin shell, `hidden` on every load. `em`, not px, so
+   a hero figure and a table cell blur by the same share of their own size —
+   enough that a glance from the next chair reads nothing, while the shape
+   of the screen stays put. */
+.money {
+  transition: filter 160ms ease-out;
+}
+
+[data-money='hidden'] .money {
+  filter: blur(0.42em);
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .money {
+    transition: none;
+  }
+}

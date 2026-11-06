@@ -27,6 +27,7 @@ export function StatTile({
   accent = false,
   tint,
   href,
+  money = false,
 }: {
   label: string;
   value: string;
@@ -52,6 +53,8 @@ export function StatTile({
    * matches the count they clicked.
    */
   href?: string;
+  /** An amount: blurred until the header's eye opens it (`money-privacy.tsx`). The context line too — it usually carries the gross or the split. */
+  money?: boolean;
 }) {
   const body = (
     <>
@@ -71,11 +74,11 @@ export function StatTile({
           />
         ) : null}
       </p>
-      <p className="mt-1.5 text-[length:var(--fs-title-2)] font-semibold leading-none text-fg">
+      <p className={cn('mt-1.5 text-[length:var(--fs-title-2)] font-semibold leading-none text-fg', money && 'money')}>
         {value}
       </p>
       {context ? (
-        <p className="mt-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">{context}</p>
+        <p className={cn('mt-1.5 text-[length:var(--fs-text-xs)] text-fg-muted', money && 'money')}>{context}</p>
       ) : null}
     </>
   );

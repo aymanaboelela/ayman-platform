@@ -142,14 +142,14 @@ export default async function CentersFinancePage({
         <StatTile
           color="var(--viz-1)"
           icon={Wallet}
-          value={`${formatEGP(finance.totalCents)} ج`}
+          value={<span className="money">{`${formatEGP(finance.totalCents)} ج`}</span>}
           label={f.total}
         />
         <StatTile color="var(--ok)" icon={UserCheck} value={finance.attendances} label={f.attendances} />
         <StatTile
           color="var(--viz-3)"
           icon={Coins}
-          value={average === null ? '—' : `${formatEGP(average)} ج`}
+          value={<span className="money">{average === null ? '—' : `${formatEGP(average)} ج`}</span>}
           label={f.average}
         />
         <StatTile color="var(--viz-2)" icon={School} value={withAttendance} label={f.centers} />
@@ -185,7 +185,7 @@ export default async function CentersFinancePage({
                       {share !== null ? ` · ${formatCopy(f.share, { percent: share })}` : ''}
                     </p>
                   </div>
-                  <p className={cn('text-[length:var(--fs-title-3)] font-bold tabular-nums', TONE_TEXT)}>
+                  <p className={cn('money text-[length:var(--fs-title-3)] font-bold tabular-nums', TONE_TEXT)}>
                     {formatEGP(center.totalCents)} ج
                   </p>
                 </header>
@@ -208,7 +208,7 @@ export default async function CentersFinancePage({
                                 {slot.label}
                               </Link>
                               <span className="text-[length:var(--fs-text-sm)] tabular-nums text-fg">
-                                <span className="font-semibold">{formatEGP(slot.totalCents)} ج</span>
+                                <span className="money font-semibold">{formatEGP(slot.totalCents)} ج</span>
                                 <span className="text-fg-muted">
                                   {' · '}
                                   {formatCopy(f.attendancesCount, { count: slot.attendances })}

@@ -108,18 +108,18 @@ export default async function FinanceOverviewPage() {
           hasRefunds ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3',
         )}
       >
-        <StatTile label={c.tileRevenueTotal} value={egp(overview.revenueTotalCents)} accent />
+        <StatTile money label={c.tileRevenueTotal} value={egp(overview.revenueTotalCents)} accent />
         {hasRefunds ? (
-          <StatTile label={c.tileRefunds} value={`− ${egp(overview.refundsTotalCents)}`} />
+          <StatTile money label={c.tileRefunds} value={`− ${egp(overview.refundsTotalCents)}`} />
         ) : null}
-        <StatTile
+        <StatTile money
           label={c.tileExpensesTotal}
           value={egp(overview.expensesTotalCents)}
           href="/admin/finance/expenses"
         />
         {/* Not an `accent` tile: amber is the "press this" colour in this
             system, and the net is the one number on the page nobody clicks. */}
-        <StatTile label={c.tileNet} value={egp(overview.netCents)} context={c.netExplained} />
+        <StatTile money label={c.tileNet} value={egp(overview.netCents)} context={c.netExplained} />
       </div>
 
       {/* Where the money came FROM, each side shown NET — «الاشتراكات هتقولي
@@ -127,7 +127,7 @@ export default async function FinanceOverviewPage() {
           under each as the subtraction that produced it, so the figure can be
           checked rather than trusted. */}
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
+        <StatTile money
           label={c.tileSubscriptionNet}
           value={egp(overview.subscriptionNetRevenueCents)}
           href="/admin/finance/subscriptions"
@@ -142,7 +142,7 @@ export default async function FinanceOverviewPage() {
         {/* «شحن المحفظة» — its own stream, beside the other two. A
             subscription paid from the wallet is NOT in «الاشتراكات»: its
             money is this tile, counted once, the day it came in. */}
-        <StatTile
+        <StatTile money
           label={c.tileWallet}
           value={egp(overview.walletRevenueCents)}
           href="/admin/wallet"
@@ -151,7 +151,7 @@ export default async function FinanceOverviewPage() {
             held: egp(overview.walletBalanceCents),
           })}
         />
-        <StatTile
+        <StatTile money
           label={c.tileBookNet}
           value={egp(overview.bookNetRevenueCents)}
           href="/admin/books?status=paid"
@@ -161,7 +161,7 @@ export default async function FinanceOverviewPage() {
               : undefined
           }
         />
-        <StatTile
+        <StatTile money
           label={c.tileBookProfit}
           value={egp(overview.bookProfitCents)}
           context={
@@ -186,7 +186,7 @@ export default async function FinanceOverviewPage() {
           straight to the courier, so counting it as margin credited the owner
           with the courier's money on every order. */}
       {overview.bookCourierCostCents !== null && overview.bookParcelCount > 0 ? (
-        <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+        <p className="money mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
           {formatCopy(c.shippingCourier, {
             collected: egp(overview.bookShippingCents),
             courier: egp(overview.bookCourierCostCents),
@@ -195,7 +195,7 @@ export default async function FinanceOverviewPage() {
           })}
         </p>
       ) : overview.bookShippingCents > 0 ? (
-        <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+        <p className="money mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
           {formatCopy(c.shippingPassThrough, { amount: egp(overview.bookShippingCents) })}
         </p>
       ) : null}
@@ -251,7 +251,7 @@ export default async function FinanceOverviewPage() {
                       style={{ inlineSize: `${Math.max(share, 2)}%` }}
                     />
                   </span>
-                  <span className="w-28 shrink-0 text-end text-[length:var(--fs-text-sm)] tabular-nums text-fg">
+                  <span className="money w-28 shrink-0 text-end text-[length:var(--fs-text-sm)] tabular-nums text-fg">
                     {egp(entry.amountCents)}
                   </span>
                 </li>
@@ -270,7 +270,7 @@ export default async function FinanceOverviewPage() {
                   {c.refundsRow}
                 </span>
                 <span className="flex-1" />
-                <span className="w-28 shrink-0 text-end text-[length:var(--fs-text-sm)] tabular-nums text-fg">
+                <span className="money w-28 shrink-0 text-end text-[length:var(--fs-text-sm)] tabular-nums text-fg">
                   {egp(overview.refundsTotalCents)}
                 </span>
               </div>
@@ -307,17 +307,17 @@ export default async function FinanceOverviewPage() {
                 {months.map((month) => (
                   <tr key={month.month} className="border-b border-line-subtle">
                     <td className="p-2 text-fg">{monthLabel(month.month)}</td>
-                    <td className="p-2 text-end tabular-nums text-fg-muted">
+                    <td className="money p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.subscriptionRevenueCents)}
                     </td>
-                    <td className="p-2 text-end tabular-nums text-fg-muted">
+                    <td className="money p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.bookRevenueCents)}
                     </td>
-                    <td className="p-2 text-end tabular-nums text-fg-muted">
+                    <td className="money p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.walletRevenueCents)}
                     </td>
                     {hasRefunds ? (
-                      <td className="p-2 text-end tabular-nums text-fg-muted">
+                      <td className="money p-2 text-end tabular-nums text-fg-muted">
                         {/* A month with no refunds prints «—», not «٠ ج»: a
                             zero in a money column reads as a figure that was
                             computed, and this one is the absence of an event. */}
@@ -326,14 +326,14 @@ export default async function FinanceOverviewPage() {
                           : '—'}
                       </td>
                     ) : null}
-                    <td className="p-2 text-end tabular-nums text-fg-muted">
+                    <td className="money p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.expensesCents)}
                     </td>
                     {/* A losing month is red, and it is the only red on this
                         page — so it reads as "this one", not as an error. */}
                     <td
                       className={cn(
-                        'p-2 text-end font-medium tabular-nums',
+                        'money p-2 text-end font-medium tabular-nums',
                         month.netCents < 0 ? 'text-[var(--err)]' : 'text-fg',
                       )}
                     >

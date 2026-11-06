@@ -1962,6 +1962,9 @@ const admin = {
   title: 'لوحة التحكم',
   signedInAs: 'داخل باسم',
   openMenu: 'فتح القائمة',
+  /** The header's eye: every money figure starts blurred (`money-privacy.tsx`). */
+  moneyShow: 'اظهر الفلوس',
+  moneyHide: 'اخفي الفلوس',
   overviewLead: 'كل حاجة بتظهر للطالب بتتظبط من هنا.',
   /** The redesigned overview: a stat strip, then the section grid. */
   overview: {

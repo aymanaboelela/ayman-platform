@@ -15,6 +15,7 @@ import { AdminAccountMenu } from './admin-account-menu';
 import { AdminNavList } from './admin-nav-list';
 import { CommandPalette } from './command-palette';
 import { InboxAlertsToggle } from './inbox-alerts';
+import { MoneyPrivacyToggle } from './money-privacy';
 import { activeNavItem } from './nav-items';
 
 /**
@@ -143,6 +144,8 @@ export function AdminHeader({
             none — see `notification-view.ts` for why the two admin kinds
             render through the student's own mapper. */}
         {notifications}
+
+        <MoneyPrivacyToggle />
 
         <ThemeToggle />
 

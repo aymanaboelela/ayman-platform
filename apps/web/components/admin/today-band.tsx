@@ -74,6 +74,7 @@ export async function TodayBand() {
               value={formatCopy(c.netValue, { amount: Math.round(sales.netCents / 100).toLocaleString('en-US') })}
               label={c.net}
               hint={c.netHint}
+              money
             />
           </>
         ) : null}
@@ -114,6 +115,7 @@ function TodayTile({
   hint,
   hue,
   tone,
+  money = false,
 }: {
   href: string;
   icon: LucideIcon;
@@ -124,6 +126,8 @@ function TodayTile({
   hue?: string;
   /** Green or red, for the two health tiles — a state, not a figure. */
   tone?: 'ok' | 'err';
+  /** An amount — blurred until the header's eye opens it. */
+  money?: boolean;
 }) {
   return (
     <Link
@@ -135,7 +139,7 @@ function TodayTile({
         <Icon className="size-5" />
       </span>
       <span className="min-w-0">
-        <span className="stat-tile__value block">{value}</span>
+        <span className={`stat-tile__value block${money ? ' money' : ''}`}>{value}</span>
         <span className="stat-tile__label block">{label}</span>
         <span className="stat-tile__hint block truncate">{hint}</span>
       </span>
