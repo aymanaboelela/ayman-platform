@@ -1989,94 +1989,47 @@
 
 
 
-/* ── «اللوح» يترسم مع القراية ──────────────────────────────────────────────
+/* ── «اللوح» بيظهر وانت بتقرا ─────────────────────────────────────────────
 
-   Same mechanism as «الاستوديو»'s, and the same safety: scroll-driven
-   animations behind `@supports`, so a browser without them gets the page
-   exactly as it was — everything present, nothing moving.
+   One-shot reveals on the DOCUMENT timeline, started by `board-motion.tsx`
+   the first time each block comes into view.
 
-   ⚠️ That guard is the whole reason this is safe to add to a page that
-   already ships. Every from-state below is `opacity: 0`, and the failure mode
-   of a scroll reveal is a page that is permanently BLANK for whoever the
-   effect did not reach. Putting the rules inside the feature query means they
-   only exist where the timeline that ends them also exists.
+   ⚠️ These used to be scroll-DRIVEN (`animation-timeline: view()`), and that
+   was the «انيميشن غريب» the owner reported on 2026-11-06. A scrubbed reveal
+   is glued to the finger: every card slid and scaled in lockstep with the
+   scroll, sat half-faded wherever the reader stopped, and faded back OUT on
+   the way up. Its `both` fill also pinned `transform` on the cards for good,
+   which silently cancelled their hover lift. A reveal is an arrival, not a
+   scrub bar: it plays once, at its own pace, and never comes back.
 
-   `prefers-reduced-motion` is handled on top: `tokens/motion.css` clamps every
-   animation to 0.01ms, which lands each element on its resting state at once.
+   The safety the `@supports` guard used to give is now an attribute:
+   - The hidden state is `[data-in='no']`, which only the script writes, and
+     only on blocks that are BELOW the fold when it runs. No JS, reduced
+     motion, an old browser → no attribute → the page exactly as the server
+     sent it. What is on screen at mount gets `data-in='0'`: shown, still.
+   - The motion is on `translate`, never `transform`, so it composes with the
+     hover lift instead of fighting it.
 
-   The panel is not in here, and that is still right: it is on screen at load,
-   so a scroll timeline would either fire instantly — a flash for no reason —
-   or never fire and leave the opener faded.
-   
-   ⚠️ But «not a scroll timeline» is not the same as «no entrance», and
-   reading it that way is what left the first screen — the one the reader
-   actually looks at — completely still while everything below it moved. The
-   opener's entrance is on the DOCUMENT timeline, below this block.
+   The panel is not in here: it is on screen at load, and its entrance is on
+   the document timeline further down this section.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* Same correction as «الاستوديو»'s: 1rem of travel is sixteen pixels, which
-   on a phone reads as a slow paint rather than as motion. */
 @keyframes board-rise {
   from {
     opacity: 0;
-    transform: translateY(2rem) scale(0.98);
+    translate: 0 1.5rem;
   }
 }
 
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    /* A section's head and its body arrive together: the section is one
-       thought, and staggering a heading against its own lead makes a reader
-       wait for a sentence that is already there. */
-    [data-preset='board'] .board-band .board-head,
-    [data-preset='board'] .board-about,
-    [data-preset='board'] .board-id,
-    [data-preset='board'] .board-faq,
-    [data-preset='board'] .board-figures {
-      animation: board-rise 600ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-      animation-timeline: view();
-      animation-range: entry 10% cover 34%;
-    }
+@media (prefers-reduced-motion: no-preference) {
+  [data-preset='board'] [data-in='no'] {
+    opacity: 0;
+  }
 
-    /* The lists stagger, because their items ARE separate objects. */
-    [data-preset='board'] .board-course,
-    [data-preset='board'] .board-feature,
-    [data-preset='board'] .board-year,
-    [data-preset='board'] .board-book,
-    [data-preset='board'] .board-honor,
-    [data-preset='board'] .board-quote {
-      animation: board-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-      animation-timeline: view();
-      animation-range: entry 6% cover 30%;
-    }
-
-    /* The stagger for items sitting side by side — see the long note in the
-       STUDIO section for why this is `animation-range-start` and not
-       `animation-delay`, which on a view timeline is measured in range units
-       and leaves the animation unfinished. */
-    [data-preset='board'] .board-courses > :nth-child(2),
-    [data-preset='board'] .board-features > :nth-child(2),
-    [data-preset='board'] .board-years > :nth-child(2) {
-      animation-range: entry 12% cover 36%;
-    }
-
-    [data-preset='board'] .board-courses > :nth-child(3),
-    [data-preset='board'] .board-features > :nth-child(3),
-    [data-preset='board'] .board-years > :nth-child(3) {
-      animation-range: entry 18% cover 42%;
-    }
-
-    [data-preset='board'] .board-courses > :nth-child(n + 4),
-    [data-preset='board'] .board-features > :nth-child(n + 4) {
-      animation-range: entry 24% cover 48%;
-    }
-
-    /* The closer asks for the account, so it gets the one larger move. */
-    [data-preset='board'] .board-closer > * {
-      animation: board-rise 720ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-      animation-timeline: view();
-      animation-range: entry 4% cover 42%;
-    }
+  /* `--board-stagger` is written by the script: the blocks that arrive in the
+     same frame (a row of cards) step in one after another, the rest at once. */
+  [data-preset='board'] [data-in='1'] {
+    animation: board-rise 560ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--board-stagger, 0ms) backwards;
   }
 }
 
@@ -2113,7 +2066,10 @@
   background:
     radial-gradient(38% 42% at 22% 30%, color-mix(in oklch, var(--p-400), transparent 62%), transparent 70%),
     radial-gradient(34% 40% at 78% 62%, color-mix(in oklch, var(--p-600), transparent 55%), transparent 72%);
-  filter: blur(8px);
+  /* No `filter: blur()`. Both gradients already fade to transparent, so the
+     blur changed nothing you could see — but it made this the most expensive
+     layer on the page: wider than the viewport, re-blurred on every frame of
+     the drift on a phone's GPU. */
 }
 
 [data-preset='board'] .board-panel::after {
@@ -2226,22 +2182,9 @@
   }
 }
 
-@keyframes board-dots {
-  to {
-    background-position: 1.5rem 1.5rem;
-  }
-}
-
 @keyframes board-float {
   50% {
     transform: translateY(-0.6rem);
-  }
-}
-
-@keyframes board-halo {
-  50% {
-    opacity: 0.65;
-    transform: scale(1.06);
   }
 }
 
@@ -2301,13 +2244,19 @@
   }
 }
 
+/* ⚠️ What is NOT looping any more, and why (2026-11-06, «البرفورمنس وحش»):
+   - The dot grid's crawl animated `background-position`, which cannot run on
+     the compositor: it repainted the whole opener, every frame, forever.
+   - The halo's breathing scaled a large gradient under the photograph while
+     the photograph itself floated: two slow motions out of phase read as the
+     picture swimming, not as light.
+   Both stay, still. The loops that remain are `transform`/`opacity` only, and
+   `board-motion.tsx` pauses each one while its section is off screen
+   (`data-still`, below) so nothing animates where nobody is looking. */
 @media (prefers-reduced-motion: no-preference) {
   [data-preset='board'] .board-panel::before {
     animation: board-drift 18s ease-in-out infinite alternate;
-  }
-
-  [data-preset='board'] .board-panel::after {
-    animation: board-dots 24s linear infinite;
+    animation-play-state: var(--board-play, running);
   }
 
   /* After the entrance (900ms + 480ms in the STUDIO-section block), so the
@@ -2315,66 +2264,64 @@
      own `animation` is the entrance. */
   [data-preset='board'] .board-portrait > * {
     animation: board-float 7s ease-in-out 1.6s infinite;
-  }
-
-  [data-preset='board'] .board-portrait::before {
-    animation: board-halo 7s ease-in-out 1.6s infinite;
+    animation-play-state: var(--board-play, running);
   }
 
   [data-preset='board'] .board-honor__crown {
     animation: board-bob 3.2s ease-in-out infinite;
+    animation-play-state: var(--board-play, running);
   }
 
   [data-preset='board'] .board-honor--gold .board-honor__avatar::after {
     animation: board-ring 2.4s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+    animation-play-state: var(--board-play, running);
   }
 
   [data-preset='board'] .board-honor--gold .board-honor__step::after {
     animation: board-sheen 4.5s ease-in-out 1s infinite;
+    animation-play-state: var(--board-play, running);
   }
-}
 
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    [data-preset='board'] .board-head__title::after {
-      animation: board-draw 700ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-      animation-timeline: view();
-      animation-range: entry 20% cover 40%;
-    }
+  /* ⚠️ A variable, not `[data-still] * { animation-play-state: paused }`.
+     Each loop above sets the `animation` SHORTHAND, which resets the play
+     state, and most of them out-specify any generic descendant rule — the
+     honour board's ring and sheen kept running under one. An inherited custom
+     property reaches every descendant and pseudo-element whatever the
+     specificity of the rule that started the loop. */
+  [data-preset='board'] [data-still] {
+    --board-play: paused;
+  }
 
-    /* The podium builds third → second → first: the steps rise, then the
-       names land on them, and the first place comes last. */
-    [data-preset='board'] .board-honor__step {
-      animation: board-grow 700ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-      animation-timeline: view();
-      animation-range: entry 5% cover 30%;
-    }
+  /* The pieces inside a revealed block arrive with it — once, on the same
+     document timeline as the block (see the reveal note above). */
+  [data-preset='board'] [data-in='1'] .board-head__title::after {
+    animation: board-draw 700ms cubic-bezier(0.22, 0.61, 0.36, 1) calc(var(--board-stagger, 0ms) + 200ms) backwards;
+  }
 
-    [data-preset='board'] .board-honor--podium .board-honor__avatar {
-      animation: board-pop 600ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-      animation-timeline: view();
-      animation-range: entry 10% cover 32%;
-    }
+  /* The podium builds third → second → first: the steps rise, then the
+     names land on them, and the first place comes last. */
+  [data-preset='board'] [data-in='1'] .board-honor__step {
+    animation: board-grow 700ms cubic-bezier(0.22, 0.61, 0.36, 1) calc(var(--board-stagger, 0ms) + 100ms) backwards;
+  }
 
-    [data-preset='board'] .board-honor--podium[data-place='2'] .board-honor__step,
-    [data-preset='board'] .board-honor--podium[data-place='2'] .board-honor__avatar {
-      animation-range: entry 14% cover 38%;
-    }
+  [data-preset='board'] .board-honor--podium[data-in='1'] .board-honor__avatar {
+    animation: board-pop 600ms cubic-bezier(0.22, 0.61, 0.36, 1) calc(var(--board-stagger, 0ms) + 450ms) backwards;
+  }
 
-    [data-preset='board'] .board-honor--podium[data-place='1'] .board-honor__step,
-    [data-preset='board'] .board-honor--podium[data-place='1'] .board-honor__avatar {
-      animation-range: entry 22% cover 46%;
-    }
+  [data-preset='board'] .board-honor--podium[data-place='2'][data-in='1'] .board-honor__step {
+    animation-delay: calc(var(--board-stagger, 0ms) + 250ms);
+  }
 
-    /* The roll staggers in threes — a row of the grid at a time on a wide
-       screen, one card after another on a phone. */
-    [data-preset='board'] .board-roll > :nth-child(3n + 2) {
-      animation-range: entry 12% cover 36%;
-    }
+  [data-preset='board'] .board-honor--podium[data-place='2'][data-in='1'] .board-honor__avatar {
+    animation-delay: calc(var(--board-stagger, 0ms) + 600ms);
+  }
 
-    [data-preset='board'] .board-roll > :nth-child(3n) {
-      animation-range: entry 18% cover 42%;
-    }
+  [data-preset='board'] .board-honor--podium[data-place='1'][data-in='1'] .board-honor__step {
+    animation-delay: calc(var(--board-stagger, 0ms) + 400ms);
+  }
+
+  [data-preset='board'] .board-honor--podium[data-place='1'][data-in='1'] .board-honor__avatar {
+    animation-delay: calc(var(--board-stagger, 0ms) + 750ms);
   }
 }
 
@@ -2392,7 +2339,7 @@
    (owner, 2026-11-04)
 
    The cursor layer (`board-motion.tsx`) writes `--mx`/`--my` on the card under
-   the pointer and `--rx`/`--ry` on the ones that tilt. Everything below reads
+   the pointer. Everything below reads
    them with a fallback, so a card the script never touched — a phone, a
    reduced-motion reader, the server HTML — is simply flat and unlit.
    --------------------------------------------------------------------------- */
@@ -2476,11 +2423,13 @@
   opacity: 1;
 }
 
-/* ---- tilt, for the two kinds of card that are doors ---- */
+/* ---- lift, for the two kinds of card that are doors ---- */
 
 [data-preset='board'] .board-course:hover,
 [data-preset='board'] .board-tile__link:hover {
-  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-4px);
+  /* A lift, not a 3D tilt. The tilt followed the cursor across a card that
+     is mostly a poster image, so the poster skewed under every small move. */
+  transform: translateY(-4px);
 }
 
 /* ---- course cards: the poster leans in ---- */
@@ -2575,8 +2524,11 @@
   padding-inline: 0.9rem;
   border: 1px solid color-mix(in oklch, var(--p-300), transparent 55%);
   border-radius: var(--r-full);
-  background: color-mix(in oklch, var(--board-plate), transparent 25%);
-  backdrop-filter: blur(6px);
+  /* Near-opaque instead of `backdrop-filter`: six floating frosted-glass
+     chips re-blurred whatever was behind them on every frame, which is what
+     made the opener stutter on phones. Over a dark slab the difference does
+     not read. */
+  background: color-mix(in oklch, var(--board-plate), transparent 8%);
   color: var(--p-100);
   font-family: var(--font-mono);
   font-size: clamp(0.8125rem, 1.8vw, 1.0625rem);
@@ -2617,13 +2569,11 @@
   [data-preset='board'] .board-glyph--4 { inset-inline-end: calc(50% + 4.25rem); }
 }
 
+/* Up and down only. The ±3° rock, on six chips each on its own clock, made
+   the opener wobble rather than float. */
 @keyframes board-glyph {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-3deg);
-  }
   50% {
-    transform: translateY(-0.75rem) rotate(3deg);
+    transform: translateY(-0.5rem);
   }
 }
 
@@ -2649,7 +2599,7 @@
   background:
     radial-gradient(30% 50% at 25% 60%, color-mix(in oklch, var(--p-400), transparent 65%), transparent 70%),
     radial-gradient(30% 50% at 75% 40%, color-mix(in oklch, var(--p-600), transparent 58%), transparent 72%);
-  filter: blur(8px);
+  /* No blur — see `.board-panel::before`. */
   pointer-events: none;
 }
 
@@ -2660,6 +2610,7 @@
     animation:
       board-glyph-in 600ms cubic-bezier(0.22, 0.61, 0.36, 1) 1.4s backwards,
       board-glyph 6s ease-in-out 2s infinite;
+    animation-play-state: var(--board-play, running);
   }
 
   [data-preset='board'] .board-glyph--2 { animation-delay: 1.5s, 2.6s; animation-duration: 600ms, 7s; }
@@ -2670,6 +2621,7 @@
 
   [data-preset='board'] .board-foot__closer::before {
     animation: board-drift 16s ease-in-out infinite alternate;
+    animation-play-state: var(--board-play, running);
   }
 }
 

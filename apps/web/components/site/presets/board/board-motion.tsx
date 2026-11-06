@@ -4,8 +4,30 @@ import { useEffect } from 'react';
 
 /** Cards that carry the cursor spotlight (`--mx` / `--my`). */
 const LIT = '.board-course, .board-feature, .board-tile__link, .board-honor--row, .board-quote';
-/** The subset that also tilts toward the cursor (`--rx` / `--ry`). */
-const TILTED = '.board-course, .board-tile__link';
+/**
+ * Blocks that arrive once, the first time they come into view. Must match the
+ * reveal note in `presets.css` (BOARD section) — the stylesheet keys on the
+ * `data-in` this script writes, not on these names.
+ */
+const REVEALED = [
+  '.board-band .board-head',
+  '.board-about',
+  '.board-id',
+  '.board-faq',
+  '.board-figures',
+  '.board-course',
+  '.board-feature',
+  '.board-year',
+  '.board-book',
+  '.board-honor',
+  '.board-quote',
+  '.board-closer > *',
+].join(', ');
+/** Sections holding an infinite loop, paused (`data-still`) while off screen. */
+const LOOPING = '.board-panel, .board-honors-band, .board-foot__closer';
+/** Gap between blocks that come into view in the same frame (a row of cards). */
+const STAGGER_MS = 80;
+const STAGGER_MAX_MS = 320;
 /** Figures that count up the first time they scroll into view. */
 const FIGURES = '.board-id__n, .board-panel__figure-n, .board-figure__n';
 
@@ -18,16 +40,24 @@ const FIGURES = '.board-id__n, .board-panel__figure-n, .board-figure__n';
  *
  * 1. **The cursor.** One delegated `pointermove` on the page writes the
  *    pointer's position into CSS variables on the card under it; the
- *    stylesheet turns those into a light that follows the cursor and, on
- *    course cards and year tiles, a few degrees of tilt. Only on a real
- *    hovering pointer (a phone's tap would leave a card stuck mid-tilt), and
- *    the tilt not at all under reduced motion — the light is not motion.
+ *    stylesheet turns those into a light that follows the cursor. Only on a
+ *    real hovering pointer. (It used to tilt course cards and year tiles too;
+ *    see `presets.css` for why that went.)
  *
  * 2. **The figures.** «٦ كورس / ٢٨ محاضرة / ٢١ ساعة» count up from zero the
  *    first time they are seen. Only figures BELOW the fold on load are reset
  *    to zero, so nothing the visitor is already reading changes under them;
  *    the original text is restored exactly at the end, whatever it was
  *    («+500», «21 ساعة»). Skipped entirely under reduced motion.
+ *
+ * 3. **The reveals.** Each block below the fold is marked `data-in='no'`
+ *    (hidden) and flipped to `'1'` once, when it first comes into view, which
+ *    plays a time-based entrance. Blocks already on screen get `'0'` and never
+ *    move. This replaced a scroll-SCRUBBED reveal that followed the finger
+ *    and faded content back out on the way up (owner, 2026-11-06).
+ *
+ * 4. **The loops.** Sections with an infinite animation get `data-still`
+ *    while they are off screen, which pauses every animation inside them.
  *
  * Mounted once by `BoardLanding`. Its only markup is the reading-progress
  * line, which is pure CSS (a `scroll()` timeline) — it lives here so the page
@@ -54,23 +84,57 @@ export function BoardMotion() {
           const y = (event.clientY - box.top) / box.height;
           card.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
           card.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
-          if (!reduce && card.matches(TILTED)) {
-            card.style.setProperty('--rx', `${((0.5 - y) * 6).toFixed(2)}deg`);
-            card.style.setProperty('--ry', `${((x - 0.5) * 8).toFixed(2)}deg`);
-          }
         });
       };
-      const onOut = (event: PointerEvent) => {
-        const card = (event.target as Element | null)?.closest<HTMLElement>(LIT);
-        if (!card || card.contains(event.relatedTarget as Node | null)) return;
-        for (const name of ['--rx', '--ry']) card.style.removeProperty(name);
-      };
       root.addEventListener('pointermove', onMove, { passive: true });
-      root.addEventListener('pointerout', onOut, { passive: true });
       cleanups.push(() => {
         cancelAnimationFrame(frame);
         root.removeEventListener('pointermove', onMove);
-        root.removeEventListener('pointerout', onOut);
+      });
+    }
+
+    if (!reduce && 'IntersectionObserver' in window) {
+      const fold = window.innerHeight;
+      const pending: HTMLElement[] = [];
+      for (const node of root.querySelectorAll<HTMLElement>(REVEALED)) {
+        // Already on screen (or above it, after a restored scroll): shown, still.
+        const seen = node.getBoundingClientRect().top < fold;
+        node.dataset.in = seen ? '0' : 'no';
+        if (!seen) pending.push(node);
+      }
+
+      const reveal = new IntersectionObserver(
+        (entries) => {
+          let order = 0;
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const node = entry.target as HTMLElement;
+            reveal.unobserve(node);
+            node.style.setProperty('--board-stagger', `${Math.min(order * STAGGER_MS, STAGGER_MAX_MS)}ms`);
+            node.dataset.in = '1';
+            order += 1;
+          }
+        },
+        // A little before the block is fully up, so it is moving while the
+        // reader's eye gets there rather than after.
+        { rootMargin: '0px 0px -8% 0px' },
+      );
+      for (const node of pending) reveal.observe(node);
+
+      const loops = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          (entry.target as HTMLElement).toggleAttribute('data-still', !entry.isIntersecting);
+        }
+      });
+      for (const node of root.querySelectorAll<HTMLElement>(LOOPING)) loops.observe(node);
+
+      cleanups.push(() => {
+        reveal.disconnect();
+        loops.disconnect();
+        // A remount must never leave a block hidden behind a dead observer.
+        for (const node of pending) {
+          if (node.dataset.in === 'no') node.dataset.in = '0';
+        }
       });
     }
 
