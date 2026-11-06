@@ -80,6 +80,11 @@ async function token() {
   return cachedToken;
 }
 
+// Admin lists accept only these page sizes (`PAGE_SIZES` in contracts); any
+// other `perPage` is a 400 «invalid list query». Snap up to the next one.
+const PAGE_SIZES = [10, 20, 50, 100];
+const pageSize = (n) => PAGE_SIZES.find((size) => size >= Number(n)) ?? 100;
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let lastWriteAt = 0;
 
@@ -90,7 +95,8 @@ async function api(method, path, { body, query, binary = false } = {}) {
   }
   const url = new URL(BASE_URL + path);
   for (const [key, value] of Object.entries(query ?? {})) {
-    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+    if (value === undefined || value === null || value === '') continue;
+    url.searchParams.set(key, key === 'perPage' ? String(pageSize(value)) : String(value));
   }
 
   const isWrite = method !== 'GET';
@@ -192,7 +198,7 @@ const TOOLS = [
   {
     name: 'api_get',
     description:
-      'GET any admin API route the key is allowed, e.g. /api/admin/students?q=…, /api/admin/payments, /api/admin/courses. Returns JSON.',
+      'GET any admin API route the key is allowed, e.g. /api/admin/students?q=…, /api/admin/payments, /api/admin/courses. Returns JSON. List routes take perPage 10/20/50/100 only (put it in `query`; other values are snapped up).',
     inputSchema: obj(
       {
         path: { type: 'string', description: 'Starts with /api/. Query may be inline or in `query`.' },
@@ -230,7 +236,7 @@ const TOOLS = [
     description: 'Homework submissions waiting for review (oldest first as the API orders them).',
     inputSchema: obj({
       page: { type: 'number' },
-      perPage: { type: 'number', description: 'Up to 100.' },
+      perPage: { type: 'number', description: '10, 20, 50 or 100 (others are snapped up).' },
       courseId: { type: 'string' },
       lessonId: { type: 'string' },
     }),
