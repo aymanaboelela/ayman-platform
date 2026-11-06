@@ -632,6 +632,16 @@ export const AUDIT_ACTIONS = [
    * log is where they can see that it happened and when.
    */
   'platform:owner-sign-in',
+  /*
+   * «ربط Claude». `create`/`revoke` are the key's lifecycle (never the key
+   * itself — only its id and hint). `use` is one row per WRITE made with a
+   * key, and per request a key was refused: what an assistant changed, and
+   * what it tried to, must be answerable from this log alone. Reads are not
+   * logged — marking one batch reads hundreds of rows.
+   */
+  'agent-token:create',
+  'agent-token:revoke',
+  'agent-token:use',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

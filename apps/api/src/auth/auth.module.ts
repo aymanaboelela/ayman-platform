@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 // `@thallesp/nestjs-better-auth` exports its own class named `AuthModule` —
 // the exact same name this file's own export uses. Aliased here, at the one
 // place both are imported together, per Task 1's flag.
@@ -7,6 +7,8 @@ import { AuthModule as BetterAuthHttpModule } from '@thallesp/nestjs-better-auth
 import { auth } from './auth.config';
 import { BETTER_AUTH } from './better-auth.token';
 import { AuthGuard } from './guards/auth.guard';
+import { AgentTokenResolver } from './agent-token.resolver';
+import { AgentScopeInterceptor } from './agent-scope.interceptor';
 import { OptionalSessionService } from './optional-session.service';
 import { SessionController } from './session.controller';
 
@@ -34,6 +36,10 @@ import { SessionController } from './session.controller';
     { provide: BETTER_AUTH, useValue: auth },
     { provide: APP_GUARD, useClass: AuthGuard },
     OptionalSessionService,
+    // «ربط Claude» — verifies `ayk_` keys for `AuthGuard`. Prisma and
+    // `AuditService` are both global.
+    AgentTokenResolver,
+    { provide: APP_INTERCEPTOR, useClass: AgentScopeInterceptor },
   ],
   // `OptionalSessionService` is exported for المساعد's public routes, which
   // have to work signed-in OR signed-out. It answers "is anyone here?" and is

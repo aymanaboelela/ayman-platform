@@ -45,6 +45,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { PromoBannersModule } from '../modules/promo-banners/promo-banners.module';
 import { SubscribersModule } from '../modules/subscribers/subscribers.module';
+import { AgentTokensModule } from '../modules/agent-tokens/agent-tokens.module';
 import { WaHistoryModule } from '../modules/wa-history/wa-history.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
@@ -391,6 +392,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «البانرات الترويجية» — Prisma and `AuditService` only, both already here.
         PromoBannersModule,
         SubscribersModule,
+        // «ربط Claude» — Prisma and `AuditService` only, both already here.
+        AgentTokensModule,
         // «مين كلّمني على واتساب» — Prisma and its own identity lookup only.
         // Open here because the fixture runs as Ayman's stack.
         WaHistoryModule,
@@ -2241,6 +2244,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'subscribers meta csv: student', method: 'get', path: () => '/api/admin/subscribers/export/meta.csv', actor: 'student', status: 403 },
     { label: 'subscribers xlsx: anonymous', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'anonymous', status: 401 },
     { label: 'subscribers xlsx: student', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'student', status: 403 },
+
+    // ── «ربط Claude» — agent keys. `admin:access` on the screen's routes;
+    // `/api/agent/me` answers a key only, so a session (even admin) is a 404.
+    // Behind `agentTokens`, open here because the fixture runs as Ayman's stack.
+    { label: 'agent-tokens list: anonymous', method: 'get', path: () => '/api/admin/agent-tokens', actor: 'anonymous', status: 401 },
+    { label: 'agent-tokens list: student', method: 'get', path: () => '/api/admin/agent-tokens', actor: 'student', status: 403 },
+    { label: 'agent-tokens list: admin', method: 'get', path: () => '/api/admin/agent-tokens', actor: 'admin', status: 200 },
+    { label: 'agent-tokens create: anonymous', method: 'post', path: () => '/api/admin/agent-tokens', actor: 'anonymous', status: 401 },
+    { label: 'agent-tokens create: student', method: 'post', path: () => '/api/admin/agent-tokens', actor: 'student', status: 403 },
+    { label: 'agent-tokens revoke: anonymous', method: 'post', path: () => '/api/admin/agent-tokens/00000000-0000-7000-8000-000000000000/revoke', actor: 'anonymous', status: 401 },
+    { label: 'agent-tokens revoke: student', method: 'post', path: () => '/api/admin/agent-tokens/00000000-0000-7000-8000-000000000000/revoke', actor: 'student', status: 403 },
+    { label: 'agent me: anonymous', method: 'get', path: () => '/api/agent/me', actor: 'anonymous', status: 401 },
+    { label: 'agent me: admin session', method: 'get', path: () => '/api/agent/me', actor: 'admin', status: 404 },
 
     // ── «مين كلّمني على واتساب» — counts of the linked number's old chats,
     // `marketing:read` like the device status. The ingest beside it is the
