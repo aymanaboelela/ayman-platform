@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 /**
  * Permissions are `resource:action` strings, checked against a role→permission
  * map — never role equality (Plan 2 Global Constraint #9 / Plan 6 Global
@@ -602,6 +604,8 @@ export function userHasPermission(
   role: string | undefined | null,
   permission: string,
 ): boolean {
+  // Before the admin shortcut: an admin's KEY is still only what was ticked.
+  if (!agentScopeAllows(userId, permission)) return false;
   if (role === 'admin') return true;
   if (!userId) return roleHasPermission(role, permission);
 
@@ -619,6 +623,22 @@ export function userHasPermission(
  * شغله من غير سبب ظاهر. الاتنين بيقروا من نفس الخريطة.
  */
 export function permissionsForUser(
+  userId: string | undefined | null,
+  role: string | undefined | null,
+): readonly Permission[] {
+  const scope = agentScope.getStore();
+  if (scope && userId === scope.userId) {
+    return unscopedPermissionsForUser(userId, role).filter((p) => scope.permissions.has(p));
+  }
+  return unscopedPermissionsForUser(userId, role);
+}
+
+/**
+ * What the account holds, ignoring any agent key in flight. For the key
+ * resolver, which is the one place that must see the creator's FULL set in
+ * order to intersect it with the key.
+ */
+export function unscopedPermissionsForUser(
   userId: string | undefined | null,
   role: string | undefined | null,
 ): readonly Permission[] {
@@ -665,4 +685,38 @@ export function permissionsForRole(role: string | undefined | null): readonly Pe
   // client receives is the catalogue's and a grant cannot introduce a string
   // that is not in it.
   return PERMISSIONS.filter((permission) => granted.has(permission) || runtime?.has(permission));
+}
+
+/*
+ * «ربط Claude» — the key's permissions, for the length of one request.
+ *
+ * `AuthGuard` checks a key against the ROUTE's permission. But some handlers
+ * ask a second question themselves — finance decides `includeBooks` with
+ * `userHasPermission(..., 'book-order:read')`, the phone summary hides money
+ * the same way, montage asks about `montage:publish`. Those calls pass the
+ * creator's id and role, and without this they would answer with the
+ * creator's FULL set: a grading-only key reading the finance page would get
+ * the book money too.
+ *
+ * So while a key's request runs (`AgentScopeInterceptor`), every answer about
+ * THAT account is intersected with the key. Questions about other accounts —
+ * "which admins get this notification" — are untouched, and `roleHasPermission`
+ * (no user id) is too: it is asked about roles, not about the caller.
+ */
+interface AgentScope {
+  userId: string;
+  permissions: ReadonlySet<string>;
+}
+
+const agentScope = new AsyncLocalStorage<AgentScope>();
+
+/** Runs `fn` with an agent key's permissions narrowing its creator's. */
+export function runWithAgentScope<T>(scope: AgentScope, fn: () => T): T {
+  return agentScope.run(scope, fn);
+}
+
+function agentScopeAllows(userId: string | undefined | null, permission: string): boolean {
+  const scope = agentScope.getStore();
+  if (!scope || !userId || userId !== scope.userId) return true;
+  return scope.permissions.has(permission);
 }

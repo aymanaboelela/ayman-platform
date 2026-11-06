@@ -383,6 +383,21 @@ export const FEATURE_DECLARATIONS = [
       'الطالب يغيّر كلمة السر لوحده بكود بيوصله على الواتساب من رقم المنصة المرتبط. محتاج «حملات الواتساب» ومفتاح Turnstile على الستاك — من غيرهم الصفحة بتقول «إرسال الكود واقف».',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". A scoped, revocable key that lets an AI assistant (Claude,
+     * through the platform MCP server in `tools/platform-mcp`) call the admin
+     * API with the permissions ticked on the key — and nothing else. Off by
+     * default because a key is a credential that lives outside the browser,
+     * and whether a stack has those at all is its owner's call. With it off,
+     * `AuthGuard` refuses every key before looking it up.
+     */
+    key: 'agentTokens',
+    nameAr: 'ربط Claude بالمنصة',
+    descriptionAr:
+      'مفاتيح بصلاحيات محددة بتختارها، يستخدمها Claude عشان يصحح الواجب والامتحانات ويشتغل على المنصة من غير ما يدخل من المتصفح. كل مفتاح يتلغي بضغطة.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

@@ -2,7 +2,7 @@ import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, 
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
-import { roleHasPermission } from '../../auth/permissions';
+import { userHasPermission } from '../../auth/permissions';
 import { COURSE_LIST_SORTS, type CourseListSort, CourseService } from './course.service';
 import {
   CreateCourseDto,
@@ -142,7 +142,7 @@ export class CourseController {
   @RequirePermission('course:update')
   @Post(':id/exam/scaffold')
   scaffoldExam(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    if (!roleHasPermission(user.role, 'quiz:write')) {
+    if (!userHasPermission(user.id, user.role, 'quiz:write')) {
       throw new ForbiddenException('scaffolding an exam also requires quiz:write');
     }
     return this.courses.scaffoldExam(id);

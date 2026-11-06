@@ -30,6 +30,7 @@ import {
   UserRoundSearch,
   UserRoundCheck,
   UserCog,
+  KeyRound,
   type LucideIcon,
   Megaphone,
   MessagesSquare,
@@ -63,6 +64,7 @@ import { youtubeStudioCopy } from '@ayman/contracts/copy/youtube-studio';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 import { promoBannersCopy } from '@ayman/contracts/copy/promo-banners';
 import { subscribersCopy } from '@ayman/contracts/copy/subscribers';
+import { agentTokensCopy } from '@ayman/contracts/copy/agent-tokens';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
  * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
@@ -688,6 +690,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.roles,
     icon: ShieldCheck,
     permission: 'staff:manage',
+    group: 'system',
+  },
+  {
+    // «ربط Claude» — keys an AI assistant calls the admin API with.
+    // `admin:access` like the API: every staff account makes keys for itself,
+    // and a key never carries more than its creator holds.
+    href: '/admin/agent-tokens',
+    labelAr: agentTokensCopy.nav,
+    icon: KeyRound,
+    permission: 'admin:access',
+    feature: 'agentTokens',
     group: 'system',
   },
   {

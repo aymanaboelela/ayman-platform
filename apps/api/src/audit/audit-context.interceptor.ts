@@ -13,6 +13,8 @@ interface AuditableRequest {
   id?: unknown;
   user?: AuthenticatedUser;
   headers?: Record<string, string | string[] | undefined>;
+  /** Set by `AuthGuard` when the caller used an agent key (`ayk_…`). */
+  agentToken?: { id: string; hint: string };
 }
 
 function firstHeader(value: string | string[] | undefined): string | null {
@@ -47,7 +49,16 @@ export class AuditContextInterceptor implements NestInterceptor {
     const actor: AuditActor = {
       actorUserId: request.user?.id ?? null,
       actorIp: request.ip ?? null,
-      actorUserAgent: firstHeader(request.headers?.['user-agent']),
+      /*
+       * A key acts AS its creator, so `actorUserId` alone would make every
+       * write an assistant made look like the instructor did it by hand. The
+       * key's id rides on the user-agent column — every row a service writes
+       * during this request then says which key it came through, with no new
+       * column on a hash-chained table.
+       */
+      actorUserAgent: request.agentToken
+        ? `agent-token:${request.agentToken.id} (${request.agentToken.hint}) ${firstHeader(request.headers?.['user-agent']) ?? ''}`.trim()
+        : firstHeader(request.headers?.['user-agent']),
       requestId: typeof request.id === 'string' ? request.id : null,
     };
 

@@ -65,6 +65,7 @@ import { ShareCardsModule } from './modules/share-cards/share-cards.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { PromoBannersModule } from './modules/promo-banners/promo-banners.module';
 import { SubscribersModule } from './modules/subscribers/subscribers.module';
+import { AgentTokensModule } from './modules/agent-tokens/agent-tokens.module';
 import { WaHistoryModule } from './modules/wa-history/wa-history.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { AdminMobileModule } from './modules/admin-mobile/admin-mobile.module';
@@ -216,6 +217,8 @@ import { PasswordResetModule } from './modules/password-reset/password-reset.mod
     PromoBannersModule,
     // «المشتركين» — who holds a paid course or month, and who does not.
     SubscribersModule,
+    // «ربط Claude» — scoped keys an AI assistant calls the admin API with.
+    AgentTokensModule,
     // «مين كلّمني على واتساب» — the linked number's chats from before the link.
     WaHistoryModule,
     CouponsModule,
