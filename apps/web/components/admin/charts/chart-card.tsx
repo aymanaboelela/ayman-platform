@@ -43,6 +43,7 @@ export function ChartCard({
   className,
   action,
   isEmpty,
+  money = false,
 }: {
   title: string;
   hint?: string;
@@ -61,6 +62,8 @@ export function ChartCard({
    * blank rectangle — which looks like a broken screen, not an empty one.
    */
   isEmpty?: boolean;
+  /** The chart plots amounts: its body and table blur until the header's eye opens them. */
+  money?: boolean;
 }) {
   const [showTable, setShowTable] = useState(false);
   const tableId = useId();
@@ -106,11 +109,11 @@ export function ChartCard({
           {c.noData}
         </p>
       ) : (
-        <div className="min-w-0 grow">{children}</div>
+        <div className={cn('min-w-0 grow', money && 'money')}>{children}</div>
       )}
 
       {showTable ? (
-        <div id={tableId} className="mt-4 overflow-x-auto border-t border-line-subtle pt-3">
+        <div id={tableId} className={cn('mt-4 overflow-x-auto border-t border-line-subtle pt-3', money && 'money')}>
           <table className="w-full text-[length:var(--fs-text-sm)]" aria-label={c.tableFallbackLabel}>
             <thead>
               <tr className="text-fg-muted">

@@ -127,7 +127,7 @@ export default async function ExpensesPage({
             {c.summaryTotal}
             <span className="exp-hero__scope">{scope}</span>
           </p>
-          <p className="exp-hero__figure">
+          <p className="exp-hero__figure money">
             {formatEGP(summary.totalCents)}
             <span>ج</span>
           </p>
@@ -168,7 +168,7 @@ export default async function ExpensesPage({
             className="exp-chip"
           >
             {c.filterMonthAll}
-            <span className="exp-chip__sum">{egp(monthsTotal)}</span>
+            <span className="exp-chip__sum money">{egp(monthsTotal)}</span>
           </Link>
           {summary.byMonth.map((entry) => (
             <Link
@@ -178,7 +178,7 @@ export default async function ExpensesPage({
               className="exp-chip"
             >
               {monthLabel(entry.month)}
-              <span className="exp-chip__sum">{egp(entry.amountCents)}</span>
+              <span className="exp-chip__sum money">{egp(entry.amountCents)}</span>
             </Link>
           ))}
         </nav>
@@ -199,7 +199,7 @@ export default async function ExpensesPage({
                 <LayoutGrid aria-hidden="true" />
               </span>
               <span className="exp-cat__name">{c.filterCategoryAll}</span>
-              <span className="exp-cat__sum">{egp(categoriesTotal)}</span>
+              <span className="exp-cat__sum money">{egp(categoriesTotal)}</span>
               <span className="exp-cat__meta">
                 {c.summaryCount.replace(
                   '{n}',
@@ -222,7 +222,7 @@ export default async function ExpensesPage({
                     <Icon aria-hidden="true" />
                   </span>
                   <span className="exp-cat__name">{cat[entry.category]}</span>
-                  <span className="exp-cat__sum">{egp(entry.amountCents)}</span>
+                  <span className="exp-cat__sum money">{egp(entry.amountCents)}</span>
                   <span className="exp-cat__meta">
                     {c.summaryCount.replace('{n}', String(entry.count))} ·{' '}
                     {c.categoryShare.replace('{n}', String(Math.round(share)))}
@@ -260,7 +260,7 @@ export default async function ExpensesPage({
               <div key={group.month} className="exp-month">
                 <p className="exp-month__head">
                   <span>{monthLabel(group.month)}</span>
-                  <span className="exp-month__sum">
+                  <span className="exp-month__sum money">
                     {egp(monthTotals.get(group.month) ?? 0)}
                   </span>
                 </p>
@@ -286,7 +286,7 @@ export default async function ExpensesPage({
                           </p>
                           {row.noteAr ? <p className="exp-row__note">{row.noteAr}</p> : null}
                         </div>
-                        <span className="exp-row__amount">{egp(row.amountCents)}</span>
+                        <span className="exp-row__amount money">{egp(row.amountCents)}</span>
                         <div className="exp-row__actions">
                           <ExpenseRowActions row={row} books={bookOptions} />
                         </div>
@@ -299,7 +299,7 @@ export default async function ExpensesPage({
 
             <p className="exp-ledger__total">
               <span>{c.ledgerTotal}</span>
-              <span>{egp(summary.totalCents)}</span>
+              <span className="money">{egp(summary.totalCents)}</span>
             </p>
           </div>
         )}

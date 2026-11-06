@@ -22,6 +22,7 @@ import { WalletTopupsAlertsProvider } from '@/components/admin/wallet-topups-ale
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
 import { HomeworkAlertsProvider } from '@/components/admin/homework-alerts';
 import { UploadDock } from '@/components/admin/upload-dock';
+import { MoneyPrivacyProvider } from '@/components/admin/money-privacy';
 import { AppBadge } from '@/components/admin/app-badge';
 import { GradingAlertsProvider } from '@/components/admin/grading-alerts';
 import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
@@ -135,6 +136,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         الرئيسية، لوحة كتاب الكورس. شوف `entitlements-context.tsx`. */}
     <AdminEntitlementsProvider features={features}>
     <AdminPermissionsProvider permissions={session.permissions}>
+    {/* Every money figure starts blurred; the header's eye opens them. */}
+    <MoneyPrivacyProvider>
     <div className="product-type min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} features={features} />
       <div className="flex min-w-0 flex-col">
@@ -163,6 +166,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* The home-screen icon's number — see `AppBadge`. */}
       {features.adminMobile ? <AppBadge /> : null}
     </div>
+    </MoneyPrivacyProvider>
     </AdminPermissionsProvider>
     </AdminEntitlementsProvider>
     </NotificationStreamProvider>

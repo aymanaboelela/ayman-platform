@@ -37,6 +37,7 @@ export default async function AdminWalletPage() {
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <StatTile
           label={c.tileHeld}
+          money
           value={egp(initial.totals.balanceCents)}
           context={formatCopy(c.tileHeldContext, { n: initial.totals.walletCount })}
           tint="var(--viz-6)"
@@ -44,6 +45,7 @@ export default async function AdminWalletPage() {
         />
         <StatTile
           label={c.tilePending}
+          money
           value={String(initial.totals.pendingCount)}
           context={formatCopy(c.tilePendingContext, { amount: egp(initial.totals.pendingCents) })}
           tint="var(--viz-1)"

@@ -169,6 +169,7 @@ export default async function AdminFinancePage({
             The gross sits underneath as the subtraction that produced it. */}
         <StatTile
           label={c.tileSubscriptionNet}
+          money
           value={`${formatEGP(summary.netRevenueTotalCents)} ج`}
           accent
           context={
@@ -210,6 +211,7 @@ export default async function AdminFinancePage({
         <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <StatTile
             label={c.tileBookRevenue}
+            money
             value={`${formatEGP(bookRevenue.revenueTotalCents)} ج`}
             href="/admin/books?status=paid"
           />
@@ -344,7 +346,7 @@ export default async function AdminFinancePage({
                         ? PLAN_LABEL[row.plan]
                         : c.noPayment}
                   </td>
-                  <td className="mono p-3 text-fg-muted">
+                  <td className="mono money p-3 text-fg-muted">
                     {/* An admin-comped term reads as «مجاني», not «٠ ج» — the
                         term still cost the course's own price, nothing was
                         actually collected. See the model note on

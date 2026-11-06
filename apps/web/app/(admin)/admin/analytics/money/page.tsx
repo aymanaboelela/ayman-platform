@@ -226,6 +226,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
           icon={Wallet}
           hue="var(--a-9)"
           label={c.tileToday}
+          money
           value={formatAmount(todayRow?.netCents ?? 0)}
           context={formatCopy(c.tileTodayContext, {
             amount: formatAmount(yesterdayRow?.netCents ?? 0),
@@ -236,6 +237,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
           icon={Coins}
           hue="var(--viz-1)"
           label={`${c.tileWindow} · ${RANGE_LABEL[days]}`}
+          money
           value={formatAmount(totals.netCents)}
           context={formatCopy(c.tileWindowContext, {
             // Whole pounds: an average is an estimate, and «571.67» claims a
@@ -263,6 +265,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
           // chart right under this tile, and money going OUT is a state.
           hue="var(--err)"
           label={c.tileRefunds}
+          money
           value={formatAmount(totals.refundCents === 0 ? 0 : -totals.refundCents)}
           context={c.tileRefundsContext}
         />
@@ -270,6 +273,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
           icon={PiggyBank}
           hue={WALLET_COLOR}
           label={c.tileWallet}
+          money
           value={formatAmount(totals.walletCents)}
           context={formatCopy(c.tileWalletContext, { n: formatCount(totals.walletPaidCount) })}
         />
@@ -280,6 +284,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
             // charts, and violet is course 3's.
             hue="var(--e-ink)"
             label={c.tileBooks}
+          money
             value={formatAmount(totals.bookCents)}
             context={formatCopy(c.tileBooksContext, { n: formatCount(totals.bookCount) })}
           />
@@ -305,6 +310,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
         <ChartCard
           title={c.chartIncomeTitle}
           hint={c.chartIncomeHint}
+          money
           isEmpty={nothingSold}
           rows={[...daily].reverse().map((day) => ({
             label: dayTitle(day.date, report.to, yesterdayKey),
@@ -420,7 +426,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                             and the only place a wallet-paid subscription's
                             money ever shows up. */}
                         {day.walletCents !== 0 ? (
-                          <span className="money-chip" style={{ '--chip-hue': WALLET_COLOR } as React.CSSProperties}>
+                          <span className="money-chip money" style={{ '--chip-hue': WALLET_COLOR } as React.CSSProperties}>
                             {c.dayWallet} {formatAmount(day.walletCents)}
                           </span>
                         ) : null}
@@ -473,7 +479,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                               {c.seriesRenewal} {formatCount(cell.renewalCount)}
                             </span>
                           ) : null}
-                          <span className="tabular font-semibold text-fg">
+                          <span className="tabular money font-semibold text-fg">
                             {formatAmount(cell.amountCents)}
                           </span>
                         </li>
@@ -504,6 +510,7 @@ function MoneyTile({
   value,
   context,
   loud = false,
+  money = false,
 }: {
   icon: LucideIcon;
   hue: string;
@@ -511,6 +518,8 @@ function MoneyTile({
   value: string;
   context?: string;
   loud?: boolean;
+  /** An amount — blurred until the header's eye opens it. */
+  money?: boolean;
 }) {
   return (
     <div
@@ -522,9 +531,9 @@ function MoneyTile({
       </span>
       <div className="min-w-0">
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{label}</p>
-        <p className="money-tile__value">{value}</p>
+        <p className={cn('money-tile__value', money && 'money')}>{value}</p>
         {context ? (
-          <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{context}</p>
+          <p className={cn('mt-1 text-[length:var(--fs-text-xs)] text-fg-muted', money && 'money')}>{context}</p>
         ) : null}
       </div>
     </div>
@@ -556,7 +565,7 @@ function CourseCard({
         </Link>
       </header>
 
-      <p className="money-tile__value mt-3">{formatAmount(course.amountCents)}</p>
+      <p className="money-tile__value money mt-3">{formatAmount(course.amountCents)}</p>
       <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
         {formatCopy(c.courseCounts, {
           n: formatCount(course.count),
@@ -647,7 +656,8 @@ function Figure({
       <span className="money-day__label">{label}</span>
       <span
         className={cn(
-          'tabular',
+          // Every day-row figure is an amount.
+          'tabular money',
           strong ? 'font-semibold text-fg' : 'text-fg',
           tone === 'err' && 'text-err',
         )}

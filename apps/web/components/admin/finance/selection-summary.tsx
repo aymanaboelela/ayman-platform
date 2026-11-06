@@ -69,7 +69,7 @@ export function SelectionSummary({
         <span className="text-[length:var(--fs-text-sm)] text-fg-muted tabular">
           {formatCopy(c.selectionStudents, { n: String(selection.studentCount) })}
         </span>
-        <span className="text-[length:var(--fs-text-sm)] text-fg-muted tabular">
+        <span className="money text-[length:var(--fs-text-sm)] text-fg-muted tabular">
           {formatCopy(c.selectionRevenue, { amount: formatEGP(selection.revenueCents) })}
         </span>
         <span className="text-[length:var(--fs-text-sm)] text-fg-muted tabular">
