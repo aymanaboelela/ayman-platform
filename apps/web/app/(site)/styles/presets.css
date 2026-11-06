@@ -2263,7 +2263,7 @@
      two never fight over the same frame. On the CHILD, because the wrapper's
      own `animation` is the entrance. */
   [data-preset='board'] .board-portrait > * {
-    animation: board-float 7s ease-in-out 1.6s infinite;
+    animation: board-float 7s ease-in-out 700ms infinite;
     animation-play-state: var(--board-play, running);
   }
 
@@ -2580,7 +2580,7 @@
 @keyframes board-glyph-in {
   from {
     opacity: 0;
-    transform: scale(0.6);
+    transform: scale(0.85);
   }
 }
 
@@ -2604,20 +2604,18 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Each token on its own clock, so they never move as one block. Entered
-     after the portrait (1.38s), then drifting. */
+  /* Entered just behind the photograph, then floating with it. */
   [data-preset='board'] .board-glyph {
     animation:
-      board-glyph-in 600ms cubic-bezier(0.22, 0.61, 0.36, 1) 1.4s backwards,
-      board-glyph 6s ease-in-out 2s infinite;
+      board-glyph-in 420ms cubic-bezier(0.22, 0.61, 0.36, 1) 260ms backwards,
+      board-glyph 7s ease-in-out 700ms infinite;
     animation-play-state: var(--board-play, running);
   }
 
-  [data-preset='board'] .board-glyph--2 { animation-delay: 1.5s, 2.6s; animation-duration: 600ms, 7s; }
-  [data-preset='board'] .board-glyph--3 { animation-delay: 1.6s, 2.3s; animation-duration: 600ms, 5.4s; }
-  [data-preset='board'] .board-glyph--4 { animation-delay: 1.7s, 3s; animation-duration: 600ms, 6.6s; }
-  [data-preset='board'] .board-glyph--5 { animation-delay: 1.8s, 2.8s; animation-duration: 600ms, 7.4s; }
-  [data-preset='board'] .board-glyph--6 { animation-delay: 1.9s, 3.2s; animation-duration: 600ms, 5.8s; }
+  /* Two phases on the photograph's 7s clock, not six clocks: alternate chips
+     are half a cycle apart, so the group breathes in order instead of
+     jittering. */
+  [data-preset='board'] .board-glyph:nth-of-type(even) { animation-delay: 320ms, 4.2s; }
 
   [data-preset='board'] .board-foot__closer::before {
     animation: board-drift 16s ease-in-out infinite alternate;
@@ -5936,32 +5934,41 @@ body:has(main[data-preset='board']) .site-nav--pinned .site-btn--outline {
    rule on the element, so the opener is fully present when animations do not
    run — reduced motion, or a browser that skipped them. `tokens/motion.css`
    clamps these to 0.01ms, which lands each line at rest immediately.
+
+   ⚠️ SHORT, and that is the point (owner, 2026-11-06: «الانيميشن اللي في أول
+   السكرينة»). The first version ran for three seconds on a phone: five
+   lines staggered in, the photograph rose from 90% scale after a 480ms wait,
+   the code chips popped in at 1.4s — a full second after the page looked
+   finished — and then every piece started bobbing on its own clock. The screen
+   never held still long enough to be read, and the photograph, which is the
+   page's LCP element, painted 1.4s late because it sat at opacity 0 waiting
+   its turn. Now the whole opener has settled in about 600ms: the words and the
+   photograph arrive together, the chips just behind them, and only one slow
+   float is left running.
    ══════════════════════════════════════════════════════════════════════════ */
 
 @keyframes board-enter {
   from {
     opacity: 0;
-    transform: translateY(1.25rem);
+    transform: translateY(0.75rem);
   }
 }
 
 @keyframes board-enter-figure {
   from {
     opacity: 0;
-    transform: translateY(3rem) scale(0.9);
+    transform: translateY(1.25rem);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   [data-preset='board'] .board-panel__inner > * {
-    animation: board-enter 620ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation: board-enter 420ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
   }
 
-  [data-preset='board'] .board-panel__inner > :nth-child(1) { animation-delay: 60ms; }
-  [data-preset='board'] .board-panel__inner > :nth-child(2) { animation-delay: 150ms; }
-  [data-preset='board'] .board-panel__inner > :nth-child(3) { animation-delay: 240ms; }
-  [data-preset='board'] .board-panel__inner > :nth-child(4) { animation-delay: 330ms; }
-  [data-preset='board'] .board-panel__inner > :nth-child(5) { animation-delay: 420ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(2) { animation-delay: 40ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(3) { animation-delay: 80ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(n + 4) { animation-delay: 120ms; }
 
   /* الصورة ليها الحركة دي، أبطأ وأبعد، وبتوصل بعد الكلام — شوف الملاحظة فوق
      ليه أكبر حاجة في الفريم بتتحرك آخر واحدة.
@@ -5975,7 +5982,7 @@ body:has(main[data-preset='board']) .site-nav--pinned .site-btn--outline {
      وحدها، فمساحة الحركة (`translateY`/`scale`) اتزودت معاها — حركة أوضح
      تناسب حجم أكبر، مش نفس الرقصة القديمة على جسم أكبر. */
   [data-preset='board'] .board-portrait {
-    animation: board-enter-figure 900ms cubic-bezier(0.22, 0.61, 0.36, 1) 480ms backwards;
+    animation: board-enter-figure 520ms cubic-bezier(0.22, 0.61, 0.36, 1) 80ms backwards;
   }
 }
 
