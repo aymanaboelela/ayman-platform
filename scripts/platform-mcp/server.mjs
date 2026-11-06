@@ -116,11 +116,23 @@ async function api(method, path, { body, query, binary = false } = {}) {
     if (isWrite) headers['x-csrf-token'] = '1';
     if (body !== undefined) headers['content-type'] = 'application/json';
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (error) {
+      // A dropped connection («terminated», «fetch failed») between here and
+      // Cloudflare. Reads are retried; a write is not, because it may have
+      // landed — the caller re-reads and decides.
+      if (!isWrite && attempt < MAX_RETRIES) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
+      throw new Error(`${method} ${path} → network error: ${error?.cause?.message ?? error?.message ?? error}`);
+    }
 
     if (response.status === 429 && attempt < MAX_RETRIES) {
       const retryAfter = Number(response.headers.get('retry-after'));
