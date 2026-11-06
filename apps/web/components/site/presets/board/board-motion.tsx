@@ -126,7 +126,13 @@ export function BoardMotion() {
           (entry.target as HTMLElement).toggleAttribute('data-still', !entry.isIntersecting);
         }
       });
-      for (const node of root.querySelectorAll<HTMLElement>(LOOPING)) loops.observe(node);
+      // `document`, not `root`: the footer is its own `[data-preset='board']`
+      // element outside `<main>`, and its closer carries one of the loops.
+      for (const node of document.querySelectorAll<HTMLElement>(
+        `[data-preset="board"] :is(${LOOPING})`,
+      )) {
+        loops.observe(node);
+      }
 
       cleanups.push(() => {
         reveal.disconnect();
