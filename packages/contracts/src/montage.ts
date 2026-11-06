@@ -143,7 +143,7 @@ export const MontageVideoPatchSchema = z
   .refine((value) => value.title !== undefined || value.note !== undefined, { message: 'nothing to change' });
 export type MontageVideoPatch = z.infer<typeof MontageVideoPatchSchema>;
 
-/** `GET /api/montage/:id/download` — a short-lived link straight to the bucket. */
+/** `GET /api/montage/:id/download` (and `/watch`, signed `inline`) — a short-lived link straight to the bucket. */
 export const MontageDownloadSchema = z.object({ url: z.string().min(1), expiresAt: z.string() });
 export type MontageDownload = z.infer<typeof MontageDownloadSchema>;
 

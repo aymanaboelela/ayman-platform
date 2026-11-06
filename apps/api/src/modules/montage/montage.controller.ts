@@ -83,6 +83,12 @@ export class MontageController {
     return this.montage.download(id);
   }
 
+  @RequirePermission('montage:read')
+  @Get('montage/:id/watch')
+  watch(@Param('id', Id) id: string) {
+    return this.montage.watch(id);
+  }
+
   @RequirePermission('montage:publish')
   @Get('admin/montage/targets')
   targets() {

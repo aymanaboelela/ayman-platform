@@ -577,10 +577,10 @@ describe('CSP builders', () => {
 
     expect(directive(policy, 'connect-src')).toContain('https://video.example.test');
     expect(directive(policy, 'connect-src')).toContain('https://acct.r2.cloudflarestorage.test');
-    // The read origin is a media load as well as a fetch; the upload host is
-    // never a media source and must not be granted as one.
+    // The read origin is a media load as well as a fetch. The upload host is
+    // one too since the montage screen's «شوف» plays a presigned original.
     expect(directive(policy, 'media-src')).toContain('https://video.example.test');
-    expect(directive(policy, 'media-src')).not.toContain('r2.cloudflarestorage.test');
+    expect(directive(policy, 'media-src')).toContain('https://acct.r2.cloudflarestorage.test');
     // And an IMAGE: the encoder's `poster.jpg` is the uploaded lecture's poster
     // on the student's page. Blocked, it failed as a broken image, the player
     // dropped it, and the lecture showed a grey box where its picture belongs.

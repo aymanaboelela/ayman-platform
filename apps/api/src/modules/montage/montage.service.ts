@@ -276,6 +276,19 @@ export class MontageService {
   }
 
   /**
+   * «شوف» — the same original, signed `inline` so it plays in the page. No
+   * transcode: what the editor uploaded is what the instructor checks, and a
+   * file the browser cannot decode (HEVC .mov, .mkv) says so on screen.
+   */
+  async watch(id: string): Promise<MontageDownload> {
+    const row = await this.row(id);
+    const storage = this.storage();
+    if (row.status !== 'ready') throw new ConflictException('الفيديو لسه بيترفع');
+    const url = await storage.presignDownload(montageSourceKey(row.storageId), row.fileName, DOWNLOAD_TTL_SECONDS, 'inline');
+    return { url, expiresAt: new Date(Date.now() + DOWNLOAD_TTL_SECONDS * 1000).toISOString() };
+  }
+
+  /**
    * Every place a hand-over can go: each course's sections, and the video
    * lessons in them. Never the library's hidden holding course.
    */
