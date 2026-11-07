@@ -135,37 +135,32 @@ function matchOf(view: ArenaView) {
   return view.match;
 }
 
-describe('arena — admin topics', () => {
-  it('pairs two students only when they picked the same topic, and plays that topic’s questions', async () => {
+describe('arena — the teacher’s arena topic', () => {
+  it('plays the topic the teacher set for the course — the student only presses start', async () => {
     const { service, builds } = setup();
-    await online(service, 'alice', 'bob', 'dina');
-    expect((await service.join('alice', COURSE, UNIT_1)).phase).toBe('queued');
-    // نفس الكورس، تحدّي تاني — مستنية لوحدها.
-    expect((await service.join('bob', COURSE, LESSON_3)).phase).toBe('queued');
-
-    const match = matchOf(await service.join('dina', COURSE, UNIT_1));
+    await online(service, 'alice', 'bob');
+    expect((await service.join('alice', COURSE)).phase).toBe('queued');
+    const match = matchOf(await service.join('bob', COURSE));
     expect(match.opponent.player.name).toBe('مريم');
     expect(match.courseTitle).toBe('البرمجة · الوحدة الأولى');
     expect(builds).toEqual([{ course: COURSE, topics: [UNIT_1] }]);
   });
 
-  it('says how many classmates wait in each topic', async () => {
+  it('says how many classmates wait on the arena topic', async () => {
     const { service } = setup();
     await online(service, 'alice', 'bob');
-    await service.join('alice', COURSE, LESSON_3);
+    await service.join('alice', COURSE);
     const lobby = await service.lobby('bob');
     const topics = lobby.courses.find((course) => course.id === COURSE)!.topics;
-    expect(topics.find((topic) => topic.id === LESSON_3)?.waiting).toBe(1);
-    expect(topics.find((topic) => topic.id === UNIT_1)?.waiting).toBe(0);
+    expect(topics.find((topic) => topic.id === UNIT_1)?.waiting).toBe(1);
   });
 
-  it('refuses the whole course once it has topics, and a topic too small to fill a match', async () => {
+  it('refuses a course with no arena topic — no fallback to the whole course', async () => {
     const { service } = setup();
-    await online(service, 'alice');
-    await expect(service.join('alice', COURSE)).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(service.join('alice', COURSE, SMALL)).rejects.toBeInstanceOf(ForbiddenException);
-    // كورس من غير تحديات زي ما كان.
-    expect((await service.join('alice', FLAT)).phase).toBe('queued');
+    await online(service, 'alice', 'eve', 'fay');
+    // FLAT looks playable but has no arena topic: the guard in `join` holds anyway.
+    await expect(service.join('alice', FLAT)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.join('eve', COURSE)).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 

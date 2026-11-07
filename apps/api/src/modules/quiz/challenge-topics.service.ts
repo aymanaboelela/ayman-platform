@@ -36,7 +36,7 @@ export class ChallengeTopicsService {
       this.prisma.challengeTopic.findMany({
         where: { courseId },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-        select: { id: true, title: true, isActive: true, position: true, sectionIds: true, lessonIds: true },
+        select: { id: true, title: true, isActive: true, inArena: true, position: true, sectionIds: true, lessonIds: true },
       }),
     ]);
 
@@ -76,6 +76,7 @@ export class ChallengeTopicsService {
           id: topic.id,
           title: topic.title,
           isActive: topic.isActive,
+          inArena: topic.inArena,
           position: topic.position,
           sectionIds: topic.sectionIds,
           lessonIds: topic.lessonIds,
@@ -125,14 +126,26 @@ export class ChallengeTopicsService {
     if (!topic) throw new NotFoundException();
     // الوحدات/الدروس اللي اتمسحت من الكورس بتتشال هنا — أول حفظ بينضّف.
     const scope = this.scopeIn(lessons, patch.sectionIds ?? topic.sectionIds, patch.lessonIds ?? topic.lessonIds);
-    await this.prisma.challengeTopic.update({
+    const update = this.prisma.challengeTopic.update({
       where: { id: topicId },
       data: {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        ...(patch.inArena !== undefined ? { inArena: patch.inArena } : {}),
         ...scope,
       },
     });
+    // تحدّي ساحة واحد لكل كورس (partial unique index): اللي قبله بيتشال في
+    // نفس الترانزاكشن، وإلا الـindex يرفض الحفظ.
+    await (patch.inArena
+      ? this.prisma.$transaction([
+          this.prisma.challengeTopic.updateMany({
+            where: { courseId, inArena: true, id: { not: topicId } },
+            data: { inArena: false },
+          }),
+          update,
+        ])
+      : update);
     await this.audit.record({
       action: 'challenge-topic:update',
       resourceType: AUDIT_RESOURCES.challengeTopic,

@@ -8,6 +8,7 @@ import { GameBankDetailSchema } from '@ayman/contracts/quiz/game';
 import { StatTile } from '@/components/admin/charts/stat-tile';
 import { num } from '@/components/admin/charts/format';
 import { adminGetOrNotFound, adminGetOrNull } from '@/lib/admin-api';
+import { IS_AYMAN } from '@/lib/tenant';
 import { ChallengeTopics } from './challenge-topics';
 import { BankRow } from './lesson-bank-row';
 import { ModesForm } from './modes-form';
@@ -73,7 +74,7 @@ export default async function GameCourseBankPage({ params }: { params: Promise<{
             {copy.admin.challenges.title}
           </h2>
           <p className="mb-3 mt-1 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.challenges.lead}</p>
-          <ChallengeTopics key={challenges.topics.map((topic) => topic.id).join()} initial={challenges} />
+          <ChallengeTopics key={challenges.topics.map((topic) => topic.id).join()} initial={challenges} arena={IS_AYMAN} />
         </section>
       ) : null}
 

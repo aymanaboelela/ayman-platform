@@ -74,25 +74,26 @@ export class ArenaAccessService implements ArenaAccessPort {
       return { name, image, cohort, cohortLabel, blocked: 'no_subscription', courses: [] };
     }
 
-    const [counts, topical] = await Promise.all([this.game.arenaPoolCounts(userId), this.game.topicCourses(userId)]);
+    // «تحدّي الساحة»: الأدمن بيختار من المنهج التحدّي (درس، وحدة، أو وحدات)،
+    // والطالب بيلعب عليه هو — مابيختارش. كورس لسه مالوش تحدّي ساحة مايتلعبش،
+    // ومفيش رجوع لـ«الكورس كله»: ده كان الطالب بيختار الكورس، والمطلوب العكس.
+    const topical = await this.game.topicCourses(userId, undefined, 'arena');
     const courses = paid.map((course) => {
-      // «التحديات»: كورس فيها بيتلعب على تحدّي، والعدّ من بنك التحديات — مش
-      // من الكويزات اللي اتمتحنت بس.
       const withTopics = topical.get(course.id);
-      if (withTopics && withTopics.topics.length > 0) {
-        const inLessons = (lessonIds: readonly string[]) => {
-          const wanted = new Set(lessonIds);
-          return withTopics.entries.filter((entry) => entry.lessonId !== null && wanted.has(entry.lessonId)).length;
+      const topics = (withTopics?.topics ?? []).slice(0, 1).map((topic) => {
+        const wanted = new Set(topic.lessonIds);
+        const questions = withTopics!.entries.filter((entry) => entry.lessonId !== null && wanted.has(entry.lessonId)).length;
+        return {
+          id: topic.id,
+          title: topic.title,
+          scope: topic.scope,
+          questions,
+          playable: questions >= ARENA_RULES.minPool,
+          waiting: 0,
         };
-        const topics = withTopics.topics.map((topic) => {
-          const questions = inLessons(topic.lessonIds);
-          return { id: topic.id, title: topic.title, questions, playable: questions >= ARENA_RULES.minPool, waiting: 0 };
-        });
-        const questions = inLessons(withTopics.topics.flatMap((topic) => topic.lessonIds));
-        return { id: course.id, title: course.title, questions, playable: topics.some((topic) => topic.playable), topics };
-      }
-      const questions = counts.get(course.id) ?? 0;
-      return { id: course.id, title: course.title, questions, playable: questions >= ARENA_RULES.minPool, topics: [] };
+      });
+      const questions = topics[0]?.questions ?? 0;
+      return { id: course.id, title: course.title, questions, playable: topics[0]?.playable ?? false, topics };
     });
     courses.sort((a, b) => Number(b.playable) - Number(a.playable) || b.questions - a.questions);
     return { name, image, cohort, cohortLabel, blocked: null, courses };

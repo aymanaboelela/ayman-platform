@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  Flag,
   Layers,
   ListChecks,
   Pencil,
@@ -64,7 +65,7 @@ interface Draft {
  * الطالب، فالرقم اللي هنا هو اللي الطالب هيلاقيه (من غير فرق النظام
  * والامتحانات اللي سلّمها — `c.howCount`).
  */
-export function ChallengeTopics({ initial }: { initial: AdminChallengeTopics }) {
+export function ChallengeTopics({ initial, arena = false }: { initial: AdminChallengeTopics; arena?: boolean }) {
   const [detail, setDetail] = useState(initial);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [failed, setFailed] = useState(false);
@@ -99,6 +100,18 @@ export function ChallengeTopics({ initial }: { initial: AdminChallengeTopics }) 
       {detail.topics.length === 0 && editing !== 'new' ? (
         <p className="rounded-lg border border-dashed border-line p-6 text-center text-fg-muted">{c.none}</p>
       ) : null}
+      {/* «ساحة التحدي» plays ONLY on the topic marked here — the student no
+          longer picks. Say so loudly while nothing is marked: the arena is
+          closed on this course until then. */}
+      {arena && detail.topics.length > 0 && !detail.topics.some((topic) => topic.inArena) ? (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-lg border border-[color-mix(in_oklab,var(--warn)_45%,var(--color-line))] bg-[color-mix(in_oklab,var(--warn)_10%,var(--color-surface-2))] p-3 text-[length:var(--fs-text-sm)] text-fg"
+        >
+          <Flag className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden="true" />
+          {c.arenaNone}
+        </p>
+      ) : null}
 
       <ul className="flex flex-col gap-3">
         {detail.topics.map((topic, index) =>
@@ -122,7 +135,9 @@ export function ChallengeTopics({ initial }: { initial: AdminChallengeTopics }) 
               first={index === 0}
               last={index === detail.topics.length - 1}
               pending={pending}
+              arena={arena}
               onToggle={(isActive) => apply(() => updateChallengeAction(detail.courseId, topic.id, { isActive }))}
+              onArena={(inArena) => apply(() => updateChallengeAction(detail.courseId, topic.id, { inArena }))}
               onUp={() => move(index, -1)}
               onDown={() => move(index, 1)}
               onEdit={() => setEditing(topic.id)}
@@ -157,6 +172,7 @@ export function ChallengeTopics({ initial }: { initial: AdminChallengeTopics }) 
           {c.failed}
         </p>
       ) : null}
+      {arena ? <p className="text-[length:var(--fs-text-xs)] text-fg-subtle">{c.arenaHint}</p> : null}
       <p className="text-[length:var(--fs-text-xs)] text-fg-subtle">{c.howCount}</p>
     </div>
   );
@@ -168,7 +184,9 @@ function TopicRow({
   first,
   last,
   pending,
+  arena,
   onToggle,
+  onArena,
   onUp,
   onDown,
   onEdit,
@@ -179,7 +197,9 @@ function TopicRow({
   first: boolean;
   last: boolean;
   pending: boolean;
+  arena: boolean;
   onToggle: (isActive: boolean) => void;
+  onArena: (inArena: boolean) => void;
   onUp: () => void;
   onDown: () => void;
   onEdit: () => void;
@@ -207,7 +227,15 @@ function TopicRow({
             <Swords className="size-5" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-fg [overflow-wrap:anywhere]">{topic.title}</p>
+            <p className="flex flex-wrap items-center gap-2 font-semibold text-fg [overflow-wrap:anywhere]">
+              {topic.title}
+              {arena && topic.inArena ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_oklab,var(--warn)_22%,transparent)] px-2 py-0.5 text-[length:var(--fs-text-xs)] font-bold text-fg">
+                  <Flag className="size-3" aria-hidden="true" />
+                  {c.arenaBadge}
+                </span>
+              ) : null}
+            </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5 text-[length:var(--fs-text-xs)]">
               {topic.sectionIds.length > 0 ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-fg">
@@ -254,6 +282,17 @@ function TopicRow({
             <Switch id={`${id}-on`} checked={topic.isActive} onCheckedChange={onToggle} disabled={pending} />
             <span className="text-[length:var(--fs-text-sm)] text-fg">{topic.isActive ? c.active : c.inactive}</span>
           </label>
+          {arena ? (
+            <Button
+              variant={topic.inArena ? 'ghost' : 'secondary'}
+              onClick={() => onArena(!topic.inArena)}
+              disabled={pending}
+              aria-pressed={topic.inArena}
+            >
+              <Flag className="size-4" aria-hidden="true" />
+              {topic.inArena ? c.arenaUnset : c.arenaSet}
+            </Button>
+          ) : null}
           <Button variant="ghost" onClick={onUp} disabled={pending || first} aria-label={c.up}>
             <ArrowUp className="size-4" aria-hidden="true" />
           </Button>
