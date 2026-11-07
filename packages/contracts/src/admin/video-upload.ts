@@ -147,6 +147,37 @@ export const VideoUploadResumedSchema = z.object({
 export type VideoUploadResumed = z.infer<typeof VideoUploadResumedSchema>;
 
 /**
+ * «اترفع قد إيه» — how far an upload has got, read from the BUCKET, not from
+ * the tab that is sending it.
+ *
+ * The tab knows its own progress, and nobody else does: a second device, the
+ * same admin after closing the tab, or the videos screen opened on another
+ * page all saw only «بيترفع» with no number. The parts that have arrived are
+ * the truth (S3 `ListParts`), so this is what any screen can show — and
+ * `lastPartAt` is what tells «still going» from «stopped an hour ago».
+ *
+ * `uploadId` is returned so a stopped upload can be resumed from ANY browser
+ * with the same file. It is not a credential: writing a part still needs a
+ * signed URL only `resume` hands out, behind `lesson:write`.
+ */
+export const VideoUploadProgressSchema = z.object({
+  /** False once the upload is sealed (encoding or ready) or never started. */
+  uploading: z.boolean(),
+  videoId: z.string().nullable(),
+  uploadId: z.string().nullable(),
+  fileName: z.string().nullable(),
+  /** Bytes in parts that arrived WHOLE — the same rule `resume` uses. */
+  sentBytes: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative().nullable(),
+  partsDone: z.number().int().nonnegative(),
+  partsTotal: z.number().int().nonnegative().nullable(),
+  /** When the newest part landed; null before the first one. */
+  lastPartAt: z.string().nullable(),
+  startedAt: z.string().nullable(),
+});
+export type VideoUploadProgress = z.infer<typeof VideoUploadProgressSchema>;
+
+/**
  * What the admin screen polls while the encode runs.
  *
  * `progress` is a coarse 0–100 written by the worker between ffmpeg passes,

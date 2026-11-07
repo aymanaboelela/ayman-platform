@@ -1917,6 +1917,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson video upload resume: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/resume`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', sizeBytes: 1024 }) },
     { label: 'admin lesson video upload status: anonymous', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson video upload status: student', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'student', status: 403 },
+    { label: 'admin lesson video upload progress: anonymous', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/progress`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson video upload progress: student', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/progress`, actor: 'student', status: 403 },
     { label: 'admin lesson video upgrade state: anonymous', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upgrade`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson video upgrade state: student', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upgrade`, actor: 'student', status: 403 },
     { label: 'admin lesson video upgrade request: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upgrade`, actor: 'anonymous', status: 401 },

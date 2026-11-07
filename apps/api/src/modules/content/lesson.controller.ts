@@ -218,6 +218,18 @@ export class LessonController {
    * called by the screen that just started the upload. `lesson:write` costs
    * nothing here and keeps the diagnostic with the people who can act on it.
    */
+  /**
+   * «اترفع قد إيه» — the upload's progress as the BUCKET sees it, for any
+   * screen, not only the tab sending it. `lesson:write` like `status`, and
+   * because it returns the `uploadId` a resume needs.
+   */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Get('lessons/:id/video/upload/progress')
+  videoUploadProgress(@Param('id') id: string) {
+    return this.uploads.progress(id);
+  }
+
   @RequireFeature('video.upload')
   @RequirePermission('lesson:write')
   @Get('lessons/:id/video/upload/status')
