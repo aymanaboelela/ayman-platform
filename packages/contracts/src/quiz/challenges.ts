@@ -99,6 +99,12 @@ export const ChallengeTopicPatchSchema = z
     sectionIds: z.array(z.uuid()).max(MAX_SECTIONS).optional(),
     lessonIds: z.array(z.uuid()).max(MAX_LESSONS).optional(),
     isActive: z.boolean().optional(),
+    /**
+     * «تحدّي الساحة» — `true` بيخلّيه هو تحدّي الساحة في الكورس ده (واللي كان
+     * قبله بيتشال في نفس الحفظ)، و`false` بيشيله: الساحة تقفل على الكورس لحد
+     * ما تختار غيره.
+     */
+    inArena: z.boolean().optional(),
   })
   .strict();
 export type ChallengeTopicPatch = z.infer<typeof ChallengeTopicPatchSchema>;
@@ -120,6 +126,8 @@ export const AdminChallengeTopicSchema = z.object({
   id: z.string(),
   title: z.string(),
   isActive: z.boolean(),
+  /** تحدّي الساحة في الكورس ده — واحد بس لكل كورس. */
+  inArena: z.boolean(),
   position: z.number().int(),
   sectionIds: z.array(z.string()),
   lessonIds: z.array(z.string()),

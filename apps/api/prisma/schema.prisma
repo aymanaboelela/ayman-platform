@@ -6723,6 +6723,10 @@ model ChallengeTopic {
   lessonIds  String[] @default([]) @map("lesson_ids") @db.Uuid
   /// الطالب بيشوف المتشغّل بس.
   isActive   Boolean  @default(true) @map("is_active")
+  /// «تحدّي الساحة»: الماتش في الكورس ده على التحدّي ده بس، والطالب مابيختارش.
+  /// واحد بس لكل كورس (partial unique index في الـmigration)، ومستقل عن
+  /// `isActive` (الألعاب).
+  inArena    Boolean  @default(false) @map("in_arena")
   position   Int      @default(0)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")

@@ -440,6 +440,39 @@ describe('challenge topics', () => {
     expect(removed.topics.map((topic) => topic.id)).toEqual([idA]);
   });
 
+  it('keeps one arena topic per course, independent of the games switch, and names what it covers', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await grant(fixture.studentId);
+    const sectionId = await courseSectionId();
+    const a = await topics.create(fixture.courseId, { title: 'أ', sectionIds: [sectionId], lessonIds: [], isActive: true });
+    const b = await topics.create(fixture.courseId, { title: 'ب', sectionIds: [], lessonIds: [fixture.lessonId], isActive: false });
+    const [idA, idB] = [a.topics[0]!.id, b.topics[1]!.id];
+    expect(b.topics.map((topic) => topic.inArena)).toEqual([false, false]);
+    // Nothing marked: the arena has nothing to play in this course.
+    expect((await game.topicCourses(fixture.studentId, undefined, 'arena')).get(fixture.courseId)).toBeUndefined();
+
+    await topics.update(fixture.courseId, idA, { inArena: true });
+    // Marking B unmarks A in the same save — the partial unique index would refuse two.
+    const moved = await topics.update(fixture.courseId, idB, { inArena: true });
+    expect(moved.topics.map((topic) => [topic.id, topic.inArena])).toEqual([
+      [idA, false],
+      [idB, true],
+    ]);
+
+    // B is off in the games, yet it IS the arena's — and only it.
+    const arena = (await game.topicCourses(fixture.studentId, undefined, 'arena')).get(fixture.courseId)!;
+    expect(arena.topics.map((topic) => topic.id)).toEqual([idB]);
+    expect(arena.topics[0]!.scope).toHaveLength(1);
+    const games = (await game.topicCourses(fixture.studentId)).get(fixture.courseId)!;
+    expect(games.topics.map((topic) => topic.id)).toEqual([idA]);
+    // The hub never ships the arena-only `scope` field.
+    const hub = await game.hub(fixture.studentId);
+    expect(hub.courses.find((entry) => entry.id === fixture.courseId)?.topics[0]).not.toHaveProperty('scope');
+
+    const cleared = await topics.update(fixture.courseId, idB, { inArena: false });
+    expect(cleared.topics.every((topic) => !topic.inArena)).toBe(true);
+  });
+
   it('imports a paste straight into a lesson, with explanations and variant groups, and drafts stay drafts', async () => {
     fixture = await seedQuizFixture(prisma, { questionCount: 0 });
     await grant(fixture.studentId);
