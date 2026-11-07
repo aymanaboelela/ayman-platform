@@ -27,6 +27,7 @@ import { IS_AYMAN, TENANT_KEY } from '@/lib/tenant';
 import { ownBucketBytes } from '@/lib/video-usage';
 import { monthlyAtCurrentStorage } from '@/lib/video-usage-math';
 import { DeleteVideoButton } from './delete-video-button';
+import { UploadProgress } from './upload-progress';
 import { RestoreVideoButton } from './restore-video-button';
 import { LibraryUploadButton } from './library-upload-button';
 import { PlayVideoButton } from './play-video-button';
@@ -360,6 +361,8 @@ function VideoRow({ item, stats }: { item: VideoLibraryItem; stats: VideoStatsRo
           </dl>
 
           {stats !== undefined ? <RowStats stats={stats} /> : null}
+          {/* «اترفع قد إيه» — the bucket's count, with «كمّل الرفع» when it stopped. */}
+          {item.status === 'uploading' ? <UploadProgress lessonId={item.lessonId} courseId={item.courseId} /> : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">

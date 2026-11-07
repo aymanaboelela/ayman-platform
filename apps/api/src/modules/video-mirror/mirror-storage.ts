@@ -12,6 +12,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListMultipartUploadsCommand,
   ListObjectsV2Command,
   ListPartsCommand,
   PutObjectCommand,
@@ -519,8 +520,8 @@ export class MirrorStorage {
   async listParts(
     key: string,
     uploadId: string,
-  ): Promise<{ partNumber: number; etag: string; size: number }[] | null> {
-    const parts: { partNumber: number; etag: string; size: number }[] = [];
+  ): Promise<{ partNumber: number; etag: string; size: number; lastModified: Date | null }[] | null> {
+    const parts: { partNumber: number; etag: string; size: number; lastModified: Date | null }[] = [];
     let marker: string | undefined;
     try {
       do {
@@ -534,7 +535,12 @@ export class MirrorStorage {
         );
         for (const part of listed.Parts ?? []) {
           if (part.PartNumber !== undefined && part.ETag !== undefined) {
-            parts.push({ partNumber: part.PartNumber, etag: part.ETag, size: part.Size ?? 0 });
+            parts.push({
+              partNumber: part.PartNumber,
+              etag: part.ETag,
+              size: part.Size ?? 0,
+              lastModified: part.LastModified ?? null,
+            });
           }
         }
         marker = listed.IsTruncated === true ? listed.NextPartNumberMarker : undefined;
@@ -544,6 +550,22 @@ export class MirrorStorage {
       throw error;
     }
     return parts;
+  }
+
+  /**
+   * The open multipart upload for `key`, newest first — for «اترفع قد إيه»
+   * when the screen asking is not the tab that started it, and so has no
+   * `uploadId` of its own. Null when there is none (sealed, aborted, reaped).
+   */
+  async findMultipartUpload(key: string): Promise<{ uploadId: string; initiated: Date | null } | null> {
+    const listed = await this.s3.send(
+      new ListMultipartUploadsCommand({ Bucket: this.config.bucket, Prefix: key }),
+    );
+    const open = (listed.Uploads ?? [])
+      .filter((upload) => upload.Key === key && upload.UploadId !== undefined)
+      .sort((a, b) => (b.Initiated?.getTime() ?? 0) - (a.Initiated?.getTime() ?? 0));
+    const newest = open[0];
+    return newest?.UploadId ? { uploadId: newest.UploadId, initiated: newest.Initiated ?? null } : null;
   }
 
   /**

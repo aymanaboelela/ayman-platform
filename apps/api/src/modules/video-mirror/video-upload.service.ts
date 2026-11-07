@@ -12,6 +12,7 @@ import type {
   VideoLadderUpgrade,
   VideoUploadAbort,
   VideoUploadComplete,
+  VideoUploadProgress,
   VideoUploadResume,
   VideoUploadResumed,
   VideoUploadSession,
@@ -407,6 +408,68 @@ export class VideoUploadService {
       if (parked !== null) ids.add((JSON.parse(parked) as ReplacedVideo).externalId);
     }
     return ids;
+  }
+
+  /**
+   * «اترفع قد إيه» — read from the bucket, so any screen sees the same number
+   * the uploading tab does. See `VideoUploadProgressSchema`.
+   *
+   * Counts only parts that arrived WHOLE (the rule `reopenSession` resumes
+   * by), so the bar never claims bytes a resume would send again.
+   */
+  async progress(lessonId: string): Promise<VideoUploadProgress> {
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { provider: true, externalId: true, mirrorStatus: true, sourceBytes: true, sourceName: true },
+    });
+    const idle: VideoUploadProgress = {
+      uploading: false,
+      videoId: row?.externalId ?? null,
+      uploadId: null,
+      fileName: row?.sourceName ?? null,
+      sentBytes: 0,
+      totalBytes: row?.sourceBytes === null || row?.sourceBytes === undefined ? null : Number(row.sourceBytes),
+      partsDone: 0,
+      partsTotal: null,
+      lastPartAt: null,
+      startedAt: null,
+    };
+    if (row === null || row.provider !== 'upload' || row.mirrorStatus !== 'uploading') return idle;
+
+    const storage = this.storage();
+    const key = uploadSourceKey(row.externalId);
+    const open = await storage.findMultipartUpload(key);
+    if (open === null) return { ...idle, uploading: true };
+
+    const parts = (await storage.listParts(key, open.uploadId)) ?? [];
+    const total = idle.totalBytes;
+    const partsTotal = total === null ? null : uploadPartCount(total);
+    const partSize = total === null ? null : uploadPartSize(total);
+    const expected = (n: number): number | null =>
+      total === null || partSize === null || partsTotal === null
+        ? null
+        : n < partsTotal
+          ? partSize
+          : total - partSize * (partsTotal - 1);
+    const whole = parts.filter((part) => {
+      const want = expected(part.partNumber);
+      return want === null ? part.size > 0 : part.size === want;
+    });
+    const newest = whole.reduce<Date | null>(
+      (latest, part) => (part.lastModified && (!latest || part.lastModified > latest) ? part.lastModified : latest),
+      null,
+    );
+
+    return {
+      ...idle,
+      uploading: true,
+      uploadId: open.uploadId,
+      sentBytes: whole.reduce((sum, part) => sum + part.size, 0),
+      partsDone: whole.length,
+      partsTotal,
+      lastPartAt: newest?.toISOString() ?? null,
+      startedAt: open.initiated?.toISOString() ?? null,
+    };
   }
 
   /** What the admin screen polls while the encode runs. */

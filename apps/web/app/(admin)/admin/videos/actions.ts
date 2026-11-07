@@ -3,7 +3,8 @@
 import { updateTag } from 'next/cache';
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
-import { AdminApiError, adminSend } from '@/lib/admin-api';
+import { AdminApiError, adminGet, adminSend } from '@/lib/admin-api';
+import { VideoUploadProgressSchema, type VideoUploadProgress } from '@ayman/contracts/admin/video-upload';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
 import { revalidatePath } from '@/lib/revalidate-screen';
 
@@ -100,5 +101,21 @@ export async function createUploadSlotAction(
         ? body.message
         : '';
     return { ok: false, message: /[؀-ۿ]/.test(message) ? message : copy.admin.videos.uploadFailed };
+  }
+}
+
+/**
+ * «اترفع قد إيه» — polled by an uploading row. Read from the bucket by the
+ * API, so it is the same number whichever tab or device is sending the file.
+ * `null` on any failure: the row then keeps its plain «بيترفع» badge.
+ */
+export async function uploadProgressAction(lessonId: string): Promise<VideoUploadProgress | null> {
+  try {
+    return await adminGet(
+      `/api/admin/lessons/${encodeURIComponent(lessonId)}/video/upload/progress`,
+      VideoUploadProgressSchema,
+    );
+  } catch {
+    return null;
   }
 }
