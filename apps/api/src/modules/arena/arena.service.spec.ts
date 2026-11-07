@@ -20,7 +20,14 @@ function eligible(name: string, stream: 'general' | 'languages', courses = [COUR
     cohort: { systemId: SYSTEM, year: 2, stream },
     cohortLabel: `تانية · ${stream}`,
     blocked: null,
-    courses: courses.map((id) => ({ id, title: `كورس ${id.slice(-1)}`, questions: 20, playable: true })),
+    // Every course carries the teacher's arena topic — the only thing a match plays on now.
+    courses: courses.map((id) => ({
+      id,
+      title: `كورس ${id.slice(-1)}`,
+      questions: 20,
+      playable: true,
+      topics: [{ id: `${id}-arena`, title: 'تحدّي الساحة', scope: [], questions: 20, playable: true, waiting: 0 }],
+    })),
   };
 }
 

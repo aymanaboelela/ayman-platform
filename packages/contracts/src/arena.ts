@@ -281,14 +281,13 @@ export type ArenaBoard = z.infer<typeof ArenaBoardSchema>;
 export const ArenaCourseSchema = z.object({
   id: z.string(),
   title: z.string(),
-  /** أسئلة بنك الطالب في الكورس ده. */
+  /** أسئلة بنك الطالب في تحدّي الساحة بتاع الكورس ده (صفر لو مالوش). */
   questions: z.number().int().min(0),
-  /** `questions >= ARENA_RULES.minPool`. */
+  /** فيه تحدّي ساحة، و`questions >= ARENA_RULES.minPool`. */
   playable: z.boolean(),
   /**
-   * «التحديات» المتشغّلة في الكورس. مش فاضية = الماتش على تحدّي (أو تحدّي
-   * طالب)، مش على الكورس كله — `questions`/`playable` فوق بيتحسبوا من بنك
-   * التحديات ساعتها.
+   * تحدّي الساحة اللي الأدمن حطّه للكورس — واحد بالكتير. فاضية = الأدمن لسه
+   * ماحددش، والكورس مايتلعبش. مفيش «الكورس كله» ولا اختيار من الطالب.
    */
   topics: z.array(ArenaTopicSchema).default([]),
 });

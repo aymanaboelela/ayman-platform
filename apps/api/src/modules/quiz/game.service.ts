@@ -43,6 +43,7 @@ import {
   blockedBankEntries,
   challengeCandidates,
   courseLessons,
+  type CourseLesson,
   lessonServes,
   topicHomeLessons,
 } from './challenge-pool';
@@ -105,9 +106,16 @@ interface PoolRow {
 
 /** «التحديات» المتشغّلة في كورس واحد، وبنك الطالب فيها. */
 export interface TopicCourse {
-  topics: GameHubTopic[];
+  /** `scope` = أسامي الوحدات والدروس اللي اتختارت — للساحة بس، مابيطلعش للألعاب. */
+  topics: Array<GameHubTopic & { scope: string[] }>;
   entries: PoolEntry[];
 }
+
+/**
+ * أنهي تحديات: `games` = المتشغّلة (`isActive`)، و`arena` = تحدّي الساحة
+ * (`inArena`) — واحد بالكتير لكل كورس، ومستقل عن التشغيل في الألعاب.
+ */
+export type TopicSet = 'games' | 'arena';
 
 /** ترتيب المستويات اللي بنسحب منها لكل اختيار — الأقرب الأول. */
 const BANDS: Record<GameLevel, GameLevel[]> = {
@@ -449,21 +457,12 @@ export class GameService {
    * متشغّل أو من كورس تاني مابيضيفش حاجة.
    */
   async arenaTopicPool(userId: string, courseId: string, topicIds: readonly string[]): Promise<ArenaPoolItem[]> {
-    const course = (await this.topicCourses(userId, [courseId])).get(courseId);
+    const course = (await this.topicCourses(userId, [courseId], 'arena')).get(courseId);
     if (!course) return [];
     const lessons = new Set(course.topics.filter((topic) => topicIds.includes(topic.id)).flatMap((topic) => topic.lessonIds));
     return course.entries.filter((entry) => entry.lessonId !== null && lessons.has(entry.lessonId)).map(arenaItem);
   }
 
-  /** كام سؤال للساحة في كل كورس في بنك الطالب — كويري واحدة للكل. */
-  async arenaPoolCounts(userId: string): Promise<Map<string, number>> {
-    const pool = await this.pool(userId);
-    const counts = new Map<string, number>();
-    for (const courseId of pool.courses.keys()) {
-      counts.set(courseId, eligible(pool, 'race', courseId, { kind: 'all' }).length);
-    }
-    return counts;
-  }
 
   /** سؤال مش في بنك الطالب = 404 — مش الإجابة، ومش صوته. */
   async assertInPool(userId: string, questionId: string): Promise<void> {
@@ -677,14 +676,14 @@ export class GameService {
    * «التحديات» المتشغّلة في كورسات الطالب، وبنكه في كل واحد — شوف
    * `challenge-pool.ts`. البنك متفلتر على نظام الطالب (عربي/لغات): درس
    * للّغات بس مابيوصلش طالب عربي. `only` = كورسات معيّنة (الجولة)، غير كده
-   * كل كورساته (صفحة الألعاب).
+   * كل كورساته (صفحة الألعاب). `set` = تحديات الألعاب ولا تحدّي الساحة.
    */
-  async topicCourses(userId: string, only?: readonly string[]): Promise<Map<string, TopicCourse>> {
+  async topicCourses(userId: string, only?: readonly string[], set: TopicSet = 'games'): Promise<Map<string, TopicCourse>> {
     const playable = await this.playableCourseIds(userId);
     const courseIds = only ? playable.filter((id) => only.includes(id)) : playable;
     if (courseIds.length === 0) return new Map();
     const rows = await this.prisma.challengeTopic.findMany({
-      where: { courseId: { in: courseIds }, isActive: true },
+      where: { courseId: { in: courseIds }, ...(set === 'arena' ? { inArena: true } : { isActive: true }) },
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, title: true, courseId: true, sectionIds: true, lessonIds: true },
     });
@@ -702,7 +701,12 @@ export class GameService {
     const out = new Map<string, TopicCourse>();
     for (const row of rows) {
       const course = out.get(row.courseId) ?? { topics: [], entries: [] };
-      course.topics.push({ id: row.id, title: row.title, lessonIds: [...topicHomeLessons(row, lessons)] });
+      course.topics.push({
+        id: row.id,
+        title: row.title,
+        lessonIds: [...topicHomeLessons(row, lessons)],
+        scope: topicScope(row, lessons),
+      });
       out.set(row.courseId, course);
     }
     for (const candidate of served) {
@@ -986,7 +990,35 @@ function topicFields(course: TopicCourse | undefined): { topics: GameHubTopic[];
     bucket.counts[entry.level] += 1;
     buckets.set(entry.lessonId, bucket);
   }
-  return { topics: course.topics, topicBuckets: [...buckets.values()] };
+  return {
+    topics: course.topics.map(({ id, title, lessonIds }) => ({ id, title, lessonIds })),
+    topicBuckets: [...buckets.values()],
+  };
+}
+
+/**
+ * التحدّي على إيه، بأسامي المنهج وبترتيب الكورس: الوحدات اللي اتختارت كلها،
+ * وبعدين الدروس اللي اتختارت لوحدها (ومش جوّه وحدة متختارة أصلًا).
+ */
+export function topicScope(
+  topic: { courseId: string; sectionIds: readonly string[]; lessonIds: readonly string[] },
+  lessons: readonly CourseLesson[],
+): string[] {
+  const sections = new Set(topic.sectionIds);
+  const picked = new Set(topic.lessonIds);
+  const units: string[] = [];
+  const singles: string[] = [];
+  const seen = new Set<string>();
+  for (const lesson of lessons) {
+    if (lesson.courseId !== topic.courseId) continue;
+    if (sections.has(lesson.sectionId)) {
+      if (!seen.has(lesson.sectionId)) units.push(lesson.sectionTitle.trim());
+      seen.add(lesson.sectionId);
+    } else if (picked.has(lesson.id)) {
+      singles.push(lesson.title.trim());
+    }
+  }
+  return [...units, ...singles];
 }
 
 function countOf(course: { counts: { easy: number; medium: number; hard: number } }): number {

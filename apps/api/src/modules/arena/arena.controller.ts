@@ -133,14 +133,17 @@ export class ArenaController {
     }
   }
 
-  /** «يلا نبدأ» — للطابور، أو للماتش اللي لسه شغّال. */
+  /**
+   * «يلا نبدأ» — للطابور، أو للماتش اللي لسه شغّال. `topicId` في البادي
+   * بيتجاهل (تاب قديم لسه بيبعته): التحدّي هو اللي الأدمن حطّه للكورس.
+   */
   @NoAnswerLeak()
   @Throttle({ short: { limit: 3, ttl: seconds(1) }, medium: { limit: 20, ttl: seconds(60) } })
   @UsePipes(ZodValidationPipe)
   @HttpCode(200)
   @Post('queue')
   join(@CurrentUser() user: AuthenticatedUser, @Body() body: ArenaQueueDto): Promise<ArenaView> {
-    return this.arena.join(user.id, body.courseId, body.topicId);
+    return this.arena.join(user.id, body.courseId);
   }
 
   /**

@@ -231,10 +231,17 @@ describe('ArenaRecordsService (database)', () => {
   });
 
   describe('who counts as subscribed', () => {
-    // كورس من غير «تحديات» — العدّ من بنك الكويزات زي الأول.
+    // The teacher's arena topic on the course, 30 questions in its bank. Asked
+    // for with `set = 'arena'` — the games' active topics are a different list.
+    const sets: unknown[] = [];
+    const arenaTopic = { id: 'topic-1', title: 'الدرس الأول', lessonIds: ['lesson-1'], scope: ['الدرس الأول'] };
     const game = {
-      arenaPoolCounts: async () => new Map([[courseId, 30]]),
-      topicCourses: async () => new Map(),
+      topicCourses: async (_userId: string, _only: unknown, set: unknown) => {
+        sets.push(set);
+        return new Map([
+          [courseId, { topics: [arenaTopic], entries: Array.from({ length: 30 }, () => ({ lessonId: 'lesson-1' })) }],
+        ]);
+      },
     } as unknown as GameService;
     const access = () => new ArenaAccessService(prisma, game);
 
@@ -249,8 +256,26 @@ describe('ArenaRecordsService (database)', () => {
       await prisma.accessGrant.create({ data: { userId: id, scope: 'course', courseId, source: 'admin' } });
       const result = await access().eligibility(id);
       expect(result.blocked).toBeNull();
-      expect(result.courses).toEqual([{ id: courseId, title: 'كورس الساحة', questions: 30, playable: true, topics: [] }]);
+      expect(result.courses).toEqual([
+        {
+          id: courseId,
+          title: 'كورس الساحة',
+          questions: 30,
+          playable: true,
+          topics: [{ id: 'topic-1', title: 'الدرس الأول', scope: ['الدرس الأول'], questions: 30, playable: true, waiting: 0 }],
+        },
+      ]);
       expect(result.cohortLabel).toContain('عربي');
+      expect(sets.at(-1)).toBe('arena');
+    });
+
+    it('a course the teacher has not given an arena topic is listed but not playable', async () => {
+      const id = await enrolled('هنا');
+      await prisma.accessGrant.create({ data: { userId: id, scope: 'course', courseId, source: 'admin' } });
+      const bare = { topicCourses: async () => new Map() } as unknown as GameService;
+      expect((await new ArenaAccessService(prisma, bare).eligibility(id)).courses).toEqual([
+        { id: courseId, title: 'كورس الساحة', questions: 0, playable: false, topics: [] },
+      ]);
     });
 
     it('lets a single month in', async () => {

@@ -327,10 +327,11 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
   }
 
   /**
-   * «يلا نبدأ». طالب واحد = طابور واحد أو ماتش واحد، مهما فتح تابات. كورس
-   * فيه «تحديات» بيتلعب على تحدّي (`topicId` لازم)، وطابوره لكل تحدّي.
+   * «يلا نبدأ». طالب واحد = طابور واحد أو ماتش واحد، مهما فتح تابات. الماتش
+   * دايمًا على تحدّي الساحة اللي الأدمن حطّه للكورس (`eligibility` بيرجّع واحد
+   * بالكتير) — الطالب بيختار الكورس بس، وطابوره لكل (كورس × دفعة × تحدّي).
    */
-  async join(userId: string, courseId: string, topicId?: string): Promise<ArenaView> {
+  async join(userId: string, courseId: string): Promise<ArenaView> {
     const key = await this.withLock(`u:${userId}`, async () => {
       const pointer = await this.pointer(userId);
       if (pointer?.kind === 'match') {
@@ -343,12 +344,11 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
       if (eligibility.blocked) throw new ForbiddenException({ code: eligibility.blocked });
       const course = eligibility.courses.find((entry) => entry.id === courseId && entry.playable);
       if (!course) throw new ForbiddenException({ code: 'course_not_playable' });
-      const topics = course.topics ?? [];
-      const topic = topics.find((entry) => entry.id === topicId) ?? null;
-      if (topics.length > 0 && !topic) throw new ForbiddenException({ code: 'topic_required' });
-      if (topicId && !topic?.playable) throw new ForbiddenException({ code: 'course_not_playable' });
+      // `playable` فوق = فيه تحدّي ساحة وبنكه كفاية، فده موجود دايمًا هنا.
+      const topic = (course.topics ?? []).find((entry) => entry.playable) ?? null;
+      if (!topic) throw new ForbiddenException({ code: 'course_not_playable' });
 
-      const next = queueKeyOf(courseId, eligibility.cohort, topic?.id ?? null);
+      const next = queueKeyOf(courseId, eligibility.cohort, topic.id);
       const now = this.clock();
       if (pointer?.kind === 'queue' && pointer.key !== next) await this.leaveQueue(userId, pointer);
       const since = pointer?.kind === 'queue' && pointer.key === next ? pointer.since : now;
@@ -361,9 +361,9 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
         since,
         name: eligibility.name,
         image: eligibility.image,
-        topicId: topic?.id ?? null,
-        topicIds: topic ? [topic.id] : [],
-        topicTitle: topic?.title ?? null,
+        topicId: topic.id,
+        topicIds: [topic.id],
+        topicTitle: topic.title,
         challengeId: null,
       };
       await this.setPointer(userId, entry);

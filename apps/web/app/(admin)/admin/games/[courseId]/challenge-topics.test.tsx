@@ -33,6 +33,7 @@ const detail: AdminChallengeTopics = {
       id: '01990000-0000-7000-8000-0000000f0001',
       title: 'الدرس التاني بس',
       isActive: true,
+      inArena: false,
       position: 0,
       sectionIds: [],
       lessonIds: [L2],
@@ -78,6 +79,26 @@ describe('ChallengeTopics — the admin «قسم التحديات»', () => {
       lessonIds: [],
       isActive: true,
     });
+  });
+
+  it('marks a topic as the arena challenge, and warns while none is marked', async () => {
+    const marked = { ...detail, topics: [{ ...detail.topics[0]!, inArena: true }] };
+    updateChallengeAction.mockResolvedValue({ ok: true, detail: marked });
+    render(<ChallengeTopics initial={detail} arena />);
+    expect(screen.getByRole('status')).toHaveTextContent(c.arenaNone);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(c.arenaSet) }));
+    });
+    expect(updateChallengeAction).toHaveBeenCalledWith(COURSE, detail.topics[0]!.id, { inArena: true });
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByText(c.arenaBadge)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: new RegExp(c.arenaUnset) })).toBeInTheDocument();
+  });
+
+  it('shows no arena controls on a stack without the arena', () => {
+    render(<ChallengeTopics initial={detail} />);
+    expect(screen.queryByRole('button', { name: new RegExp(c.arenaSet) })).toBeNull();
+    expect(screen.queryByText(c.arenaNone)).toBeNull();
   });
 
   it('switches a topic off for students with one press', async () => {
