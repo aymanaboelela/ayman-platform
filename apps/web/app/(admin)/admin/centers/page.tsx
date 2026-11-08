@@ -311,6 +311,9 @@ function SlotCard({
           ) : null}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             <Chip color={slot.year === null ? 'var(--viz-5)' : 'var(--viz-3)'}>{yearLabel(slot.year)}</Chip>
+            {slot.track ? (
+              <Chip color="var(--viz-4)">{slot.track === 'arabic' ? c.slotForm.trackArabic : c.slotForm.trackLanguages}</Chip>
+            ) : null}
             {slot.isFull ? <Chip color="var(--warn)">{c.full}</Chip> : null}
             {!slot.isActive ? <Chip color="var(--err)">{c.inactive}</Chip> : null}
           </div>

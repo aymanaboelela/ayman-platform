@@ -27,6 +27,8 @@ export const CenterSlotViewSchema = z.object({
   startMinute: z.number().int(),
   endMinute: z.number().int(),
   year: z.number().int().nullable(),
+  /** `arabic` | `languages`; null = both. */
+  track: z.enum(['arabic', 'languages']).nullable(),
   /** Closed to NEW bookings — the admin's «فل» switch, or no seat left. A
    *  student already booked here keeps it. */
   full: z.boolean(),

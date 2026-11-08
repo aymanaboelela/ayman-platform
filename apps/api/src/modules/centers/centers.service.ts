@@ -59,6 +59,7 @@ interface SlotRow {
   startMinute: number;
   endMinute: number;
   year: number | null;
+  track: string | null;
   capacity: number | null;
   isFull: boolean;
   isActive: boolean;
@@ -74,6 +75,7 @@ function slotView(slot: SlotRow, booked: number): CenterSlotView {
     startMinute: slot.startMinute,
     endMinute: slot.endMinute,
     year: slot.year,
+    track: slot.track === 'arabic' || slot.track === 'languages' ? slot.track : null,
     full: slot.isFull || seatsLeft === 0,
     seatsLeft,
     priceCents: slot.priceCents,

@@ -41,6 +41,8 @@ const slotShape = {
   startMinute: MinuteSchema,
   endMinute: MinuteSchema,
   year: z.number().int().min(1).max(3).nullable().default(null),
+  /** عربي / لغات — `null` = both. */
+  track: z.enum(['arabic', 'languages']).nullable().default(null),
   capacity: z.number().int().min(1).max(5000).nullable().default(null),
   priceCents: z.number().int().min(0).max(100_000_000).nullable().default(null),
   isFull: z.boolean().default(false),
@@ -63,6 +65,7 @@ export const AdminSlotPatchSchema = z
     startMinute: MinuteSchema.optional(),
     endMinute: MinuteSchema.optional(),
     year: z.number().int().min(1).max(3).nullable().optional(),
+    track: z.enum(['arabic', 'languages']).nullable().optional(),
     capacity: z.number().int().min(1).max(5000).nullable().optional(),
     priceCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
     isFull: z.boolean().optional(),
