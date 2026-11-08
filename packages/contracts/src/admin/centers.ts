@@ -172,6 +172,9 @@ export const AttendanceScanResultSchema = z.object({
   presentCount: z.number().int(),
   recordId: z.uuid(),
   scannedAt: z.iso.datetime(),
+  /** A reservation's `RS…` code with no account behind it: checked in on the
+   *  reservation itself, so there is no attendance row to undo. */
+  reservationOnly: z.boolean().optional(),
 });
 export type AttendanceScanResult = z.infer<typeof AttendanceScanResultSchema>;
 

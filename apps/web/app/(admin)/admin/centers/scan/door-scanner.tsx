@@ -32,6 +32,7 @@ import {
 import { studentNumberFromCode } from '@ayman/contracts/centers';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { reservationsCopy } from '@ayman/contracts/copy/center-reservations';
 import { Select } from '@ayman/ui/components/select';
 import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiDelete, apiPost } from '@/lib/api';
@@ -71,6 +72,8 @@ interface HistoryEntry {
   student: AttendanceScanResult['student'];
   scannedAt: string;
   undone: boolean;
+  /** A reservation's `RS…` code with no account — nothing to undo. */
+  reservationOnly: boolean;
 }
 
 type LastRead =
@@ -322,6 +325,7 @@ export function DoorScanner({
             student: result.student,
             scannedAt: result.scannedAt,
             undone: false,
+            reservationOnly: result.reservationOnly ?? false,
           },
           ...rows,
         ].slice(0, HISTORY_LIMIT),
@@ -954,10 +958,11 @@ function HistoryRow({
           <span>{clock.format(new Date(entry.scannedAt))}</span>
           {entry.outcome === 'already' ? <Chip color="var(--warn)">{s.already}</Chip> : null}
           {entry.notBookedHere ? <Chip color="var(--viz-1)">{s.notBookedHere}</Chip> : null}
+          {entry.reservationOnly ? <Chip color="var(--viz-2)">{reservationsCopy.admin.scanReservation}</Chip> : null}
           {slot ? <span className="truncate">{slot.time}</span> : null}
         </p>
       </div>
-      {entry.undone ? (
+      {entry.reservationOnly ? null : entry.undone ? (
         <span className="shrink-0 text-[length:var(--fs-text-xs)] font-medium text-fg-muted">{s.undone}</span>
       ) : (
         <button

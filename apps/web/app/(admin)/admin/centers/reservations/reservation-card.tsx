@@ -86,6 +86,10 @@ export function ReservationCard({
                 {r.fullName}
               </h3>
               <Chip color={hue}>{a.status[r.status]}</Chip>
+              {r.checkedInAt ? (
+                <Chip color="var(--ok)">{formatCopy(a.attendedAt, { date: whenOf(r.checkedInAt) })}</Chip>
+              ) : null}
+              {r.linked ? <Chip color="var(--viz-3)">{a.linked}</Chip> : null}
             </div>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-muted">
               <span className={cn('font-semibold', TONE_TEXT)}>

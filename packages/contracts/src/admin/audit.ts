@@ -636,6 +636,8 @@ export const AUDIT_ACTIONS = [
   'center-reservation:delete',
   'center-reservation:settings',
   'center-reservation:center',
+  'center-reservation:claim',
+  'center-reservation:checkin',
   'center-manager:create',
   'center-manager:password',
   'center-manager:disable',

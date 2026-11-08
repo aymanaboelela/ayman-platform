@@ -22,6 +22,7 @@ import { reservationsCopy } from '@ayman/contracts/copy/center-reservations';
 import { formatSlotTime } from '@ayman/contracts/centers';
 import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone, toAsciiDigits } from '@ayman/contracts/phone';
+import { create as createQr } from 'qrcode';
 import {
   PublicReservationSchema,
   ReservationConfigSchema,
@@ -112,8 +113,11 @@ async function fetchState(): Promise<Fetched> {
       if (!id) return null;
       try {
         return await apiGet(`/api/center-reservations/${id}`, PublicReservationSchema, { cache: 'no-store' });
-      } catch {
-        writeStored(null);
+      } catch (error) {
+        // Forget it only when the server says it is gone. A dropped connection
+        // in a queue must not wipe the student's reservation (and its door
+        // code) off their phone.
+        if (error instanceof Error && /failed with 404/.test(error.message)) writeStored(null);
         return null;
       }
     })(),
@@ -265,7 +269,7 @@ export function ReserveFlow({ brand }: { brand: string }) {
             }}
           />
         ) : (
-          <Done reservation={reservation} onAgain={() => go('pay')} onNew={startOver} />
+          <Done reservation={reservation} onAgain={() => go('pay')} onClaimed={setReservation} />
         )
       ) : (
         <Choose open={config.open} onCenter={pickCenterFlow} />
@@ -1047,17 +1051,61 @@ function Pay({
 
 /* ── تم ─────────────────────────────────────────────────────────────────── */
 
+/** The door code as an SVG — one path of module runs (`AttendanceCard`'s QR). */
+function DoorQr({ text, label }: { text: string; label: string }) {
+  const { modules } = createQr(text, { errorCorrectionLevel: 'M' });
+  const margin = 2;
+  const size = modules.size + margin * 2;
+  let path = '';
+  for (let row = 0; row < modules.size; row += 1) {
+    let col = 0;
+    while (col < modules.size) {
+      if (!modules.get(row, col)) {
+        col += 1;
+        continue;
+      }
+      const start = col;
+      while (col < modules.size && modules.get(row, col)) col += 1;
+      path += `M${start + margin} ${row + margin + 0.5}h${col - start}`;
+    }
+  }
+  return (
+    <svg role="img" aria-label={label} viewBox={`0 0 ${size} ${size}`} shapeRendering="crispEdges" className="rsv-qr__svg">
+      <path d={path} stroke="currentColor" strokeWidth={1} fill="none" />
+    </svg>
+  );
+}
+
 function Done({
   reservation,
   onAgain,
-  onNew,
+  onClaimed,
 }: {
   reservation: PublicReservation;
   onAgain: () => void;
-  onNew: () => void;
+  onClaimed: (next: PublicReservation) => void;
 }) {
   const rejected = reservation.status === 'rejected';
   const confirmed = reservation.status === 'confirmed';
+  const [needsProfile, setNeedsProfile] = useState(false);
+
+  /* Signed in, in the browser that made it: take it onto the account. A
+     visitor with no session gets a 401 and nothing changes. */
+  useEffect(() => {
+    if (reservation.linked || rejected || reservation.status === 'cancelled') return;
+    let cancelled = false;
+    apiPost(`/api/center-reservations/${reservation.id}/claim`, PublicReservationSchema)
+      .then((next) => {
+        if (!cancelled) onClaimed(next);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled && codeOf(error) === 'finish_onboarding') setNeedsProfile(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reservation.id, reservation.linked, reservation.status, rejected, onClaimed]);
+
   const body = rejected
     ? reservation.rejectionReason
       ? formatCopy(p.doneRejected, { reason: reservation.rejectionReason })
@@ -1066,6 +1114,14 @@ function Done({
       ? p.doneConfirmed
       : p.doneSubmitted;
 
+  const payState = rejected
+    ? { text: p.payRejected, tone: 'err' }
+    : reservation.checkedIn || confirmed
+      ? { text: p.payAccepted, tone: 'ok' }
+      : reservation.status === 'submitted'
+        ? { text: p.payPending, tone: 'info' }
+        : { text: p.payNone, tone: 'warn' };
+
   return (
     <section className={cn('rsv-card rsv-done', confirmed && 'is-confirmed', rejected && 'is-rejected')} role="status">
       <span className="rsv-done__icon" aria-hidden="true">
@@ -1073,31 +1129,87 @@ function Done({
       </span>
       <h2 className="rsv-done__title">{rejected ? p.payTitle : p.doneTitle}</h2>
       <p className="rsv-done__body">{body}</p>
-      {rejected ? null : (
+
+      {rejected ? (
+        <div className="rsv-actions rsv-actions--stack">
+          <button type="button" className="rsv-btn rsv-btn--primary" onClick={onAgain}>
+            {p.sendAgain}
+          </button>
+        </div>
+      ) : (
         <>
           <p className="rsv-done__number" dir="ltr">
             #{reservation.number}
           </p>
           <p className="rsv-done__center">{reservation.centerName}</p>
           {reservation.slot ? <p className="rsv-done__slot">{formatSlotTime(reservation.slot)}</p> : null}
+
+          {/* Where the money stands — what was sent, what is left for the door. */}
+          <dl className="rsv-status">
+            <div className="rsv-status__row">
+              <dt>{p.payStatus}</dt>
+              <dd className={`rsv-status__value is-${payState.tone}`}>
+                {reservation.amountCents > 0 ? `${formatEGP(reservation.amountCents)} ج · ` : ''}
+                {payState.text}
+              </dd>
+            </div>
+            <div className="rsv-status__row">
+              <dt>{p.remaining}</dt>
+              <dd className={cn('rsv-status__value', reservation.checkedIn ? 'is-ok' : 'is-info')}>
+                {reservation.checkedIn
+                  ? p.paidInFull
+                  : reservation.remainingCents > 0
+                    ? `${formatEGP(reservation.remainingCents)} ج`
+                    : p.remainingNone}
+              </dd>
+            </div>
+            {reservation.checkedIn ? (
+              <div className="rsv-status__row">
+                <dt>{p.attended}</dt>
+                <dd className="rsv-status__value is-ok">✓</dd>
+              </div>
+            ) : null}
+          </dl>
+
+          {/* The door code — scanned at the first class. */}
+          <div className="rsv-qr">
+            <p className="rsv-qr__title">{p.doorTitle}</p>
+            <DoorQr text={reservation.code} label={`${p.doorTitle} ${reservation.code}`} />
+            <p className="rsv-qr__code" dir="ltr">
+              {reservation.code}
+            </p>
+            <p className="rsv-qr__hint">{p.doorHint}</p>
+          </div>
           <p className="rsv-done__keep">{p.keepNumber}</p>
+
+          <div className="rsv-account">
+            <p className="rsv-account__title">{p.accountTitle}</p>
+            {reservation.linked ? (
+              <>
+                <p className="rsv-account__body">{p.accountLinked}</p>
+                <a href="/profile" className="rsv-btn rsv-btn--online">
+                  {p.openCard}
+                </a>
+              </>
+            ) : needsProfile ? (
+              <>
+                <p className="rsv-account__body">{p.finishProfile}</p>
+                <a href={`/onboarding?next=${encodeURIComponent('/reserve')}`} className="rsv-btn rsv-btn--online">
+                  {p.onlineCta}
+                </a>
+              </>
+            ) : (
+              <>
+                <p className="rsv-account__body">{p.accountWhy}</p>
+                <a href={`/register?next=${encodeURIComponent('/reserve')}`} className="rsv-btn rsv-btn--online">
+                  <Laptop size={18} aria-hidden="true" />
+                  {p.onlineCta}
+                </a>
+              </>
+            )}
+          </div>
         </>
       )}
-      <div className="rsv-actions rsv-actions--stack">
-        {rejected ? (
-          <button type="button" className="rsv-btn rsv-btn--primary" onClick={onAgain}>
-            {p.sendAgain}
-          </button>
-        ) : null}
-        <a href="/register" className="rsv-btn rsv-btn--online">
-          <Laptop size={18} aria-hidden="true" />
-          {p.onlineCta}
-        </a>
-        <button type="button" className="rsv-btn rsv-btn--ghost" onClick={onNew}>
-          {p.newReservation}
-        </button>
-      </div>
-      {rejected ? null : <p className="rsv-done__also">{p.alsoOnline}</p>}
     </section>
   );
 }

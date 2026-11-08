@@ -160,6 +160,8 @@ model User {
   /// «حساب السنتر» — set only on a `center_manager` account: the one centre
   /// whose reservations it may read. See `CenterManager`.
   centerManager     CenterManager?
+  /// Public-page reservations this account claimed — see `CenterReservation`.
+  centerReservations CenterReservation[] @relation("ReservationUser")
   attendanceRecords AttendanceRecord[] @relation("AttendanceStudent")
   attendanceScans   AttendanceRecord[] @relation("AttendanceScanner")
 
@@ -7485,8 +7487,17 @@ model CenterReservation {
   reviewedAt       DateTime?               @map("reviewed_at")
   reviewedByUserId String?                 @map("reviewed_by_user_id")
   rejectionReason  String?                 @map("rejection_reason")
+  /// The platform account this reservation was claimed by — set when the
+  /// student signs up and opens the page in the same browser. From then on the
+  /// account's own card (`ST…`) is what the door scans.
+  userId           String?                 @map("user_id")
+  /// First attendance. From this moment the session is paid in full: the
+  /// booking amount online, the rest at the door.
+  checkedInAt      DateTime?               @map("checked_in_at")
   createdAt        DateTime                @default(now()) @map("created_at")
   updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  user User? @relation("ReservationUser", fields: [userId], references: [id], onDelete: SetNull)
 
   /// Restrict, not cascade: deleting a centre must never take its money
   /// records with it. `CentersService.deleteCenter` refuses first.
@@ -7496,6 +7507,7 @@ model CenterReservation {
   @@index([centerId, status, createdAt])
   @@index([slotId, status])
   @@index([phone])
+  @@index([userId])
   @@map("center_reservations")
   @@schema("app")
 }
