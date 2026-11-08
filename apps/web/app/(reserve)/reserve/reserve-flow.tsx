@@ -21,7 +21,7 @@ import { copy } from '@ayman/contracts/copy';
 import { reservationsCopy } from '@ayman/contracts/copy/center-reservations';
 import { formatSlotTime } from '@ayman/contracts/centers';
 import { formatCopy } from '@ayman/contracts/format';
-import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import { normalizeEgyptianPhone, toAsciiDigits } from '@ayman/contracts/phone';
 import {
   PublicReservationSchema,
   ReservationConfigSchema,
@@ -39,7 +39,7 @@ import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { formatEGP } from '@/lib/price';
 import { uploadReservationScreenshot } from '@/lib/upload-client';
-import { AmountCard, CheckoutField, CopyButton, PayStep } from '@/components/site/checkout-parts';
+import { CheckoutField, CopyButton, PayStep } from '@/components/site/checkout-parts';
 import { PaymentBrand } from '@/components/site/payment-brand';
 import { PaymentMethodChoice } from '@/components/site/payment-method-choice';
 import '@/components/site/book-checkout.css';
@@ -529,7 +529,8 @@ function Details({
           maxLength={20}
           invalid={Boolean(errors.phone)}
           aria-describedby={errors.phone ? 'rsv-phone-error' : undefined}
-          onChange={(event) => setPhone(event.target.value)}
+          // «٠١٠…» from an Arabic keyboard is shown as «010…» as it is typed.
+          onChange={(event) => setPhone(toAsciiDigits(event.target.value))}
           disabled={saving}
         />
       </CheckoutField>
@@ -544,7 +545,7 @@ function Details({
         options={config.grades.map((g) => ({ value: g.slug, label: g.label }))}
         disabled={saving}
       />
-      {config.askTrack ? (
+      {config.askTrack && tracks.length > 1 ? (
         <Choice
           id="rsv-track"
           label={p.track}
@@ -906,18 +907,21 @@ function Pay({
           <p className="rsv-lead">
             {formatCopy(p.payLead, { amount: formatEGP(reservation.amountCents), share: shareText(payPercent) })}
           </p>
-          <AmountCard
-            icon={<Wallet size={22} />}
-            label={
-              reservation.sessionPriceCents
-                ? `${p.amountLabel} · ${formatCopy(p.sessionPrice, { amount: formatEGP(reservation.sessionPriceCents) })}`
-                : p.amountLabel
-            }
-            value={`${formatEGP(reservation.amountCents)} ج`}
-            digits={String(Math.round(reservation.amountCents / 100))}
-            copyLabel={copy.subscribe.copyAmount}
-            copiedLabel={copy.subscribe.copied}
-          />
+          {/* The figure to send — no copy button: it is two or three digits, and
+              the owner asked for it gone. */}
+          <div className="bco-amount">
+            <span className="bco-amount__icon" aria-hidden="true">
+              <Wallet size={22} />
+            </span>
+            <div className="bco-amount__text">
+              <p className="bco-amount__label">
+                {reservation.sessionPriceCents
+                  ? `${p.amountLabel} · ${formatCopy(p.sessionPrice, { amount: formatEGP(reservation.sessionPriceCents) })}`
+                  : p.amountLabel}
+              </p>
+              <p className="bco-amount__value">{formatEGP(reservation.amountCents)} ج</p>
+            </div>
+          </div>
 
           {!railConfirmed ? (
             <div className="rsv-rail">
@@ -972,7 +976,7 @@ function Pay({
                       invalid={Boolean(errors.senderPhone)}
                       aria-describedby={errors.senderPhone ? 'rsv-sender-error' : undefined}
                       onChange={(event) => {
-                        setSenderPhone(event.target.value);
+                        setSenderPhone(toAsciiDigits(event.target.value));
                         setErrors((e) => ({ ...e, senderPhone: undefined }));
                       }}
                       disabled={submitting}
