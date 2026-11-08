@@ -173,6 +173,16 @@ export const PAYMENT_PROOF_KEY_PATTERN = /^payment-proof\/[0-9a-f]{2}\/[0-9a-f-]
 export const BOOK_ORDER_PROOF_KEY_PATTERN = /^book-order-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
 /**
+ * «حجز السناتر» — the booking transfer screenshot, `center-reservation-proof/
+ * <2 hex>/<uuid>.webp`, minted by `CenterReservationsService`. Same shape and
+ * same reason as the two proof patterns above — and added in the same commit
+ * as the prefix, so this one never 500s in production first (caught on the
+ * first local upload: «invalid storage key»).
+ */
+export const CENTER_RESERVATION_PROOF_KEY_PATTERN =
+  /^center-reservation-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
+
+/**
  * الواجب — `hw/<2 hex>/<uuid>.webp`, minted by `HomeworkService`.
  *
  * ## Another prefix, and this time the reason is a LIFETIME
@@ -232,7 +242,7 @@ export const SOCIAL_POST_KEY_PATTERN = /^sp\/[0-9a-f-]{36}\.jpg$/;
  */
 export const GAME_VOICE_KEY_PATTERN = /^game-voice\/(?:library\/)?[0-9a-f]{64}\.mp3$/;
 
-/** Any of the nine shapes. `MediaStorage` implementations validate against this. */
+/** Any of the shapes above. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     GAME_VOICE_KEY_PATTERN.test(key) ||
@@ -241,6 +251,7 @@ export function isValidStorageKey(key: string): boolean {
     CONVERSATION_KEY_PATTERN.test(key) ||
     PAYMENT_PROOF_KEY_PATTERN.test(key) ||
     BOOK_ORDER_PROOF_KEY_PATTERN.test(key) ||
+    CENTER_RESERVATION_PROOF_KEY_PATTERN.test(key) ||
     HOMEWORK_KEY_PATTERN.test(key) ||
     DESIGN_KEY_PATTERN.test(key) ||
     SOCIAL_POST_KEY_PATTERN.test(key)

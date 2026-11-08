@@ -1,5 +1,5 @@
 import { can, type SessionUser } from '@/lib/session';
-import { staffShellFor } from '@/lib/staff-shell';
+import { staffShellFor, type StaffShell } from '@/lib/staff-shell';
 
 /**
  * What `/dashboard`'s THROWING reads need — `/api/me/dashboard`
@@ -30,6 +30,6 @@ export function canOpenDashboard(session: SessionUser | null): boolean {
  * `admin:access` — so sending them to `/admin` was a 404 straight after
  * signing in. Everyone else who lands here is staff with the dashboard.
  */
-export function landingForStaff(session: SessionUser | null): '/admin' | '/studio' | '/montage' {
+export function landingForStaff(session: SessionUser | null): '/admin' | StaffShell {
   return (session && staffShellFor(session.permissions)) ?? '/admin';
 }

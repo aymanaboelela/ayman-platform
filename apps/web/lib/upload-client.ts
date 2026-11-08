@@ -350,6 +350,21 @@ export function uploadBookOrderScreenshot(
   );
 }
 
+/** «حجز السناتر» — the deposit's transfer screenshot, from a phone on mobile data. */
+export function uploadReservationScreenshot(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<{ screenshotKey: string }>> {
+  return upload(
+    '/api/center-reservations/screenshot',
+    file,
+    MAX_UPLOAD_BYTES,
+    (json) => z.object({ screenshotKey: z.string() }).parse(json),
+    onProgress,
+    true,
+  );
+}
+
 /**
  * الواجب — one page of a student's answer.
  *

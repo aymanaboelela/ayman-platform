@@ -57,6 +57,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
 import { UnlockCodesModule } from './modules/unlock-codes/unlock-codes.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { CentersModule } from './modules/centers/centers.module';
+import { CenterReservationsModule } from './modules/center-reservations/center-reservations.module';
 import { HomeworkModule } from './modules/homework/homework.module';
 import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
 import { ArenaModule } from './modules/arena/arena.module';
@@ -197,6 +198,7 @@ import { PasswordResetModule } from './modules/password-reset/password-reset.mod
     UnlockCodesModule,
     WalletModule,
     CentersModule,
+    CenterReservationsModule,
     BookOrdersModule,
     // الواجب — the exercise on a lecture, and the photographs of the answer.
     HomeworkModule,

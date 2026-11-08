@@ -14,7 +14,7 @@ import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { stampPathname } from './lib/request-pathname';
 import { safeNext } from './lib/safe-next';
-import { staffShellFor } from './lib/staff-shell';
+import { staffShellFor, type StaffShell } from './lib/staff-shell';
 import { TEACHES_CODE, isProgrammingOnlyRoute } from './lib/tenant-subject';
 
 /**
@@ -110,6 +110,8 @@ export const PROTECTED_PREFIXES = [
   '/studio',
   // «المونتاج» — the video editor's own shell.
   '/montage',
+  // «لوحة السنتر» — a centre owner's own shell.
+  '/center',
   '/quizzes',
   // Every route below renders inside the student shell and its page calls
   // `apiGetAuthed` unconditionally. Without an entry here an anonymous request
@@ -439,7 +441,7 @@ export interface AuthState {
   authenticated: boolean;
   onboardingCompleted: boolean;
   /** A designer's or a video editor's own page — see `lib/staff-shell.ts`. */
-  staffShell?: '/studio' | '/montage' | null;
+  staffShell?: StaffShell | null;
 }
 
 export type RedirectDecision = 'login' | 'onboarding' | 'dashboard' | 'next' | 'staff-shell' | null;

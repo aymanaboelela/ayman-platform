@@ -147,6 +147,18 @@ export const FEATURE_DECLARATIONS = [
   },
   {
     /*
+     * "Ayman first". A public page that takes real deposits, so it stays off
+     * on every other stack until the owner opens it. Nothing on it carries his
+     * identity; once opened it also needs a centre with reservations switched
+     * on before the page lists anything.
+     */
+    key: 'centerReservations',
+    nameAr: 'حجز السناتر',
+    descriptionAr: 'صفحة حجز عامة: سنتر بعربون وصورة تحويل أو أونلاين، ولوحة لكل صاحب سنتر.',
+    defaultForTenant: false,
+  },
+  {
+    /*
      * «لأيمن الأول» — on for him, off on every other stack until the owner
      * opens it. It moves WALLET MONEY (a credit to two students per paying
      * friend), so a teacher must decide to fund it; and even once opened the

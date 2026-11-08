@@ -58,6 +58,7 @@ import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlemen
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminPractice } from '@ayman/contracts/copy/admin-practice';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
+import { reservationsCopy } from '@ayman/contracts/copy/center-reservations';
 import { designsCopy } from '@ayman/contracts/copy/designs';
 import { socialPostsCopy } from '@ayman/contracts/copy/social-posts';
 import { youtubeStudioCopy } from '@ayman/contracts/copy/youtube-studio';
@@ -555,6 +556,24 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.centersFinance,
     icon: HandCoins,
     permission: 'center:read',
+    group: 'centers',
+  },
+  {
+    // «حجوزات السناتر» — the public reservation page's inbox. `center:read`
+    // like the rest of the group; the decisions on it ask `center:write`.
+    href: '/admin/centers/reservations',
+    labelAr: reservationsCopy.admin.nav,
+    icon: ClipboardList,
+    permission: 'center:read',
+    feature: 'centerReservations',
+    group: 'centers',
+  },
+  {
+    href: '/admin/centers/reservations/setup',
+    labelAr: reservationsCopy.admin.navSetup,
+    icon: Settings,
+    permission: 'center:write',
+    feature: 'centerReservations',
     group: 'centers',
   },
 
