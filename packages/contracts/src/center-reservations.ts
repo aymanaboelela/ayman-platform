@@ -119,6 +119,12 @@ export const ReservationCreateSchema = z
     track: z.enum(RESERVATION_TRACKS).nullable(),
     system: z.enum(RESERVATION_SYSTEMS).nullable(),
     gender: z.enum(RESERVATION_GENDERS).nullable(),
+    /**
+     * The reservation this browser already holds, if any. The ONLY way to get
+     * an existing row back: a phone number is not a secret, so knowing one
+     * must never hand over somebody's reservation id (the bearer).
+     */
+    resumeId: z.uuid().optional(),
   })
   .strict();
 export type ReservationCreate = z.input<typeof ReservationCreateSchema>;

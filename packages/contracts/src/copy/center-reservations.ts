@@ -97,6 +97,7 @@ export const reservationsCopy = {
 
     genericError: 'حصلت مشكلة. نجرّب تاني؟',
     centerClosed: 'الحجز في السنتر ده اتقفل. نختار سنتر تاني؟',
+    alreadyReserved: 'الرقم ده عليه حجز في السنتر ده قبل كده. لأي تعديل، التواصل مع السنتر.',
   },
 
   /* ── Dashboard ── */

@@ -628,6 +628,7 @@ function GroupPick({
           centerId: center.id,
           slotId: slot.id,
           ...answers,
+          resumeId: readStored() ?? undefined,
         }),
       );
     } catch (failure) {
@@ -635,6 +636,8 @@ function GroupPick({
       if (code === 'slot_full' || code === 'slot_closed') {
         setError(p.slotFull);
         await onReload();
+      } else if (code === 'already_reserved') {
+        setError(p.alreadyReserved);
       } else if (code === 'center_closed' || code === 'reservations_closed') {
         setError(p.centerClosed);
         await onReload();

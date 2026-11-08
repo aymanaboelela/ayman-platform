@@ -206,11 +206,9 @@ export class CenterReservationsService {
   }
 
   /**
-   * The form. Saved before any payment, and RESUMED rather than duplicated:
-   * the same phone at the same centre with a live reservation gets that
-   * reservation back — a student who closed the tab at the transfer step and
-   * came back the next day is one row, not two, and the centre does not call
-   * them twice.
+   * The form. Saved before any payment. RESUMED rather than duplicated only
+   * when the browser presents the existing row's id (`resumeId`) — never on
+   * the phone number alone, which anybody may know.
    */
   async create(input: {
     centerId: string;
@@ -221,6 +219,7 @@ export class CenterReservationsService {
     track: 'arabic' | 'languages' | null;
     system: 'general' | 'azhar' | null;
     gender: 'male' | 'female' | null;
+    resumeId?: string;
   }): Promise<PublicReservation> {
     const settings = await this.readSettings();
     if (!settings.isOpen) throw new ConflictException({ code: 'reservations_closed', message: 'reservations are closed' });
@@ -260,7 +259,15 @@ export class CenterReservationsService {
       orderBy: { createdAt: 'desc' },
       select: { id: true, status: true },
     });
-    if (existing !== null) {
+    // A phone number is not a secret: only the browser that holds the row's
+    // id may resume it. Anybody else gets a new unpaid row, or — when that
+    // number already has a paid booking here — a refusal that carries no id
+    // and no personal data.
+    if (existing !== null && existing.id !== input.resumeId) {
+      if (existing.status !== 'started') {
+        throw new ConflictException({ code: 'already_reserved', message: 'this number already has a reservation here' });
+      }
+    } else if (existing !== null) {
       // Only an unpaid one takes the new answers; a paid one is evidence.
       if (existing.status === 'started') {
         if (await this.slotIsFull(slot)) throw new ConflictException({ code: 'slot_full', message: 'this group is full' });
