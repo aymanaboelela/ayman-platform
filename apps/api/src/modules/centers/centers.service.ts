@@ -342,7 +342,9 @@ export class CentersService {
     const history = await this.prisma.centerSlot.count({
       where: { centerId: id, OR: [{ bookings: { some: {} } }, { sessions: { some: {} } }] },
     });
-    if (history > 0) {
+    // Reservations are money records (`onDelete: Restrict`) — same answer.
+    const reservations = await this.prisma.centerReservation.count({ where: { centerId: id } });
+    if (history > 0 || reservations > 0) {
       throw new ConflictException({ code: 'center_has_history', message: 'deactivate instead' });
     }
     await this.prisma.center.delete({ where: { id } });

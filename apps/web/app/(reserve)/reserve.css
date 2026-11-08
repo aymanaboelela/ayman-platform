@@ -1,0 +1,855 @@
+/* ============================================================================
+   «الحجز» — the public reservation page (`/reserve`).
+
+   Phone first: nearly everyone opening it is on a phone, from a link, with one
+   thumb. One column up to 36rem, big tap targets (≥ 3.25rem), and colour that
+   carries meaning — amber (`--a-*`) is the action, teal is the centre, violet
+   is online, green is done.
+
+   Only `:root` tokens (`--n-*`, `--a-*`, `--viz-*`, status) — nothing here
+   depends on a surface class. Every mix with a neutral is `in oklab`: the dark
+   neutrals are navy and an `oklch` mix rotates hues toward violet
+   (`lib/neutral-mix-space.test.ts`).
+   ============================================================================ */
+
+.rsv-shell {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 120% 22rem at 50% -4rem, color-mix(in oklab, var(--a-9) 22%, transparent), transparent 70%),
+    radial-gradient(ellipse 60% 18rem at 100% 30%, color-mix(in oklab, var(--viz-2) 12%, transparent), transparent 70%),
+    radial-gradient(ellipse 60% 18rem at 0% 70%, color-mix(in oklab, var(--viz-3) 12%, transparent), transparent 70%),
+    var(--n-1);
+  color: var(--n-12);
+}
+
+.rsv {
+  max-width: 36rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 3.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.rsv-anchor {
+  scroll-margin-top: 1rem;
+}
+
+/* ---------- hero ---------- */
+
+.rsv-hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+}
+
+.rsv-hero__brand {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  font-size: var(--fs-text-sm);
+  font-weight: 700;
+  color: var(--n-12);
+  background: color-mix(in oklab, var(--n-2) 80%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.rsv-hero__eyebrow {
+  margin-top: 0.5rem;
+  font-size: var(--fs-text-sm);
+  font-weight: 700;
+  color: var(--a-11);
+}
+
+.rsv-hero__title {
+  font-size: clamp(1.9rem, 7.5vw, 2.6rem);
+  line-height: 1.15;
+  font-weight: 800;
+  color: var(--n-12);
+}
+
+.rsv-hero__lead {
+  max-width: 28rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.7;
+  color: var(--n-11);
+}
+
+/* ---------- steps ---------- */
+
+.rsv-steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.25rem;
+  padding: 0.6rem;
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--n-2) 85%, transparent);
+  border: 1px solid var(--border);
+}
+
+.rsv-steps__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: var(--fs-text-xs);
+  font-weight: 600;
+  color: var(--n-10);
+}
+
+.rsv-steps__dot {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: var(--fs-text-sm);
+  background: var(--n-3);
+  color: var(--n-11);
+  transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out);
+}
+
+.rsv-steps__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.rsv-steps__item.is-current {
+  color: var(--n-12);
+}
+
+.rsv-steps__item.is-current .rsv-steps__dot {
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--a-9) 25%, transparent);
+}
+
+.rsv-steps__item.is-done .rsv-steps__dot {
+  background: color-mix(in oklab, var(--ok) 22%, var(--n-2));
+  color: var(--ok);
+}
+
+/* ---------- section titles, cards ---------- */
+
+.rsv-section-title {
+  margin-bottom: 0.75rem;
+  font-size: var(--fs-title-4);
+  font-weight: 800;
+  color: var(--n-12);
+  text-align: center;
+}
+
+.rsv-section-title--in {
+  margin: 0.25rem 0 0;
+  text-align: start;
+}
+
+.rsv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem 1rem;
+  border-radius: 1.25rem;
+  background: var(--n-2);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 30rem) {
+  .rsv-card {
+    padding: 1.5rem;
+  }
+}
+
+.rsv-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.rsv-lead {
+  font-size: var(--fs-text-base);
+  line-height: 1.75;
+  color: var(--n-11);
+}
+
+/* ---------- the two big choices ---------- */
+
+.rsv-option {
+  --rsv-tone: var(--viz-2);
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  min-height: 6.5rem;
+  padding: 1.1rem 1rem;
+  border-radius: 1.25rem;
+  text-align: start;
+  color: var(--n-12);
+  text-decoration: none;
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--rsv-tone) 16%, transparent), transparent 65%),
+    var(--n-2);
+  border: 1.5px solid color-mix(in oklab, var(--rsv-tone) 45%, var(--border));
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+
+.rsv-option:hover {
+  border-color: var(--rsv-tone);
+  box-shadow: var(--shadow-lg);
+}
+
+.rsv-option:active {
+  transform: scale(0.985);
+}
+
+.rsv-option:focus-visible,
+.rsv-center__main:focus-visible,
+.rsv-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.rsv-option--center {
+  --rsv-tone: var(--viz-2);
+}
+
+.rsv-option--online {
+  --rsv-tone: var(--viz-3);
+}
+
+.rsv-option--closed {
+  --rsv-tone: var(--n-9);
+  cursor: default;
+  box-shadow: none;
+}
+
+.rsv-option--closed:hover {
+  border-color: color-mix(in oklab, var(--rsv-tone) 45%, var(--border));
+  box-shadow: none;
+}
+
+.rsv-option__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 1rem;
+  color: var(--ink-fg);
+  background: linear-gradient(140deg, var(--rsv-tone), color-mix(in oklab, var(--rsv-tone) 60%, var(--n-12)));
+  box-shadow: 0 6px 16px -6px color-mix(in oklab, var(--rsv-tone) 70%, transparent);
+}
+
+.rsv-option--closed .rsv-option__icon {
+  color: var(--n-11);
+  background: var(--n-4);
+  box-shadow: none;
+}
+
+.rsv-option__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.rsv-option__title {
+  font-size: var(--fs-title-4);
+  font-weight: 800;
+}
+
+.rsv-option__hint {
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--n-11);
+}
+
+.rsv-option__go {
+  flex-shrink: 0;
+  color: color-mix(in oklab, var(--rsv-tone) 80%, var(--n-12));
+}
+
+.rsv-signin {
+  margin-top: 0.9rem;
+  text-align: center;
+  font-size: var(--fs-text-sm);
+}
+
+.rsv-signin a {
+  color: var(--n-11);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- centre cards ---------- */
+
+.rsv-center {
+  --rsv-tone: var(--viz-2);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: var(--n-2);
+  border: 1.5px solid color-mix(in oklab, var(--rsv-tone) 40%, var(--border));
+  border-inline-start: 6px solid var(--rsv-tone);
+  box-shadow: var(--shadow-md);
+}
+
+.rsv-center[data-hue='1'] {
+  --rsv-tone: var(--viz-3);
+}
+
+.rsv-center[data-hue='2'] {
+  --rsv-tone: var(--viz-5);
+}
+
+.rsv-center[data-hue='3'] {
+  --rsv-tone: var(--viz-4);
+}
+
+.rsv-center__main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 1rem;
+  text-align: start;
+  color: var(--n-12);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--rsv-tone) 12%, transparent), transparent 70%);
+  cursor: pointer;
+}
+
+.rsv-center__main:active {
+  background: color-mix(in oklab, var(--rsv-tone) 16%, var(--n-2));
+}
+
+.rsv-center__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.9rem;
+  color: var(--rsv-tone);
+  background: color-mix(in oklab, var(--rsv-tone) 18%, var(--n-2));
+}
+
+.rsv-center__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.rsv-center__name {
+  font-size: var(--fs-title-4);
+  font-weight: 800;
+}
+
+.rsv-center__address {
+  font-size: var(--fs-text-sm);
+  line-height: 1.55;
+  color: var(--n-11);
+  overflow-wrap: anywhere;
+}
+
+.rsv-center__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+}
+
+.rsv-center__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: var(--fs-text-xs);
+  font-weight: 700;
+  color: var(--a-11);
+  background: color-mix(in oklab, var(--a-9) 14%, var(--n-2));
+}
+
+.rsv-center__map {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+  color: color-mix(in oklab, var(--rsv-tone) 80%, var(--n-12));
+  text-decoration: none;
+}
+
+/* ---------- the form ---------- */
+
+/* The checkout parts (pay steps, number box) size themselves by the `bco`
+   container and read two local tokens — give them both here. */
+.rsv-form {
+  container: bco / inline-size;
+  --bco-card: var(--n-1);
+  --bco-field: var(--n-2);
+}
+
+.rsv-grid + .rsv-actions,
+.rsv-form > .rsv-actions {
+  margin-top: 0.5rem;
+}
+
+.rsv-picked__sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+  color: var(--n-11);
+}
+
+/* ---------- groups ---------- */
+
+.rsv-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.rsv-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 1rem;
+  text-align: start;
+  color: var(--n-12);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--viz-2) 10%, transparent), transparent 70%), var(--n-1);
+  border: 1.5px solid color-mix(in oklab, var(--viz-2) 40%, var(--border));
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+
+.rsv-slot:hover:not(:disabled) {
+  border-color: var(--a-9);
+}
+
+.rsv-slot:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.rsv-slot:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.rsv-slot:disabled {
+  cursor: default;
+}
+
+.rsv-slot[aria-busy='true'] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.rsv-slot.is-full {
+  opacity: 0.6;
+  background: var(--n-3);
+  border-color: var(--border);
+}
+
+.rsv-slot__when {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--viz-2);
+}
+
+.rsv-slot__label {
+  display: block;
+  font-size: var(--fs-text-xs);
+  font-weight: 700;
+  color: var(--n-11);
+}
+
+.rsv-slot__time {
+  display: block;
+  font-size: var(--fs-text-base);
+  font-weight: 800;
+  color: var(--n-12);
+}
+
+.rsv-slot__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  text-align: end;
+}
+
+.rsv-slot__session {
+  font-size: var(--fs-text-xs);
+  font-weight: 600;
+  color: var(--n-11);
+}
+
+.rsv-slot__now {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: var(--fs-text-sm);
+  font-weight: 800;
+  color: var(--a-11);
+  background: color-mix(in oklab, var(--a-9) 15%, var(--n-2));
+  white-space: nowrap;
+}
+
+.rsv-slot__full {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: var(--fs-text-sm);
+  font-weight: 800;
+  color: var(--err);
+  background: color-mix(in oklab, var(--err) 12%, var(--n-2));
+}
+
+.rsv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  text-align: center;
+  color: var(--n-11);
+  background: var(--n-3);
+}
+
+.rsv-form .bco-field {
+  margin: 0;
+}
+
+.rsv-input {
+  min-height: 3.25rem;
+  font-size: 1rem;
+}
+
+.rsv-picked {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.9rem;
+  background: color-mix(in oklab, var(--viz-2) 12%, var(--n-2));
+  border: 1px solid color-mix(in oklab, var(--viz-2) 35%, var(--border));
+}
+
+.rsv-picked__icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.7rem;
+  color: var(--viz-2);
+  background: color-mix(in oklab, var(--viz-2) 20%, var(--n-2));
+}
+
+.rsv-picked__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.rsv-picked__chip {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: var(--fs-text-xs);
+  font-weight: 700;
+  color: var(--a-11);
+  background: color-mix(in oklab, var(--a-9) 14%, var(--n-2));
+}
+
+.rsv-choice {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.rsv-choice__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.rsv-choice__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.rsv-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.9rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--fs-text-base);
+  line-height: 1.35;
+  color: var(--n-12);
+  background: var(--n-3);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.rsv-pill:hover {
+  border-color: color-mix(in oklab, var(--a-9) 50%, var(--border));
+}
+
+.rsv-pill:has(input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.rsv-pill.is-on {
+  color: var(--a-12);
+  background: color-mix(in oklab, var(--a-9) 18%, var(--n-2));
+  border-color: var(--a-9);
+  box-shadow: inset 0 0 0 1px var(--a-9);
+}
+
+.rsv-form-error {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.8rem;
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+  color: var(--err);
+  background: color-mix(in oklab, var(--err) 10%, var(--n-2));
+}
+
+.rsv-rail .pay-choice {
+  margin: 0;
+}
+
+/* ---------- buttons ---------- */
+
+.rsv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.rsv-actions--split {
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  margin-top: 0.25rem;
+}
+
+.rsv-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.rsv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 3.25rem;
+  padding: 0 1.25rem;
+  border-radius: 0.9rem;
+  font-size: var(--fs-text-base);
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+
+.rsv-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.rsv-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.rsv-btn--primary {
+  color: var(--on-accent-ink);
+  background: var(--accent-cta);
+  box-shadow: 0 8px 20px -10px color-mix(in oklab, var(--a-9) 80%, transparent);
+}
+
+.rsv-btn--primary:hover:not(:disabled) {
+  background: var(--accent-cta-hover);
+}
+
+.rsv-btn--grow {
+  flex: 1;
+}
+
+.rsv-btn--ghost {
+  color: var(--n-12);
+  background: var(--n-3);
+  border: 1px solid var(--border);
+}
+
+.rsv-btn--ghost:hover:not(:disabled) {
+  background: var(--n-4);
+}
+
+.rsv-btn--online {
+  color: var(--ink-fg);
+  background: linear-gradient(135deg, var(--viz-3), color-mix(in oklab, var(--viz-3) 65%, var(--n-12)));
+}
+
+/* ---------- done ---------- */
+
+.rsv-done {
+  align-items: center;
+  text-align: center;
+  --rsv-tone: var(--info);
+}
+
+.rsv-done.is-confirmed {
+  --rsv-tone: var(--ok);
+}
+
+.rsv-done.is-rejected {
+  --rsv-tone: var(--err);
+}
+
+.rsv-done__icon {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  color: var(--rsv-tone);
+  background: color-mix(in oklab, var(--rsv-tone) 16%, var(--n-2));
+  box-shadow: 0 0 0 8px color-mix(in oklab, var(--rsv-tone) 8%, transparent);
+}
+
+.rsv-done__title {
+  font-size: var(--fs-title-3);
+  font-weight: 800;
+}
+
+.rsv-done__body {
+  font-size: var(--fs-text-base);
+  line-height: 1.75;
+  color: var(--n-11);
+}
+
+.rsv-done__number {
+  padding: 0.5rem 1.4rem;
+  border-radius: 1rem;
+  font-size: 2.25rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+  color: var(--a-11);
+  background: color-mix(in oklab, var(--a-9) 12%, var(--n-2));
+  border: 2px dashed color-mix(in oklab, var(--a-9) 50%, var(--border));
+}
+
+.rsv-done__center {
+  font-weight: 700;
+}
+
+.rsv-done__slot {
+  font-weight: 700;
+  color: var(--viz-2);
+}
+
+.rsv-done__keep,
+.rsv-done__also {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* ---------- states ---------- */
+
+.rsv-state {
+  align-items: center;
+  text-align: center;
+}
+
+.rsv-state__icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 999px;
+}
+
+.rsv-state__icon--err {
+  color: var(--err);
+  background: color-mix(in oklab, var(--err) 12%, var(--n-2));
+}
+
+.rsv-state__title {
+  font-size: var(--fs-title-4);
+  font-weight: 800;
+}
+
+.rsv-state__body {
+  color: var(--n-11);
+  line-height: 1.7;
+}
+
+.rsv-skel {
+  height: 6.5rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(90deg, var(--n-3), var(--n-4), var(--n-3));
+  background-size: 200% 100%;
+  animation: rsv-shimmer 1.4s linear infinite;
+}
+
+@keyframes rsv-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rsv-skel {
+    animation: none;
+  }
+
+  .rsv-option,
+  .rsv-btn,
+  .rsv-pill {
+    transition: none;
+  }
+}

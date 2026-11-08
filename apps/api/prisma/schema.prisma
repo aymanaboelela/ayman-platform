@@ -157,6 +157,9 @@ model User {
   /// «السناتر» — the student's group bookings, the classes they attended,
   /// and (for an admin) the scans they made at the door.
   centerBookings    CenterBooking[]
+  /// «حساب السنتر» — set only on a `center_manager` account: the one centre
+  /// whose reservations it may read. See `CenterManager`.
+  centerManager     CenterManager?
   attendanceRecords AttendanceRecord[] @relation("AttendanceStudent")
   attendanceScans   AttendanceRecord[] @relation("AttendanceScanner")
 
@@ -2221,7 +2224,20 @@ model Center {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  slots CenterSlot[]
+  /// Listed on the public reservation page (`/reserve`). Separate from
+  /// `isActive` on purpose: a centre can run classes all year and take new
+  /// reservations only before a season, and closing the page must not hide
+  /// the centre from attendance.
+  reservationsOpen Boolean @default(false) @map("reservations_open")
+  /// Where the booking payment is sent, per centre — a centre may collect on its own
+  /// wallet. Empty falls back to the platform's `contact.instapay` /
+  /// `contact.vodafoneCash`; never one rail's number under the other's name.
+  instapay         String?
+  vodafoneCash     String? @map("vodafone_cash")
+
+  slots        CenterSlot[]
+  reservations CenterReservation[]
+  managers     CenterManager[]
 
   @@map("centers")
   @@schema("app")
@@ -2253,9 +2269,11 @@ model CenterSlot {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  center   Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  bookings CenterBooking[]
-  sessions AttendanceSession[]
+  center       Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  bookings     CenterBooking[]
+  sessions     AttendanceSession[]
+  /// Public-page reservations into this group — see `CenterReservation`.
+  reservations CenterReservation[]
 
   @@index([centerId])
   @@map("center_slots")
@@ -7419,5 +7437,111 @@ model AgentToken {
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("agent_tokens")
+  @@schema("app")
+}
+
+/// «حجز سنتر» — somebody who opened the public reservation page and picked a
+/// centre. Written the moment the form is filled, BEFORE any payment, so a
+/// student who stops at the transfer step is still a row the centre can call
+/// («بدأ ومكمّلش»). Not tied to a `User`: most of these people have no account
+/// yet, and the page asks for no sign-in.
+model CenterReservation {
+  id               String                  @id @default(uuid(7)) @db.Uuid
+  /// The short number read out over the phone («حجز رقم ١٠٢٤»). Not a secret —
+  /// the `id` is what the student's browser holds to come back to it.
+  number           Int                     @unique @default(autoincrement())
+  centerId         String                  @map("center_id") @db.Uuid
+  /// The group («مجموعة») picked — a weekly `CenterSlot`. SET NULL if the
+  /// slot is ever removed; the price below keeps what was quoted.
+  slotId           String?                 @map("slot_id") @db.Uuid
+  fullName         String                  @map("full_name")
+  /// E.164, normalised the way sign-in normalises.
+  phone            String
+  /// A `GRADES` slug (`bac1`, `bac2`…).
+  gradeSlug        String                  @map("grade_slug")
+  /// `arabic` | `languages` — null when the page does not ask.
+  track            String?
+  /// `general` | `azhar` — null when the page does not ask.
+  system           String?
+  /// `male` | `female` — null when the page does not ask. Recorded for the
+  /// centre's seating; no copy ever branches on it.
+  gender           String?
+  status           CenterReservationStatus @default(started)
+  /// The group's session price at the moment of booking (`CenterSlot.priceCents`).
+  sessionPriceCents Int?                   @map("session_price_cents")
+  /// What the student pays to hold the seat — `payPercent` of the session
+  /// price, copied at booking so a price change tomorrow rewrites nothing.
+  amountCents      Int                     @default(0) @map("amount_cents")
+  /// `instapay` | `vodafoneCash`.
+  paymentMethod    String?                 @map("payment_method")
+  /// The number the money left from — what the review matches against the
+  /// incoming transfer.
+  senderPhone      String?                 @map("sender_phone")
+  screenshotKey    String?                 @map("screenshot_key")
+  submittedAt      DateTime?               @map("submitted_at")
+  reviewedAt       DateTime?               @map("reviewed_at")
+  reviewedByUserId String?                 @map("reviewed_by_user_id")
+  rejectionReason  String?                 @map("rejection_reason")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  /// Restrict, not cascade: deleting a centre must never take its money
+  /// records with it. `CentersService.deleteCenter` refuses first.
+  center Center      @relation(fields: [centerId], references: [id], onDelete: Restrict)
+  slot   CenterSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+
+  @@index([centerId, status, createdAt])
+  @@index([slotId, status])
+  @@index([phone])
+  @@map("center_reservations")
+  @@schema("app")
+}
+
+enum CenterReservationStatus {
+  /// Form filled, no transfer yet.
+  started
+  /// Transfer screenshot sent, waiting for review.
+  submitted
+  confirmed
+  rejected
+  cancelled
+
+  @@map("center_reservation_status")
+  @@schema("app")
+}
+
+/// The login a centre's owner is given: one `center_manager` account, one
+/// centre. Its whole world is that centre's reservations, read-only.
+model CenterManager {
+  userId    String   @id @map("user_id")
+  centerId  String   @map("center_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  center Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  @@index([centerId])
+  @@map("center_managers")
+  @@schema("app")
+}
+
+/// The reservation page's own switches — one row (`id = 1`). Its own table
+/// and not a `site_settings` key, because the page's EXISTENCE hangs on
+/// `isOpen` and the settings readers are cached (and baked at build time).
+model CenterReservationSettings {
+  id        Int      @id @default(1)
+  isOpen    Boolean  @default(false) @map("is_open")
+  headline  String?
+  note      String?
+  /// `GRADES` slugs offered, in order.
+  grades    String[] @default(["bac1", "bac2"])
+  askTrack  Boolean  @default(true) @map("ask_track")
+  askSystem Boolean  @default(true) @map("ask_system")
+  askGender Boolean  @default(true) @map("ask_gender")
+  /// The share of one session paid to book — «نص الحصة» = 50.
+  payPercent Int     @default(50) @map("pay_percent")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("center_reservation_settings")
   @@schema("app")
 }

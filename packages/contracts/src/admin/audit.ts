@@ -627,6 +627,20 @@ export const AUDIT_ACTIONS = [
   'montage:editor-disable',
   'montage:editor-enable',
   /*
+   * «حجز السناتر». `review` carries which decision (confirm / reject / cancel /
+   * reopen) — the one that says money was accepted. The manager rows are the
+   * centre owners' logins, for the editors' reason: accounts that belong to
+   * someone outside the team.
+   */
+  'center-reservation:review',
+  'center-reservation:delete',
+  'center-reservation:settings',
+  'center-reservation:center',
+  'center-manager:create',
+  'center-manager:password',
+  'center-manager:disable',
+  'center-manager:enable',
+  /*
    * «لوحته» — the platform owner opened this stack's admin from his control
    * plane, with no password (`admin/owner-sign-in.ts`). The instructor's own
    * log is where they can see that it happened and when.

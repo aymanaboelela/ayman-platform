@@ -135,6 +135,7 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
       'center:read',
       'center:write',
       'center:attendance',
+      'center-portal:read',
     ],
   },
   {

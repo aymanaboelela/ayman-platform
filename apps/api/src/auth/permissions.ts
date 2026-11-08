@@ -249,6 +249,11 @@ export const PERMISSIONS = [
   'center:read',
   'center:write',
   'center:attendance',
+  // «لوحة السنتر» — what a centre owner's login (`center_manager`) holds.
+  // Self-scoped like `payment:submit`: every query behind it resolves the
+  // centre through the caller's own `center_managers` row, so on any account
+  // without one it reads nothing.
+  'center-portal:read',
   // الواجب — the exercise on a lecture and the photographs of the answer.
   //
   // `homework:submit` is self-scoped, the same principle as `payment:submit`
@@ -328,7 +333,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * ships to the operator first and reaches the instructor when somebody decides
  * it should — which is exactly the behaviour asked for.
  */
-export type Role = 'admin' | 'owner' | 'student' | 'designer' | 'video_editor';
+export type Role = 'admin' | 'owner' | 'student' | 'designer' | 'video_editor' | 'center_manager';
 
 /**
  * `'*'` grants every permission, including ones added after this line was
@@ -433,6 +438,16 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
    * `montage:publish` — the most this account can do is hand files over.
    */
   video_editor: new Set<Permission>(['montage:read', 'montage:write']),
+  /**
+   * A centre's owner — «لوحة السنتر» and nothing else: their own centre's
+   * reservations, read-only.
+   *
+   * A concrete list for the designer's reason: this account belongs to a
+   * business partner outside the teaching team, so tomorrow's permission must
+   * not reach it the day it ships. No `admin:access`, no `center:read` (that
+   * is every centre's attendance and money), no student permissions.
+   */
+  center_manager: new Set<Permission>(['center-portal:read']),
 };
 
 const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));
@@ -483,6 +498,8 @@ const NEVER_GRANTABLE = new Set<Permission>([
   'payment:submit',
   'book-order:submit',
   'homework:submit',
+  // Self-scoped to a `center_managers` row; on a staff account it reads nothing.
+  'center-portal:read',
 ]);
 
 export function grantablePermissions(role: Role): readonly Permission[] {

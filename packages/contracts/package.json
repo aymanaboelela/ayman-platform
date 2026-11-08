@@ -56,6 +56,8 @@
     "./guardian-view": "./src/guardian-view.ts",
     "./copy/guardian": "./src/copy/guardian.ts",
     "./centers": "./src/centers.ts",
+    "./center-reservations": "./src/center-reservations.ts",
+    "./copy/center-reservations": "./src/copy/center-reservations.ts",
     "./unlock-codes": "./src/unlock-codes.ts",
     "./video": "./src/video.ts",
     "./admin/video-upload": "./src/admin/video-upload.ts",

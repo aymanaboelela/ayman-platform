@@ -33,6 +33,7 @@ import { GuardianModule } from '../modules/guardian/guardian.module';
 import { PasswordResetModule } from '../modules/password-reset/password-reset.module';
 import { UnlockCodesModule } from '../modules/unlock-codes/unlock-codes.module';
 import { CentersModule } from '../modules/centers/centers.module';
+import { CenterReservationsModule } from '../modules/center-reservations/center-reservations.module';
 import { SettingsModule } from '../modules/admin/settings/settings.module';
 import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
@@ -378,6 +379,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         UnlockCodesModule,
         // «السناتر» — same reason as the two above.
         CentersModule,
+        CenterReservationsModule,
         SettingsModule,
         StudentsModule,
         AdminTaxonomyModule,
@@ -2462,6 +2464,65 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'montage editor disable: student', method: 'post', path: () => '/api/admin/montage/editors/x/disable', actor: 'student', status: 403 },
     { label: 'montage editor enable: anonymous', method: 'post', path: () => '/api/admin/montage/editors/x/enable', actor: 'anonymous', status: 401 },
     { label: 'montage editor enable: student', method: 'post', path: () => '/api/admin/montage/editors/x/enable', actor: 'student', status: 403 },
+    // ── «حجز السناتر» ──────────────────────────────────────────────────────
+    // The dashboard half is `center:read`/`center:write`; the centre owner's
+    // panel is `center-portal:read`, which only `center_manager` (and the
+    // wildcard admin) holds. The public half follows the guest book order:
+    // `@Public()`, and every row below 404s/409s on the business rule — proof
+    // the route has no session gate, not that the id belongs to anyone.
+    { label: 'center reservations list: anonymous', method: 'get', path: () => '/api/admin/center-reservations', actor: 'anonymous', status: 401 },
+    { label: 'center reservations list: student', method: 'get', path: () => '/api/admin/center-reservations', actor: 'student', status: 403 },
+    { label: 'center reservations setup: anonymous', method: 'get', path: () => '/api/admin/center-reservations/setup', actor: 'anonymous', status: 401 },
+    { label: 'center reservations setup: student', method: 'get', path: () => '/api/admin/center-reservations/setup', actor: 'student', status: 403 },
+    { label: 'center reservations settings: anonymous', method: 'put', path: () => '/api/admin/center-reservations/settings', actor: 'anonymous', status: 401, body: () => ({ isOpen: false, headline: null, note: null, grades: ['bac1'], askTrack: true, askSystem: true, askGender: true, payPercent: 50 }) },
+    { label: 'center reservations settings: student', method: 'put', path: () => '/api/admin/center-reservations/settings', actor: 'student', status: 403, body: () => ({ isOpen: false, headline: null, note: null, grades: ['bac1'], askTrack: true, askSystem: true, askGender: true, payPercent: 50 }) },
+    { label: 'center reservations center patch: anonymous', method: 'patch', path: () => `/api/admin/center-reservations/centers/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ reservationsOpen: false }) },
+    { label: 'center reservations center patch: student', method: 'patch', path: () => `/api/admin/center-reservations/centers/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ reservationsOpen: false }) },
+    { label: 'center manager create: anonymous', method: 'post', path: () => '/api/admin/center-reservations/managers', actor: 'anonymous', status: 401, body: () => ({ centerId: randomUUID(), name: 'صاحب سنتر', phone: '01500000998', password: 'center2026' }) },
+    { label: 'center manager create: student', method: 'post', path: () => '/api/admin/center-reservations/managers', actor: 'student', status: 403, body: () => ({ centerId: randomUUID(), name: 'صاحب سنتر', phone: '01500000998', password: 'center2026' }) },
+    { label: 'center manager password: anonymous', method: 'post', path: () => '/api/admin/center-reservations/managers/x/password', actor: 'anonymous', status: 401, body: () => ({ password: 'center2026' }) },
+    { label: 'center manager password: student', method: 'post', path: () => '/api/admin/center-reservations/managers/x/password', actor: 'student', status: 403, body: () => ({ password: 'center2026' }) },
+    { label: 'center manager disable: anonymous', method: 'post', path: () => '/api/admin/center-reservations/managers/x/disable', actor: 'anonymous', status: 401 },
+    { label: 'center manager disable: student', method: 'post', path: () => '/api/admin/center-reservations/managers/x/disable', actor: 'student', status: 403 },
+    { label: 'center manager enable: anonymous', method: 'post', path: () => '/api/admin/center-reservations/managers/x/enable', actor: 'anonymous', status: 401 },
+    { label: 'center manager enable: student', method: 'post', path: () => '/api/admin/center-reservations/managers/x/enable', actor: 'student', status: 403 },
+    { label: 'center reservation screenshot: anonymous', method: 'get', path: () => `/api/admin/center-reservations/${randomUUID()}/screenshot`, actor: 'anonymous', status: 401 },
+    { label: 'center reservation screenshot: student', method: 'get', path: () => `/api/admin/center-reservations/${randomUUID()}/screenshot`, actor: 'student', status: 403 },
+    { label: 'center reservation review: anonymous', method: 'post', path: () => `/api/admin/center-reservations/${randomUUID()}/review`, actor: 'anonymous', status: 401, body: () => ({ action: 'confirm' }) },
+    { label: 'center reservation review: student', method: 'post', path: () => `/api/admin/center-reservations/${randomUUID()}/review`, actor: 'student', status: 403, body: () => ({ action: 'confirm' }) },
+    { label: 'center reservation delete: anonymous', method: 'delete', path: () => `/api/admin/center-reservations/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'center reservation delete: student', method: 'delete', path: () => `/api/admin/center-reservations/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'center portal: anonymous', method: 'get', path: () => '/api/center-portal', actor: 'anonymous', status: 401 },
+    { label: 'center portal: student', method: 'get', path: () => '/api/center-portal', actor: 'student', status: 403 },
+    { label: 'center portal screenshot: anonymous', method: 'get', path: () => `/api/center-portal/reservations/${randomUUID()}/screenshot`, actor: 'anonymous', status: 401 },
+    { label: 'center portal screenshot: student', method: 'get', path: () => `/api/center-portal/reservations/${randomUUID()}/screenshot`, actor: 'student', status: 403 },
+    { label: 'center reservations list: admin', method: 'get', path: () => '/api/admin/center-reservations', actor: 'admin', status: 200 },
+    { label: 'center reservations setup: admin', method: 'get', path: () => '/api/admin/center-reservations/setup', actor: 'admin', status: 200 },
+    { label: 'center manager password: admin, not a manager', method: 'post', path: () => '/api/admin/center-reservations/managers/no-such-user/password', actor: 'admin', status: 404, body: () => ({ password: 'center2026' }) },
+    // The admin holds the permission by wildcard but has no `center_managers`
+    // row — the panel resolves the centre from that row alone.
+    { label: 'center portal: admin, no centre', method: 'get', path: () => '/api/center-portal', actor: 'admin', status: 404 },
+    { label: 'center reservation config: anonymous', method: 'get', path: () => '/api/center-reservations/config', actor: 'anonymous', status: 200 },
+    {
+      label: 'center reservation create: anonymous, page closed',
+      method: 'post',
+      path: () => '/api/center-reservations',
+      actor: 'anonymous',
+      // The settings row defaults to closed, so a valid form reaches the
+      // service and is refused there — no 401 on the way.
+      body: () => ({ centerId: randomUUID(), slotId: randomUUID(), fullName: 'طالب تجربة الحجز', phone: '01012345678', gradeSlug: 'bac1', track: 'arabic', system: 'general', gender: 'female' }),
+      status: 409,
+    },
+    {
+      label: 'center reservation payment: anonymous, unknown reservation',
+      method: 'post',
+      path: () => `/api/center-reservations/${randomUUID()}/payment`,
+      actor: 'anonymous',
+      body: () => ({ method: 'instapay', senderPhone: '01012345678', screenshotKey: 'center-reservation-proof/00/00000000-0000-0000-0000-000000000000.webp' }),
+      status: 404,
+    },
+    { label: 'center reservation confirm: anonymous, unknown reservation', method: 'post', path: () => `/api/center-reservations/${randomUUID()}/confirm`, actor: 'anonymous', status: 404 },
+    { label: 'center reservation get: anonymous, unknown reservation', method: 'get', path: () => `/api/center-reservations/${randomUUID()}`, actor: 'anonymous', status: 404 },
     { label: 'montage editors list: admin', method: 'get', path: () => '/api/admin/montage/editors', actor: 'admin', status: 200 },
     // A student's id is not an editor's: the password route refuses it as unknown.
     { label: 'montage editor password: admin, not an editor', method: 'post', path: () => '/api/admin/montage/editors/no-such-user/password', actor: 'admin', status: 404, body: () => ({ password: 'montage2026' }) },
@@ -3541,6 +3602,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // upload. The plain-JSON routes around it (create, payment, mine, and
       // the whole admin surface) ARE covered above.
       'POST /api/book-orders/screenshot',
+      // Same multipart problem — the centre reservation's transfer screenshot.
+      'POST /api/center-reservations/screenshot',
       // 400s for anything but a video-kind lesson regardless of actor (a
       // business rule, not an authorization one) -- this fixture's lesson is
       // text-kind, so every actor would hit the same 400 here and the row
@@ -3818,6 +3881,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'POST /api/book-orders/screenshot',
           'POST /api/book-orders/:id/payment',
           'GET /api/book-orders/:id',
+          /*
+           * «حجز السناتر» — the public reservation page, for the guest book
+           * order's reason: the students it is for mostly have no account
+           * yet. Ownership is the reservation's own id (UUIDv7, handed back
+           * only to whoever made it); every write carries `@RequireCsrf()`.
+           */
+          'GET /api/center-reservations/config',
+          'POST /api/center-reservations',
+          'POST /api/center-reservations/screenshot',
+          'POST /api/center-reservations/:id/payment',
+          'POST /api/center-reservations/:id/confirm',
+          'GET /api/center-reservations/:id',
         ].sort(),
       );
     });
