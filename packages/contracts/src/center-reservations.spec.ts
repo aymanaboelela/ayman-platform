@@ -46,3 +46,20 @@ describe('the copy', () => {
     expect(JSON.stringify(reservationsCopy)).not.toContain('عربون');
   });
 });
+
+describe('the door code', () => {
+  it('round-trips RS + number and never reads a student card', async () => {
+    const { reservationCodeFor, reservationNumberFromCode } = await import('@ayman/contracts/center-reservations');
+    expect(reservationCodeFor(1024)).toBe('RS1024');
+    expect(reservationNumberFromCode(' rs1024 ')).toBe(1024);
+    expect(reservationNumberFromCode('ST1024')).toBeNull();
+    expect(reservationNumberFromCode('1024')).toBeNull();
+  });
+
+  it('leaves the rest of the session for the door until the first attendance', async () => {
+    const { remainingAtDoorCents } = await import('@ayman/contracts/center-reservations');
+    expect(remainingAtDoorCents(12000, 6000, false)).toBe(6000);
+    expect(remainingAtDoorCents(12000, 6000, true)).toBe(0);
+    expect(remainingAtDoorCents(null, 0, false)).toBe(0);
+  });
+});

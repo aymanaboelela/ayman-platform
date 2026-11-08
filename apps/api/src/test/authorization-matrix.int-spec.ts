@@ -2522,6 +2522,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       status: 404,
     },
     { label: 'center reservation confirm: anonymous, unknown reservation', method: 'post', path: () => `/api/center-reservations/${randomUUID()}/confirm`, actor: 'anonymous', status: 404 },
+    { label: 'center reservation claim: anonymous', method: 'post', path: () => `/api/center-reservations/${randomUUID()}/claim`, actor: 'anonymous', status: 401 },
+    // A student holds `profile:write`; an id that matches nothing is a 404.
+    { label: 'center reservation claim: student, unknown reservation', method: 'post', path: () => `/api/center-reservations/${randomUUID()}/claim`, actor: 'student', status: 404 },
     { label: 'center reservation get: anonymous, unknown reservation', method: 'get', path: () => `/api/center-reservations/${randomUUID()}`, actor: 'anonymous', status: 404 },
     { label: 'montage editors list: admin', method: 'get', path: () => '/api/admin/montage/editors', actor: 'admin', status: 200 },
     // A student's id is not an editor's: the password route refuses it as unknown.

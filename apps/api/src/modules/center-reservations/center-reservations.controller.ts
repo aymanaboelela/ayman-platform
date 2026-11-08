@@ -6,6 +6,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
 import type { PublicReservation, ReservationConfig } from '@ayman/contracts/center-reservations';
 import { Public } from '../../auth/decorators/public.decorator';
+import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
+import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { ReservationCreateDto, ReservationPaymentDto } from './center-reservations.dto';
@@ -81,6 +83,15 @@ export class CenterReservationsController {
   @Post(':id/confirm')
   confirmFree(@Param('id', ParseUUIDPipe) id: string): Promise<PublicReservation> {
     return this.reservations.confirmFree(id);
+  }
+
+  /** Signed in: the student takes the reservation onto their account. */
+  @RequirePermission('profile:write')
+  @RequireCsrf()
+  @Throttle(WRITE_THROTTLE)
+  @Post(':id/claim')
+  claim(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string): Promise<PublicReservation> {
+    return this.reservations.claim(user.id, id);
   }
 
   @Public()

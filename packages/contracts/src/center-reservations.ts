@@ -166,6 +166,14 @@ export const PublicReservationSchema = z.object({
   amountCents: z.number().int().nonnegative(),
   payment: z.object({ instapay: z.string().nullable(), vodafoneCash: z.string().nullable() }),
   rejectionReason: z.string().nullable(),
+  /** What the door scans for a student with no account yet (`RS1024`). */
+  code: z.string(),
+  /** Claimed by a platform account — the account's own card works too. */
+  linked: z.boolean(),
+  /** Attended at least once: the session is paid in full. */
+  checkedIn: z.boolean(),
+  /** Left to pay at the door for the first session; 0 once attended. */
+  remainingCents: z.number().int().nonnegative(),
 });
 export type PublicReservation = z.infer<typeof PublicReservationSchema>;
 
@@ -192,6 +200,8 @@ export const AdminReservationSchema = z.object({
   submittedAt: z.string().nullable(),
   reviewedAt: z.string().nullable(),
   rejectionReason: z.string().nullable(),
+  linked: z.boolean(),
+  checkedInAt: z.string().nullable(),
   createdAt: z.string(),
 });
 export type AdminReservation = z.infer<typeof AdminReservationSchema>;
@@ -350,4 +360,23 @@ export function reservationGradeLabel(slug: string): string {
 export function bookingAmountCents(priceCents: number | null, percent: number): number {
   if (priceCents === null || priceCents <= 0 || percent <= 0) return 0;
   return Math.round((priceCents * percent) / 100 / 100) * 100;
+}
+
+/**
+ * The door code of a reservation with no account — `RS` + its number. Not a
+ * secret, like the student card's `ST…`: it identifies, it opens nothing.
+ */
+export const RESERVATION_CODE_PREFIX = 'RS';
+export function reservationCodeFor(number: number): string {
+  return `${RESERVATION_CODE_PREFIX}${number}`;
+}
+export function reservationNumberFromCode(raw: string): number | null {
+  const match = /^\s*RS(\d{3,9})\s*$/i.exec(raw);
+  return match ? Number(match[1]) : null;
+}
+
+/** Left to pay at the centre for the first session. */
+export function remainingAtDoorCents(sessionPriceCents: number | null, amountCents: number, checkedIn: boolean): number {
+  if (checkedIn || sessionPriceCents === null) return 0;
+  return Math.max(0, sessionPriceCents - amountCents);
 }

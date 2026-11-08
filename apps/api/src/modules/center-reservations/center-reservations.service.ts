@@ -11,6 +11,8 @@ import { GRADES } from '@ayman/contracts/grades';
 import {
   RESERVATION_PAGE_SIZE,
   bookingAmountCents,
+  remainingAtDoorCents,
+  reservationCodeFor,
   reservationGradeLabel,
   type AdminReservation,
   type AdminReservations,
@@ -38,6 +40,7 @@ import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../admin/settings/settings.service';
+import { CentersService } from '../centers/centers.service';
 import { MediaService, type UploadFile } from '../media/media.service';
 
 /** Three segments (`prefix/xx/uuid.webp`), so the public media route cannot address it. */
@@ -69,6 +72,8 @@ const RESERVATION_SELECT = {
   submittedAt: true,
   reviewedAt: true,
   rejectionReason: true,
+  userId: true,
+  checkedInAt: true,
   createdAt: true,
   center: { select: { name: true } },
 } satisfies Prisma.CenterReservationSelect;
@@ -123,6 +128,8 @@ export class CenterReservationsService {
     private readonly audit: AuditService,
     private readonly media: MediaService,
     private readonly settings: SettingsService,
+    /** Books the claimed account into the group — one direction only. */
+    private readonly centers: CentersService,
   ) {}
 
   /* ── Public ──────────────────────────────────────────────────────────── */
@@ -349,6 +356,8 @@ export class CenterReservationsService {
         sessionPriceCents: true,
         amountCents: true,
         rejectionReason: true,
+        userId: true,
+        checkedInAt: true,
         slot: { select: { label: true, dayOfWeek: true, startMinute: true, endMinute: true } },
         center: { select: { id: true, name: true, instapay: true, vodafoneCash: true } },
       },
@@ -371,7 +380,55 @@ export class CenterReservationsService {
         vodafoneCash: row.center.vodafoneCash ?? platform.vodafoneCash,
       },
       rejectionReason: row.rejectionReason,
+      code: reservationCodeFor(row.number),
+      linked: row.userId !== null,
+      checkedIn: row.checkedInAt !== null,
+      remainingCents: remainingAtDoorCents(row.sessionPriceCents, row.amountCents, row.checkedInAt !== null),
     };
+  }
+
+  /**
+   * «ربط الحجز بحسابي» — the signed-in student, in the browser that made the
+   * reservation (its id is the proof), takes it onto their account: the
+   * account is booked into the group, so the door scans their own card and the
+   * attendance sheet knows them from the first class.
+   *
+   * Idempotent for the same account; refused for a different one, and for a
+   * reservation that was rejected or cancelled.
+   */
+  async claim(userId: string, id: string): Promise<PublicReservation> {
+    const row = await this.prisma.centerReservation.findUnique({
+      where: { id },
+      select: { userId: true, status: true, slotId: true },
+    });
+    if (row === null) throw new NotFoundException();
+    if (row.userId !== null && row.userId !== userId) {
+      throw new ConflictException({ code: 'claimed_by_other', message: 'this reservation belongs to another account' });
+    }
+    if (row.status === 'rejected' || row.status === 'cancelled') {
+      throw new ConflictException({ code: 'not_claimable', message: 'this reservation is closed' });
+    }
+    const profile = await this.prisma.studentProfile.findUnique({ where: { userId }, select: { userId: true } });
+    if (profile === null) {
+      throw new ConflictException({ code: 'finish_onboarding', message: 'finish the profile first' });
+    }
+    if (row.userId === null) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.centerReservation.update({ where: { id }, data: { userId } });
+        await tx.studentProfile.update({ where: { userId }, data: { attendanceMode: 'center' } });
+        // The seat was already counted against the group when the reservation
+        // was made, so the capacity check would count this student twice.
+        if (row.slotId) await this.centers.setBookingTx(tx, userId, row.slotId, { force: true });
+      });
+      await this.audit.record({
+        action: 'center-reservation:claim',
+        resourceType: 'center_reservations',
+        resourceId: id,
+        outcome: 'success',
+        metadata: { userId },
+      });
+    }
+    return this.publicView(id);
   }
 
   /* ── Dashboard ───────────────────────────────────────────────────────── */
@@ -839,6 +896,8 @@ function toAdmin(row: ReservationRow): AdminReservation {
     submittedAt: row.submittedAt?.toISOString() ?? null,
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
     rejectionReason: row.rejectionReason,
+    linked: row.userId !== null,
+    checkedInAt: row.checkedInAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }

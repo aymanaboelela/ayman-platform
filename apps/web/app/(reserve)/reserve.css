@@ -853,3 +853,116 @@
     transition: none;
   }
 }
+
+/* ---------- done: status, door code, account ---------- */
+
+.rsv-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  background: var(--n-1);
+  border: 1px solid var(--border);
+}
+
+.rsv-status__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: var(--fs-text-sm);
+}
+
+.rsv-status__row dt {
+  color: var(--n-11);
+  font-weight: 600;
+}
+
+.rsv-status__value {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 800;
+  --rsv-tone: var(--info);
+  color: color-mix(in oklab, var(--rsv-tone) 80%, var(--n-12));
+  background: color-mix(in oklab, var(--rsv-tone) 14%, var(--n-2));
+}
+
+.rsv-status__value.is-ok {
+  --rsv-tone: var(--ok);
+}
+
+.rsv-status__value.is-warn {
+  --rsv-tone: var(--warn);
+}
+
+.rsv-status__value.is-err {
+  --rsv-tone: var(--err);
+}
+
+.rsv-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: var(--n-1);
+  border: 2px dashed color-mix(in oklab, var(--viz-2) 45%, var(--border));
+}
+
+.rsv-qr__title {
+  font-weight: 800;
+  color: var(--viz-2);
+}
+
+/* Dark modules on white, whatever the theme: a phone camera reads contrast,
+   and a light-on-dark QR is one many scanners refuse. */
+.rsv-qr__svg {
+  width: 12.5rem;
+  max-width: 100%;
+  height: auto;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  color: var(--on-light-ink);
+  background: oklch(1 0 0);
+}
+
+.rsv-qr__code {
+  font-size: var(--fs-title-4);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  unicode-bidi: isolate;
+  color: var(--n-12);
+}
+
+.rsv-qr__hint {
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--n-11);
+}
+
+.rsv-account {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: color-mix(in oklab, var(--viz-3) 9%, var(--n-1));
+  border: 1px solid color-mix(in oklab, var(--viz-3) 30%, var(--border));
+}
+
+.rsv-account__title {
+  font-weight: 800;
+  color: color-mix(in oklab, var(--viz-3) 80%, var(--n-12));
+}
+
+.rsv-account__body {
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--n-11);
+}

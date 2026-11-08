@@ -1,3 +1,5 @@
+import { reservationNumberFromCode } from '@ayman/contracts/center-reservations';
+import { GRADES } from '@ayman/contracts/grades';
 import {
   BadRequestException,
   ConflictException,
@@ -480,6 +482,8 @@ export class CentersService {
    * student who did sit in the room with no record of it.
    */
   async scan(adminId: string, input: AttendanceScanInput): Promise<AttendanceScanResult> {
+    const reservationNumber = reservationNumberFromCode(input.code);
+    if (reservationNumber !== null) return this.scanReservation(adminId, input, reservationNumber);
     const studentNumber = studentNumberFromCode(input.code);
     if (studentNumber === null) {
       throw new BadRequestException({ code: 'attendance_bad_code', message: 'not a student code' });
@@ -492,6 +496,62 @@ export class CentersService {
       throw new NotFoundException({ code: 'attendance_unknown_student', message: 'no such student' });
     }
     return this.attend(adminId, input.slotId, profile.userId, input.date ?? todayKey(), 'scan');
+  }
+
+  /**
+   * A public-page reservation's `RS…` code. With an account behind it, it is
+   * that account's read like any card. Without one there is no student to
+   * write an attendance row for, so the reservation itself is checked in —
+   * once — and confirmed: the person at the door has just taken the rest of
+   * the session's money, which is what «اتدفع» means here.
+   */
+  private async scanReservation(
+    adminId: string,
+    input: AttendanceScanInput,
+    number: number,
+  ): Promise<AttendanceScanResult> {
+    const reservation = await this.prisma.centerReservation.findUnique({
+      where: { number },
+      select: { id: true, userId: true, slotId: true, fullName: true, gradeSlug: true, status: true, checkedInAt: true },
+    });
+    if (!reservation || reservation.status === 'rejected' || reservation.status === 'cancelled') {
+      throw new NotFoundException({ code: 'attendance_unknown_student', message: 'no such reservation' });
+    }
+    if (reservation.userId) {
+      return this.attend(adminId, input.slotId, reservation.userId, input.date ?? todayKey(), 'scan');
+    }
+    const already = reservation.checkedInAt !== null;
+    const checkedInAt = reservation.checkedInAt ?? new Date();
+    if (!already) {
+      await this.prisma.centerReservation.update({
+        where: { id: reservation.id },
+        data: { checkedInAt, status: 'confirmed', reviewedAt: new Date(), reviewedByUserId: adminId },
+      });
+      await this.record('center-reservation:checkin', 'center_reservations', reservation.id, {
+        adminId,
+        slotId: input.slotId,
+        from: reservation.status,
+      });
+    }
+    const session = await this.prisma.attendanceSession.findUnique({
+      where: { slotId_date: { slotId: input.slotId, date: dateOf(input.date ?? todayKey()) } },
+      select: { _count: { select: { records: true } } },
+    });
+    return {
+      outcome: already ? 'already' : 'recorded',
+      student: {
+        userId: '',
+        studentNumber: number,
+        fullName: reservation.fullName,
+        year: GRADES.find((grade) => grade.slug === reservation.gradeSlug)?.year ?? null,
+        avatarKey: null,
+      },
+      notBookedHere: reservation.slotId !== input.slotId,
+      presentCount: session?._count.records ?? 0,
+      recordId: reservation.id,
+      scannedAt: checkedInAt.toISOString(),
+      reservationOnly: true,
+    };
   }
 
   async manual(adminId: string, slotId: string, userId: string, date?: string): Promise<AttendanceScanResult> {
@@ -545,6 +605,21 @@ export class CentersService {
       record = await this.prisma.attendanceRecord.findUniqueOrThrow({
         where: { sessionId_userId: { sessionId: session.id, userId } },
         select: { id: true, scannedAt: true },
+      });
+    }
+
+    // A public-page reservation this account claimed at this centre: the
+    // first class attended settles it — the rest of the session was paid at
+    // the door.
+    if (outcome === 'recorded') {
+      await this.prisma.centerReservation.updateMany({
+        where: {
+          userId,
+          checkedInAt: null,
+          centerId: slot.centerId,
+          status: { in: ['started', 'submitted', 'confirmed'] },
+        },
+        data: { checkedInAt: new Date(), status: 'confirmed' },
       });
     }
 
