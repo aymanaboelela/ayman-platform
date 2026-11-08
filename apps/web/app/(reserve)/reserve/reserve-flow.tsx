@@ -416,6 +416,11 @@ function CenterPick({
 
 type Errors = Partial<Record<'fullName' | 'phone' | 'grade' | 'track' | 'system' | 'gender' | 'form', string>>;
 
+function offeredTracks(slots: PublicReservationSlot[]): ReservationTrack[] {
+  if (slots.some((slot) => slot.track === null)) return ['arabic', 'languages'];
+  return (['arabic', 'languages'] as const).filter((t) => slots.some((slot) => slot.track === t));
+}
+
 function minPrice(slots: PublicReservationSlot[]): number | null {
   const prices = slots.map((slot) => slot.priceCents).filter((price): price is number => price !== null && price > 0);
   return prices.length > 0 ? Math.min(...prices) : null;
@@ -439,7 +444,12 @@ function Details({
   const [grade, setGrade] = useState<string | null>(
     initial?.gradeSlug ?? (config.grades.length === 1 ? config.grades[0]!.slug : null),
   );
-  const [track, setTrack] = useState<ReservationTrack | null>(initial?.track ?? null);
+  /* Only the tracks this centre actually teaches — a centre whose groups are
+     all «عربي» offers no «لغات» to pick and then find empty. */
+  const tracks = offeredTracks(center.slots);
+  const [track, setTrack] = useState<ReservationTrack | null>(
+    initial?.track ?? (tracks.length === 1 ? tracks[0]! : null),
+  );
   const [system, setSystem] = useState<ReservationSystem | null>(initial?.system ?? null);
   const [gender, setGender] = useState<ReservationGender | null>(initial?.gender ?? null);
   const [errors, setErrors] = useState<Errors>({});
@@ -541,10 +551,10 @@ function Details({
           error={errors.track}
           value={track}
           onChange={(v) => setTrack(v as ReservationTrack)}
-          options={[
-            { value: 'arabic', label: p.trackArabic },
-            { value: 'languages', label: p.trackLanguages },
-          ]}
+          options={tracks.map((value) => ({
+            value,
+            label: value === 'arabic' ? p.trackArabic : p.trackLanguages,
+          }))}
           disabled={saving}
         />
       ) : null}
@@ -617,7 +627,11 @@ function GroupPick({
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const grade = config.grades.find((g) => g.slug === answers.gradeSlug);
-  const slots = center.slots.filter((slot) => slot.year === null || slot.year === grade?.year);
+  const slots = center.slots.filter(
+    (slot) =>
+      (slot.year === null || slot.year === grade?.year) &&
+      (slot.track === null || answers.track === null || slot.track === answers.track),
+  );
 
   async function pick(slot: PublicReservationSlot) {
     setSaving(slot.id);

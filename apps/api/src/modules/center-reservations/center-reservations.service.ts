@@ -150,6 +150,7 @@ export class CenterReservationsService {
               startMinute: true,
               endMinute: true,
               year: true,
+              track: true,
               priceCents: true,
               capacity: true,
               isFull: true,
@@ -187,6 +188,7 @@ export class CenterReservationsService {
               startMinute: slot.startMinute,
               endMinute: slot.endMinute,
               year: slot.year,
+              track: slot.track === 'arabic' || slot.track === 'languages' ? slot.track : null,
               priceCents: slot.priceCents,
               amountCents: bookingAmountCents(slot.priceCents, settings.payPercent),
               full: slot.isFull || (slot.capacity !== null && (taken.get(slot.id) ?? 0) >= slot.capacity),
@@ -232,10 +234,13 @@ export class CenterReservationsService {
     const gradeYear = GRADES.find((grade) => grade.slug === input.gradeSlug)?.year;
     const slot = await this.prisma.centerSlot.findFirst({
       where: { id: input.slotId, centerId: center.id, isActive: true },
-      select: { id: true, year: true, priceCents: true, capacity: true, isFull: true },
+      select: { id: true, year: true, track: true, priceCents: true, capacity: true, isFull: true },
     });
     if (slot === null) throw new ConflictException({ code: 'slot_closed', message: 'this group is not available' });
     if (slot.year !== null && slot.year !== gradeYear) throw new BadRequestException('this group is for another year');
+    if (settings.askTrack && slot.track !== null && input.track !== slot.track) {
+      throw new BadRequestException('this group is for another track');
+    }
     const pricing = {
       slotId: slot.id,
       sessionPriceCents: slot.priceCents,

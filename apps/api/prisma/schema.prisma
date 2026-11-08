@@ -2258,6 +2258,9 @@ model CenterSlot {
   endMinute   Int      @map("end_minute")
   /// الصف اللي المجموعة ليه (١ = أولى…). `null` = مفتوحة لكل الصفوف.
   year        Int?
+  /// `arabic` | `languages` — the track the group teaches. `null` = both. The
+  /// reservation page shows a student only the groups of the track they picked.
+  track       String?
   /// أقصى عدد حجوزات. `null` = مفيش حد.
   capacity    Int?
   /// «فل خلاص» بإيد الأدمن — بيقفل الحجز حتى لو فيه أماكن.

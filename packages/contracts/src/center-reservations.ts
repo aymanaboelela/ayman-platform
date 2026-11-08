@@ -73,6 +73,8 @@ export const PublicReservationSlotSchema = z.object({
   endMinute: z.number().int(),
   /** The grade year it is for (`GRADES[].year`); null = every year. */
   year: z.number().int().nullable(),
+  /** عربي / لغات; null = both. */
+  track: z.enum(RESERVATION_TRACKS).nullable(),
   /** One session. Null = no price set. */
   priceCents: z.number().int().nonnegative().nullable(),
   /** What booking it costs now — `payPercent` of the session. */

@@ -361,6 +361,7 @@ function SlotForm({
   const [start, setStart] = useState(toTimeValue(slot?.startMinute ?? 16 * 60));
   const [end, setEnd] = useState(toTimeValue(slot?.endMinute ?? 18 * 60));
   const [year, setYear] = useState(slot && slot.year !== null ? String(slot.year) : '');
+  const [track, setTrack] = useState<string>(slot?.track ?? '');
   const [capacity, setCapacity] = useState(slot?.capacity ? String(slot.capacity) : '');
   const [price, setPrice] = useState(
     slot && slot.priceCents !== null ? String(slot.priceCents / 100) : '',
@@ -400,6 +401,7 @@ function SlotForm({
       startMinute,
       endMinute,
       year: year === '' ? null : Number(year),
+      track: track === 'arabic' || track === 'languages' ? (track as 'arabic' | 'languages') : null,
       capacity: capacityValue,
       priceCents,
       isFull,
@@ -460,7 +462,7 @@ function SlotForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field id="slot-year" label={f.year}>
           <Select id="slot-year" value={year} onChange={(event) => setYear(event.target.value)}>
             <option value="">{c.allYears}</option>
@@ -469,6 +471,13 @@ function SlotForm({
                 {name}
               </option>
             ))}
+          </Select>
+        </Field>
+        <Field id="slot-track" label={f.track}>
+          <Select id="slot-track" value={track} onChange={(event) => setTrack(event.target.value)}>
+            <option value="">{f.trackBoth}</option>
+            <option value="arabic">{f.trackArabic}</option>
+            <option value="languages">{f.trackLanguages}</option>
           </Select>
         </Field>
         <Field id="slot-capacity" label={f.capacity} hint={f.capacityHint}>
