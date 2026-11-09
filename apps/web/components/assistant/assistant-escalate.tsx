@@ -67,7 +67,12 @@ export function AssistantEscalate({
    */
   transcript?: readonly AssistantTranscriptTurn[];
   onOpened: (thread: ConversationThread) => void;
-  onBack: () => void;
+  /**
+   * Absent when this form IS the panel's first screen — the AI chat it used
+   * to sit behind is gone, so there is nothing to go back to and a «رجوع»
+   * would lead nowhere.
+   */
+  onBack?: () => void;
 }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -121,14 +126,16 @@ export function AssistantEscalate({
       onSubmit={submit}
       className="flex flex-col gap-3.5 p-4"
     >
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-1.5 self-start text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
-      >
-        <CornerUpRight className="size-3.5" aria-hidden="true" />
-        {copy.assistant.choices.back}
-      </button>
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 self-start text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
+        >
+          <CornerUpRight className="size-3.5" aria-hidden="true" />
+          {copy.assistant.choices.back}
+        </button>
+      ) : null}
 
       {crumbs.length > 0 ? (
         <div className="rounded-lg border border-line-subtle bg-surface-2 px-3 py-2">

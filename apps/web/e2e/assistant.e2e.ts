@@ -18,14 +18,11 @@ const c = copy.assistant;
  * answer — that the panel opens, that both halves work, and that the result is
  * reachable by keyboard and clean under axe.
  *
- * ## The open chat is asserted WITHOUT a model, on purpose
+ * ## There is no AI chat to assert any more
  *
- * `ANTHROPIC_API_KEY` is unset in CI, so `POST /api/assistant/ask` answers out
- * of `matchKnowledge` — the same paragraphs the guided tree shows, retrieved
- * by word overlap. That makes the answer to a fixed question DETERMINISTIC and
- * assertable by `copy` key, which a model's own wording would never be. It
- * also means these tests cover the path most likely to be live on a fresh
- * deployment, which is the one nobody would otherwise look at.
+ * The panel opens straight onto the box that reaches أيمن — «مش عاوز يبقى في
+ * رد في المنصة تلقائي». The first test below pins that: no AI composer, the
+ * message box on the first screen.
  */
 
 /*
@@ -51,13 +48,11 @@ const c = copy.assistant;
 test.describe('the assistant widget', () => {
   test.skip(({ isMobile }) => Boolean(isMobile), 'see the note above: fixed-element hit-testing under mobile emulation');
 
-  test('opens onto the open chat, not onto a menu', async ({ page }) => {
+  test('opens straight onto the box to أيمن, with no AI chat in front of it', async ({ page }) => {
     /*
-     * The front door. It used to be the question tree, and a student whose
-     * question was not one of the four categories had to walk the tree to find
-     * that out. Typing is what a chat launcher promises, so a box to type in
-     * is what one tap has to produce — this asserts that the promise is kept
-     * before anything else about the panel is checked.
+     * «عاوز الرسايل تجيلي على طول، مش عاوز يبقى في رد في المنصة تلقائي». One
+     * tap has to produce the box whose message reaches him as written — and
+     * the AI composer that used to sit in front of it must not be there.
      */
     await page.goto('/');
 
@@ -65,113 +60,22 @@ test.describe('the assistant widget', () => {
     await expect(launcher).toBeVisible();
     await launcher.click();
 
-    const panel = page.getByRole('dialog', { name: c.title });
+    const panel = page.getByRole('dialog', { name: c.contact.ayman });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('textbox', { name: c.ai.placeholder })).toBeVisible();
-    // ONE screen, so the way to a person is a button rather than a tab.
-    await expect(panel.getByRole('button', { name: c.contact.ayman })).toBeVisible();
-  });
-
-  test('answers a typed question and keeps it across tabs', async ({ page }) => {
-    /*
-     * The whole feature, from the student's side: type a real question in
-     * their own words, get an answer streamed back, and — when the answer is
-     * not good enough — a card that hands the question to a person already
-     * written.
-     *
-     * The expected text is a `copy` key rather than a sentence, so this
-     * asserts the WIRING (question in → the right written answer out) and not
-     * a model's phrasing. See the note at the top of this file for why the
-     * answer is deterministic here.
-     */
-    await page.goto('/');
-    await page.getByRole('button', { name: c.open, exact: true }).click();
-    const panel = page.getByRole('dialog', { name: c.title });
-
-    await panel.getByRole('textbox', { name: c.ai.placeholder }).fill('الكويزات شكلها إيه؟');
-    await panel.getByRole('button', { name: c.ai.send }).click();
-
-    await expect(panel.getByText(c.script.studyQuizzes)).toBeVisible();
-
-    /*
-     * The transcript survives leaving the screen and coming back. The panel is
-     * one screen now, so the round trip is chat → the handoff form → back;
-     * `AssistantChat` is hidden rather than unmounted, because the transcript
-     * lives in `useAssistantAsk` and an unmount throws it away along with any
-     * answer still streaming.
-     *
-     * Asserted inside this test rather than in one of its own because a second
-     * test would spend a second call on a route that is throttled and, in
-     * production, billed.
-     */
-    await panel.getByRole('button', { name: c.contact.ayman }).click();
     await expect(panel.getByRole('textbox', { name: c.escalate.message })).toBeVisible();
-    await panel.getByRole('button', { name: copy.assistant.choices.back }).click();
-    await expect(panel.getByText(c.script.studyQuizzes)).toBeVisible();
-
-    /*
-     * A GOOD answer does not raise the card. It used to raise it on every
-     * reply, which made it wallpaper — see `scripted()` on the API side. The
-     * way to a person is in the footer on every screen regardless, and the
-     * next test covers the case the card is actually for.
-     */
-    await expect(panel.getByRole('button', { name: c.ai.escalateAction })).toBeHidden();
-  });
-
-  test('raises the أيمن card on a question it cannot answer, with the question already written', async ({
-    page,
-  }) => {
-    /*
-     * The other half. «مين هيكسب الماتش؟» matches nothing in the corpus, so
-     * with no model configured (CI, and every fresh deployment) the honest
-     * answer is «مش عارف» — and THAT is what the card is for.
-     *
-     * A separate test rather than a second question in the one above, because
-     * two asks inside one test would sit right on the burst throttle. One ask
-     * each keeps both of them well inside it.
-     */
-    await page.goto('/');
-    await page.getByRole('button', { name: c.open, exact: true }).click();
-    const panel = page.getByRole('dialog', { name: c.title });
-
-    const asked = 'مين هيكسب الماتش النهارده؟';
-    await panel.getByRole('textbox', { name: c.ai.placeholder }).fill(asked);
-    await panel.getByRole('button', { name: c.ai.send }).click();
-
-    await expect(panel.getByText(c.ai.unknown)).toBeVisible();
-
-    const handoff = panel.getByRole('button', { name: c.ai.escalateAction });
-    await expect(handoff).toBeVisible();
-    await handoff.click();
-
-    // …and the question travels with it. Typing it a second time is the small
-    // disrespect `initialMessage` exists to remove.
-    await expect(panel.getByRole('textbox', { name: c.escalate.message })).toHaveValue(asked);
-  });
-
-  test('reaches أيمن from the first screen, with nothing typed', async ({ page }) => {
-    /*
-     * «عاوز يقدر يتواصل مع المهندس أيمن على طول». Before the footer strip,
-     * «على طول» meant walking two or three stops into the tree and finding a
-     * tinted row at the bottom of a menu — four questions nobody asked,
-     * answered before the one they came to ask.
-     */
-    await page.goto('/');
-    await page.getByRole('button', { name: c.open, exact: true }).click();
-    const panel = page.getByRole('dialog', { name: c.title });
-
-    await panel.getByRole('button', { name: c.contact.ayman }).click();
-    await expect(panel.getByRole('textbox', { name: c.escalate.message })).toBeVisible();
+    await expect(panel.getByRole('textbox', { name: c.ai.placeholder })).toHaveCount(0);
+    // First screen, so there is nothing to go back to.
+    await expect(panel.getByRole('button', { name: copy.assistant.choices.back })).toHaveCount(0);
   });
 
   test('closes on Escape and returns focus to the launcher', async ({ page }) => {
     await page.goto('/');
     const launcher = page.getByRole('button', { name: c.open, exact: true });
     await launcher.click();
-    await expect(page.getByRole('dialog', { name: c.title })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: c.contact.ayman })).toBeVisible();
 
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: c.title })).toBeHidden();
+    await expect(page.getByRole('dialog', { name: c.contact.ayman })).toBeHidden();
     // Focus left somewhere arbitrary is how a keyboard user loses their place
     // entirely — the panel was the last thing they were in.
     await expect(launcher).toBeFocused();
@@ -186,7 +90,7 @@ test.describe('the assistant widget', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     await page.getByRole('button', { name: c.open, exact: true }).click();
-    await expect(page.getByRole('dialog', { name: c.title })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: c.contact.ayman })).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
