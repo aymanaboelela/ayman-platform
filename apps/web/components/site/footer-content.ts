@@ -199,11 +199,17 @@ export const ACCOUNT_LINKS = [
  * وسبب وجود الفلتر أصلًا لسه قايم: الفوتر ده على كل صفحة تسويق، فلينك ميت
  * فيه مش لينك ميت واحد — ده لينك ميت في فوتر كل صفحة.
  */
-const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links', '/practice', '/pdfs'];
+const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links', '/pdfs'];
 
-export function footerPageLinks(features: Entitlements): readonly FooterLink[] {
+/**
+ * `practiceOpen` — `/practice` is no longer his alone (2026-11-08): it is
+ * listed wherever `practiceIsOpen()` says the page exists, which on his
+ * stack is always.
+ */
+export function footerPageLinks(features: Entitlements, practiceOpen = IS_AYMAN): readonly FooterLink[] {
   return PAGE_LINKS.filter((link) => {
     if (link.href === '/books') return features.books && IS_AYMAN;
+    if (link.href === '/practice') return practiceOpen;
     if (AYMAN_ONLY_PAGES.includes(link.href)) return IS_AYMAN;
     return true;
   });
@@ -261,9 +267,12 @@ export function footerContent({
   contact,
   features,
   grades = TENANT_GRADES,
+  practiceOpen = IS_AYMAN,
 }: {
   contact: PublicSettingsRead['contact'];
   features: Entitlements;
+  /** Whether `/practice` exists on this stack — `practiceIsOpen()`. */
+  practiceOpen?: boolean;
   /** The stack's live grades — see `yearLinks`. */
   grades?: readonly Grade[];
 }): FooterContent {
@@ -283,7 +292,7 @@ export function footerContent({
     follow: c.footerFollow,
     social: footerSocial(contact),
     columns: [
-      { key: 'pages', label: c.footerPages, links: footerPageLinks(features) },
+      { key: 'pages', label: c.footerPages, links: footerPageLinks(features, practiceOpen) },
       // One label, used for the visible heading AND for the landmark's name.
       // The classic footer labels this column's `<nav>` with
       // `c.tracksSelectTitle` and heads it with `copy.onboarding.year` — two

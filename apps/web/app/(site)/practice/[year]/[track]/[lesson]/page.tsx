@@ -7,14 +7,13 @@ import { arabicCount } from '@ayman/contracts/arabic-count';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { IS_AYMAN } from '@/lib/tenant';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import {
   getPracticeSet,
   parsePracticeTrack,
   parsePracticeYear,
-  practiceCourseSlug,
+  practiceCourseHref,
   practicePath,
   unitLook,
   unitNumber,
@@ -41,7 +40,7 @@ async function resolve(params: Params) {
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
-  const found = IS_AYMAN ? await resolve(params) : null;
+  const found = await resolve(params);
   if (!found) return { robots: { index: false, follow: false } };
   const { year, track, code, set } = found;
   const fill = (t: string) =>
@@ -58,7 +57,6 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function PracticeLessonPage({ params }: { params: Params }) {
-  if (!IS_AYMAN) notFound();
   const found = await resolve(params);
   if (!found) notFound();
   const { year, track, code, set } = found;
@@ -98,7 +96,7 @@ export default async function PracticeLessonPage({ params }: { params: Params })
         <PracticeRunner
           set={set}
           articleHref={set.articleSlug ? `/news/${set.articleSlug}` : null}
-          courseHref={`/courses/${practiceCourseSlug(year, track)}`}
+          courseHref={practiceCourseHref(year, track)}
         />
       </div>
     </main>

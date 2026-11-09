@@ -10,6 +10,7 @@ import {
 } from '@ayman/contracts/practice';
 import { apiGet, apiGetOrNull } from '@/lib/api';
 import { TAG_PRACTICE } from '@/lib/cache-tags';
+import { IS_AYMAN } from '@/lib/tenant';
 
 /**
  * «اختبارات مجانية» — loaders and the presentation the public pages share.
@@ -37,6 +38,35 @@ export async function getPracticeListOrEmpty(): Promise<PracticePublicList> {
   } catch {
     return { sets: [] };
   }
+}
+
+/**
+ * Does «اختبارات مجانية» exist on this stack?
+ *
+ * Always on Ayman's — byte-for-byte what the pages did when they were gated
+ * on `IS_AYMAN`. On a teacher's stack (owner, 2026-11-08: «الفيتشر تشتغل
+ * عندهم»): once the teacher has switched `practice.enabled` on AND published
+ * at least one set. The API answers 404 while the flag is off, which the list
+ * reader turns into «no sets», so one read decides both.
+ *
+ * ⚠️ That read is `'use cache'`d and `next build` has no API, so for the
+ * first minutes after a deploy a teacher's `/practice` can 404 until the
+ * entry revalidates. The footer link and the landing invite read the same
+ * entry, so nothing links INTO that window.
+ */
+export async function practiceIsOpen(): Promise<boolean> {
+  if (IS_AYMAN) return true;
+  const { sets } = await getPracticeListOrEmpty();
+  return sets.length > 0;
+}
+
+/**
+ * Where «اشترك في الكورس» goes from a finished set. Ayman's course slugs are
+ * his own; a teacher's catalogue has different ones, so their stacks send
+ * the student to the catalogue instead of a 404.
+ */
+export function practiceCourseHref(year: PracticeYear, track: PracticeTrack): string {
+  return IS_AYMAN ? `/courses/${practiceCourseSlug(year, track)}` : '/courses';
 }
 
 /** One set with its questions and key, or `null` (missing, unpublished, or the feature off). */

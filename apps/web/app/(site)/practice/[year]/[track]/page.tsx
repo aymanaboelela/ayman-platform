@@ -7,7 +7,6 @@ import { arabicCount } from '@ayman/contracts/arabic-count';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { IS_AYMAN } from '@/lib/tenant';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import {
@@ -17,8 +16,7 @@ import {
   parsePracticeYear,
   practicePath,
   practiceTotals,
-  practiceUnits,
-} from '@/lib/practice/catalog';
+  practiceUnits, practiceIsOpen } from '@/lib/practice/catalog';
 import { bestKey } from '@/lib/practice/grade';
 import { PracticeBestChip } from '@/components/practice/practice-best-chip';
 import { UnitIcon } from '@/components/practice/unit-icon';
@@ -29,7 +27,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const raw = await params;
   const year = parsePracticeYear(raw.year);
   const track = parsePracticeTrack(raw.track);
-  if (!IS_AYMAN || !year || !track) return { robots: { index: false, follow: false } };
+  if (!(await practiceIsOpen()) || !year || !track) return { robots: { index: false, follow: false } };
   return buildMetadata({
     title: p.meta.trackTitle.replace('{year}', p.years[year]).replace('{track}', p.tracks[track]),
     description: p.meta.trackDescription.replace('{year}', p.years[year]).replace('{track}', p.tracks[track]),
@@ -38,7 +36,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function PracticeTrackPage({ params }: { params: Params }) {
-  if (!IS_AYMAN) notFound();
+  if (!(await practiceIsOpen())) notFound();
   const raw = await params;
   const year = parsePracticeYear(raw.year);
   if (!year) notFound();

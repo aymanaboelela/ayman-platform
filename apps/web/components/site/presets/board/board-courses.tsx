@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PracticeInvite } from '@/components/practice/practice-invite';
 import { GraduationCap, Layers } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -111,6 +112,7 @@ export async function BoardCourses({
       : courses.slice(0, limit);
 
   return (
+    <>
     <section className="board-band" id="courses">
       <div className="board-shell">
         <BoardHeading chip={boardCopy.courses.chip} title={title} lead={lead} level={level} />
@@ -254,5 +256,11 @@ export async function BoardCourses({
         )}
       </div>
     </section>
+    {/* «اختبارات مجانية» right under the courses, where the classic page
+        puts it. It draws nothing while the stack has no published set (or
+        the `practice.enabled` flag is off), so a new teacher never shows an
+        invite to an empty page. */}
+    <PracticeInvite />
+    </>
   );
 }
