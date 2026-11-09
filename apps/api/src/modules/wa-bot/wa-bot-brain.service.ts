@@ -18,7 +18,7 @@ import { masculineAddress, masculineCorrection } from '@ayman/contracts/assistan
 import { isFeatureEnabled } from '../../common/entitlements';
 import { tenantName } from '../../common/tenant';
 import { AssistantAiService } from '../assistant/ai/assistant-ai.service';
-import { HANDOFF_NOTICE_EVERY_MS, MAX_YEAR_ASKS } from './policy';
+import { HANDOFF_NOTICE_EVERY_MS, HOUR_MS, MAX_YEAR_ASKS } from './policy';
 import {
   booksBlock,
   courseBlock,
@@ -44,6 +44,8 @@ export interface BrainChat {
   readonly year: number | null;
   readonly yearAsks: number;
   readonly lastHandoffNoticeAt: Date | null;
+  /** Handed to a person who has not answered yet (cleared when he does). */
+  readonly needsHuman?: boolean;
   /** Whether the bot has answered this number before — the first reply greets. */
   readonly repliedBefore: boolean;
 }
@@ -261,6 +263,18 @@ export class WaBotBrainService {
   }
 
   private async fallback(input: BrainInput, patch: BrainResult['patch'], intents: readonly string[] = []): Promise<BrainResult> {
+    // Told «هوصّل للفريق» and still waiting: whatever comes next («السؤال أهو
+    // يا مستر», a screenshot caption, the rest of the story) is addressed to
+    // him, not to the bot. A model answer here talked over the handoff it had
+    // just announced («هتتوجه رسالتك للمهندس…» to a student who asked for
+    // him by name). The rules above still answer a plain price question; only
+    // the model keeps quiet, until he replies or the silence window ends.
+    if (input.chat.needsHuman && input.chat.lastHandoffNoticeAt) {
+      const since = input.now.getTime() - input.chat.lastHandoffNoticeAt.getTime();
+      if (since < input.settings.handoffSilenceHours * HOUR_MS) {
+        return { ...silent('waitingForPerson'), intents, patch: { ...patch, needsHuman: true } };
+      }
+    }
     if (input.settings.aiFallback && this.modelAvailable) {
       const answer = await this.askModel(input.text, input.history);
       if (answer) {
