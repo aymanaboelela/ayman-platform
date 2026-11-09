@@ -6,19 +6,18 @@ import { copy } from '@ayman/contracts';
 import { PRACTICE_TRACKS, PRACTICE_YEARS, type PracticeYear } from '@ayman/contracts/practice';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { IS_AYMAN } from '@/lib/tenant';
 import { brandImage } from '@/lib/brand-image';
 import { getBranding } from '@/lib/settings';
 import { ThemedImage } from '@/components/themed-image';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
-import { getPracticeListOrEmpty, practicePath, practiceTotals } from '@/lib/practice/catalog';
+import { getPracticeListOrEmpty, practicePath, practiceTotals, practiceIsOpen } from '@/lib/practice/catalog';
 import { PracticeShowcase } from '@/components/practice/practice-showcase';
 
 export async function generateMetadata(): Promise<Metadata> {
   // Ayman's curriculum and his courses — see `lib/practice/catalog.ts`. On
   // any other stack the route 404s and describes nothing.
-  if (!IS_AYMAN) return { robots: { index: false, follow: false } };
+  if (!(await practiceIsOpen())) return { robots: { index: false, follow: false } };
   return buildMetadata({ title: p.meta.indexTitle, description: p.meta.indexDescription, path: '/practice' });
 }
 
@@ -26,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
 const YEARS_SHOWN: readonly PracticeYear[] = [...PRACTICE_YEARS].reverse();
 
 export default async function PracticeIndexPage() {
-  if (!IS_AYMAN) notFound();
+  if (!(await practiceIsOpen())) notFound();
   const [{ sets }, branding] = await Promise.all([getPracticeListOrEmpty(), getBranding()]);
   const totals = practiceTotals(sets);
 

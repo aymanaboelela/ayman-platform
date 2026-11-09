@@ -6,13 +6,12 @@ import { copy } from '@ayman/contracts';
 import { PRACTICE_TRACKS } from '@ayman/contracts/practice';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { IS_AYMAN } from '@/lib/tenant';
 import { brandImage } from '@/lib/brand-image';
 import { getBranding } from '@/lib/settings';
 import { ThemedImage } from '@/components/themed-image';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
-import { getPracticeListOrEmpty, parsePracticeYear, practicePath, practiceTotals } from '@/lib/practice/catalog';
+import { getPracticeListOrEmpty, parsePracticeYear, practicePath, practiceTotals, practiceIsOpen } from '@/lib/practice/catalog';
 
 type Params = Promise<{ year: string }>;
 
@@ -23,7 +22,7 @@ type Params = Promise<{ year: string }>;
  */
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const year = parsePracticeYear((await params).year);
-  if (!IS_AYMAN || !year) return { robots: { index: false, follow: false } };
+  if (!(await practiceIsOpen()) || !year) return { robots: { index: false, follow: false } };
   return buildMetadata({
     title: p.meta.trackTitle.replace('{year}', p.years[year]).replace(' {track}', ''),
     description: p.meta.trackDescription.replace('{year}', p.years[year]).replace(' ({track})', ''),
@@ -32,7 +31,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function PracticeYearPage({ params }: { params: Params }) {
-  if (!IS_AYMAN) notFound();
+  if (!(await practiceIsOpen())) notFound();
   const year = parsePracticeYear((await params).year);
   if (!year) notFound();
   const [{ sets }, branding] = await Promise.all([getPracticeListOrEmpty(), getBranding()]);

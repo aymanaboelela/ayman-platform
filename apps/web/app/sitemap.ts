@@ -62,7 +62,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { posts } = await getNewsListOrEmpty();
   // «ملفات PDF» — empty off Ayman's stack without asking; see the loader.
   const { pdfs } = await getPdfListOrEmpty();
-  const practice = IS_AYMAN ? await getPracticeListOrEmpty() : { sets: [] };
+  const practice = await getPracticeListOrEmpty();
   /* الصفحات اللي بتعيش جوّه فيتشر. لو الفيتشر مقفولة، الصفحة بترد ٤٠٤ —
      ونشر URL ميت في السايت‌ماب مش سهو صغير: ده بالظبط «الدريفت» اللي بيخلّي
      طبقة الاكتشاف بتقول حاجة الموقع مابيقولهاش. */
@@ -158,8 +158,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // «اختبارات مجانية»: the index, each year, each year × track, and one URL
     // per published set — each is the page a «اختبار على درس …» search should
     // land on. Read from the API (`…OrEmpty`, so a build with no API or a stack
-    // with the feature off lists none). Ayman only, like `/essentials` above.
-    ...(IS_AYMAN && practice.sets.length > 0
+    // with the feature off lists none). Every stack since 2026-11-08: a teacher
+    // who switched it on and published a set gets their own URLs listed.
+    ...(practice.sets.length > 0
       ? [
           { url: `${SITE_URL}/practice`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'weekly' as const, priority: 0.7 },
           ...[...new Set(practice.sets.map((s) => practicePath(s.year)))].map((path) => ({

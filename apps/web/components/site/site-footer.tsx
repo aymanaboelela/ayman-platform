@@ -25,6 +25,7 @@ import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { SITE_TAGLINE, bySubject } from '@/lib/subject-copy';
 import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { waMeHref } from '@ayman/contracts/whatsapp';
+import { practiceIsOpen } from '@/lib/practice/catalog';
 
 const c = copy.landing;
 
@@ -43,7 +44,7 @@ const c = copy.landing;
  * own because it redraws the frames the tracks section already fetched.
  */
 export async function SiteFooter() {
-  const [{ contact }, features, branding, grades] = await Promise.all([
+  const [{ contact }, features, branding, grades, practiceOpen] = await Promise.all([
     getPublicSettingsOrDefaults(),
     getEntitlements(),
     /* الثالثة مجانية عمليًا: `getBranding()` هو `'use cache'` ومتقري أصلًا في
@@ -51,9 +52,11 @@ export async function SiteFooter() {
     getBranding(),
     // The stack's live «الصفوف» — the year column links to its grade pages.
     getStackGrades(),
+    // Same cached entry the landing invite reads — see `practiceIsOpen`.
+    practiceIsOpen(),
   ]);
 
-  const pageLinks = footerPageLinks(features);
+  const pageLinks = footerPageLinks(features, practiceOpen);
   // Named as the module constant it replaces, so the classic JSX below is
   // the same bytes (`landing-preset.test.ts` digests it): the live list on a
   // stack with grades, the two old links everywhere else.
@@ -106,47 +109,47 @@ export async function SiteFooter() {
    */
   if (branding.landingPreset === 'neon' && TEACHES_CODE) {
     const { default: NeonFooter } = await import('@/components/site/presets/neon/neon-footer');
-    return <NeonFooter content={footerContent({ contact, features, grades })} />;
+    return <NeonFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'board') {
     const { default: BoardFooter } = await import('@/components/site/presets/board/board-footer');
-    return <BoardFooter content={footerContent({ contact, features, grades })} />;
+    return <BoardFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'studio') {
     const { default: StudioFooter } = await import('@/components/site/presets/studio/studio-footer');
-    return <StudioFooter content={footerContent({ contact, features, grades })} />;
+    return <StudioFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'ruqaa') {
     const { default: RuqaaFooter } = await import('@/components/site/presets/ruqaa/ruqaa-footer');
-    return <RuqaaFooter content={footerContent({ contact, features, grades })} />;
+    return <RuqaaFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'kurrasa') {
     const { default: KurrasaFooter } = await import('@/components/site/presets/kurrasa/kurrasa-footer');
-    return <KurrasaFooter content={footerContent({ contact, features, grades })} />;
+    return <KurrasaFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'taif') {
     const { default: TaifFooter } = await import('@/components/site/presets/taif/taif-footer');
-    return <TaifFooter content={footerContent({ contact, features, grades })} />;
+    return <TaifFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'sabboora') {
     const { default: SabbooraFooter } = await import('@/components/site/presets/sabboora/sabboora-footer');
-    return <SabbooraFooter content={footerContent({ contact, features, grades })} />;
+    return <SabbooraFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'rihla') {
     const { default: RihlaFooter } = await import('@/components/site/presets/rihla/rihla-footer');
-    return <RihlaFooter content={footerContent({ contact, features, grades })} />;
+    return <RihlaFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   if (branding.landingPreset === 'nujoom') {
     const { default: NujoomFooter } = await import('@/components/site/presets/nujoom/nujoom-footer');
-    return <NujoomFooter content={footerContent({ contact, features, grades })} />;
+    return <NujoomFooter content={footerContent({ contact, features, grades, practiceOpen })} />;
   }
 
   return (

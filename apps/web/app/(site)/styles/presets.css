@@ -2014,23 +2014,22 @@
    the document timeline further down this section.
    ══════════════════════════════════════════════════════════════════════════ */
 
-@keyframes board-rise {
-  from {
-    opacity: 0;
-    translate: 0 1.5rem;
-  }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   [data-preset='board'] [data-in='no'] {
     opacity: 0;
   }
+}
 
-  /* `--board-stagger` is written by the script: the blocks that arrive in the
-     same frame (a row of cards) step in one after another, the rest at once. */
-  [data-preset='board'] [data-in='1'] {
-    animation: board-rise 560ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--board-stagger, 0ms) backwards;
-  }
+/* The entrance itself is GSAP's since 2026-11-08 (`presets/motion/
+   preset-gsap.ts`, shared with `studio`): rise, settle from 96%, title
+   wipe, a picture easing out of a slight zoom. It clears its inline
+   `transform` when it lands, so the hover lift below is untouched.
+
+   «magnetic»: the script leans `.site-btn` toward the cursor by writing
+   `--mag-x` / `--mag-y`. They go through `translate`, a property of its own,
+   so they compose with the button's `transform` hover lift. */
+[data-preset='board'] :is(.site-btn, .practice-btn) {
+  translate: var(--mag-x, 0) var(--mag-y, 0);
 }
 
 /* ---------------------------------------------------------------------------
@@ -4482,6 +4481,12 @@
   border-radius: 999px;
   font-weight: 600;
   transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+/* «magnetic» — written by `presets/motion/preset-gsap.ts` on a hovering
+   pointer only; `translate`, not `transform`, so nothing else is overridden. */
+[data-preset='studio'] :is(.st-btn, .practice-btn) {
+  translate: var(--mag-x, 0) var(--mag-y, 0);
 }
 
 [data-preset='studio'] .st-btn--solid {

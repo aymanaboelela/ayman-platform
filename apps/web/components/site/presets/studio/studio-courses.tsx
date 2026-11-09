@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PracticeInvite } from '@/components/practice/practice-invite';
 
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -69,6 +70,7 @@ export async function StudioCourses({
       : courses.slice(0, limit);
 
   return (
+    <>
     <section className="st-section" id="courses">
       <div className="st-shell">
         {/*
@@ -128,5 +130,11 @@ export async function StudioCourses({
         )}
       </div>
     </section>
+    {/* «اختبارات مجانية» right under the courses, where the classic page
+        puts it. It draws nothing while the stack has no published set (or
+        the `practice.enabled` flag is off), so a new teacher never shows an
+        invite to an empty page. */}
+    <PracticeInvite />
+    </>
   );
 }

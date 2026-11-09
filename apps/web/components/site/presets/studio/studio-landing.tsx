@@ -14,6 +14,35 @@ import { StudioTracks } from './studio-tracks';
 import { StudioFaq } from './studio-faq';
 import { StudioCta } from './studio-cta';
 import { StudioStats, StudioQuotes, StudioHonors, StudioBooksLink } from './studio-simple';
+import { PresetMotion } from '../motion/preset-motion';
+import type { PresetMotionConfig } from '../motion/preset-gsap';
+
+/**
+ * The GSAP layer (`../motion/preset-gsap.ts`), aimed at this page's blocks.
+ * The opener is not listed: it is on screen at load and keeps its own CSS
+ * entrance (`studio-motion.test.ts`). Everything below it arrives once.
+ */
+const STUDIO_MOTION: PresetMotionConfig = {
+  reveal: [
+    '.st-section .st-head',
+    '.st-about__figure',
+    '.st-about__copy',
+    '.st-reason',
+    '.st-course',
+    '.st-year',
+    '.st-figure',
+    '.st-quote',
+    '.st-honor-card',
+    '.st-q',
+    '.st-section__foot',
+    '.st-close',
+    '.practice-invite__card',
+  ].join(', '),
+  titles: '.st-head__title, .st-close__t, .practice-invite__title',
+  media: '.st-about__figure img, .st-course img',
+  figures: '.st-figure__n',
+  magnetic: '.st-btn, .practice-btn',
+};
 
 /**
  * «الاستوديو» — the landing page for `branding.landingPreset === 'studio'`.
@@ -78,6 +107,7 @@ export default async function StudioLanding({
 
   return (
     <main data-preset="studio">
+      <PresetMotion config={STUDIO_MOTION} />
       {/*
         The last resort, and it should never render: a page composed only of
         blocks that cannot carry a heading still gets a real `<h1>` rather than

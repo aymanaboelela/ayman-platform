@@ -71,6 +71,9 @@ vi.mock('@/lib/settings', () => ({
 /* Generated course art resolves a storage key through `next/image` and has
    nothing to say about any decision below. */
 vi.mock('@/components/course-art', () => ({ CourseArt: () => null }));
+// An async server component of its own (reads the practice list); it has its
+// own tests, and here it would only stall the synchronous render.
+vi.mock('@/components/practice/practice-invite', () => ({ PracticeInvite: () => null }));
 /* `initials` is the real thing, not a stub: the honour board renders it
    INSTEAD of the photograph, so a test that stubbed it out would assert
    nothing about the one behaviour that matters here. `UserAvatar` stays
