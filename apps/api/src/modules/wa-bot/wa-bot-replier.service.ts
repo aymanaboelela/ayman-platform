@@ -1,3 +1,4 @@
+import { copy as bot } from '@ayman/contracts/copy/wa-bot';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { AskTurn } from '@ayman/contracts/assistant/ask';
@@ -123,6 +124,7 @@ export class WaBotReplier {
       // goes to the inbox, unless a person is already on it or it was «قف».
       if (['chatCap', 'dailyCap', 'paused', 'disabled'].includes(decision.reason)) {
         await this.prisma.waChat.update({ where: { id: chat.id }, data: { needsHuman: true } });
+        if (!chat.needsHuman) void this.device.label(chat.phone, bot.needsReplyLabel, true);
       }
       return;
     }
@@ -174,6 +176,12 @@ export class WaBotReplier {
       where: { id: chat.id },
       data: this.chatUpdate(chat, result, sent !== null, now),
     });
+
+    // «محتاج رد مني» on the owner's own WhatsApp — the inbox screen is one
+    // place to notice a handoff; the chat list on his phone is the place he
+    // actually looks. Fire-and-forget: see `WhatsappDeviceService.label`.
+    const handedOff = result.patch.needsHuman || (result.reply !== null && sent === null);
+    if (handedOff) void this.device.label(chat.phone, bot.needsReplyLabel, true);
   }
 
   private chatUpdate(chat: WaChat, result: BrainResult, sent: boolean, now: Date) {

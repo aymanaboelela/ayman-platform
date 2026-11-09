@@ -119,6 +119,38 @@ export interface CourseFact {
    * so nothing is lost by leaving this pair out, and «الكتاب بكام؟» is
    * answered from the rows the shop actually sells.
    */
+  /**
+   * How the course is actually sold and released: its months and its terms.
+   *
+   * ⚠️ Without this the model had ONLY the three plan prices above, and it
+   * filled the gap with confident fiction — «الكورس بيتفتح كله مرة واحدة ومالوش
+   * تقسيم شهري», «150 ده سعر الاشتراك السنوي», «لازم تكون فاتح الكورس من بداية
+   * السنة» — all said to real students, on the website and on WhatsApp, in the
+   * same week. The structure is a fact the database holds, so it is handed
+   * over rather than left for the model to imagine.
+   */
+  readonly months: readonly MonthFact[];
+  readonly terms: readonly TermFact[];
+}
+
+/** One month of a course, as a student sees it on the subscribe page. */
+export interface MonthFact {
+  readonly index: number;
+  readonly title: string;
+  /** Released and on sale. A closed month has not come out yet. */
+  readonly isOpen: boolean;
+  /** The month's own price; `null` falls back to the course's monthly price. */
+  readonly priceCents: number | null;
+  /** Published lesson titles tagged to this month, in course order. */
+  readonly lessons: readonly string[];
+}
+
+/** One term of a course — a block of units sold together. */
+export interface TermFact {
+  readonly title: string;
+  readonly isOpen: boolean;
+  readonly priceCents: number | null;
+  readonly salePriceCents: number | null;
 }
 
 /** Everything money-shaped, as of one instant. */
@@ -249,6 +281,23 @@ export class AssistantFactsService {
              * the hardest kind to notice. The prices that exist are the three
              * plan columns above.
              */
+            months: {
+              orderBy: { monthIndex: 'asc' },
+              select: {
+                monthIndex: true,
+                title: true,
+                isOpen: true,
+                priceCents: true,
+                lessons: {
+                  where: { lesson: { isPublished: true } },
+                  select: { lesson: { select: { title: true, position: true } } },
+                },
+              },
+            },
+            terms: {
+              orderBy: { position: 'asc' },
+              select: { title: true, isOpen: true, priceCents: true, salePriceCents: true },
+            },
           },
         }),
         this.books.shippingRates(),
@@ -269,6 +318,21 @@ export class AssistantFactsService {
           monthlyPriceCents: row.monthlyPriceCents,
           quarterlyPriceCents: row.quarterlyPriceCents,
           yearlyPriceCents: row.yearlyPriceCents,
+          months: row.months.map((month) => ({
+            index: month.monthIndex,
+            title: month.title,
+            isOpen: month.isOpen,
+            priceCents: month.priceCents,
+            lessons: [...month.lessons]
+              .sort((a, b) => a.lesson.position - b.lesson.position)
+              .map((link) => link.lesson.title),
+          })),
+          terms: row.terms.map((term) => ({
+            title: term.title,
+            isOpen: term.isOpen,
+            priceCents: term.priceCents,
+            salePriceCents: term.salePriceCents,
+          })),
         })),
         shippingRates,
         at: Date.now(),

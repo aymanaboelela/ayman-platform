@@ -64,6 +64,8 @@ const SEND_TIMEOUT_MS = 45_000;
  * queued ahead of it on the sidecar. The sidecar gives the write itself 20s.
  */
 const CONTACT_TIMEOUT_MS = 45_000;
+/** A label change is app-state, small and quick; it must never hold a reply up. */
+const LABEL_TIMEOUT_MS = 5_000;
 
 /** What saving one WhatsApp-only contact came to. */
 export interface ContactSaveResult {
@@ -396,6 +398,27 @@ export class WhatsappDeviceService {
     // mark a row done on a body it does not understand.
     if (body.saved !== true) throw new Error('wa /contacts answered without saving');
     return { saved: true, onWhatsApp: true, lid: typeof body.lid === 'string' ? body.lid : null };
+  }
+
+  /**
+   * Put a WhatsApp Business label on a chat, or take it off — «محتاج رد مني»
+   * on the owner's phone, see `services/wa/src/chat-labels.mjs`.
+   *
+   * Never throws and never waits long: a personal account has no labels, a
+   * device can be offline, and neither may stop the bot from answering or the
+   * inbox from recording a reply. The answer is logged at debug level only.
+   */
+  async label(phone: string, name: string, on: boolean): Promise<boolean> {
+    try {
+      const body = (await this.call(
+        '/label',
+        { method: 'POST', body: JSON.stringify({ phone, name, on }) },
+        LABEL_TIMEOUT_MS,
+      )) as { applied?: boolean; reason?: string };
+      return body.applied === true;
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -10,6 +10,7 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import { clearAuthDir } from './auth-store.mjs';
 import { saveContact } from './contact-save.mjs';
+import { ChatLabels } from './chat-labels.mjs';
 import { fenceAuthState } from './auth-fence.mjs';
 import { HistoryChats, historyUrl, httpSender } from './history-chats.mjs';
 import { ConnectWatchdog } from './connect-watchdog.mjs';
@@ -110,6 +111,9 @@ if (!TOKEN) {
  * and «error 463» — where WhatsApp's refusal codes appear.
  */
 const logger = pino({ level: process.env.WA_LOG_LEVEL ?? 'info' });
+
+/** «محتاج رد مني» and friends — WhatsApp Business labels. See `chat-labels.mjs`. */
+const chatLabels = new ChatLabels(AUTH_DIR, logger);
 const baileysLogger = logger.child({}, { level: process.env.WA_BAILEYS_LOG_LEVEL ?? 'warn' });
 
 /** `disconnected` | `linking` | `connected`. Mirrors the contract's enum. */
@@ -464,6 +468,11 @@ async function connect({ interactive = false } = {}) {
     });
 
     if (INBOUND_URL) socket.ev.on('messages.upsert', (upsert) => onIncoming(upsert, socket));
+
+    // Business labels arrive through app-state sync, never by request.
+    socket.ev.on('labels.edit', (label) => {
+      if (isCurrent()) chatLabels.observe(label).catch(() => undefined);
+    });
 
     // ⚠️ THE SECOND TICK. Registered per socket, because `connect()` builds a
     // new one on every reconnect and a listener bound to a dead socket hears
@@ -833,6 +842,32 @@ async function send({ phone: to, text, imageUrl }) {
  * is false. Serialised on the same queue as `/send`: one socket, one thing on
  * the wire at a time.
  */
+/**
+ * Put a Business label on one chat, or take it off.
+ *
+ * Applied to the chat's LID when WhatsApp has one for the number — migrated
+ * accounts keep their chats under the LID, and a label on the phone-number
+ * jid would land on a chat the owner never sees — and to the phone-number
+ * jid otherwise.
+ */
+async function applyLabel(digits, name, on) {
+  const socket = sock;
+  if (state !== 'connected' || !socket) return { applied: false, reason: 'offline' };
+  const labelId = await chatLabels.idFor(name);
+  if (!labelId) return { applied: false, reason: 'no-label' };
+  const pn = jidFor(digits);
+  const lid = await withTimeout(socket.signalRepository?.lidMapping?.getLIDForPN?.(pn), 1000, null);
+  const jid = typeof lid === 'string' && lid ? lid : pn;
+  try {
+    if (on) await socket.addChatLabel(jid, labelId);
+    else await socket.removeChatLabel(jid, labelId);
+    return { applied: true };
+  } catch (error) {
+    logger.warn({ err: error, on }, 'wa /label: WhatsApp refused the label change');
+    return { applied: false, reason: 'refused' };
+  }
+}
+
 async function saveOneContact({ phone: to, name }) {
   const socket = sock;
   if (state !== 'connected' || !socket) throw httpError(409, 'device is not connected');
@@ -897,6 +932,7 @@ async function unlink() {
       await withTimeout(stale.logout(), 5000, null);
       retire(stale, 'unlinked');
     }
+    chatLabels.reset();
     return clearAuthDir(AUTH_DIR);
   })();
   // Published before anything is awaited — see step 3 above.
@@ -1092,6 +1128,20 @@ const server = createServer((request, response) => {
           () => saveOneContact(body),
         ));
         json(response, 200, result);
+        return;
+      }
+
+      case 'POST /label': {
+        // `{ phone, name, on }` — put a label on that chat or take it off.
+        // Best effort by design: a personal account has no labels, and an
+        // answer of `applied: false` is a normal day, not an error.
+        const body = await readBody(request);
+        const digits = body.phone ? digitsOf(body.phone) : '';
+        if (digits.length < 10 || digits.length > 15 || typeof body.name !== 'string') {
+          json(response, 400, { error: 'phone and name are required' });
+          return;
+        }
+        json(response, 200, await applyLabel(digits, body.name, body.on !== false));
         return;
       }
 

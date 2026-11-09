@@ -35,10 +35,18 @@ export function selectAnswerProvider(timeoutMs: number): AnswerProvider | null {
    * the earliest questions of the day and lets the rest still be answered —
    * see `ChainProvider` for why it can only switch before the first byte.
    *
-   * Anthropic is last because it is the only one that costs money: it should
-   * never be reached while a free tier still has room.
+   * Anthropic goes FIRST when its key is set. It used to be last («the only
+   * one that costs money»), and that ordering is what let Gemini Flash answer
+   * 1,470 website questions and every WhatsApp fallback in November 2026 —
+   * addressing students in the masculine and inventing how courses are sold
+   * («الكورس بيتفتح كله مرة واحدة»، «150 ده سعر السنة»). Setting the paid key
+   * is the owner choosing quality; the free models stay behind it as the
+   * fallback for an outage or a spent budget, never the other way round.
    */
   const providers: AnswerProvider[] = [];
+  if (env.ANTHROPIC_API_KEY) {
+    providers.push(new AnthropicProvider(env.ANTHROPIC_API_KEY, timeoutMs, env.ANTHROPIC_MODEL));
+  }
   if (env.GEMINI_API_KEY) {
     providers.push(
       new GeminiProvider(
@@ -56,9 +64,6 @@ export function selectAnswerProvider(timeoutMs: number): AnswerProvider | null {
         timeoutMs,
       ),
     );
-  }
-  if (env.ANTHROPIC_API_KEY) {
-    providers.push(new AnthropicProvider(env.ANTHROPIC_API_KEY, timeoutMs));
   }
 
   if (providers.length === 0) return null;

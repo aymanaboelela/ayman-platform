@@ -286,6 +286,58 @@ describe('the model fallback', () => {
   });
 });
 
+describe('the model fallback on WhatsApp — channel and voice', () => {
+  const draft = (text: string) =>
+    async function* (_q: string, _h: unknown, _s: unknown, _st: unknown, meta?: { provider: string | null }) {
+      if (meta) meta.provider = 'anthropic:claude-opus-5-5';
+      yield { t: 'delta' as const, text };
+      yield { t: 'done' as const, escalate: false };
+    };
+
+  it('asks with the WhatsApp channel rules', async () => {
+    modelEvents = [{ t: 'delta', text: 'المتغيّر مكان في الذاكرة.' }, { t: 'done', escalate: false }];
+    await ask('يعني إيه متغيّر؟');
+    const options = (ai.answer as jest.Mock).mock.calls.at(-1)![5];
+    expect(options).toMatchObject({ channel: 'whatsapp' });
+  });
+
+  /* «لو عايز تكمل…» reached a real student from the free model, 2026-11-04. */
+  it('throws away a masculine draft and sends the neutral rewrite', async () => {
+    modelEvents = [];
+    (ai.answer as jest.Mock)
+      .mockImplementationOnce(draft('لو عايز تفهمها، الحلقة بتكرر والدالة بتتنده.'))
+      .mockImplementationOnce(draft('الحلقة بتكرر خطوات، والدالة مجموعة خطوات بتتنده باسمها.'));
+    const result = await ask('إيه الفرق بين الحلقة والدالة؟');
+    expect(result.action).toBe('model');
+    expect(result.reply).toContain('مجموعة خطوات بتتنده');
+    expect(result.reply).not.toContain('عايز');
+    const retry = (ai.answer as jest.Mock).mock.calls.at(-1)![5];
+    expect(retry.correction).toContain('«عايز»');
+  });
+
+  it('hands to a person when the rewrite is still masculine', async () => {
+    modelEvents = [];
+    (ai.answer as jest.Mock)
+      .mockImplementationOnce(draft('لو محتاج حاجة ابعت.'))
+      .mockImplementationOnce(draft('لو محتاج حاجة ابعت تاني.'));
+    expect((await ask('إيه الفرق بين الحلقة والدالة؟')).action).toBe('handoff');
+  });
+});
+
+describe('closings and scams', () => {
+  it('«تمام مفيش مشكله» after an apology needs no answer and no person', async () => {
+    const result = await ask('تمام مفيش مشكله');
+    expect(result.action).toBe('silent');
+    expect(result.patch.needsHuman).toBeUndefined();
+  });
+
+  it('a forwarded prize scam is never answered', async () => {
+    modelEvents = [{ t: 'delta', text: 'أي حاجة' }, { t: 'done', escalate: false }];
+    const result = await ask('هدية نقدية بقيمة 3,000 جنيه — انقر على الرابط https://iuzbn.buzz/x');
+    expect(result).toMatchObject({ action: 'silent', reason: 'spam' });
+  });
+});
+
 describe('silence', () => {
   it.each(['شكرا', 'تمام', 'ok'])('«%s» needs no answer', async (text) => {
     expect((await ask(text)).action).toBe('silent');

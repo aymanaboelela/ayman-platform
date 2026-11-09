@@ -6,6 +6,7 @@ import {
   YEAR_INTENTS,
   classify,
   looksAutomated,
+  looksLikeSpam,
   parseYear,
   type BotIntent,
   type YearOption,
@@ -13,6 +14,7 @@ import {
 import type { BotAction, BotSettings } from '@ayman/contracts/wa-bot/schemas';
 import { normalizeArabic } from '@ayman/contracts/wa-bot/normalize';
 import { isOptOutMessage } from '@ayman/contracts/marketing/render';
+import { masculineAddress, masculineCorrection } from '@ayman/contracts/assistant/voice';
 import { isFeatureEnabled } from '../../common/entitlements';
 import { tenantName } from '../../common/tenant';
 import { AssistantAiService } from '../assistant/ai/assistant-ai.service';
@@ -126,6 +128,7 @@ export class WaBotBrainService {
     if (!text) return silent('empty');
     if (isOptOutMessage(text)) return silent('optOut');
     if (looksAutomated(text)) return silent('automated');
+    if (looksLikeSpam(text, this.ownHosts)) return silent('spam');
 
     const [resolved, catalog] = await Promise.all([this.answers.resolved(), this.facts.catalog()]);
     const { options } = catalog;
@@ -282,6 +285,46 @@ export class WaBotBrainService {
     };
   }
 
+  /** This stack's own host, so a student pasting a platform link is not spam. */
+  private get ownHosts(): string[] {
+    try {
+      return [new URL(this.facts.appUrl).host.replace(/^www\./, '')];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * The model's answer, or `null` for «hand this to a person».
+   *
+   * ## The masculine check, and why it retries instead of trusting the prompt
+   *
+   * The system prompt forbids gendered address in capitals, and Gemini Flash
+   * still wrote «لو عايز تكمل», «ممكن تتواصل», «لو محتاج مساعدة، ابعت» to real
+   * students in its first week on WhatsApp. A WhatsApp reply is not streamed,
+   * so unlike the website it can be READ before it is sent: a draft carrying
+   * a masculine form is thrown away and asked for again with the offending
+   * words named; a second failure goes to a person rather than out.
+   */
+  private async askModel(question: string, history: readonly AskTurn[]): Promise<string | null> {
+    const first = await this.draft(question, history, undefined);
+    if (first === null) return null;
+    // Only the model's own words are checked: the link lines under them are
+    // course titles and page names from the catalog, not address.
+    const words = masculineAddress(first.text);
+    if (words.length === 0) return first.reply;
+
+    this.logger.warn(`wa-bot model draft used masculine address (${words.join(', ')}); asking again`);
+    const second = await this.draft(question, history, masculineCorrection(words));
+    if (second === null) return null;
+    const still = masculineAddress(second.text);
+    if (still.length > 0) {
+      this.logger.warn(`wa-bot model rewrite still masculine (${still.join(', ')}); handing to a person`);
+      return null;
+    }
+    return second.reply;
+  }
+
   /**
    * المساعد's own model, answering from the platform's public facts only.
    *
@@ -291,14 +334,22 @@ export class WaBotBrainService {
    * fine inside a chat panel with a «contact» button under them, and not fine
    * as a WhatsApp message from the instructor's number.
    */
-  private async askModel(question: string, history: readonly AskTurn[]): Promise<string | null> {
+  private async draft(
+    question: string,
+    history: readonly AskTurn[],
+    correction: string | undefined,
+  ): Promise<{ text: string; reply: string } | null> {
     const meta: { provider: string | null } = { provider: null };
     let text = '';
     let escalate = false;
     let links: string[] = [];
     try {
       const signal = AbortSignal.timeout(MODEL_TIMEOUT_MS);
-      for await (const event of this.ai.answer(question.slice(0, 1000), history, signal, null, meta)) {
+      const events = this.ai.answer(question.slice(0, 1000), history, signal, null, meta, {
+        channel: 'whatsapp',
+        correction,
+      });
+      for await (const event of events) {
         if (event.t === 'delta') text += event.text;
         else if (event.t === 'error') return null;
         else if (event.t === 'done') {
@@ -312,10 +363,9 @@ export class WaBotBrainService {
     }
     const trimmed = text.trim();
     if (!meta.provider || escalate || !trimmed || trimmed === copy.assistant.ai.refused) return null;
-    return clip([trimmed, ...links].join('\n'));
+    return { text: trimmed, reply: clip([trimmed, ...links].join('\n')) };
   }
 
-  /** Every placeholder's value for this reply — read live, see `WaBotFactsService`. */
   private async vars(
     input: BrainInput,
     year: YearOption | null,

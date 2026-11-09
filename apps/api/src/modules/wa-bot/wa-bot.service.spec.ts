@@ -29,6 +29,7 @@ describe('WaBotService + WaBotReplier', () => {
   let chats: WaBotService;
   let replier: WaBotReplier;
   const send = jest.fn(async () => ({ messageId: `out-${send.mock.calls.length}-${Date.now()}` }));
+  const label = jest.fn(async () => true);
   const compose = jest.fn(async () => ({
     action: 'answer' as const,
     reply: 'دي أسعار الكورسات',
@@ -58,7 +59,7 @@ describe('WaBotService + WaBotReplier', () => {
     await prisma.$connect();
 
     const audit = { record: jest.fn() } as unknown as AuditService;
-    const device = { enabled: true, send } as unknown as WhatsappDeviceService;
+    const device = { enabled: true, send, label } as unknown as WhatsappDeviceService;
     const identity = new WaBotIdentityService(prisma);
     const settings = new WaBotSettingsService(prisma, audit);
     const facts = { catalog: async () => ({ courses: [], options: [] }) } as unknown as WaBotFactsService;
@@ -114,6 +115,7 @@ describe('WaBotService + WaBotReplier', () => {
 
   beforeEach(() => {
     send.mockClear();
+    label.mockClear();
     compose.mockClear();
   });
 
@@ -198,6 +200,8 @@ describe('WaBotService + WaBotReplier', () => {
     const chat = await prisma.waChat.findUniqueOrThrow({ where: { phone: HUMAN } });
     expect(chat).toMatchObject({ needsHuman: false, leadStatus: 'contacted', replyDueAt: null });
     expect(chat.humanRepliedAt).not.toBeNull();
+    // «محتاج رد مني» comes off the chat on his own WhatsApp.
+    expect(label).toHaveBeenCalledWith(HUMAN, 'محتاج رد مني', false);
 
     // They answer the person; the bot stays out of it for the whole window.
     await chats.recordInbound({ phone: HUMAN, text: 'الكورس بكام', messageId: `in-h3-${suffix}` }, at(t0, 2000));

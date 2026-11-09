@@ -3,6 +3,7 @@ import {
   BOT_INTENTS,
   DEFAULT_KEYWORDS,
   classify,
+  looksLikeSpam,
   looksAutomated,
   parseYear,
   type YearOption,
@@ -260,5 +261,42 @@ describe('looksAutomated — other bots are never answered', () => {
 
   it.each(['الكورس بكام', 'عايز اكلم حد', 'تمام شكرا'])('a person: «%s»', (text) => {
     expect(looksAutomated(text)).toBe(false);
+  });
+});
+
+// ── closings and scams (2026-11) ───────────────────────────────────────────
+
+
+describe('«مفيش مشكلة» is a closing, not a complaint', () => {
+  it('does not hand «تمام مفيش مشكله» to a person', () => {
+    const result = classify('تمام مفيش مشكله');
+    expect(result.intents).not.toContain('human');
+    expect(result.thanks).toBe(true);
+  });
+
+  it('reads «تعبت حضرتك معايا» as thanks', () => {
+    expect(classify('تعبت حضرتك معايا').thanks).toBe(true);
+  });
+
+  it('still hands a real problem to a person', () => {
+    expect(classify('عندي مشكلة في الدفع').intents).toContain('human');
+  });
+});
+
+describe('looksLikeSpam', () => {
+  it('catches the forwarded «هدية نقدية» scam with a foreign link', () => {
+    const text =
+      'الرئيس السيسي: هدية نقدية بقيمة 3,000 جنيه مصري للجميع\nانقر على الرابط أدناه\nhttps://iuzbn.buzz/mDaBCL/eg-ar?1104';
+    expect(looksLikeSpam(text, ['aymanaboelela.com'])).toBe(true);
+  });
+
+  it('lets a student paste a platform or YouTube link', () => {
+    expect(looksLikeSpam('الدرس ده مش بيفتح https://aymanaboelela.com/library/x', ['aymanaboelela.com'])).toBe(false);
+    expect(looksLikeSpam('شرح الفيديو ده https://youtu.be/abc', ['aymanaboelela.com'])).toBe(false);
+  });
+
+  it('leaves an ordinary question alone', () => {
+    expect(looksLikeSpam('الكورس بكام؟')).toBe(false);
+    expect(looksLikeSpam('ازاي احصل على الكتاب')).toBe(false);
   });
 });

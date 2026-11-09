@@ -212,6 +212,8 @@ export class WaBotService {
       });
       await this.markHumanReplied(tx, chat, now, 'phone');
     });
+    // He answered: «محتاج رد مني» comes off the chat on his phone.
+    if (chat.needsHuman) void this.device.label(phone, bot.needsReplyLabel, false);
   }
 
   /**
@@ -401,6 +403,7 @@ export class WaBotService {
       });
       await this.markHumanReplied(tx, chat, now, 'admin');
     });
+    if (chat.needsHuman) void this.device.label(chat.phone, bot.needsReplyLabel, false);
     await this.audit.record({
       action: 'wa-bot:reply',
       resourceType: 'wa_chat',
@@ -413,7 +416,7 @@ export class WaBotService {
   }
 
   async patchChat(id: string, patch: WaChatPatch): Promise<WaChatDetail> {
-    const chat = await this.prisma.waChat.findUnique({ where: { id }, select: { id: true } });
+    const chat = await this.prisma.waChat.findUnique({ where: { id }, select: { id: true, phone: true } });
     if (!chat) throw new NotFoundException();
     await this.prisma.waChat.update({
       where: { id },
@@ -422,6 +425,8 @@ export class WaBotService {
         ...(patch.botPaused !== undefined ? { botPaused: patch.botPaused } : {}),
       },
     });
+    // «تمام، اتحلّت» from the inbox moves the WhatsApp label the same way.
+    if (patch.needsHuman !== undefined) void this.device.label(chat.phone, bot.needsReplyLabel, patch.needsHuman);
     return this.chatDetail(id);
   }
 

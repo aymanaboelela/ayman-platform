@@ -268,8 +268,19 @@ const COURSE_WORDS = [
 /** How many answers one reply may combine before it stops being a reply. */
 export const MAX_INTENTS_PER_REPLY = 2;
 
+/**
+ * «مفيش مشكلة» is the OPPOSITE of a complaint, and it matched `human` on the
+ * word «مشكلة» — a student answering «تمام مفيش مشكله» to an apology was told
+ * «هوصّل الرسالة للفريق» and put in the queue for a person. Negated problem
+ * words, and «تعبتك»-style thanks, are rewritten to «تمام» before scoring so
+ * they read as the closing they are.
+ */
+const NOT_A_PROBLEM =
+  /(?:^|\s)(?:مفيش|مافيش|ما فيش|مش|ولا|بلاش)\s+(?:أي\s+|اي\s+)?(?:مشكل[ةه]|مشاكل|حاجة|حاجه)(?=\s|$|[.!،؟?])/gu;
+const THANKS_PHRASES = /(?:تعبت\s+حضرتك(?:\s+معايا)?|تعبتك(?:\s+معايا)?|تعبناك|ولا\s+يهمك|ربنا\s+يخليك|الله\s+يكرمك)/gu;
+
 export function classify(text: string, options: ClassifyOptions = {}): Classification {
-  const message = prepareMessage(text);
+  const message = prepareMessage(text.replace(NOT_A_PROBLEM, ' تمام ').replace(THANKS_PHRASES, ' شكرا '));
   const disabled = new Set(options.disabled ?? []);
   const scored: { key: string; score: number; rank: number }[] = [];
 
@@ -428,6 +439,43 @@ const AUTOMATED = [
   'this is an automated', 'do not reply', 'no-reply', 'out of office', 'away message',
   'لا ترد على هذه الرسالة', 'خارج أوقات العمل', 'سنرد عليك في أقرب وقت',
 ];
+
+/**
+ * Hosts a student plausibly links to while asking a real question. Anything
+ * else — `iuzbn.buzz/mDaBCL/eg-ar?…` was the first one — is a forwarded scam.
+ */
+const KNOWN_HOSTS = [
+  'youtube.com', 'youtu.be', 'whatsapp.com', 'wa.me', 'facebook.com', 'fb.com', 'fb.watch',
+  'instagram.com', 'tiktok.com', 'google.com', 't.me', 'telegram.me',
+];
+
+/** High-precision phrases only: each is something no student asks a teacher. */
+const SCAM_PHRASES = [
+  'هدية نقدية', 'هديه نقديه', 'انقر على الرابط', 'اضغط على الرابط', 'لقد ربحت', 'مبروك لقد',
+  'للحصول على هديتك', 'لقد حصلت على هديتي', 'للاطلاع على هديتك',
+];
+
+/**
+ * A forwarded advert, prize or chain message — answered with silence.
+ *
+ * The bot answered «الرئيس السيسي: هدية نقدية بقيمة 3,000 جنيه… انقر على
+ * الرابط» with «السؤال ده مش من ضمن الحاجات اللي أقدر أساعد فيها», which tells
+ * the sender the number is live and costs a model call to say nothing.
+ *
+ * `ownHosts` are this stack's own domains (site, media); a link there is a
+ * student showing the page they are stuck on.
+ */
+export function looksLikeSpam(text: string, ownHosts: readonly string[] = []): boolean {
+  const folded = normalizeArabic(text);
+  if (SCAM_PHRASES.some((phrase) => folded.includes(normalizeArabic(phrase)))) return true;
+  const allowed = [...KNOWN_HOSTS, ...ownHosts.map((h) => h.toLowerCase())];
+  for (const match of text.matchAll(/https?:\/\/([^\s/?#]+)/giu)) {
+    const host = match[1]!.toLowerCase().replace(/^www\./, '');
+    const ok = allowed.some((known) => host === known || host.endsWith(`.${known}`));
+    if (!ok) return true;
+  }
+  return false;
+}
 
 export function looksAutomated(text: string): boolean {
   const folded = normalizeArabic(text);

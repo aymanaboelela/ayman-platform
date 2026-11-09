@@ -488,6 +488,81 @@ export function pricingBlock(facts: AssistantFacts | null): string {
   );
 }
 
+// ── how a course is sold ───────────────────────────────────────────────────
+
+/** Lessons listed per month before the list is cut — a month is 2–10 in practice. */
+const MONTH_LESSONS_MAX = 12;
+const LESSON_TITLE_MAX = 70;
+
+/**
+ * The months and terms of every paid course, and the rule that ties them to
+ * access — the block the model was missing when it told students the course
+ * «بيتفتح كله مرة واحدة» and «مالوش تقسيم شهري».
+ *
+ * The rules are the ones `LessonAccessService` enforces: a month grant opens
+ * the lessons tagged to that month and nothing else, a term grant opens the
+ * term's units, and a course-wide (year) grant opens everything. They are
+ * stated here as instructions because a model that is only shown the data
+ * still guesses how the data combines.
+ *
+ * `null` facts → nothing about structure may be said, same as prices.
+ */
+export function structureBlock(facts: AssistantFacts | null): string {
+  if (!facts) {
+    return 'How courses are split into months and terms could NOT be read for this request. Do not describe it; if asked, say it needs checking and emit the escalation marker.';
+  }
+
+  const rules = [
+    'This is how access is sold on this platform. It is enforced by the code; never contradict it and never describe it any other way.',
+    '- A course is split into MONTHS («الشهر الأول»، «الشهر الثاني»…). Buying a month opens the lessons of THAT month only.',
+    '- Every month is bought on its own. An earlier month that is open can still be bought at any time — nobody has to have started at the beginning of the year.',
+    '- A month marked «لسه ما نزلش» has not been released. Say it has not come out yet. Never give a date for it.',
+    '- A TERM opens every unit of that term in one purchase. The FULL YEAR opens the whole course: what is out now and what comes out later.',
+    '- Lessons are recorded videos, open as soon as the purchase is approved. There is no fixed weekly class time for the online course.',
+    '- When asked what a month covers, name its lessons from the list below. Never invent a lesson, a unit or a topic that is not listed.',
+  ].join('\n');
+
+  const paid = facts.courses.filter((course) => course.requiresGrant && course.months.length + course.terms.length > 0);
+  if (paid.length === 0) return `${rules}\n\nمفيش كورس مقسوم شهور أو ترمات دلوقتي.`;
+
+  const blocks = paid.map((course) => {
+    const lines = [`«${course.title}» (${course.slug})`];
+    for (const month of course.months) {
+      if (!month.isOpen) {
+        lines.push(`- ${month.title}: لسه ما نزلش`);
+        continue;
+      }
+      const cents = month.priceCents ?? course.monthlyPriceCents;
+      const price = cents !== null ? ` — ${egp(cents)}` : '';
+      const shown = month.lessons.slice(0, MONTH_LESSONS_MAX).map((title) => clipTitle(title));
+      const more = month.lessons.length > MONTH_LESSONS_MAX ? ` (+${month.lessons.length - MONTH_LESSONS_MAX} درس تاني)` : '';
+      const lessons = shown.length > 0 ? `: ${shown.join('، ')}${more}` : ': الدروس لسه بتتضاف';
+      lines.push(`- ${month.title} (نازل${price})${lessons}`);
+    }
+    for (const term of course.terms) {
+      if (!term.isOpen) {
+        lines.push(`- ${term.title}: مش متاح للشراء دلوقتي`);
+        continue;
+      }
+      const sale =
+        term.salePriceCents !== null && term.priceCents !== null && term.salePriceCents < term.priceCents
+          ? ` (عرض دلوقتي ${egp(term.salePriceCents)} بدل ${egp(term.priceCents)})`
+          : '';
+      const price = term.priceCents !== null ? ` — ${egp(term.priceCents)}` : '';
+      lines.push(`- ${term.title}${sale || price}`);
+    }
+    if (course.yearlyPriceCents !== null) lines.push(`- السنة كاملة — ${egp(course.yearlyPriceCents)}`);
+    return lines.join('\n');
+  });
+
+  return [rules, ...blocks].join('\n\n');
+}
+
+function clipTitle(title: string): string {
+  const flat = title.replace(/\s+/g, ' ').trim();
+  return flat.length > LESSON_TITLE_MAX ? `${flat.slice(0, LESSON_TITLE_MAX - 1)}…` : flat;
+}
+
 // ── the no-model path ──────────────────────────────────────────────────────
 
 /**

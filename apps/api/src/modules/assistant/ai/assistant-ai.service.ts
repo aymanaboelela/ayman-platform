@@ -27,6 +27,7 @@ import {
   knowledgeBlock,
   matchKnowledge,
   pricingBlock,
+  structureBlock,
 } from './assistant-knowledge';
 import type { AnswerProvider } from './providers/answer-provider';
 import { selectAnswerProvider } from './providers/select-provider';
@@ -71,9 +72,9 @@ import { selectAnswerProvider } from './providers/select-provider';
  * answers, no red error, and «أكلّم م. أيمن» on every reply. A support widget
  * that says "not configured" is a support widget nobody turns on.
  *
- * Gemini wins over Anthropic when BOTH are set — a deployment carrying two
- * keys is one mid-migration, and the free one is the safer thing to be
- * spending while nobody is watching.
+ * Anthropic answers first when BOTH are set (since 2026-11): the free models
+ * measurably broke the gender and the how-courses-are-sold rules, so a paid
+ * key is the owner choosing quality, and the free ones are its fallback.
  */
 
 /**
@@ -208,6 +209,8 @@ export const SYSTEM = `You are «${copy.assistant.title}» — the built-in assi
 # ⚠️ NEVER ADDRESS THE READER WITH A GENDERED FORM
 This platform never asks whether a student is a boy or a girl, so the copy must never guess. Arabic second-person imperatives and pronouns inflect for gender; يـ/تـ endings and ـك pronouns on verbs are the trap.
 - FORBIDDEN: «اضغط», «اضغطي», «ادخل», «روح», «انت متأكد», «هتلاقيها», «جاهز؟»
+- ALSO FORBIDDEN, and these are the ones that actually slipped through to students: «لو عايز تكمل», «تقدر تذاكر», «متاح ليك», «ممكن تتواصل», «لو محتاج مساعدة», «ابعت رسالة», «اشترك في», «تمشي فيه بالسرعة اللي تناسبك» said TO the reader.
+- Rewrite pattern: «لو عايز تكمل…» → «لو الهدف تكملة…»; «تقدر تذاكر في أي وقت» → «المذاكرة متاحة في أي وقت»; «متاح ليك» → «متاح»; «ممكن تتواصل مع…» → «أوصّل السؤال لـ…».
 - USE INSTEAD: the verbal noun («دوسة على…», «الدخول من…», «تحميل الملف من…»), a nominal sentence («الملف موجود في صفحة الدرس»), or the FIRST person («أوصّلك ل${INSTRUCTOR_NAME}», «أقدر أساعد في…»).
 - «حضرتك» is safe. «إنت» is not.
 
@@ -419,6 +422,31 @@ export class SentinelFilter {
  * because their second one failed would be the server punishing them for its
  * own earlier bad day.
  */
+/** See `answer()`'s `options`. */
+export interface AnswerOptions {
+  /** `whatsapp` adds `WHATSAPP_CHANNEL`; the website widget is the default. */
+  readonly channel?: 'web' | 'whatsapp';
+  /** Why the previous draft was refused, and what to do instead. */
+  readonly correction?: string;
+}
+
+/**
+ * The rules that change when the reply goes out on WhatsApp.
+ *
+ * `SYSTEM` describes the website widget — a panel with a «أكلّم…» button
+ * under it — and on WhatsApp the model followed it literally: «ممكن تبعت
+ * طلبك للمتابعة على واتساب من زرار «أكلّم المهندس أيمن أبو العلا» تحت», sent
+ * on WhatsApp, to someone already on WhatsApp, about a button that does not
+ * exist there. Stated as an override because it has to beat lines above it.
+ */
+const WHATSAPP_CHANNEL = `# CHANNEL: WHATSAPP — these lines OVERRIDE anything above that describes the website widget
+- This conversation is a WhatsApp chat with the platform's number, not the website assistant. There are NO buttons, cards, panels or menus here. Never mention a button, «تحت», a card, the widget, or «المساعد».
+- ${INSTRUCTOR_NAME} reads this same WhatsApp chat and replies in it himself. Never tell anyone to contact him on WhatsApp or anywhere else — they already are talking to his number. When a person is needed, emit the escalation marker and say nothing about how to reach him; the system tells them.
+- Never write a URL. Page links are added automatically after your message from the destination markers.
+- One to three short sentences of plain text. No lists, no headings, no markdown, and no emoji other than the 🌷 in the line below.
+- A message that is only thanks, «تمام», «ماشي», «مفيش مشكلة» or a goodbye gets one short warm line such as «العفو 🌷 في الخدمة.» and nothing else — never a new explanation.
+- A message that is a forwarded advert, a prize, a giveaway, a political or religious chain message, or contains a link to another site: reply with nothing but the escalation marker.`;
+
 export function openingWithUser(history: readonly AskTurn[]): readonly AskTurn[] {
   const first = history.findIndex((turn) => turn.role === 'user');
   return first === -1 ? [] : history.slice(first);
@@ -501,6 +529,13 @@ export class AssistantAiService {
      * apart.
      */
     meta?: { provider: string | null },
+    /**
+     * Where the answer will be read, and a correction to apply to it.
+     *
+     * Both land in the per-request CONTEXT block, never in `SYSTEM` — the
+     * cached prefix stays byte-identical whichever channel asks.
+     */
+    options?: AnswerOptions,
   ): AsyncGenerator<AskEvent> {
     /*
      * ── THE PRICES, ONCE PER REQUEST AND BEFORE THE BRANCH ───────────────
@@ -563,6 +598,9 @@ export class AssistantAiService {
         context: [
           `# CATALOG\n${catalogBlock(courses)}`,
           `# PRICES\n${pricingBlock(money)}`,
+          `# HOW EACH COURSE IS SOLD\n${structureBlock(money)}`,
+          options?.channel === 'whatsapp' ? WHATSAPP_CHANNEL : '',
+          options?.correction ? `# ⚠️ CORRECTION — REWRITE\n${options.correction}` : '',
           student ? `# THIS STUDENT (the one asking, and the only one you can see)\n${student}` : '',
         ]
           .filter(Boolean)
