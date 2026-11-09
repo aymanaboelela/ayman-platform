@@ -5235,7 +5235,7 @@ export const copy = {
     openWithReply: 'فتح المساعد — فيه رد جديد',
     close: 'قفل المساعد',
     title: 'مساعد المنصة',
-    subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
+    subtitle: 'الرسالة بتوصل لأيمن نفسه، والرد بيرجع هنا ومعاه إشعار.',
     /**
      * The two WhatsApp links in the panel's footer, on every screen of the
      * guide. «القناة» first: it is the one that reaches the student again

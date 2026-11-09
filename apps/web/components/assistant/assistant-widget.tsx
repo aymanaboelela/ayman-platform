@@ -75,10 +75,7 @@ import { copy } from '@ayman/contracts/copy';
 import { tenantName } from '@/lib/tenant';
 import { IS_AYMAN } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
-import type {
-  AssistantTranscriptTurn,
-  ConversationThread,
-} from '@ayman/contracts/assistant/conversation';
+import type { ConversationThread } from '@ayman/contracts/assistant/conversation';
 import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
 import { cn } from '@ayman/ui/lib/cn';
 // The barrel spells this `export * as motionPresets`, so the namespace form is
@@ -90,12 +87,6 @@ import { AssistantRobot } from './assistant-robot';
 import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
 import { useVisibleViewport } from './use-visible-viewport';
 import { loadAssistantSummary } from './assistant-summary';
-/*
- * TYPE-ONLY. `./assistant-handoff` reaches `ConversationThreadSchema`, so it
- * is Zod, so it is behind an `import()` at the moment of a handoff — exactly
- * like the three screens above. The type is erased and costs nothing.
- */
-import type { HandoffState } from './assistant-handoff';
 
 /**
  * The two strings on this widget that name the instructor, gated.
@@ -140,10 +131,6 @@ const CONTACT_LABEL = IS_AYMAN
  * a round trip at the moment of a deliberate tap, rather than a delay on the
  * way to a page.
  */
-const AssistantChat = dynamic(
-  () => import('./assistant-chat').then((module) => module.AssistantChat),
-  { ssr: false },
-);
 const AssistantEscalate = dynamic(
   () => import('./assistant-escalate').then((module) => module.AssistantEscalate),
   { ssr: false },
@@ -156,11 +143,12 @@ const AssistantThread = dynamic(
 const c = copy.assistant;
 
 /**
- * The four screens of the panel — and only ONE of them is a destination.
+ * The three screens of the panel.
  *
- * `chat` is what opens, and for most students it is the whole widget. The
- * other three are places the chat sends you: the handoff form, its
- * confirmation, and the conversation أيمن answers in.
+ * `escalate` — the box that goes straight to أيمن — is what opens. There is
+ * no AI chat in front of it any more: «مش عاوز يبقى في رد في المنصة تلقائي»,
+ * every question reaches him as written and he answers it himself. The other
+ * two are its confirmation and the conversation he answers in.
  *
  * There used to be a fifth, `guide` — a question tree behind its own tab,
  * beside the chat and the conversation. Three tabs over a support panel is
@@ -170,7 +158,7 @@ const c = copy.assistant;
  * the server, derived from `copy.assistant.script` — but nobody has to walk
  * them to get one.
  */
-type Mode = 'chat' | 'escalate' | 'sent' | 'thread';
+type Mode = 'escalate' | 'sent' | 'thread';
 
 /**
  * Where the launcher lives, which is a property of the SURFACE and not of the
@@ -266,7 +254,7 @@ export function AssistantWidget({
   );
 
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>('chat');
+  const [mode, setMode] = useState<Mode>('escalate');
   /*
    * Only while the panel is open. The listener is cheap, but it writes two
    * custom properties on `<html>` on every visual-viewport change — which on a
@@ -274,49 +262,6 @@ export function AssistantWidget({
    * is closed.
    */
   useVisibleViewport(open);
-  /*
-   * What «أكلّم م. أيمن» starts the box with.
-   *
-   * Empty from the footer and from the guided tree — nothing has been typed
-   * yet — and the student's own question when the handoff came out of the
-   * chat, where they have already written it once. Held here rather than in
-   * `AssistantChat` because the form is a sibling screen, not a child of it.
-   */
-  const [escalateDraft, setEscalateDraft] = useState('');
-
-  /**
-   * The chat's transcript, as a REF the chat keeps current.
-   *
-   * Read at exactly two moments — a handoff, and a press on «أكلّم م. أيمن» in
-   * the footer — and never rendered from. Holding it as state up here would
-   * re-render the launcher, the panel and every screen in it on each streamed
-   * token to maintain a copy nothing on screen is reading; see the prop's own
-   * note in `assistant-chat.tsx`.
-   */
-  const transcriptRef = useRef<AssistantTranscriptTurn[]>([]);
-  /*
-   * The transcript FROZEN at the moment the handoff started.
-   *
-   * Not `transcriptRef.current` read again at submit time: the form is a
-   * screen the student can sit on for a minute, the chat stays mounted behind
-   * it, and an answer still streaming in would keep appending to the ref. What
-   * أيمن should read is the conversation as it stood when المساعد gave up.
-   */
-  const [escalateTranscript, setEscalateTranscript] = useState<AssistantTranscriptTurn[]>([]);
-  /** Where المساعد's own handoff has got to — the chat's card draws this. */
-  const [handoff, setHandoff] = useState<HandoffState>('idle');
-  /**
-   * How many turns of this chat أيمن has already been sent.
-   *
-   * المساعد can give up twice in one sitting, and the second handoff must not
-   * re-file the four turns the first one already put in the thread — he would
-   * read the same exchange twice, with the new question buried under it. Only
-   * the tail since the last successful handoff travels.
-   *
-   * A ref: it is bookkeeping between two events, nothing renders from it, and
-   * advancing it must not re-render the panel mid-answer.
-   */
-  const carriedTurns = useRef(0);
 
   /*
    * What the LAUNCHER knows, and what the PANEL knows, kept apart on purpose.
@@ -491,149 +436,6 @@ export function AssistantWidget({
       .catch(() => setThreadFailed(true));
   }, []);
 
-  /**
-   * المساعد ran out of answer — so the question goes to أيمن, now, without
-   * anybody being sent to a second screen to send it themselves.
-   *
-   * ## Signed in: the promise is kept here, silently
-   *
-   * The platform already holds their name and their WhatsApp number, so there
-   * is nothing left to ask and nothing left to confirm. The thread is opened
-   * with the question AND the exchange that led to it, the panel stays exactly
-   * where it is — on the answer they are still reading — and the card under
-   * that answer changes from «بنوصّل» to «راحت». «الطالب مالوش دعوة إن فيه
-   * شاشة تانية».
-   *
-   * ## A guest: the form, because there is nowhere to reply TO
-   *
-   * A visitor with no account has left no way to be answered. Opening a thread
-   * for them would be filing a question أيمن can read and cannot respond to,
-   * so the card asks for a name and a number instead — and the transcript and
-   * the question are carried into that form already written, so it is one
-   * field and a number rather than a fresh start.
-   *
-   * ## A failure is never silent and never a dead end
-   *
-   * `failed` puts the same form up with a different sentence. المساعد has just
-   * said «هبعت الرسالة»; if that did not happen, the student has to be told,
-   * and told what to press.
-   */
-  const handleEscalate = useCallback(
-    (question: string) => {
-      const all = [...transcriptRef.current];
-      /*
-       * ⚠️ CLAMPED BEFORE SLICING, because the two sides of this subtraction
-       * do not have the same lifetime.
-       *
-       * `transcriptRef` is a VIEW of `messages` — rebuilt from it on every
-       * change — so «مسح» empties it back to `[]` and the next question starts
-       * counting from zero. `carriedTurns` is a widget-level ref that only
-       * ever goes up. After one handoff and one clear, `all.length` was 2 and
-       * `carriedTurns.current` was 6, so `slice(6)` returned nothing and the
-       * SECOND handoff reached أيمن with a bare sentence and no chat under it
-       * — the exact failure the transcript exists to fix, on the second
-       * occurrence, silently.
-       *
-       * A count larger than the transcript can only mean the transcript was
-       * rebuilt, and nothing in the current one has been filed.
-       */
-      if (carriedTurns.current > all.length) carriedTurns.current = 0;
-      // The exchange as it stands RIGHT NOW, minus whatever a previous handoff
-      // already filed — see the state's and the ref's own notes.
-      const transcript = all.slice(carriedTurns.current);
-      setEscalateDraft(question);
-      setEscalateTranscript(transcript);
-
-      if (!isSignedIn) {
-        setHandoff('needsIdentity');
-        return;
-      }
-
-      setHandoff('sending');
-
-      void (async () => {
-        /*
-         * ⚠️ THE THREAD IS FETCHED FIRST WHEN THE SUMMARY SAYS THERE IS ONE.
-         *
-         * A second handoff belongs IN the conversation that already exists:
-         * opening another puts two rows in صندوق الوارد for one afternoon, and
-         * the third is refused outright by `MAX_OPEN_PER_IDENTITY` — the
-         * student told their question could not be sent because they had asked
-         * too many.
-         *
-         * The guard used to be `thread && thread.status !== 'closed'`, which
-         * read the wrong state. `thread` is only ever populated by opening the
-         * panel onto the conversation or by a handoff earlier in THIS page
-         * load; a student who was handed over yesterday, or on the previous
-         * page, arrives here with `thread === null` and `summary.hasOpenThread
-         * === true` — and that is the ordinary case, not the corner one. So
-         * the branch that mattered always took the "open a new one" road.
-         *
-         * `ensureThread`'s `threadRequested` flag is claimed here too, so a
-         * later tap on the launcher does not fetch it a second time. It is
-         * deliberately not READ as a guard: it is set the moment a fetch
-         * STARTS, so an `ensureThread` still in flight would leave `thread`
-         * null here and send this branch back down the "open a new one" road
-         * that this whole block exists to close.
-         */
-        let existing = thread;
-        if (!existing && hasOpenThread) {
-          threadRequested.current = true;
-          existing = await import('./assistant-session')
-            .then(({ loadAssistantThread }) => loadAssistantThread())
-            /*
-             * A failed lookup falls through to opening a new conversation
-             * rather than failing the handoff. المساعد has just promised to
-             * send the question; a duplicate row in his inbox is a far smaller
-             * cost than a promise broken because a probe timed out.
-             */
-            .catch(() => null);
-          if (existing) setThread(existing);
-        }
-
-        // `live`, not `open` — the widget already has an `open` in scope and it
-        // is the panel's visibility, which is a different thing entirely.
-        const live = existing && existing.status !== 'closed' ? existing : null;
-        const { openAssistantConversation, postAssistantMessage } = await import(
-          './assistant-handoff'
-        );
-        return live
-          ? postAssistantMessage(live.id, question, transcript)
-          : openAssistantConversation({
-              /*
-                `['root']` — the same trail the form posts. The tree is gone,
-                so there is no route anybody walked; the inbox renders no
-                crumbs and reads the transcript instead, which is a far better
-                answer to «هو سأل على إيه» than a breadcrumb ever was.
-              */
-              entryPath: ['root'],
-              message: question,
-              transcript,
-            });
-      })()
-        .then((opened) => {
-          setThread(opened);
-          // The POST returned the thread this session just created, so there is
-          // nothing left for `ensureThread` to fetch — the same bookkeeping the
-          // form's `onOpened` does, and for the same reason.
-          threadRequested.current = true;
-          // Only on SUCCESS. A failed send that advanced this would drop the
-          // turns it failed to carry out of the retry.
-          carriedTurns.current = all.length;
-          setHandoff('sent');
-        })
-        /*
-         * Everything lands here: a 429 from the open-thread throttle, a 403
-         * from `MAX_OPEN_PER_IDENTITY`, a failed chunk fetch. They differ to a
-         * server and not to a student, whose next move is the same in all
-         * three — and the form gives its own, better-worded error when they
-         * press again.
-         */
-        .catch(() => setHandoff('failed'));
-    },
-    [isSignedIn, thread, hasOpenThread],
-  );
-
   /*
    * `?assistant=1` — where a reply notification lands.
    *
@@ -669,7 +471,7 @@ export function AssistantWidget({
 
   const closePanel = useCallback(() => {
     setOpen(false);
-    setMode('chat');
+    setMode('escalate');
     // `router.replace`, not `history.replaceState`: `useSearchParams()` reads
     // Next's router state, and a raw history write leaves it believing the
     // parameter is still there — the panel would refuse to close.
@@ -701,7 +503,7 @@ export function AssistantWidget({
      * not been fetched yet and this tap is what fetches it.
      */
     if (thread) {
-      setMode(thread.status !== 'closed' ? 'thread' : 'chat');
+      setMode(thread.status !== 'closed' ? 'thread' : 'escalate');
       return;
     }
     if (hasOpenThread) {
@@ -709,7 +511,7 @@ export function AssistantWidget({
       setMode('thread');
       return;
     }
-    setMode('chat');
+    setMode('escalate');
   }
 
   /*
@@ -757,7 +559,7 @@ export function AssistantWidget({
           <m.div
             role="dialog"
             aria-modal="false"
-            aria-label={c.title}
+            aria-label={CONTACT_LABEL}
             initial={motionPresets.popover.initial}
             animate={motionPresets.popover.animate}
             exit={motionPresets.popover.exit}
@@ -808,8 +610,10 @@ export function AssistantWidget({
                 />
               </span>
               <span className="flex-1">
+                {/* «أكلّم م. أيمن», not «مساعد المنصة»: there is no assistant
+                    left in here, only the box that reaches him. Gated above. */}
                 <span className="block text-[length:var(--fs-text-sm)] font-semibold">
-                  {c.title}
+                  {CONTACT_LABEL}
                 </span>
                 {/*
                   ⚠️ Gated, and it is the line that proved a gate in a file is
@@ -842,45 +646,6 @@ export function AssistantWidget({
               the transcript scrolling behind it.
             */}
             <div className="flex min-h-0 flex-1 flex-col">
-              {/*
-                ⚠️ HIDDEN, not unmounted — and this is the difference between a
-                chat and a form that forgets you.
-
-                The transcript lives inside `useAssistantAsk`, so unmounting
-                this screen throws it away: a tap on «أسئلة شائعة», or the
-                round trip through the handoff form and back, erased the
-                conversation the student was in the middle of. Worse, it
-                aborted an answer that was still streaming.
-
-                `display: contents` on the wrapper keeps `AssistantChat` a
-                direct flex item of the column above — its `flex-1 min-h-0` is
-                what lets the composer sit at the bottom while the transcript
-                scrolls — and `display: none` takes the whole subtree out of
-                layout without touching its state. An answer requested from
-                this tab keeps arriving while the reader is on another one, and
-                is waiting for them when they come back.
-              */}
-              <div className={panelMode === 'chat' ? 'contents' : 'hidden'}>
-                <AssistantChat
-                  transcriptRef={transcriptRef}
-                  handoff={handoff}
-                  onEscalate={handleEscalate}
-                  /*
-                    A new question makes the last handoff's receipt stale. This
-                    state only ever moves forward, so without putting it back
-                    the second escalating answer rendered the FIRST one's
-                    «الرسالة راحت» for a frame before its own handoff started —
-                    see `askFresh` in `assistant-chat.tsx`.
-                  */
-                  onNewQuestion={() => setHandoff('idle')}
-                  onOpenHandoffForm={() => setMode('escalate')}
-                  onOpenThread={() => {
-                    ensureThread();
-                    setMode('thread');
-                  }}
-                />
-              </div>
-
               {panelMode === 'escalate' ? (
                 // `overscroll-contain` — the same scroll-chaining fix as the
                 // chat transcript in `assistant-chat.tsx`, for the one other
@@ -895,42 +660,21 @@ export function AssistantWidget({
                     */
                     entryPath={['root']}
                     isSignedIn={isSignedIn}
-                    initialMessage={escalateDraft}
-                    /*
-                      Whatever المساعد and the student had already said, frozen
-                      at the handoff. Empty when the form was reached from the
-                      footer with nothing typed into the chat, and the server
-                      then simply writes no transcript message.
-                    */
-                    transcript={escalateTranscript}
                     onOpened={(opened) => {
                       setThread(opened);
-                      // A guest who has now left a number, or a retry after a
-                      // failure — either way the handoff المساعد promised has
-                      // happened, and the card behind this screen has to say so
-                      // rather than still be offering to send it.
-                      setHandoff('sent');
                       // The POST just returned the thread this session created,
                       // so there is nothing left for `ensureThread` to go and
                       // get. Marking it done stops a later tap — or a
                       // `?assistant=1` — spending a request to fetch what is
                       // already in hand.
                       threadRequested.current = true;
-                      // Everything the form just filed is now with him.
-                      carriedTurns.current = transcriptRef.current.length;
                       setMode('sent');
                     }}
                     /*
-                      There is one screen to go back TO now. This used to
-                      branch — `escalateDraft ? 'chat' : 'guide'` — because the
-                      handoff could be reached from either the chat or the
-                      question tree. The tree is gone, and the stale branch
-                      sent «رجوع» to a mode that no longer renders: the panel
-                      went blank, with the chat still mounted and hidden behind
-                      nothing. Caught by `assistant.e2e.ts`, which walks
-                      chat → handoff → back.
+                      No `onBack`: this form is the panel's first screen now
+                      that the AI chat in front of it is gone, so there is
+                      nothing to go back to.
                     */
-                    onBack={() => setMode('chat')}
                   />
                 </div>
               ) : null}
@@ -991,72 +735,44 @@ export function AssistantWidget({
             </div>
 
             {/*
-              ── «أكلّم م. أيمن», on every screen ─────────────────────────
+              ── under the box: the old conversation and WhatsApp ─────────
 
-              «عاوز يقدر يتواصل مع المهندس أيمن على طول». Before this, reaching
-              him meant walking two or three stops into the tree and finding a
-              tinted row at the bottom of a menu — so somebody who opened the
-              panel already knowing they wanted a person had to answer four
-              questions they did not care about first.
+              Only on `escalate`, the screen that opens. Not on `sent` or
+              `thread`: there the student is already talking to him.
 
-              Not shown on `escalate` or `sent`: on those two screens the
-              student IS talking to him, and a button offering to start what
-              they are already doing is the kind of thing that makes a reader
-              doubt whether it worked. Not on `thread` either, for the same
-              reason.
+              The thread button appears only when a conversation exists. An
+              OPEN one never gets here — `openPanel` lands on it directly — so
+              this is the way back to one he answered and closed, for a
+              student who opened the panel to ask something new.
             */}
-            {panelMode === 'chat' ? (
+            {panelMode === 'escalate' ? (
               <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line-subtle px-3 py-2">
-                {/*
-                  ONE button, and what it says depends on whether a
-                  conversation already exists.
-
-                  «محادثتك» used to be a third tab. Three tabs over a chat
-                  panel is three decisions before a student has asked
-                  anything — «هيتلحبط من ٣ دول» — so the panel is one screen
-                  now and this is the only way out of it. That makes the label
-                  load-bearing: «أكلّم م. أيمن» when there is nobody to go back
-                  to, and «محادثتك» when there is, because a student with an
-                  answer waiting must not be offered a way to start a second
-                  conversation instead of reading the first.
-                */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (hasThread) {
+                {hasThread ? (
+                  <button
+                    type="button"
+                    onClick={() => {
                       ensureThread();
                       setMode('thread');
-                      return;
-                    }
-                    setEscalateDraft('');
-                    /*
-                      Nobody typed a question at المساعد and then pressed this —
-                      they either had a conversation or they did not. If they
-                      did, it goes with them: «محتاج أشوف الشات كامل عشان أعرف
-                      هو سأل على إيه» is just as true when the student decided
-                      to ask a person as when المساعد decided for them.
-                    */
-                    setEscalateTranscript([...transcriptRef.current]);
-                    setMode('escalate');
-                  }}
-                  className={cn(
-                    'relative flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent/10 px-2.5 py-1',
-                    'text-[length:var(--fs-text-xs)] font-medium text-accent-text',
-                    'transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20',
-                  )}
-                >
-                  <UserRoundCheck className="size-3.5" aria-hidden="true" />
-                  {hasThread ? THREAD_TITLE : CONTACT_LABEL}
-                  {/* The same dot the launcher carries, for the same reason:
-                      it is the only thing on this screen that says an answer
-                      is waiting behind the button. */}
-                  {hasThread && unread > 0 ? (
-                    <span
-                      aria-hidden="true"
-                      className="size-1.5 rounded-full bg-[color:var(--err)]"
-                    />
-                  ) : null}
-                </button>
+                    }}
+                    className={cn(
+                      'relative flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent/10 px-2.5 py-1',
+                      'text-[length:var(--fs-text-xs)] font-medium text-accent-text',
+                      'transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20',
+                    )}
+                  >
+                    <UserRoundCheck className="size-3.5" aria-hidden="true" />
+                    {THREAD_TITLE}
+                    {/* The same dot the launcher carries, for the same reason:
+                        it is the only thing on this screen that says an answer
+                        is waiting behind the button. */}
+                    {unread > 0 ? (
+                      <span
+                        aria-hidden="true"
+                        className="size-1.5 rounded-full bg-[color:var(--err)]"
+                      />
+                    ) : null}
+                  </button>
+                ) : null}
 
                 <AssistantWhatsappLinks whatsapp={whatsapp} />
               </footer>

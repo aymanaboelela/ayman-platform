@@ -115,11 +115,18 @@ test.describe('the assistant on a phone', () => {
     expect(Math.round(box!.y)).toBe(OFFSET);
     expect(Math.round(box!.height)).toBe(PHONE.height - KEYBOARD);
 
-    // And the composer came with it, above where the keyboard would be.
+    // And the message box can be brought above where the keyboard would be.
+    // It is not pinned any more: the panel opens on the form to the
+    // instructor (no AI chat composer), and that form scrolls inside the
+    // panel. Focusing it — what a real tap does — scrolls it into view.
     const composer = page.locator('.assistant-panel textarea').first();
+    await composer.focus();
+    await composer.scrollIntoViewIfNeeded();
     const cbox = await composer.boundingBox();
     expect(cbox).not.toBeNull();
-    expect(cbox!.y + cbox!.height).toBeLessThanOrEqual(PHONE.height - KEYBOARD);
+    // Bounded by the panel's own bottom edge — the visible area runs from
+    // OFFSET to OFFSET + (PHONE.height - KEYBOARD), not from 0.
+    expect(cbox!.y + cbox!.height).toBeLessThanOrEqual(box!.y + box!.height);
   });
 
   test('hides the floating launcher behind the sheet', async ({ page }) => {
