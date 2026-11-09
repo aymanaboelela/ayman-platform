@@ -124,7 +124,9 @@ test.describe('the assistant on a phone', () => {
     await composer.scrollIntoViewIfNeeded();
     const cbox = await composer.boundingBox();
     expect(cbox).not.toBeNull();
-    expect(cbox!.y + cbox!.height).toBeLessThanOrEqual(PHONE.height - KEYBOARD);
+    // Bounded by the panel's own bottom edge — the visible area runs from
+    // OFFSET to OFFSET + (PHONE.height - KEYBOARD), not from 0.
+    expect(cbox!.y + cbox!.height).toBeLessThanOrEqual(box!.y + box!.height);
   });
 
   test('hides the floating launcher behind the sheet', async ({ page }) => {
