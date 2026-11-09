@@ -280,6 +280,24 @@ describe('the model fallback', () => {
     expect((await ask('سؤال صعب جدا')).action).toBe('handoff');
   });
 
+  /* «هتتوجه رسالتك للمهندس…» right after «أكلم حد», 2026-11-09. */
+  it('keeps quiet after handing over, until he replies', async () => {
+    modelEvents = [{ t: 'delta', text: 'هتتوجه رسالتك للمهندس.' }, { t: 'done', escalate: false }];
+    const waiting = { needsHuman: true, lastHandoffNoticeAt: new Date('2026-10-28T10:30:00Z') };
+    const calls = (ai.answer as jest.Mock).mock.calls.length;
+    const result = await ask('هو سأل في منصة مدرس زميل', { chat: waiting });
+    expect(result.action).toBe('silent');
+    expect(result.reason).toBe('waitingForPerson');
+    expect(result.patch.needsHuman).toBe(true);
+    expect((ai.answer as jest.Mock).mock.calls.length).toBe(calls);
+  });
+
+  it('answers again once the silence window has passed', async () => {
+    modelEvents = [{ t: 'delta', text: 'الـ recursion يعني الدالة بتنده نفسها.' }, { t: 'done', escalate: false }];
+    const stale = { needsHuman: true, lastHandoffNoticeAt: new Date('2026-10-27T10:00:00Z') };
+    expect((await ask('ممكن تشرحلي الـ recursion؟', { chat: stale })).action).toBe('model');
+  });
+
   it('is never asked when the admin switched it off', async () => {
     modelEvents = [{ t: 'delta', text: 'إجابة' }, { t: 'done', escalate: false }];
     expect((await ask('سؤال صعب جدا', { aiFallback: false })).action).toBe('handoff');

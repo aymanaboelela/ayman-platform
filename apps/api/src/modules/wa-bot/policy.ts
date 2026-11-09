@@ -59,7 +59,7 @@ export interface PolicyInput {
   readonly sentToday: number;
 }
 
-const HOUR_MS = 60 * 60 * 1000;
+export const HOUR_MS = 60 * 60 * 1000;
 
 const CAIRO_PARTS = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Africa/Cairo',

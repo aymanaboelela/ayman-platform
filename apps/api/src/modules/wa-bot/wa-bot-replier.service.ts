@@ -141,6 +141,7 @@ export class WaBotReplier {
         year: chat.year,
         yearAsks: chat.yearAsks,
         lastHandoffNoticeAt: chat.lastHandoffNoticeAt,
+        needsHuman: chat.needsHuman,
         repliedBefore: chat.lastBotReplyAt !== null,
       },
       history,
