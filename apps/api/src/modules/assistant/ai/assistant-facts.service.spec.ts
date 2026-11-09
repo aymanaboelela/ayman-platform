@@ -26,6 +26,20 @@ const COURSE = {
   monthlyPriceCents: 15_000,
   quarterlyPriceCents: 40_000,
   yearlyPriceCents: null as number | null,
+  months: [
+    {
+      monthIndex: 1,
+      title: 'الشهر الأول',
+      isOpen: true,
+      priceCents: null as number | null,
+      lessons: [
+        { lesson: { title: 'الدرس التاني', position: 2 } },
+        { lesson: { title: 'الدرس الأول', position: 1 } },
+      ],
+    },
+    { monthIndex: 2, title: 'الشهر الثاني', isOpen: false, priceCents: null as number | null, lessons: [] },
+  ],
+  terms: [{ title: 'الترم الأول', isOpen: true, priceCents: 45_000 as number | null, salePriceCents: null as number | null }],
 };
 
 function make(
@@ -78,6 +92,15 @@ describe('AssistantFactsService — reading the numbers', () => {
       },
     ]);
     expect(facts!.courses[0]!.monthlyPriceCents).toBe(15_000);
+    // The structure the model used to invent: months in course order, their
+    // lessons sorted by position, a closed month kept (it is «لسه ما نزلش»).
+    expect(facts!.courses[0]!.months).toEqual([
+      { index: 1, title: 'الشهر الأول', isOpen: true, priceCents: null, lessons: ['الدرس الأول', 'الدرس التاني'] },
+      { index: 2, title: 'الشهر الثاني', isOpen: false, priceCents: null, lessons: [] },
+    ]);
+    expect(facts!.courses[0]!.terms).toEqual([
+      { title: 'الترم الأول', isOpen: true, priceCents: 45_000, salePriceCents: null },
+    ]);
     expect(facts!.shippingRates).toEqual({ cairo_giza: 8_000, delta: 10_000, far: 15_000 });
 
     expect(findBooks.mock.calls[0]![0]).toMatchObject({ where: { isActive: true } });

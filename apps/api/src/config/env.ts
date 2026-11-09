@@ -339,8 +339,8 @@ const schema = z
      */
 
     /**
-     * The free one, and the default. A key from AI Studio — no card, no
-     * subscription. Wins over `ANTHROPIC_API_KEY` when both are set.
+     * The free one. A key from AI Studio — no card, no subscription. Behind
+     * `ANTHROPIC_API_KEY` when both are set (see `selectAnswerProvider`).
      */
     GEMINI_API_KEY: optionalSecret,
 
@@ -398,8 +398,19 @@ const schema = z
      */
     GROQ_MODEL: optionalWithDefault('openai/gpt-oss-120b,openai/gpt-oss-20b'),
 
-    /** The paid upgrade. One variable, no code change — see the runbook. */
+    /**
+     * The paid upgrade, and — when it is set — the FIRST model asked, with the
+     * free ones behind it as fallbacks. See `selectAnswerProvider`.
+     *
+     * It goes first because the free models measurably failed the two rules
+     * this assistant exists to keep: Gemini Flash addressed students in the
+     * masculine and invented how courses are sold, on the website and on
+     * WhatsApp, in the same week (2026-11).
+     */
     ANTHROPIC_API_KEY: optionalSecret,
+
+    /** Which Claude model answers when `ANTHROPIC_API_KEY` is set. */
+    ANTHROPIC_MODEL: optionalWithDefault('claude-opus-5-5'),
 
     /**
      * «عدد السوشيال ميديا» — a YouTube Data API v3 key (Google Cloud console,

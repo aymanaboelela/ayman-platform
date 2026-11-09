@@ -25,15 +25,22 @@ import type {
  * strings, and abort plumbing that actually cancels the upstream generation.
  */
 
-/** Support answers are short and grounded; `effort: 'low'` is the shape of that. */
-const MODEL = 'claude-opus-5';
+/**
+ * Opus 5.5 — the current Opus, and cheaper than the Opus 5 this replaced.
+ * Overridable with `ANTHROPIC_MODEL`. Support answers are short and grounded,
+ * so `effort: 'low'` below keeps the spend in proportion.
+ */
+const DEFAULT_MODEL = 'claude-opus-5-5';
 const MAX_TOKENS = 1024;
 
 export class AnthropicProvider implements AnswerProvider {
-  readonly id = `anthropic:${MODEL}`;
+  readonly id: string;
   private readonly client: Anthropic;
+  private readonly model: string;
 
-  constructor(apiKey: string, timeoutMs: number) {
+  constructor(apiKey: string, timeoutMs: number, model: string = DEFAULT_MODEL) {
+    this.model = model;
+    this.id = `anthropic:${model}`;
     /*
      * An explicit key or nothing. A bare constructor would let the SDK resolve
      * an operator's personal `ant auth login` profile off the deployment
@@ -46,9 +53,17 @@ export class AnthropicProvider implements AnswerProvider {
   }
 
   async *answer(request: ProviderRequest): AsyncGenerator<ProviderChunk> {
-    const stream = this.client.messages.stream(
+    /*
+     * Beta surface for ONE reason: `fallbacks: 'default'`. A safety classifier
+     * declining an ordinary «الكورس بكام؟» would otherwise end the answer with
+     * `refused`; with it, the API re-runs the request on a model chosen for
+     * that refusal category inside the same call.
+     */
+    const stream = this.client.beta.messages.stream(
       {
-        model: MODEL,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        model: this.model,
         max_tokens: request.maxOutputTokens ?? MAX_TOKENS,
         /*
          * `low`, and thinking left adaptive rather than disabled. Answering a

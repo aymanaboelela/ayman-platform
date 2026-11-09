@@ -63,6 +63,13 @@ export const copy = {
     thanks: 'شكرًا / تمام (من غير رد)',
   },
 
+  /**
+   * The WhatsApp Business label the owner creates on his own phone. A chat the
+   * bot hands to a person gets it; his reply takes it off. Matched by name
+   * (spacing and «ي/ى» forgiven), so it must be created with this wording.
+   */
+  needsReplyLabel: 'محتاج رد مني',
+
   reply: {
     /** `{{الاختيارات}}` is the numbered list, one option per line. */
     yearQuestion: 'علشان أبعت التفاصيل الصح: السنة الدراسية كام؟ ابعتوا رقم الاختيار بس 👇\n{{الاختيارات}}',
