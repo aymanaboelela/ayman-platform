@@ -53,6 +53,17 @@ export const INSTRUCTOR_IMAGE_PATH = aymanOnly('/team/ayman.jpg');
 export const INSTRUCTOR_IMAGE = INSTRUCTOR_IMAGE_PATH ? absolute(INSTRUCTOR_IMAGE_PATH) : undefined;
 
 /**
+ * The platform's MARK, as distinct from his face: the Organization's `logo`
+ * is what Google shows beside the site in a name search and in a knowledge
+ * panel, and a portrait there reads as a person card, not a brand. His
+ * photograph stays the `image`. Same gate as the portrait — the PNG spells
+ * his name, so a teacher's stack spreads the key away exactly like
+ * `INSTRUCTOR_IMAGE`. 512px square: Google wants ≥112px and crawlable.
+ */
+const ORG_LOGO_PATH = aymanOnly('/brand/ayman-logo.png');
+export const ORG_LOGO = ORG_LOGO_PATH ? absolute(ORG_LOGO_PATH) : undefined;
+
+/**
  * Every photograph of him the site shows — the `/about` strip first, the old
  * portrait last. A `Person.image` LIST: one picture is a guess for an image
  * index to make about a contested name, eight captioned ones are a pattern.
@@ -577,7 +588,7 @@ export function organizationJsonLd(
     // Through the subject gate — `copy.site.tagline` itself on a programming
     // stack, the stack's own subject line on any other.
     slogan: SITE_TAGLINE,
-    ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE, logo: INSTRUCTOR_IMAGE } : {}),
+    ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE, logo: ORG_LOGO ?? INSTRUCTOR_IMAGE } : {}),
     founder: { '@id': PERSON_ID },
     inLanguage: 'ar',
     areaServed: { '@type': 'Country', name: 'Egypt' },
