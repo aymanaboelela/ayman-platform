@@ -256,6 +256,13 @@ describe('personJsonLd name parts', () => {
     expect(data.image).toContain(`${SITE_URL}/team/ayman.jpg`);
     expect(data.image).toContain(`${SITE_URL}/team/ayman-abo-el-ela-podcast.jpg`);
   });
+
+  /** The SERP/knowledge-panel thumbnail is the platform's mark; his face stays the `image`. */
+  it('gives the organisation its mark as the logo, not his portrait', () => {
+    const org = organizationJsonLd();
+    expect(org.logo).toBe(`${SITE_URL}/brand/ayman-logo.png`);
+    expect(org.image).toBe(`${SITE_URL}/team/ayman.jpg`);
+  });
 });
 
 describe('courseJsonLd', () => {
