@@ -1,7 +1,7 @@
 import { Crown, Medal } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
-import { initials } from '@/components/app/user-avatar';
+import { HonorAvatar } from '@/components/site/honor-avatar';
 import { BoardHeading } from './board-heading';
 import { boardCopy } from './board-copy';
 
@@ -40,8 +40,12 @@ const METAL = { 1: 'gold', 2: 'silver', 3: 'bronze' } as const;
  *
  * ## What is deliberately NOT on a card
  *
- * - The photograph. Initials only: the board names a minor on the one page a
- *   stranger reads (`board-landing.test.tsx` pins it with a real-looking key).
+ * - The photograph. The drawn graduate (`HonorAvatar`) instead — never the
+ *   student's own picture: the board names a minor on the one page a stranger
+ *   reads (`board-landing.test.tsx` pins it with a real-looking key). It used
+ *   to be two initials on a navy disc; on Adel's stack (2026-11-11) a board of
+ *   thirteen identical navy discs read as «بايضة خالص», so each name now gets
+ *   the same coloured figure the `/honor-board` page already draws.
  * - The mark. «بدون درجات» — `scaledScore` / `percent` stay in the payload
  *   and never reach the markup.
  *
@@ -111,6 +115,16 @@ function groupByCourse(entries: readonly HonorBoardEntry[]): CourseGroup[] {
   return [...groups.values()];
 }
 
+/**
+ * The word under a name. The written ordinals stop at the tenth (the range an
+ * instructor can hand-set), but a board of thirteen still has an eleventh:
+ * those rows used to carry no label at all and looked unfinished next to the
+ * rest. Past the words, «المركز ١١» in the same voice.
+ */
+function rankLabel(rank: number): string {
+  return c.placeRanks[rank - 1] ?? `${c.placeRankPrefix} ${rank}`;
+}
+
 function HonorGroup({ group }: { group: CourseGroup }) {
   return (
     <div className="board-honor-group">
@@ -140,10 +154,10 @@ function HonorGroup({ group }: { group: CourseGroup }) {
                   </span>
                 ) : null}
                 <span className="board-honor__avatar" aria-hidden="true">
-                  {initials(entry.studentName)}
+                  <HonorAvatar name={entry.studentName} />
                 </span>
+                <span className="board-honor__rank">{rankLabel(place)}</span>
                 <span className="board-honor__name">{entry.studentName}</span>
-                <span className="board-honor__rank">{c.placeRanks[place - 1]}</span>
                 {/* The step itself — its height is the place, so the podium
                     reads as a podium before a single word is read. */}
                 <span className="board-honor__step" aria-hidden="true">
@@ -167,15 +181,11 @@ function HonorGroup({ group }: { group: CourseGroup }) {
                 {entry.rank}
               </span>
               <span className="board-honor__avatar" aria-hidden="true">
-                {initials(entry.studentName)}
+                <HonorAvatar name={entry.studentName} />
               </span>
               <span className="board-honor__who">
                 <span className="board-honor__name">{entry.studentName}</span>
-                {/* The word for screen readers and for places that have one;
-                    past the tenth the number in the disc says it. */}
-                {c.placeRanks[entry.rank - 1] ? (
-                  <span className="board-honor__rank">{c.placeRanks[entry.rank - 1]}</span>
-                ) : null}
+                <span className="board-honor__rank">{rankLabel(entry.rank)}</span>
               </span>
             </li>
           ))}

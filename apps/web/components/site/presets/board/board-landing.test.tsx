@@ -74,10 +74,8 @@ vi.mock('@/components/course-art', () => ({ CourseArt: () => null }));
 // An async server component of its own (reads the practice list); it has its
 // own tests, and here it would only stall the synchronous render.
 vi.mock('@/components/practice/practice-invite', () => ({ PracticeInvite: () => null }));
-/* `initials` is the real thing, not a stub: the honour board renders it
-   INSTEAD of the photograph, so a test that stubbed it out would assert
-   nothing about the one behaviour that matters here. `UserAvatar` stays
-   stubbed — it is the component this board must not reach for. */
+/* `UserAvatar` is stubbed — it is the component this board must not reach
+   for: the honour board draws `HonorAvatar` INSTEAD of the photograph. */
 vi.mock('@/components/app/user-avatar', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/app/user-avatar')>()),
   UserAvatar: () => null,
@@ -603,6 +601,8 @@ describe('BoardHonors — the empty board', () => {
     expect(container.querySelectorAll('.board-honor')).toHaveLength(13);
     expect(container.querySelectorAll('.board-podium .board-honor')).toHaveLength(3);
     expect(container.querySelectorAll('.board-roll .board-honor')).toHaveLength(10);
+    // Past the written ordinals a row still says which place it is.
+    expect(screen.getByText(`${copy.landing.honorBoard.placeRankPrefix} 13`)).toBeTruthy();
     expect(container.querySelector('[data-place="1"]')?.textContent).toContain('طالب 1');
     // The course is said once for the group, not on each of the thirteen cards.
     expect(screen.getAllByText('برمجة — تانية بكالوريا')).toHaveLength(1);
@@ -617,7 +617,7 @@ describe('BoardHonors — the empty board', () => {
    * preset that reached for `<UserAvatar image={…}>` fails here rather than
    * passing on a fixture that had no photo to leak.
    */
-  it('shows initials and never the photograph', () => {
+  it('draws the graduate figure and never the photograph', () => {
     const { container } = render(
       <BoardHonors
         entries={[
@@ -638,7 +638,7 @@ describe('BoardHonors — the empty board', () => {
     );
 
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('.board-honor__avatar')?.textContent).toBeTruthy();
+    expect(container.querySelector('.board-honor__avatar svg.honor-avatar')).not.toBeNull();
   });
 
   /*
@@ -1001,7 +1001,9 @@ describe('board preset — the stylesheet cannot reach the classic page', () => 
    *
    * ⚠️ `.board-honor__score` used to be the second entry here. The mark came
    * off this board with the photographs — «بدون درجات» — so the selector went
-   * with it, and `.board-honor__avatar` inherited the rule. A stale name in
+   * with it, and `.board-honor__avatar` inherited the rule — until the
+   * initials themselves gave way to the drawn figure (2026-11-11), and the
+   * rule moved to `.board-honor__n`, the roll's place number. A stale name in
    * this list does not fail: `indexOf` returns -1, `slice(-1)` hands back the
    * last character of the file, and the assertion fails on an empty body with
    * a message naming a selector nobody can find. That is how this was noticed.
@@ -1009,7 +1011,7 @@ describe('board preset — the stylesheet cannot reach the classic page', () => 
   it('isolates every Latin-digit run', () => {
     const css = stripComments(boardSection());
 
-    for (const selector of ['.board-tile__n', '.board-honor__avatar']) {
+    for (const selector of ['.board-tile__n', '.board-honor__n']) {
       expect(css, `${selector} is not in the stylesheet at all`).toContain(`${selector} {`);
       const rule = css.slice(css.indexOf(`${selector} {`));
       const body = rule.slice(0, rule.indexOf('}'));
