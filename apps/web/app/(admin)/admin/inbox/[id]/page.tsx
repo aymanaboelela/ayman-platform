@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getEntitlements } from '@/lib/entitlements';
 import Link from 'next/link';
-import { CornerUpRight, MessageCircle, Phone, UserRound } from 'lucide-react';
+import { CornerUpRight, EllipsisVertical, MessageCircle, Phone, UserRound } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
 import {
   AdminConversationDetailSchema,
@@ -18,6 +18,10 @@ import { AdminChat } from './admin-chat';
 import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
 import { InboxStatusChip } from '../status-chip';
+import { adminStudentPanel } from '@ayman/contracts/copy/admin-student-panel';
+import { StudentPanelSheet } from './student-panel/panel-sheet';
+import { StudentPanel } from './student-panel/student-panel';
+import { parsePanelTab } from './student-panel/panel-tabs';
 
 /** Day precision is enough on a hover title — the hour a subscription lapses
  *  is never what he is deciding on here. */
@@ -54,8 +58,10 @@ export const metadata = { title: c.threadTitle };
  */
 export default async function AdminInboxThreadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ panel?: string | string[] }>;
 }) {
   /*
    * نفس جيت `/admin/inbox` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
@@ -66,6 +72,12 @@ export default async function AdminInboxThreadPage({
   if (!(await getEntitlements()).assistant) notFound();
 
   const { id } = await params;
+  /*
+   * «ملف الطالب» — the ⋮ drawer, open while `?panel=` names a tab. URL state
+   * so it renders HERE on the server, one tab's reads at a time, without the
+   * composer losing its draft — see `student-panel/panel-tabs.ts`.
+   */
+  const panelTab = parsePanelTab((await searchParams).panel);
   const thread = await adminGetOrNotFound(`/api/admin/conversations/${id}`, AdminConversationDetailSchema);
   const crumbs = assistantPathLabels(thread.entryPath);
   /*
@@ -160,6 +172,27 @@ export default async function AdminInboxThreadPage({
             `null` for a guest — see `courses`' own note on why that is
             neither badge rather than «مش مشترك».
           */}
+          {/*
+            ⋮ — «في ٣ نقط كده أضغط عليها يبقى في كل حاجة عن الطالب». At the
+            row's END, where a menu is looked for, and only for a student: a
+            guest has no record to open. `ms-auto` pushes it there whatever
+            the badges before it wrap to; `order-last` keeps it after them.
+          */}
+          {thread.userId ? (
+            <Link
+              href={`/admin/inbox/${thread.id}?panel=overview`}
+              scroll={false}
+              title={adminStudentPanel.open}
+              aria-label={adminStudentPanel.open}
+              className={cn(
+                'order-last ms-auto grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-surface-1 text-fg-muted',
+                'transition-colors duration-[160ms] ease-out hover:border-accent/50 hover:bg-accent/10 hover:text-accent-text',
+                panelTab && 'border-accent/50 bg-accent/10 text-accent-text',
+              )}
+            >
+              <EllipsisVertical className="size-5" aria-hidden="true" />
+            </Link>
+          ) : null}
           {thread.courses !== null
             ? thread.courses.length > 0
               ? thread.courses.map((course) => (
@@ -324,6 +357,12 @@ export default async function AdminInboxThreadPage({
           </ol>
         ))}
       </AdminChat>
+
+      {thread.userId && panelTab ? (
+        <StudentPanelSheet>
+          <StudentPanel userId={thread.userId} tab={panelTab} threadPath={`/admin/inbox/${thread.id}`} />
+        </StudentPanelSheet>
+      ) : null}
     </div>
   );
 }
