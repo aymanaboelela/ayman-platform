@@ -3,7 +3,17 @@
 import Link, { useLinkStatus } from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { BarChart3, BookOpenCheck, ClipboardCheck, IdCard, Loader2 } from 'lucide-react';
+import {
+  BarChart3,
+  BookOpenCheck,
+  ClipboardCheck,
+  History,
+  IdCard,
+  Loader2,
+  NotebookPen,
+  UserCog,
+  Wallet,
+} from 'lucide-react';
 import { adminStudentPanel as c } from '@ayman/contracts/copy/admin-student-panel';
 import { Sheet, SheetContent, SheetTitle } from '@ayman/ui/components/sheet';
 import { cn } from '@ayman/ui/lib/cn';
@@ -65,6 +75,10 @@ const TAB_ICON: Record<PanelTab, typeof IdCard> = {
   overview: IdCard,
   courses: BookOpenCheck,
   exams: ClipboardCheck,
+  homework: NotebookPen,
+  money: Wallet,
+  account: UserCog,
+  activity: History,
   analysis: BarChart3,
 };
 

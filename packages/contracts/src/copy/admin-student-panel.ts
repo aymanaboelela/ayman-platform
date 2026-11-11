@@ -24,6 +24,10 @@ export const adminStudentPanel = {
     overview: 'الملف',
     courses: 'الكورسات',
     exams: 'الامتحانات',
+    homework: 'الواجبات',
+    money: 'الفلوس',
+    account: 'الحساب',
+    activity: 'النشاط',
     analysis: 'التحليل',
   },
   fullProfile: 'الصفحة الكاملة',
@@ -99,6 +103,62 @@ export const adminStudentPanel = {
     /** `{n}` — the newest sittings this list holds. */
     capped: 'دي أحدث {n} محاولة بس.',
     allAttempts: 'كل المحاولات',
+
+    /* ── تعديل الدرجة ──────────────────────────────────────────────────── */
+    editScore: 'تعديل الدرجة',
+    /** `{outOf}` — the sitting's own scale. */
+    scoreLabel: 'الدرجة من {outOf}',
+    /** The attempt picker, when there is more than one handed-in sitting. */
+    whichAttempt: 'المحاولة',
+    /** `{n}` the attempt number, `{mark}` its current mark. */
+    attemptOption: 'محاولة {n} ({mark})',
+    save: 'حفظ',
+    saving: 'بنحفظ…',
+    scoreSaved: 'الدرجة اتعدّلت',
+    /** `{outOf}` */
+    scoreTooHigh: 'الدرجة لازم تكون بين ٠ و{outOf}',
+    gradePaper: 'تصحيح سؤال سؤال',
+  },
+
+  homework: {
+    sat: 'واجبات اتسلّمت',
+    accepted: 'اتقبلت',
+    needsWork: 'محتاجة تتعاد',
+    pending: 'مستنية مراجعة',
+    empty: 'مفيش ولا واجب اتسلّم لسه.',
+    emptyHint: 'أول ما يتسلّم واجب هيظهر هنا، وتقدر تقبله أو تعدّل درجته من مكانك.',
+    status: {
+      submitted: 'مستني مراجعة',
+      accepted: 'مقبول',
+      needs_work: 'يتعاد',
+    },
+    /** `{n}` — a resubmission after «يتعاد». */
+    attempt: 'تسليم {n}',
+    /** `{grade}` out of 100 — every واجب is marked on 100. */
+    gradeOf: '{grade}/100',
+    noGrade: 'من غير درجة',
+    open: 'افتح الواجب',
+    edit: 'المراجعة والدرجة',
+    decisionAccepted: 'مقبول',
+    decisionNeedsWork: 'يتعاد',
+    gradeLabel: 'الدرجة من 100',
+    gradeHint: 'سيبها فاضية لو مفيش درجة.',
+    messageLabel: 'الرسالة اللي هتوصل في المحادثة',
+    /**
+     * The defaults the message box starts with — the review endpoint ALWAYS
+     * writes its message into the student's thread, so the box is never
+     * empty. Student-facing, so no imperative and nothing gendered: «ابعته
+     * تاني» genders the reader, «محتاج يتبعت تاني» does not.
+     */
+    defaultGraded: 'درجة واجب «{lesson}»: {grade} من 100.',
+    defaultAccepted: 'واجب «{lesson}» اتقبل.',
+    defaultNeedsWork: 'واجب «{lesson}» محتاج يتبعت تاني بعد المراجعة.',
+    /** Accepting deletes the photographs — said before it happens. */
+    acceptWarning: 'القبول بيمسح صور الحل.',
+    saved: 'اتحفظ ووصل في المحادثة',
+    failed: 'مامشيش، جرّب تاني',
+    /** `{n}` — the newest submissions this list holds. */
+    capped: 'دي أحدث {n} تسليم بس.',
   },
 
   analysis: {

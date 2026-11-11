@@ -231,6 +231,14 @@ describe('HomeworkService', () => {
       const pending = await service.adminList('pending', undefined, 50, 0, unpublishedLessonId);
       expect(pending.rowCount).toBe(0);
     });
+
+    it('lists one student’s work across lectures, and nobody else’s', async () => {
+      await seed();
+      const list = await service.adminList('all', courseId, 50, 0, undefined, studentId);
+      expect(list.rowCount).toBe(2);
+      expect(list.rows.every((row) => row.studentId === studentId)).toBe(true);
+      expect(new Set(list.rows.map((row) => row.lessonId))).toEqual(new Set([lessonId, unpublishedLessonId]));
+    });
   });
 
   describe('what a student can see', () => {

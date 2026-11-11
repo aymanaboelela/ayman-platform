@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CheckCircle2, ClipboardList, PenLine, Target } from 'lucide-react';
+import { CheckCircle2, ClipboardList, ListChecks, PenLine, Target } from 'lucide-react';
 import { AdminAttemptListSchema, type AdminAttemptRow } from '@ayman/contracts/admin/attempts';
 import { arabicCount } from '@ayman/contracts/arabic-count';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -15,6 +15,7 @@ import { wholePercent } from '../../../attempts/format';
 import { STATE_LABEL, STATE_WASH, WASH } from '../../../attempts/labels';
 import { KindChip } from '../../../attempts/quiz-card';
 import { ExtraAttemptButton } from './extra-attempt-button';
+import { ScoreEditor } from './score-editor';
 import { groupAttemptsByExam, summarizeExams, type ExamGroup } from './exam-groups';
 import { PanelNotice } from './panel-notice';
 
@@ -155,6 +156,12 @@ function ExamCard({
   const tone = markTone(latest);
   const handedIn = latest.state === 'submitted' || latest.state === 'pending_review';
   const toGrade = latest.state === 'pending_review' && abilities.grade;
+  /* Every sitting the API will let him re-mark — `overrideScore` refuses an
+     open one (`attempt_not_finished`). Newest first, so the editor opens on
+     the sitting the ring is showing. */
+  const editable = group.attempts
+    .filter((row) => row.state === 'submitted' || row.state === 'pending_review')
+    .map((row) => ({ id: row.id, attemptNumber: row.attemptNumber, score: row.score, gradeOutOf: row.gradeOutOf }));
 
   return (
     <article
@@ -218,9 +225,22 @@ function ExamCard({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {abilities.unlock ? <ExtraAttemptButton quizId={latest.quizId} userId={userId} /> : null}
           {handedIn ? <AttemptReviewDialog attemptId={latest.id} /> : null}
-          {toGrade ? (
-            <Link href={`/admin/grading/${latest.id}`} className="chip chip--solid">
-              {b.grade}
+          {abilities.grade && editable.length > 0 ? <ScoreEditor sittings={editable} /> : null}
+          {/* The marking screen, question by question — for a paper waiting
+              on an essay it is THE action («تصحيح الورقة»); for a marked one
+              it is how a single answer's mark is changed rather than the
+              total. */}
+          {abilities.grade && handedIn ? (
+            <Link
+              href={`/admin/grading/${latest.id}`}
+              className={
+                toGrade
+                  ? 'chip chip--solid'
+                  : 'inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors duration-[160ms] ease-out hover:border-accent/50'
+              }
+            >
+              {toGrade ? null : <ListChecks className="size-4" aria-hidden="true" />}
+              {toGrade ? b.grade : c.exams.gradePaper}
             </Link>
           ) : null}
           {abilities.unlock ? (

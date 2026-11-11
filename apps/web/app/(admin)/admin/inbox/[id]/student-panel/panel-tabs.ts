@@ -8,7 +8,18 @@
  * state key. A client-fetched drawer would have needed its own copy of every
  * read the student page already does, and its own refresh after every write.
  */
-export const PANEL_TABS = ['overview', 'courses', 'exams', 'analysis'] as const;
+/** Ordered by how often a conversation needs them: who it is, what they
+ *  hold, how they did, then the account and the record. */
+export const PANEL_TABS = [
+  'overview',
+  'courses',
+  'exams',
+  'homework',
+  'money',
+  'account',
+  'activity',
+  'analysis',
+] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
 
 /** `null` = the drawer is closed. An unknown value opens it on the first tab

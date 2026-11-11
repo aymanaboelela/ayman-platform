@@ -17,6 +17,8 @@ import { WASH } from '../../../attempts/labels';
 import { AnalysisTab } from './analysis-tab';
 import { CoursesTab } from './courses-tab';
 import { ExamsTab } from './exams-tab';
+import { HomeworkTab } from './homework-tab';
+import { AccountTab, ActivityTab, MoneyTab } from './record-tabs';
 import { OverviewTab } from './overview-tab';
 import { PanelTabs } from './panel-sheet';
 import type { PanelTab } from './panel-tabs';
@@ -84,6 +86,14 @@ export async function StudentPanel({
             <CoursesTab userId={userId} />
           ) : tab === 'exams' ? (
             <ExamsTab userId={userId} />
+          ) : tab === 'homework' ? (
+            <HomeworkTab userId={userId} />
+          ) : tab === 'money' ? (
+            <MoneyTab userId={userId} />
+          ) : tab === 'account' ? (
+            <AccountTab student={student} />
+          ) : tab === 'activity' ? (
+            <ActivityTab userId={userId} />
           ) : (
             <AnalysisTab userId={userId} />
           )}
