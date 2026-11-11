@@ -294,6 +294,7 @@ export class HomeworkService {
     take: number,
     skip: number,
     lessonId?: string,
+    userId?: string,
   ): Promise<ListResponse<AdminHomeworkRow>> {
     const where: Prisma.HomeworkSubmissionWhereInput = {
       ...(filter === 'pending' ? { status: 'submitted' } : {}),
@@ -301,6 +302,7 @@ export class HomeworkService {
       ...(filter === 'needs_work' ? { status: 'needs_work' } : {}),
       ...(courseId ? { courseId } : {}),
       ...(lessonId ? { lessonId } : {}),
+      ...(userId ? { userId } : {}),
     };
 
     const [items, total] = await Promise.all([

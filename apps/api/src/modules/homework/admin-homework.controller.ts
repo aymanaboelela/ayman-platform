@@ -72,6 +72,7 @@ export class AdminHomeworkController {
     @Query('filter') filter?: string,
     @Query('courseId') courseId?: string,
     @Query('lessonId') lessonId?: string,
+    @Query('userId') userId?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ): Promise<ListResponse<AdminHomeworkRow>> {
@@ -87,6 +88,10 @@ export class AdminHomeworkController {
     // Validated, not passed through: it lands in a Prisma `where` on a uuid
     // column, and a junk value would be a 500 from Postgres instead of a 400.
     const parsedLesson = parseRequest(z.uuid().optional(), lessonId || undefined, 'lessonId');
+    // ONE student's work — the student drawer in a chat lists it. A
+    // better-auth id is a nanoid, never a uuid (`z.uuid()` would 400 every
+    // real student), so it is bounded by length instead.
+    const parsedUser = parseRequest(z.string().min(1).max(64).optional(), userId || undefined, 'userId');
 
     return this.homework.adminList(
       parsedFilter,
@@ -94,6 +99,7 @@ export class AdminHomeworkController {
       list.perPage,
       (list.page - 1) * list.perPage,
       parsedLesson,
+      parsedUser,
     );
   }
 

@@ -23,6 +23,7 @@
     "./copy/admin-auto-outreach": "./src/copy/admin-auto-outreach.ts",
     "./copy/quiz-experience": "./src/copy/quiz-experience.ts",
     "./copy/admin-grading": "./src/copy/admin-grading.ts",
+    "./copy/admin-student-panel": "./src/copy/admin-student-panel.ts",
     "./copy/exam-signals": "./src/copy/exam-signals.ts",
     "./copy/admin-account": "./src/copy/admin-account.ts",
     "./copy/pdfs": "./src/copy/pdfs.ts",

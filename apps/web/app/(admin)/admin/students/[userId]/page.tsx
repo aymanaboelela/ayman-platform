@@ -30,6 +30,7 @@ import { DevicesSection } from './devices-section';
 import { CenterAttendanceSection } from './center-attendance-section';
 import { GamesSection } from './games-section';
 import { PaymentsSection, PaymentsSectionSkeleton } from './payments-section';
+import { loadStudentCourseOptions } from './course-options';
 import { WalletSection } from './wallet-section';
 import { RankChip } from './rank-chip';
 
@@ -160,58 +161,18 @@ export default async function StudentDetailPage({
   /*
    * Five independent reads, issued together.
    *
-   * `grants` and the course list are for `<CourseAccessSection>`: which closed
-   * courses exist, and which of them this student already has. The course list
-   * is filtered to CLOSED ones here rather than in the component — a grant on
-   * an open course is a no-op, so offering one would be a control that does
-   * nothing.
-   *
-   * `subscriptions` and the PRICED subset of the same course list are for
-   * `<SubscriptionSection>` — a different panel entirely, see its own header
-   * comment. Every priced course IS `requiresGrant` (the DB's own
-   * `courses_priced_requires_grant` constraint), so the two course lists
-   * overlap; they serve different controls for different reasons and neither
-   * is a subset built from the other.
+   * `grants` and the closed-course list are for `<CourseAccessSection>`;
+   * `subscriptions` and the priced-course list are for
+   * `<SubscriptionSection>`. Both course lists come from
+   * `loadStudentCourseOptions`, which the chat's student drawer shares — the
+   * filters that make each control meaningful are documented there.
    */
-  const [student, taxonomy, grants, courses, subscriptions, history, conversation, devices] =
+  const [student, taxonomy, grants, courseOptions, subscriptions, history, conversation, devices] =
     await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
     getTaxonomyOrNull(),
     adminGet(`/api/admin/students/${userId}/grants`, z.array(AdminGrantRowSchema)),
-    adminGet(
-      '/api/admin/courses',
-      z.array(
-        z.object({
-          id: z.string(),
-          title: z.string(),
-          status: z.string(),
-          requiresGrant: z.boolean(),
-          monthlyPriceCents: z.number().int().nullable(),
-          quarterlyPriceCents: z.number().int().nullable(),
-          yearlyPriceCents: z.number().int().nullable(),
-          // الترم الأول / الترم الثاني — `SubscriptionSection`'s own term
-          // option finds its choices here.
-          terms: z.array(
-            z.object({
-              id: z.string(),
-              title: z.string(),
-              isOpen: z.boolean(),
-              priceCents: z.number().int().nullable(),
-            }),
-          ),
-          // شهور المنهج — the monthly plan's own choices on a course that
-          // sells by month. Empty on every course that does not.
-          months: z.array(
-            z.object({
-              id: z.string(),
-              monthIndex: z.number().int(),
-              title: z.string(),
-              isOpen: z.boolean(),
-            }),
-          ),
-        }),
-      ),
-    ),
+    loadStudentCourseOptions(),
     /*
      * ⚠️ `OrForbidden`, and this one is not optional.
      *
@@ -267,33 +228,7 @@ export default async function StudentDetailPage({
       ? 'staff'
       : null;
 
-  const closedCourses = courses
-    .filter((course) => course.requiresGrant)
-    .map((course) => ({ id: course.id, title: course.title }));
-
-  const subscribableCourses = courses
-    .filter(
-      (course) =>
-        course.status === 'published' &&
-        (course.monthlyPriceCents !== null ||
-          course.quarterlyPriceCents !== null ||
-          course.yearlyPriceCents !== null ||
-          course.terms.some((term) => term.priceCents !== null)),
-    )
-    .map((course) => ({
-      id: course.id,
-      title: course.title,
-      monthlyPriceCents: course.monthlyPriceCents,
-      quarterlyPriceCents: course.quarterlyPriceCents,
-      yearlyPriceCents: course.yearlyPriceCents,
-      // Every priced term is offered here, open or closed — the admin
-      // manual-subscribe path is a deliberate override, unlike the
-      // student-facing flow. See `SubscriptionSection`'s own doc.
-      terms: course.terms.filter((term) => term.priceCents !== null),
-      // Every month, open or closed, for the same override reason the terms
-      // above are — the API does not gate on `isOpen` here either.
-      months: course.months,
-    }));
+  const { closedCourses, subscribableCourses } = courseOptions;
 
   /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)` — the throwing
      uncached read is what 500'd `/admin/students` for seven minutes after a
