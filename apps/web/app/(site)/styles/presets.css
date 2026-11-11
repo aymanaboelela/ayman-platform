@@ -1255,6 +1255,14 @@
   list-style: none;
   /* The floor the three steps stand on. */
   border-block-end: 4px solid var(--board-slab);
+  /* One warm light behind the first place, faded out well inside the box so
+     its edge never shows as a rectangle. */
+  background: radial-gradient(
+    closest-side at 50% 45%,
+    color-mix(in oklch, var(--board-gold), transparent 75%),
+    transparent
+  );
+  padding-block-start: 1.5rem;
 }
 
 [data-preset='board'] .board-honor--podium[data-place='1'] { order: 2; }
@@ -1296,30 +1304,24 @@
   filter: drop-shadow(0 4px 10px color-mix(in oklch, var(--board-gold), transparent 50%));
 }
 
-/* The initials disc, in place of the photograph — a product decision, not a
-   missing asset (see `board-honors.tsx`). On the podium it carries a ring in
-   its metal. */
+/* The frame for the drawn graduate (`HonorAvatar`), in place of the
+   photograph — a product decision, not a missing asset (see
+   `board-honors.tsx`). The figure brings its own colour, picked from the
+   name; on the podium the frame adds a ring in the place's metal. */
 [data-preset='board'] .board-honor__avatar {
-  display: grid;
-  place-items: center;
+  display: block;
   flex: none;
   inline-size: 3.25rem;
   block-size: 3.25rem;
   border-radius: 50%;
-  background: var(--board-tile);
-  color: var(--board-on-slab);
-  font-size: var(--fs-text-base);
-  font-weight: var(--fw-bold);
-  /* Latin initials inside an RTL card: isolate so a two-letter run cannot
-     reorder against the Arabic name underneath it. */
-  direction: ltr;
-  unicode-bidi: isolate;
+  overflow: hidden;
+  background: var(--board-tint);
 }
 
 [data-preset='board'] .board-honor--podium .board-honor__avatar {
-  inline-size: clamp(3.5rem, 9vw, 4.75rem);
-  block-size: clamp(3.5rem, 9vw, 4.75rem);
-  font-size: clamp(1.05rem, 2.4vw, 1.375rem);
+  inline-size: clamp(4.25rem, 11vw, 6rem);
+  block-size: clamp(4.25rem, 11vw, 6rem);
+  overflow: visible;
   box-shadow:
     0 0 0 3px var(--board-page),
     0 0 0 6px var(--metal),
@@ -1327,8 +1329,8 @@
 }
 
 [data-preset='board'] .board-honor--gold .board-honor__avatar {
-  inline-size: clamp(4.25rem, 11vw, 5.75rem);
-  block-size: clamp(4.25rem, 11vw, 5.75rem);
+  inline-size: clamp(5.25rem, 14vw, 7.5rem);
+  block-size: clamp(5.25rem, 14vw, 7.5rem);
 }
 
 [data-preset='board'] .board-honor__name {
@@ -1350,6 +1352,17 @@
   color: var(--board-accent-ink);
 }
 
+[data-preset='board'] .board-honor--podium .board-honor__rank {
+  margin-block-start: 0.5rem;
+  padding-block: 0.1875rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--r-full);
+  /* Solid metal with dark ink: the same contrast on a light page and a dark
+     one (a translucent tint went unreadable in dark mode). */
+  background: var(--metal);
+  color: color-mix(in oklch, var(--metal-deep), black 55%);
+}
+
 /* The step: its height is the place. Metal along the top edge, the deep
    slab under it, the place number large in the middle. */
 [data-preset='board'] .board-honor__step {
@@ -1364,31 +1377,44 @@
   margin-block-start: 0.5rem;
   border-start-start-radius: var(--r-lg);
   border-start-end-radius: var(--r-lg);
+  /* The metal itself, light at the top edge and deep at the floor — the old
+     navy slab with a thin metal line made three identical dark blocks. */
   background:
-    linear-gradient(to bottom, color-mix(in oklch, var(--metal), transparent 72%), transparent 70%),
-    var(--board-slab);
-  border-block-start: 4px solid var(--metal);
-  color: var(--metal);
+    linear-gradient(
+      160deg,
+      color-mix(in oklch, var(--metal), white 25%) 0%,
+      var(--metal) 38%,
+      var(--metal-deep) 100%
+    );
+  box-shadow:
+    inset 0 2px 0 color-mix(in oklch, white, transparent 45%),
+    0 14px 30px -14px var(--metal-deep);
+  color: color-mix(in oklch, var(--metal-deep), black 30%);
   overflow: hidden;
   transform-origin: bottom;
 }
 
 [data-preset='board'] .board-honor__step-n {
-  font-size: clamp(1.75rem, 5vw, 3rem);
+  font-size: clamp(2rem, 6vw, 3.5rem);
   font-weight: var(--fw-bold);
   line-height: 1;
-  color: var(--board-on-slab);
+  color: white;
+  text-shadow: 0 2px 10px color-mix(in oklch, var(--metal-deep), black 35%);
   direction: ltr;
   unicode-bidi: isolate;
 }
 
 /* ---- the roll — every place after the third ---- */
 
+/* Two columns at most: thirteen names used to land as 3 + 3 + 3 + 1 with
+   the last card hanging alone; in pairs every row of the roll is full. */
 [data-preset='board'] .board-roll {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
   gap: 0.75rem;
-  margin: 0;
+  max-inline-size: 52rem;
+  inline-size: 100%;
+  margin: 0 auto;
   padding: 0;
   list-style: none;
 }
@@ -1398,9 +1424,14 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 0.875rem;
-  border: 1px solid var(--board-line);
+  border: 1px solid var(--board-tint-line);
+  border-inline-start: 4px solid var(--p-500);
   border-radius: var(--r-lg);
-  background: var(--board-card);
+  background: linear-gradient(
+    to left,
+    var(--board-card) 0%,
+    color-mix(in oklch, var(--p-500), var(--board-card) 90%) 100%
+  );
   box-shadow: var(--site-shadow-sm);
   transition:
     transform var(--d-hover) var(--ease-pop),
@@ -1421,9 +1452,9 @@
   inline-size: 2rem;
   block-size: 2rem;
   border-radius: 50%;
-  border: 1px solid var(--board-tint-line);
-  background: color-mix(in oklch, var(--p-500), transparent 88%);
-  color: var(--board-accent-ink);
+  background: linear-gradient(145deg, var(--p-400), var(--p-700));
+  box-shadow: 0 4px 10px -4px var(--p-700);
+  color: white;
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-bold);
   direction: ltr;
@@ -1431,9 +1462,9 @@
 }
 
 [data-preset='board'] .board-honor--row .board-honor__avatar {
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
-  font-size: var(--fs-text-sm);
+  inline-size: 3rem;
+  block-size: 3rem;
+  box-shadow: 0 0 0 2px var(--board-card), 0 0 0 3px var(--board-tint-line);
 }
 
 [data-preset='board'] .board-honor__who {
