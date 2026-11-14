@@ -87,6 +87,12 @@ import { AssistantRobot } from './assistant-robot';
 import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
 import { useVisibleViewport } from './use-visible-viewport';
 import { loadAssistantSummary } from './assistant-summary';
+import {
+  isStreamConnected,
+  onStreamOpen,
+  setChatOnScreen,
+  subscribeChat,
+} from '@/components/notifications/live-bus';
 
 /**
  * The two strings on this widget that name the instructor, gated.
@@ -178,6 +184,14 @@ type Mode = 'escalate' | 'sent' | 'thread';
 type AssistantVariant = 'floating' | 'docked';
 
 /** Never changes after mount, so there is nothing to subscribe to. */
+/**
+ * How often an open thread re-reads itself when there is no live stream to
+ * tell it — a guest, a `(site)` page, or a stream that is down. Fast enough to
+ * feel like a chat, and at 10 a minute well inside the 60-per-minute throttle
+ * for the one panel somebody is actually reading.
+ */
+const THREAD_POLL_MS = 6_000;
+
 function subscribeNever(): () => void {
   return () => {};
 }
@@ -550,6 +564,81 @@ export function AssistantWidget({
     window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen);
   }, [hydrated, ensureThread]);
+
+  /*
+   * «الشات مش ريل تايم» — the reply has to land in the open panel while the
+   * student is looking at it, not on the next page load.
+   *
+   * Two ways in, because the widget is mounted in three layouts and only one
+   * of them has the live stream:
+   *
+   *   - `(app)` holds the SSE connection (`NotificationStreamProvider`), and a
+   *     `chat` frame — or a reply notification — re-reads the thread and the
+   *     launcher's summary at once.
+   *   - `(site)` and `(auth)` do not, and a GUEST has no stream anywhere. For
+   *     them, and for any tab whose stream is down, the open thread polls —
+   *     only while the panel is showing it and the tab is in front, so the
+   *     cost is a few dozen bytes every few seconds for someone actually
+   *     reading a conversation, and nothing for everybody else.
+   *
+   * Frames come in bursts (the reply's `chat` frame and its notification
+   * arrive together), so re-reads are coalesced into one.
+   */
+  const threadOnScreen = panelOpen && panelMode === 'thread' ? (thread?.id ?? null) : null;
+  const hasLoadedThread = thread !== null;
+  useEffect(() => {
+    if (!hydrated || !mounted) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const reread = () => {
+      if (disposed) return;
+      void loadAssistantSummary()
+        .then((result) => {
+          if (!disposed) setSummary(result);
+        })
+        .catch(() => undefined);
+      if (!hasLoadedThread) return;
+      void import('./assistant-session')
+        .then(({ loadAssistantThread }) => loadAssistantThread())
+        .then((loaded) => {
+          if (!disposed && loaded) setThread(loaded);
+        })
+        // A missed re-read is caught up by the next frame or poll tick.
+        .catch(() => undefined);
+    };
+    const schedule = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(reread, 250);
+    };
+
+    const offChat = subscribeChat(schedule);
+    // A reconnect may have swallowed frames — see `live-bus.ts`.
+    const offOpen = onStreamOpen(schedule);
+    const poll = threadOnScreen
+      ? setInterval(() => {
+          if (document.visibilityState === 'visible' && !isStreamConnected()) reread();
+        }, THREAD_POLL_MS)
+      : null;
+
+    return () => {
+      disposed = true;
+      if (timer !== null) clearTimeout(timer);
+      if (poll !== null) clearInterval(poll);
+      offChat();
+      offOpen();
+    };
+  }, [hydrated, mounted, hasLoadedThread, threadOnScreen]);
+
+  /*
+   * Which thread the student is looking at, for the stream: a reply
+   * notification about THIS thread is not toasted over the very chat it is
+   * announcing (`notification-stream.tsx`).
+   */
+  useEffect(() => {
+    setChatOnScreen(threadOnScreen);
+    return () => setChatOnScreen(null);
+  }, [threadOnScreen]);
 
   if (!hydrated || !mounted) return null;
 

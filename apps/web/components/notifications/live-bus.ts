@@ -22,8 +22,12 @@
 import type { LiveQueue } from '@ayman/contracts/notifications';
 
 type QueueListener = (waiting: number) => void;
+/** `null` when the frame did not name a thread (a notification about one the
+ *  screen should re-read anyway — see `emitChatFrame`). */
+type ChatListener = (conversationId: string | null) => void;
 
 const queueListeners = new Map<LiveQueue, Set<QueueListener>>();
+const chatListeners = new Set<ChatListener>();
 const openListeners = new Set<() => void>();
 const connectionListeners = new Set<() => void>();
 let connected = false;
@@ -37,6 +41,16 @@ function setConnected(next: boolean): void {
 /** Stream side: a validated queue frame arrived. */
 export function emitQueueFrame(queue: LiveQueue, waiting: number): void {
   for (const listener of [...(queueListeners.get(queue) ?? [])]) listener(waiting);
+}
+
+/**
+ * Stream side: a conversation moved — a `chat` frame, or a notification row
+ * that is itself about a thread (a reply, «رسالة من مهندس», a homework
+ * verdict written into the chat). Both mean the same thing to a screen
+ * showing that thread: re-read it.
+ */
+export function emitChatFrame(conversationId: string | null): void {
+  for (const listener of [...chatListeners]) listener(conversationId);
 }
 
 /** Stream side: the connection is (re)established. Every frame published
@@ -63,11 +77,35 @@ export function subscribeQueue(queue: LiveQueue, listener: QueueListener): () =>
   };
 }
 
+/** Screen side, for «الشات ريل تايم». Same contract as `subscribeQueue`:
+ *  return the unsubscribe from the effect's cleanup. */
+export function subscribeChat(listener: ChatListener): () => void {
+  chatListeners.add(listener);
+  return () => {
+    chatListeners.delete(listener);
+  };
+}
+
 export function onStreamOpen(listener: () => void): () => void {
   openListeners.add(listener);
   return () => {
     openListeners.delete(listener);
   };
+}
+
+/**
+ * The conversation the student's open panel is showing, or `null`. Set by the
+ * widget, read by the stream: a «رد عليك» toast over the very chat that is
+ * already showing the reply is noise.
+ */
+let chatOnScreen: string | null = null;
+
+export function setChatOnScreen(conversationId: string | null): void {
+  chatOnScreen = conversationId;
+}
+
+export function isChatOnScreen(conversationId: string): boolean {
+  return chatOnScreen === conversationId && document.visibilityState === 'visible';
 }
 
 /** `useSyncExternalStore`'s subscribe/snapshot pair for «is the stream up». */

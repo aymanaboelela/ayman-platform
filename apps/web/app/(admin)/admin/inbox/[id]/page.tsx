@@ -14,6 +14,7 @@ import { adminGetOrNotFound } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
 import { buildChatTimeline } from '@/components/assistant/chat-timeline';
 import { groupChatTimelineByDay } from '@/components/assistant/chat-day-groups';
+import { LiveChatRefresh } from '@/components/admin/live-chat-refresh';
 import { AdminChat } from './admin-chat';
 import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
@@ -301,6 +302,8 @@ export default async function AdminInboxThreadPage({
         a client component — «ردّ بإيموجي» needs a press handler, and a long
         press needs pointer events — but nothing above them has to be.
       */}
+      {/* The student's next message lands here while he is reading. */}
+      <LiveChatRefresh conversationId={thread.id} />
       <AdminChat
         id={thread.id}
         status={thread.status}

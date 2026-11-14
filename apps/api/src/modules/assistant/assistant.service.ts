@@ -239,6 +239,8 @@ export class AssistantService {
       return conversation;
     });
 
+    await this.announce(created.id, input.userId);
+
     return {
       thread: await this.threadById(created.id),
       guestToken,
@@ -482,6 +484,8 @@ export class AssistantService {
         },
       });
     });
+
+    await this.announce(conversation.id, userId);
 
     return this.threadById(conversation.id);
   }
@@ -876,6 +880,8 @@ export class AssistantService {
         });
       }
     });
+
+    await this.announce(id, conversation.userId);
   }
 
   /**
@@ -925,6 +931,7 @@ export class AssistantService {
     // "does not exist" collapse into one honest 404 — the same shape
     // `setReaction` uses, and it never tells a caller which of the two it was.
     if (result.count === 0) throw new NotFoundException();
+    await this.announce(conversationId);
   }
 
   /**
@@ -949,6 +956,7 @@ export class AssistantService {
       where: { id: messageId, conversationId, author: 'admin' },
     });
     if (result.count === 0) throw new NotFoundException();
+    await this.announce(conversationId);
   }
 
   async setReaction(
@@ -956,22 +964,54 @@ export class AssistantService {
     messageId: string,
     reaction: string | null,
   ): Promise<void> {
-    await this.prisma.conversationMessage.updateMany({
+    const result = await this.prisma.conversationMessage.updateMany({
       where: { id: messageId, conversationId },
       data: { adminReaction: reaction },
     });
+    if (result.count > 0) await this.announce(conversationId);
   }
 
   async setStatus(id: string, status: 'open' | 'closed'): Promise<void> {
     // `updateMany`, so closing an already-deleted thread is a no-op rather
     // than a 500 from Prisma's "record not found".
-    await this.prisma.conversation.updateMany({
+    const result = await this.prisma.conversation.updateMany({
       where: { id },
       data: { status },
     });
+    if (result.count > 0) await this.announce(id);
   }
 
   // ── internals ─────────────────────────────────────────────────────────
+
+  /**
+   * «الشات يبقى ريل تايم» — tells both sides of the thread, and the inbox,
+   * that it moved. Called AFTER the write commits, never inside it: the frame
+   * makes a screen re-read the thread, and one that lands before the row does
+   * re-reads the old one and then never hears again.
+   *
+   * `ownerUserId` when the caller already holds it; otherwise one indexed
+   * lookup by primary key, on the admin-only paths (edit, delete, react,
+   * status) that are a click each.
+   *
+   * Never throws. The write already happened; a screen that misses the frame
+   * catches up on its next read, and a reply must not 500 over a redraw.
+   */
+  private async announce(conversationId: string, ownerUserId?: string | null): Promise<void> {
+    try {
+      const owner =
+        ownerUserId !== undefined
+          ? ownerUserId
+          : ((
+              await this.prisma.conversation.findUnique({
+                where: { id: conversationId },
+                select: { userId: true },
+              })
+            )?.userId ?? null);
+      await this.notifications.announceChat(conversationId, owner);
+    } catch {
+      // See above — a redraw is never worth failing the write it follows.
+    }
+  }
 
   /**
    * A quote must name a message in THIS thread.

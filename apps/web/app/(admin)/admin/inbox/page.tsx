@@ -18,6 +18,7 @@ import { InboxStatusChip, inboxTimeFormatter } from './status-chip';
 import { InboxTabs } from './inbox-tabs';
 import { ListControl } from '@/components/admin/list-controls';
 import { AdminEmpty } from '@/components/admin/admin-empty';
+import { LiveChatRefresh } from '@/components/admin/live-chat-refresh';
 
 const c = copy.assistant.inbox;
 const RowsSchema = listResponse(AdminConversationRowSchema);
@@ -108,6 +109,8 @@ export default async function AdminInboxPage({
       </p>
 
       <InboxTabs active="/admin/inbox" />
+      {/* «الشاشات من برا تبقى ريل تايم» — a new message reorders the list now. */}
+      <LiveChatRefresh />
 
       {/* Dropdowns, matching every other admin list — «يبقى برضه فيه فلتر
           وسورتنج وكل حاجة أقدر إني أختار منها بشكل حلو زي أي داشبورد في

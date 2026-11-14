@@ -17,7 +17,13 @@ import { toast } from 'sonner';
 // signed-in page. `client-barrel.test.ts` fails the build for it.
 import { copy } from '@ayman/contracts/copy';
 import { describeNotification } from '@/lib/notification-view';
-import { emitQueueFrame, emitStreamDown, emitStreamOpen } from './live-bus';
+import {
+  emitChatFrame,
+  emitQueueFrame,
+  emitStreamDown,
+  emitStreamOpen,
+  isChatOnScreen,
+} from './live-bus';
 
 const c = copy.notifications;
 
@@ -131,9 +137,37 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
         emitQueueFrame(event.queue, event.waiting);
         return;
       }
+      /*
+        A conversation moved — the open chat and the inbox list re-read it.
+        Not a notification either: the reply that IS one arrives as its own
+        `notification` frame below.
+      */
+      if (event.type === 'chat') {
+        emitChatFrame(event.conversationId);
+        return;
+      }
       if (event.type !== 'notification') return;
 
       setUnread(event.unread);
+
+      /*
+        A notification about a thread is also news for the chat on screen:
+        the broadcasts and the homework verdict write into the student's
+        conversation without a `chat` frame of their own (a broadcast to every
+        student must not fan a frame per thread out to the inbox), and this
+        row is how the student's open panel hears about them.
+      */
+      const n = event.notification;
+      if (
+        n.kind === 'conversation_reply' ||
+        n.kind === 'instructor_message' ||
+        n.kind === 'homework_reviewed'
+      ) {
+        emitChatFrame('conversationId' in n ? n.conversationId : null);
+        // Already on screen — the bubble IS the notification. The badge
+        // above still moved; the thread marks itself read.
+        if ('conversationId' in n && isChatOnScreen(n.conversationId)) return;
+      }
 
       const view = describeNotification(event.notification);
       /*

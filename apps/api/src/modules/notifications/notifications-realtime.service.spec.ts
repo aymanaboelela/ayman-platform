@@ -89,6 +89,32 @@ describe('NotificationsRealtimeService', () => {
     expect(desk).toEqual([{ type: 'queue', queue: 'payments', waiting: 1 }]);
   });
 
+  it('hands a chat frame to the inbox AND to the thread owner, and to no other student', async () => {
+    const inbox: NotificationEvent[] = [];
+    const owner: NotificationEvent[] = [];
+    const stranger: NotificationEvent[] = [];
+    service.subscribeChat((event) => inbox.push(event));
+    service.subscribe('owner', (event) => owner.push(event));
+    service.subscribe('stranger', (event) => stranger.push(event));
+    await settle();
+
+    await service.publishChat('c-1', 'owner');
+
+    expect(inbox).toEqual([{ type: 'chat', conversationId: 'c-1' }]);
+    expect(owner).toEqual(inbox);
+    expect(stranger).toEqual([]);
+  });
+
+  it('a guest thread has no owner channel — only the inbox hears it', async () => {
+    const inbox: NotificationEvent[] = [];
+    service.subscribeChat((event) => inbox.push(event));
+    await settle();
+
+    await service.publishChat('c-2', null);
+
+    expect(inbox).toEqual([{ type: 'chat', conversationId: 'c-2' }]);
+  });
+
   it('subscribes the queue channel once however many tabs listen, and leaves it with the last', async () => {
     const offA = service.subscribeQueue('payments', () => undefined);
     const offB = service.subscribeQueue('payments', () => undefined);

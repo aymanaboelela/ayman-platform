@@ -8,7 +8,13 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/push-subscribe', () => ({ ensurePushSubscribed: () => Promise.resolve() }));
 
 import { NotificationStreamProvider } from './notification-stream';
-import { isStreamConnected, onStreamOpen, subscribeQueue } from './live-bus';
+import {
+  isStreamConnected,
+  onStreamOpen,
+  setChatOnScreen,
+  subscribeChat,
+  subscribeQueue,
+} from './live-bus';
 
 /** A stand-in `EventSource` the test drives by hand. */
 class FakeEventSource {
@@ -131,6 +137,63 @@ describe('NotificationStreamProvider', () => {
     off();
     expect(heard).toEqual([4]);
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  describe('«الشات ريل تايم»', () => {
+    const THREAD = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+    const REPLY = JSON.stringify({
+      type: 'notification',
+      unread: 1,
+      notification: {
+        id: 'n2',
+        createdAt: '2026-03-01T10:00:00.000Z',
+        readAt: null,
+        kind: 'conversation_reply',
+        conversationId: THREAD,
+      },
+    });
+
+    async function send(source: FakeEventSource, data: string) {
+      await act(async () => {
+        source.onmessage?.({ data } as MessageEvent<string>);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
+
+    afterEach(() => setChatOnScreen(null));
+
+    it('hands a chat frame to the bus with its thread — no toast, the chat redraws instead', async () => {
+      const heard: (string | null)[] = [];
+      const off = subscribeChat((id) => heard.push(id));
+      render(<NotificationStreamProvider>{null}</NotificationStreamProvider>);
+
+      await send(FakeEventSource.instances[0]!, JSON.stringify({ type: 'chat', conversationId: THREAD }));
+
+      off();
+      expect(heard).toEqual([THREAD]);
+      expect(toast).not.toHaveBeenCalled();
+    });
+
+    it('a reply notification also redraws the chat, and is toasted when the chat is not on screen', async () => {
+      const heard: (string | null)[] = [];
+      const off = subscribeChat((id) => heard.push(id));
+      render(<NotificationStreamProvider>{null}</NotificationStreamProvider>);
+
+      await send(FakeEventSource.instances[0]!, REPLY);
+
+      off();
+      expect(heard).toEqual([THREAD]);
+      expect(toast).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not toast a reply over the very chat that is already showing it', async () => {
+      setChatOnScreen(THREAD);
+      render(<NotificationStreamProvider>{null}</NotificationStreamProvider>);
+
+      await send(FakeEventSource.instances[0]!, REPLY);
+
+      expect(toast).not.toHaveBeenCalled();
+    });
   });
 
   it('tells the live screens when it (re)connects and when it drops', () => {

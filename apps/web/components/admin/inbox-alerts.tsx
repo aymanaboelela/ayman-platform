@@ -20,6 +20,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { parseAdminUnreadCount } from '@ayman/contracts/assistant/summary';
 import { apiGetNarrow } from '@/lib/api';
+import { onStreamOpen, subscribeChat } from '@/components/notifications/live-bus';
 
 const c = copy.assistant.inbox;
 
@@ -95,6 +96,19 @@ export function InboxAlertsProvider({ children }: { children: ReactNode }) {
 
     if (before === null || next <= before) return;
 
+    /*
+      Already looking at the inbox: the list and the open chat redraw live
+      (`LiveChatRefresh`), so the new message is on screen — a toast and a
+      ding on top of it, for every message of a conversation he is in the
+      middle of, is noise.
+    */
+    if (
+      document.visibilityState === 'visible' &&
+      window.location.pathname.startsWith('/admin/inbox')
+    ) {
+      return;
+    }
+
     const arrived = next - before;
     const body =
       arrived === 1 ? c.alertBodyOne : formatCopy(c.alertBodyMany, { n: arrived });
@@ -143,12 +157,29 @@ export function InboxAlertsProvider({ children }: { children: ReactNode }) {
     refresh();
     const timer = window.setInterval(tick, POLL_MS);
 
+    /*
+      «ريل تايم» — a student's message moves the badge the moment the live
+      stream says so, not on the next tick. The poll stays as the fallback for
+      a stream that is down. Coalesced: one write fans out as a burst of
+      frames, and this is one request either way.
+    */
+    let burst: ReturnType<typeof setTimeout> | null = null;
+    const soon = () => {
+      if (burst !== null) clearTimeout(burst);
+      burst = setTimeout(refresh, 400);
+    };
+    const offChat = subscribeChat(soon);
+    const offOpen = onStreamOpen(soon);
+
     // Coming back to the tab is the moment the number is most likely to be
     // stale AND most likely to be looked at.
     document.addEventListener('visibilitychange', tick);
 
     return () => {
       window.clearInterval(timer);
+      if (burst !== null) clearTimeout(burst);
+      offChat();
+      offOpen();
       document.removeEventListener('visibilitychange', tick);
     };
   }, [refresh]);

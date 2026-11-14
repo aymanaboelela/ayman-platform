@@ -27,6 +27,16 @@ function queueChannelFor(queue: LiveQueue): string {
   return `notif-queue:${queue}`;
 }
 
+/**
+ * ONE channel for every conversation, heard by the inbox.
+ *
+ * Not one per conversation: the inbox LIST moves on any thread's message, and
+ * an admin tab would otherwise have to subscribe to every thread there is.
+ * The frame names the thread, and the screen showing a different one ignores
+ * it. Same unreachable-by-a-user-id prefix discipline as `queueChannelFor`.
+ */
+const CHAT_CHANNEL = 'notif-chat';
+
 type Listener = (event: NotificationEvent) => void;
 
 /**
@@ -115,6 +125,24 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
   }
 
   /**
+   * «A conversation moved» — to the inbox (every stream subscribed with
+   * `subscribeChat`) and, when the thread belongs to an account, to that
+   * student's own streams. A guest's thread has no account and therefore no
+   * stream; their panel falls back to a poll (`assistant-widget.tsx`).
+   *
+   * Never throws, for the reason `publish` does not.
+   */
+  async publishChat(conversationId: string, ownerUserId: string | null): Promise<void> {
+    const event: NotificationEvent = { type: 'chat', conversationId };
+    await Promise.all([
+      this.publishOn(CHAT_CHANNEL, event, `conversation ${conversationId} to the inbox`),
+      ownerUserId
+        ? this.publishOn(channelFor(ownerUserId), event, `conversation ${conversationId} to its owner`)
+        : Promise.resolve(),
+    ]);
+  }
+
+  /**
    * Registers one open SSE connection. The returned function unregisters it
    * and MUST be called when the response closes, or a browser that navigates
    * away leaves a listener behind for the lifetime of the process.
@@ -127,6 +155,12 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    *  function when the response closes. */
   subscribeQueue(queue: LiveQueue, listener: Listener): () => void {
     return this.subscribeOn(queueChannelFor(queue), listener);
+  }
+
+  /** `subscribe`, for the inbox's chat channel. WHO may is the controller's
+   *  question (`conversation:read`), asked before this and per frame. */
+  subscribeChat(listener: Listener): () => void {
+    return this.subscribeOn(CHAT_CHANNEL, listener);
   }
 
   private async publishOn(channel: string, event: NotificationEvent, what: string): Promise<void> {
