@@ -20,6 +20,7 @@ import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { GRADED_STATES } from './analytics.service';
+import { OpenExamAccessService } from './open-exam-access.service';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -60,6 +61,7 @@ export class ScheduledExamsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly openExams: OpenExamAccessService,
   ) {}
 
   /**
@@ -183,6 +185,7 @@ export class ScheduledExamsService {
           // is a student sitting it twice. `QuizBuilderService.upsertForLesson`
           // now refuses to flip it here too, so the API cannot undo this line.
           allowsImprovement: false,
+          openToNonSubscribers: input.openToNonSubscribers,
           passPercent: input.passPercent,
           gradeOutOf: input.gradeOutOf,
           sumMarks: 0,
@@ -213,6 +216,7 @@ export class ScheduledExamsService {
         opensAt: input.opensAt.toISOString(),
         closesAt: input.closesAt.toISOString(),
         keepOpenAfterClose: input.keepOpenAfterClose,
+        openToNonSubscribers: input.openToNonSubscribers,
         coveredLessonCount: input.coveredLessonIds.length,
       },
     });
@@ -241,6 +245,9 @@ export class ScheduledExamsService {
       }
       if (input.gradeOutOf !== undefined) quizData.gradeOutOf = input.gradeOutOf;
       if (input.passPercent !== undefined) quizData.passPercent = input.passPercent;
+      if (input.openToNonSubscribers !== undefined) {
+        quizData.openToNonSubscribers = input.openToNonSubscribers;
+      }
 
       const touchesDeadline =
         input.closesAt !== undefined || input.keepOpenAfterClose !== undefined;
@@ -394,6 +401,7 @@ export class ScheduledExamsService {
         lateAfter: true,
         gradeOutOf: true,
         passPercent: true,
+        openToNonSubscribers: true,
         lesson: { select: { title: true } },
       },
     });
@@ -416,6 +424,7 @@ export class ScheduledExamsService {
           durationMinutes: Math.max(1, Math.round((source.durationSeconds ?? 3600) / 60)),
           gradeOutOf: Number(source.gradeOutOf),
           passPercent: Number(source.passPercent),
+          openToNonSubscribers: source.openToNonSubscribers,
         },
         actorUserId,
       );
@@ -479,6 +488,7 @@ export class ScheduledExamsService {
             lateAfter: true,
             durationSeconds: true,
             gradeOutOf: true,
+            openToNonSubscribers: true,
             _count: { select: { slots: true, attempts: true } },
           },
         },
@@ -530,6 +540,7 @@ export class ScheduledExamsService {
         durationMinutes: l.quiz?.durationSeconds ? Math.round(l.quiz.durationSeconds / 60) : null,
         gradeOutOf: Number(l.quiz?.gradeOutOf ?? 100),
         keepOpenAfterClose: examKeptOpen(openUntil, lateAfter),
+        openToNonSubscribers: l.quiz?.openToNonSubscribers ?? false,
         lessonPublished: l.isPublished,
         quizPublished: l.quiz?.isPublished ?? false,
         sectionPublished: l.section.isPublished,
@@ -559,8 +570,9 @@ export class ScheduledExamsService {
   /**
    * `GET /api/me/exams` — the student's own scheduled exams.
    *
-   * Enrolment is the only gate, which is his answer verbatim: «أي حد مشترك في
-   * الكورس، من غير فلوس زيادة». `ACTIVE_ENROLLMENT_STATUSES` is `['active',
+   * Enrolment is the gate, which is his answer verbatim: «أي حد مشترك في
+   * الكورس، من غير فلوس زيادة» — plus, for an exam he marked «مفتوح لغير
+   * المشتركين», the course's whole cohort (`OpenExamAccessService`). `ACTIVE_ENROLLMENT_STATUSES` is `['active',
    * 'completed']`, the same pair the dashboard already treats as enrolled.
    *
    * Both the lesson and the quiz must be published: a draft exam is invisible,
@@ -576,13 +588,20 @@ export class ScheduledExamsService {
       select: { courseId: true },
     });
     const courseIds = enrollments.map((e) => e.courseId);
-    if (courseIds.length === 0) return { exams: [], serverTime: now.toISOString() };
+    // «مفتوح لغير المشتركين»: the open exams of the student's own cohort,
+    // whether or not they are enrolled. The same course filter the attempt
+    // door admits through, so the list never shows a paper that 403s.
+    const audience = await this.openExams.audienceCourseWhere(userId);
+    if (courseIds.length === 0 && !audience) return { exams: [], serverTime: now.toISOString() };
+
+    const shown: Prisma.LessonWhereInput[] = [{ courseId: { in: courseIds } }];
+    if (audience) shown.push({ course: audience, quiz: { openToNonSubscribers: true } });
 
     const lessons = await this.prisma.lesson.findMany({
       where: {
         kind: 'quiz',
         isPublished: true,
-        courseId: { in: courseIds },
+        OR: shown,
         section: { title: EXAM_SHELF_TITLE, isPublished: true },
         quiz: { isPublished: true, openFrom: { not: null } },
       },

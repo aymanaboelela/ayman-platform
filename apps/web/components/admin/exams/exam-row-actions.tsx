@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { DoorClosed, DoorOpen, Eye, EyeOff, PenLine, Trash2 } from 'lucide-react';
+import { DoorClosed, DoorOpen, Eye, EyeOff, PenLine, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminExamRow } from '@ayman/contracts/admin/exams';
@@ -130,6 +130,24 @@ export function ExamRowActions({
     router.refresh();
   }
 
+  /** «افتحه لغير المشتركين» from the list — same one-click shape as the
+   *  keep-open chip beside it. */
+  async function toggleOpenToAll() {
+    setFailure(null);
+    setPending(true);
+    const result = await patchExamAction(row.lessonId, {
+      openToNonSubscribers: !row.openToNonSubscribers,
+    });
+    setPending(false);
+    if (!result.ok) {
+      setFailure(result.failure);
+      toast.error(examFailureMessage(result.failure));
+      return;
+    }
+    toast.success(copy.admin.common.saved);
+    router.refresh();
+  }
+
   async function remove() {
     setPending(true);
     const result = await deleteExamAction(row.lessonId);
@@ -196,6 +214,18 @@ export function ExamRowActions({
             <DoorOpen className="size-3.5" aria-hidden="true" />
           )}
           {row.keepOpenAfterClose ? c.keepOpenOff : c.keepOpenOn}
+        </button>
+
+        <button
+          type="button"
+          className={row.openToNonSubscribers ? 'chip chip--accent' : 'chip chip--quiet'}
+          disabled={pending}
+          aria-pressed={row.openToNonSubscribers}
+          title={c.openToAllHint}
+          onClick={() => void toggleOpenToAll()}
+        >
+          <Users className="size-3.5" aria-hidden="true" />
+          {row.openToNonSubscribers ? c.openToAllOff : c.openToAllOn}
         </button>
 
         <DuplicateExamDialog

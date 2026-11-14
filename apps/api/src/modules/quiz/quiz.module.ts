@@ -25,6 +25,7 @@ import { QuizBuilderService } from './quiz-builder.service';
 import { QuizHistoryService } from './quiz-history.service';
 import { QuizScoreFeed } from './quiz-score-feed';
 import { RegradeService } from './regrade.service';
+import { OpenExamAccessService } from './open-exam-access.service';
 import { ScheduledExamsService } from './scheduled-exams.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { ExamSignalsService } from './exam-signals.service';
@@ -76,6 +77,7 @@ import { GameService } from './game.service';
     QuestionBankService,
     QuestionRemovalService,
     QuizAccessService,
+    OpenExamAccessService,
     AttemptEventsService,
     ExamSignalsService,
     AttemptService,

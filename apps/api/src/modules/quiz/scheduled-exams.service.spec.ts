@@ -8,6 +8,7 @@ import { EXAM_SHELF_TITLE, examPhase } from '@ayman/contracts/quiz/scheduled';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../../audit/audit.service';
+import { OpenExamAccessService } from './open-exam-access.service';
 import { ScheduledExamsService } from './scheduled-exams.service';
 
 /**
@@ -31,7 +32,7 @@ describe('ScheduledExamsService', () => {
   // `audit_log` is INSERT-only and a test that tidies up after itself is a
   // 42501. See `audit-log-is-insert-only`.
   const audit = { record: jest.fn().mockResolvedValue(undefined) } as unknown as AuditService;
-  const service = new ScheduledExamsService(prisma, audit);
+  const service = new ScheduledExamsService(prisma, audit, new OpenExamAccessService(prisma));
 
   const ACTOR = 'scheduled-exams-spec';
   let courseId: string;

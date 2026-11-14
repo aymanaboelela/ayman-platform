@@ -3929,6 +3929,17 @@ model Quiz {
   /// in.
   lateAfter DateTime? @map("late_after") @db.Timestamptz(3)
 
+  /// «مفتوح لغير المشتركين» — a monthly exam any student of the course's own
+  /// system, year and stream (عام/لغات) may sit, subscribed or not.
+  ///
+  /// Read ONLY by `OpenExamAccessService`, which admits a non-enrolled student
+  /// to exactly three doors: the intro page, starting/resuming an attempt, and
+  /// reviewing their own attempt. It never creates an enrollment — an
+  /// enrollment row opens the whole course (see `LessonAccessService.resolve`),
+  /// and this is one paper, not a course. A profile with no system, year or
+  /// stream is not admitted: the match would be a guess.
+  openToNonSubscribers Boolean @default(false) @map("open_to_non_subscribers")
+
   /// Offers ONE extra sitting, drawn from the `improvement` paper, with the
   /// HIGHER of the two scores counting. Only ever true on a course's final
   /// exam — `QuizBuilderService` refuses to set it on any other lesson.
