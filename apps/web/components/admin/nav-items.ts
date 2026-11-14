@@ -39,6 +39,7 @@ import {
   PackageOpen,
   Wallet,
   Smartphone,
+  ShieldAlert,
   ShieldCheck,
   School,
   ScanLine,
@@ -65,6 +66,7 @@ import { youtubeStudioCopy } from '@ayman/contracts/copy/youtube-studio';
 import { montageCopy } from '@ayman/contracts/copy/montage';
 import { promoBannersCopy } from '@ayman/contracts/copy/promo-banners';
 import { subscribersCopy } from '@ayman/contracts/copy/subscribers';
+import { videoWatchCopy } from '@ayman/contracts/copy/video-watch';
 import { agentTokensCopy } from '@ayman/contracts/copy/agent-tokens';
 /*
  * The tenant gate, read here so BOTH consumers of this table get it from one
@@ -513,6 +515,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: UserRoundCheck,
     permission: 'student:read',
     feature: 'subscribersReport',
+    group: 'students',
+  },
+  {
+    // «متابعة التنزيل» — accounts that opened many lectures in a day. With the
+    // students, on the same `student:read`: every row is a student to look at,
+    // linking to the record that permission opens. `feature` like the API.
+    href: '/admin/video-watch',
+    labelAr: videoWatchCopy.nav,
+    icon: ShieldAlert,
+    permission: 'student:read',
+    feature: 'videoKeyWatch',
     group: 'students',
   },
   {

@@ -85,6 +85,16 @@ export class VideoKeyWatchService {
     const videos = await this.redis.scard(seenKey);
     if (videos < KEY_BURST_VIDEOS) return;
 
+    // «متابعة التنزيل» — the durable record, grown with every new lecture past
+    // the line so the screen shows the day's real count, not the 25th.
+    const videoIds = await this.redis.smembers(seenKey);
+    const dayDate = new Date(`${day}T00:00:00.000Z`);
+    await this.prisma.videoKeyFlag.upsert({
+      where: { userId_day: { userId, day: dayDate } },
+      create: { userId, day: dayDate, videos, videoIds },
+      update: { videos, videoIds },
+    });
+
     // Once per account per day — the 26th lecture and the 60th are the same news.
     const first = await this.redis.set(`vk:alerted:${userId}:${day}`, '1', 'EX', 2 * DAY_SECONDS, 'NX');
     if (first !== 'OK') return;

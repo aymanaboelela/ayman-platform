@@ -1,0 +1,180 @@
+/* ---------------------------------------------------------------------------
+   /admin/video-watch — «متابعة التنزيل».
+
+   Colour is the verdict's weight, the same on every block: --warn is «أول
+   مرة» (look), --err is «اتكرر» (look first). The rail on a row, its count
+   bubble and its badge all agree, so the accounts to open first stand out
+   before a word is read.
+   --------------------------------------------------------------------------- */
+
+.vwatch-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: var(--s-12);
+  margin-block-end: var(--s-32);
+}
+
+.vwatch-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.vwatch-tile__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 999px;
+  color: var(--ink-fg);
+}
+
+.vwatch-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  margin-block-end: var(--s-16);
+}
+
+.vwatch-row {
+  --tone: var(--warn);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid var(--tone);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.vwatch-row[data-tone='repeat'] {
+  --tone: var(--err);
+}
+
+.vwatch-row__main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  flex: 1;
+  min-inline-size: 0;
+}
+
+/* The day's count, big — the number the row is about. */
+.vwatch-count {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 3.5rem;
+  padding-block: var(--s-8);
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--tone), transparent 86%);
+  color: var(--tone);
+  line-height: 1.1;
+}
+
+.vwatch-count__n {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+}
+
+.vwatch-count__unit {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+}
+
+.vwatch-lectures {
+  margin-block-start: var(--s-8);
+  font-size: var(--fs-text-sm);
+}
+
+.vwatch-lectures > summary {
+  cursor: pointer;
+  inline-size: fit-content;
+  color: var(--a-11);
+  font-weight: var(--fw-medium);
+}
+
+.vwatch-course {
+  margin-block-start: var(--s-8);
+}
+
+.vwatch-course__title {
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.vwatch-course__list {
+  margin-block-start: var(--s-4);
+  padding-inline-start: var(--s-16);
+  list-style: disc;
+  color: var(--n-11);
+  line-height: 1.8;
+}
+
+.vwatch-course__gone {
+  margin-block-start: var(--s-8);
+  color: var(--n-11);
+}
+
+.vwatch-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.vwatch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  min-block-size: 2.5rem;
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background var(--d-hover) var(--ease);
+}
+
+.vwatch-btn:hover {
+  border-color: color-mix(in oklch, var(--a-9), transparent 50%);
+  background: var(--n-2);
+}
+
+.vwatch-btn--wa {
+  border-color: color-mix(in oklch, var(--ok), transparent 55%);
+  background: color-mix(in oklch, var(--ok), transparent 88%);
+  color: var(--ok);
+}
+
+.vwatch-btn--wa:hover {
+  border-color: var(--ok);
+  background: color-mix(in oklch, var(--ok), transparent 80%);
+}
+
+/* A phone number inside an Arabic line flips without this (CLAUDE.md §7). */
+.vwatch-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+@media (max-width: 40rem) {
+  .vwatch-row__actions {
+    inline-size: 100%;
+  }
+
+  .vwatch-row__actions > * {
+    flex: 1;
+  }
+}

@@ -2249,6 +2249,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'subscribers xlsx: anonymous', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'anonymous', status: 401 },
     { label: 'subscribers xlsx: student', method: 'get', path: () => '/api/admin/subscribers/export/students.xlsx', actor: 'student', status: 403 },
 
+    // ── «متابعة التنزيل» — names and phones, so `student:read`.
+    // Behind `videoKeyWatch`, open here because the fixture runs as Ayman's stack.
+    { label: 'video-key flags summary: anonymous', method: 'get', path: () => '/api/admin/video-key-flags/summary', actor: 'anonymous', status: 401 },
+    { label: 'video-key flags summary: student', method: 'get', path: () => '/api/admin/video-key-flags/summary', actor: 'student', status: 403 },
+    { label: 'video-key flags summary: admin', method: 'get', path: () => '/api/admin/video-key-flags/summary', actor: 'admin', status: 200 },
+    { label: 'video-key flags list: anonymous', method: 'get', path: () => '/api/admin/video-key-flags', actor: 'anonymous', status: 401 },
+    { label: 'video-key flags list: student', method: 'get', path: () => '/api/admin/video-key-flags', actor: 'student', status: 403 },
+    { label: 'video-key flags list: admin', method: 'get', path: () => '/api/admin/video-key-flags?perPage=10', actor: 'admin', status: 200 },
+
     // ── «ربط Claude» — agent keys. `admin:access` on the screen's routes;
     // `/api/agent/me` answers a key only, so a session (even admin) is a 404.
     // Behind `agentTokens`, open here because the fixture runs as Ayman's stack.

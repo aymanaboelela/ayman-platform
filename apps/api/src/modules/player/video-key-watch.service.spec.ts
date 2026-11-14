@@ -26,6 +26,7 @@ function fakeRedis() {
       return 1;
     },
     scard: async (key: string) => sets.get(key)?.size ?? 0,
+    smembers: async (key: string) => [...(sets.get(key) ?? [])],
     set: async (key: string, value: string) => {
       if (strings.has(key)) return null;
       strings.set(key, value);
@@ -36,16 +37,25 @@ function fakeRedis() {
 
 function build(redis: unknown = fakeRedis()) {
   const alerts: unknown[] = [];
+  const flags = new Map<string, { videos: number; videoIds: string[] }>();
   const service = new VideoKeyWatchService(
     redis as Redis,
-    { user: { findUnique: async () => ({ name: 'طالب تجربة' }) } } as unknown as PrismaService,
+    {
+      user: { findUnique: async () => ({ name: 'طالب تجربة' }) },
+      videoKeyFlag: {
+        upsert: async (args: { where: { userId_day: { userId: string; day: Date } }; create: { videos: number; videoIds: string[] } }) => {
+          const { userId, day } = args.where.userId_day;
+          flags.set(`${userId}:${day.toISOString().slice(0, 10)}`, args.create);
+        },
+      },
+    } as unknown as PrismaService,
     {
       notifyPermission: async (_permission: string, kind: string, payload: unknown) => {
         alerts.push({ kind, payload });
       },
     } as unknown as NotificationsService,
   );
-  return { service, alerts };
+  return { service, alerts, flags };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -53,7 +63,7 @@ const vid = (n: number) => n.toString(16).padStart(32, '0');
 
 describe('VideoKeyWatchService', () => {
   it('tells staff once when an account opens many distinct lectures in a day', async () => {
-    const { service, alerts } = build();
+    const { service, alerts, flags } = build();
     const now = new Date('2026-11-14T10:00:00Z');
     for (let n = 0; n < KEY_BURST_VIDEOS - 1; n += 1) {
       await service.admit('u1', vid(n), now);
@@ -68,6 +78,9 @@ describe('VideoKeyWatchService', () => {
     expect(alerts).toEqual([
       { kind: 'video_key_burst', payload: { studentId: 'u1', studentName: 'طالب تجربة', videos: KEY_BURST_VIDEOS } },
     ]);
+    // «متابعة التنزيل» keeps the day's real count, past the line.
+    expect(flags.get('u1:2026-11-14')?.videos).toBe(KEY_BURST_VIDEOS + 1);
+    expect(flags.get('u1:2026-11-14')?.videoIds).toHaveLength(KEY_BURST_VIDEOS + 1);
   });
 
   it('refuses past the rate ceiling with a 429', async () => {
