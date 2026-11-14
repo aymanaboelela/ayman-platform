@@ -77,6 +77,13 @@ export const AdminExamCreateSchema = z
      * like any other and marked late. See `examKeptOpen`.
      */
     keepOpenAfterClose: z.boolean().default(false),
+    /**
+     * «مفتوح لغير المشتركين» — any student whose profile matches the course's
+     * system, year and stream (عام/لغات) may sit it without a subscription.
+     * Off by default: the enrolment-only gate is what every exam had before.
+     * See `OpenExamAccessService`.
+     */
+    openToNonSubscribers: z.boolean().default(false),
   })
   .strict()
   .refine((v) => v.closesAt > v.opensAt, {
@@ -110,6 +117,7 @@ export const AdminExamPatchSchema = z
     gradeOutOf: GRADE_OUT_OF.optional(),
     passPercent: z.number().min(0).max(100).optional(),
     keepOpenAfterClose: z.boolean().optional(),
+    openToNonSubscribers: z.boolean().optional(),
   })
   .strict()
   .refine((v) => v.opensAt === undefined || v.closesAt === undefined || v.closesAt > v.opensAt, {
@@ -139,6 +147,8 @@ export const AdminExamRowSchema = z.object({
   /** Sittable from the course after `closesAt` — `closesAt` is then the
    *  on-time deadline, and `phase` reads `closed` past it. */
   keepOpenAfterClose: z.boolean(),
+  /** Sittable by the course's whole cohort, subscribed or not. */
+  openToNonSubscribers: z.boolean(),
   /** Both must be true for a student to reach it, and the row shows them
    *  separately: a published quiz on an unpublished lesson is invisible, and
    *  the difference is the first thing he needs to see when it is missing. */

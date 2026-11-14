@@ -36,6 +36,7 @@ export interface ExamFormInitial {
   gradeOutOf: number;
   passPercent: number;
   keepOpenAfterClose: boolean;
+  openToNonSubscribers: boolean;
 }
 
 export interface ExamFormProps {
@@ -118,6 +119,7 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
   const [windowAmount, setWindowAmount] = useState(String(initialLength?.amount ?? 24));
   const [windowUnit, setWindowUnit] = useState<WindowUnit>(initialLength?.unit ?? 'hours');
   const [keepOpen, setKeepOpen] = useState(initial?.keepOpenAfterClose ?? false);
+  const [openToAll, setOpenToAll] = useState(initial?.openToNonSubscribers ?? false);
 
   function changeOpens(value: string) {
     setOpensAt(value);
@@ -223,6 +225,7 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
       gradeOutOf: num(gradeOutOf),
       passPercent: num(passPercent),
       keepOpenAfterClose: keepOpen,
+      openToNonSubscribers: openToAll,
     };
 
     setSaving(true);
@@ -451,6 +454,33 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
             className="mt-0.5 block text-[length:var(--fs-text-xs)] text-fg-muted"
           >
             {c.keepOpenHint}
+          </span>
+        </span>
+      </label>
+
+      {/* «مفتوح لغير المشتركين» — the cohort is the course's own system,
+          year and stream; the hint says so, because «لكل الناس» is what he
+          will otherwise assume it means. */}
+      <label
+        htmlFor="exam-open-to-all"
+        className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-2 p-3"
+      >
+        <Switch
+          id="exam-open-to-all"
+          checked={openToAll}
+          onCheckedChange={setOpenToAll}
+          aria-describedby="exam-open-to-all-hint"
+          className="mt-0.5"
+        />
+        <span className="min-w-0">
+          <span className="block text-[length:var(--fs-text-sm)] font-medium text-fg">
+            {c.openToAllLabel}
+          </span>
+          <span
+            id="exam-open-to-all-hint"
+            className="mt-0.5 block text-[length:var(--fs-text-xs)] text-fg-muted"
+          >
+            {c.openToAllHint}
           </span>
         </span>
       </label>

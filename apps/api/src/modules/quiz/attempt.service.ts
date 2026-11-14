@@ -32,6 +32,7 @@ import {
 } from './serializers/learner.serializer';
 import { resolveReviewFlags, resolveReviewWindow, toReviewQuestion } from './serializers/review.serializer';
 import { splitMarks } from './grading/mark-split';
+import { OpenExamAccessService } from './open-exam-access.service';
 import { mapOptionsBetweenVersions, remapResponse } from './grading/remap';
 
 export interface SaveResult {
@@ -258,6 +259,8 @@ export class AttemptService {
     // `@Optional()` for the same reason as `keyWatch`: without it the runner
     // simply records nothing, which is what every hand-built spec wants.
     @Optional() protected readonly signals?: ExamSignalsService,
+    // Same reason again; absent, review keeps its enrollment-only check.
+    @Optional() protected readonly openExams?: OpenExamAccessService,
   ) {}
 
   async start(userId: string, quizId: string): Promise<StartedAttempt> {
@@ -781,7 +784,11 @@ export class AttemptService {
     // requireOwnership, not require: an admin publishing a lesson mid-attempt
     // must not make an in-flight submission impossible (the same line
     // gradeAndFinalise holds for a mid-attempt unpublish).
-    await this.lessonAccess.requireOwnership(userId, attempt.quiz.lessonId);
+    // An open exam's sitter has no enrollment to own it through; the same
+    // profile match that let them start it lets them read it back.
+    if (!(await this.openExams?.admitsLesson(userId, attempt.quiz.lessonId))) {
+      await this.lessonAccess.requireOwnership(userId, attempt.quiz.lessonId);
+    }
 
     const window = resolveReviewWindow({
       submittedAt: attempt.submittedAt,

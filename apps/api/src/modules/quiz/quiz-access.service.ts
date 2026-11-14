@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { BlockedReason, QuizOverview } from '@ayman/contracts/quiz/overview';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { OpenExamAccessService } from './open-exam-access.service';
 import { countingAttemptId, decideNextSitting } from './attempt-allowance';
 import { splitPendingMarks } from './grading/mark-split';
 
@@ -32,6 +33,10 @@ export class QuizAccessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly lessonAccess: LessonAccessService,
+    // `@Optional()` only because a dozen specs build this service by hand
+    // with two arguments; `QuizModule` always provides it. Absent, every quiz
+    // keeps the enrollment-only gate — the closed default.
+    @Optional() private readonly openExams?: OpenExamAccessService,
   ) {}
 
   /**
@@ -71,16 +76,22 @@ export class QuizAccessService {
    * lessonId)` directly, which IS 404-shaped (Global Constraint — IDOR).
    */
   async assertCanAttempt(userId: string, quizId: string): Promise<QuizForAttempt> {
+    // «مفتوح لغير المشتركين»: the profile-matched cohort replaces the
+    // enrollment predicate AND the entitlement half below — see
+    // `OpenExamAccessService` for why both, and why it never enrolls anyone.
+    const openExam = (await this.openExams?.admitsQuiz(userId, quizId)) ?? false;
     const quiz = await this.prisma.quiz.findFirst({
       where: {
         id: quizId,
         isPublished: true,
         lesson: {
           isPublished: true,
-          course: {
-            status: 'published',
-            enrollments: { some: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } } },
-          },
+          course: openExam
+            ? { status: 'published' }
+            : {
+                status: 'published',
+                enrollments: { some: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } } },
+              },
         },
       },
       select: {
@@ -123,13 +134,15 @@ export class QuizAccessService {
      * it out would turn this endpoint's deliberate 403 shape into a 404 that
      * tells a stranger which quiz ids are real.
      */
-    try {
-      await this.lessonAccess.requireEntitled(userId, quiz.lessonId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new ForbiddenException({ code: 'quiz_not_accessible' });
+    if (!openExam) {
+      try {
+        await this.lessonAccess.requireEntitled(userId, quiz.lessonId);
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          throw new ForbiddenException({ code: 'quiz_not_accessible' });
+        }
+        throw error;
       }
-      throw error;
     }
 
     const now = new Date();
@@ -162,7 +175,9 @@ export class QuizAccessService {
    * decorated `@NoAnswerLeak()` for that reason.
    */
   async getLessonOverview(userId: string, lessonId: string): Promise<QuizOverview> {
-    await this.lessonAccess.require(userId, lessonId);
+    if (!(await this.openExams?.admitsLesson(userId, lessonId))) {
+      await this.lessonAccess.require(userId, lessonId);
+    }
 
     const quiz = await this.prisma.quiz.findUnique({
       where: { lessonId },
