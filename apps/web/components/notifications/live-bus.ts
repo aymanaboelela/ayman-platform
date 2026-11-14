@@ -28,6 +28,8 @@ type ChatListener = (conversationId: string | null) => void;
 
 const queueListeners = new Map<LiveQueue, Set<QueueListener>>();
 const chatListeners = new Set<ChatListener>();
+type TypingListener = (conversationId: string, from: 'visitor' | 'admin') => void;
+const typingListeners = new Set<TypingListener>();
 const openListeners = new Set<() => void>();
 const connectionListeners = new Set<() => void>();
 let connected = false;
@@ -51,6 +53,19 @@ export function emitQueueFrame(queue: LiveQueue, waiting: number): void {
  */
 export function emitChatFrame(conversationId: string | null): void {
   for (const listener of [...chatListeners]) listener(conversationId);
+}
+
+/** Stream side: «جارٍ الكتابة…» — the other side of a thread is typing. */
+export function emitTyping(conversationId: string, from: 'visitor' | 'admin'): void {
+  for (const listener of [...typingListeners]) listener(conversationId, from);
+}
+
+/** Screen side, for the typing bubble. Return the unsubscribe from cleanup. */
+export function subscribeTyping(listener: TypingListener): () => void {
+  typingListeners.add(listener);
+  return () => {
+    typingListeners.delete(listener);
+  };
 }
 
 /** Stream side: the connection is (re)established. Every frame published

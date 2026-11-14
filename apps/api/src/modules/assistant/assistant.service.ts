@@ -490,14 +490,39 @@ export class AssistantService {
     return this.threadById(conversation.id);
   }
 
-  /** Marks the visitor's side read, so the dot on the launcher clears. */
+  /**
+   * Marks the visitor's side read, so the dot on the launcher clears — and
+   * tells the INBOX, so the ✓ under his reply turns into «اتشافت» ✓✓ while
+   * he is looking at it. Inbox only (`null` owner): the student's own tab is
+   * the one that just read it.
+   *
+   * No loop: the inbox redraw re-reads the thread as the ADMIN, which marks
+   * the admin side read and announces nothing.
+   */
   async markVisitorRead(conversationId: string, userId: string | null, guestToken: string | null): Promise<void> {
     const where = this.ownerWhere(userId, guestToken);
     if (!where) return;
-    await this.prisma.conversation.updateMany({
+    const result = await this.prisma.conversation.updateMany({
       where: { ...where, id: conversationId },
       data: { visitorReadAt: new Date() },
     });
+    if (result.count > 0) await this.announce(conversationId, null);
+  }
+
+  /**
+   * «جارٍ الكتابة…» from the student's composer. Ownership in the WHERE like
+   * every visitor path, and a closed thread says nothing (there is no
+   * composer on it). Silent either way — a typing ping has no answer worth an
+   * error status.
+   */
+  async visitorTyping(conversationId: string, userId: string | null, guestToken: string | null): Promise<void> {
+    const where = this.ownerWhere(userId, guestToken);
+    if (!where) return;
+    const owned = await this.prisma.conversation.findFirst({
+      where: { ...where, id: conversationId, status: { not: 'closed' } },
+      select: { id: true },
+    });
+    if (owned) await this.notifications.announceTyping(conversationId, 'visitor', null);
   }
 
   // ── admin side ────────────────────────────────────────────────────────
@@ -969,6 +994,16 @@ export class AssistantService {
       data: { adminReaction: reaction },
     });
     if (result.count > 0) await this.announce(conversationId);
+  }
+
+  /** «جارٍ الكتابة…» from his composer — to the thread's owner, if any. */
+  async adminTyping(id: string): Promise<void> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+      select: { userId: true, status: true },
+    });
+    if (!conversation?.userId || conversation.status === 'closed') return;
+    await this.notifications.announceTyping(id, 'admin', conversation.userId);
   }
 
   async setStatus(id: string, status: 'open' | 'closed'): Promise<void> {

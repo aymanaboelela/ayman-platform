@@ -800,6 +800,15 @@ export class NotificationsService {
     await this.realtime?.publishChat(conversationId, ownerUserId);
   }
 
+  /** «جارٍ الكتابة…» — see the `typing` frame. Never throws. */
+  async announceTyping(
+    conversationId: string,
+    from: 'visitor' | 'admin',
+    ownerUserId: string | null,
+  ): Promise<void> {
+    await this.realtime?.publishTyping(conversationId, from, ownerUserId);
+  }
+
   async unreadCount(userId: string): Promise<number> {
     return this.prisma.notification.count({ where: { userId, readAt: null } });
   }

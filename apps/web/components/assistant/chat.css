@@ -1424,3 +1424,55 @@ button.chat-quote {
     transition: none;
   }
 }
+
+/* «جارٍ الكتابة…» — the other side's composer is going. Three dots that
+   breathe in turn, in the bubble's own colours, so it reads as a message
+   about to land rather than a spinner. */
+.chat-row--typing {
+  animation: chat-in var(--d-popover) var(--ease-out);
+}
+
+.chat-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-block-size: 2.25rem;
+  padding-block: 0.75rem;
+  padding-inline: 0.9rem;
+}
+
+.chat-typing__dot {
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: 999px;
+  background: var(--n-9);
+  animation: chat-typing 1.2s ease-in-out infinite;
+}
+
+.chat-typing__dot:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+.chat-typing__dot:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+@keyframes chat-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.2rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-typing__dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}

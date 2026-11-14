@@ -170,6 +170,17 @@ export class AdminInboxController {
     sendAttachment(await this.attachments.stream(id, messageId), download, response);
   }
 
+  /**
+   * «جارٍ الكتابة…» from his composer. `conversation:reply`: only a role that
+   * may answer the student may tell them an answer is coming.
+   */
+  @RequirePermission('conversation:reply')
+  @Post(':id/typing')
+  @HttpCode(204)
+  async typing(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.assistant.adminTyping(id);
+  }
+
   @RequirePermission('conversation:reply')
   @UsePipes(ZodValidationPipe)
   @Post(':id/reply')

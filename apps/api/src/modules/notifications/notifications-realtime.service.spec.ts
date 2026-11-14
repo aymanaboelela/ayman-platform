@@ -105,6 +105,22 @@ describe('NotificationsRealtimeService', () => {
     expect(stranger).toEqual([]);
   });
 
+  it('sends typing to the OTHER side only — the student’s to the inbox, his to the owner', async () => {
+    const inbox: NotificationEvent[] = [];
+    const owner: NotificationEvent[] = [];
+    service.subscribeChat((event) => inbox.push(event));
+    service.subscribe('owner', (event) => owner.push(event));
+    await settle();
+
+    await service.publishTyping('c-3', 'visitor', 'owner');
+    await service.publishTyping('c-3', 'admin', 'owner');
+    // A guest has no stream: his typing to a guest thread goes nowhere.
+    await service.publishTyping('c-4', 'admin', null);
+
+    expect(inbox).toEqual([{ type: 'typing', conversationId: 'c-3', from: 'visitor' }]);
+    expect(owner).toEqual([{ type: 'typing', conversationId: 'c-3', from: 'admin' }]);
+  });
+
   it('a guest thread has no owner channel — only the inbox hears it', async () => {
     const inbox: NotificationEvent[] = [];
     service.subscribeChat((event) => inbox.push(event));

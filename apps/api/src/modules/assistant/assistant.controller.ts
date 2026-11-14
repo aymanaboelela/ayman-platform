@@ -302,4 +302,22 @@ export class AssistantController {
     const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
     await this.assistant.markVisitorRead(id, user?.id ?? null, guestToken);
   }
+
+  /**
+   * «جارٍ الكتابة…» — the composer pings this every few seconds while the
+   * student types (`useTypingSignal`). Same identity and CSRF shape as
+   * `read`; it stores nothing and answers nothing.
+   */
+  @Public()
+  @RequireCsrf()
+  @Post('conversations/:id/typing')
+  @HttpCode(204)
+  async typing(
+    @Req() request: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    const user = await this.session.userOrNull(request);
+    const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
+    await this.assistant.visitorTyping(id, user?.id ?? null, guestToken);
+  }
 }

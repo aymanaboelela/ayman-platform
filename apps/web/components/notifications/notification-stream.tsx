@@ -22,6 +22,7 @@ import {
   emitQueueFrame,
   emitStreamDown,
   emitStreamOpen,
+  emitTyping,
   isChatOnScreen,
 } from './live-bus';
 
@@ -144,6 +145,10 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
       */
       if (event.type === 'chat') {
         emitChatFrame(event.conversationId);
+        return;
+      }
+      if (event.type === 'typing') {
+        emitTyping(event.conversationId, event.from);
         return;
       }
       if (event.type !== 'notification') return;
