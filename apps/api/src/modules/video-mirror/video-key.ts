@@ -1,4 +1,5 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { videoKeyMaskMessage } from '@ayman/contracts/video';
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -42,4 +43,17 @@ export function videoKey(secret: string, videoId: string): Buffer {
  */
 export function videoKeyUri(appUrl: string, videoId: string): string {
   return `${appUrl.replace(/\/+$/, '')}/api/videos/${videoId}/key`;
+}
+
+/**
+ * The key as the route hands it to our player: XORed with a mask only a client
+ * that chose `nonce` can rebuild — see `videoKeyMaskMessage` in contracts for
+ * what this does and does not protect. XOR is its own inverse, so the player's
+ * unwrap is this same function.
+ */
+export function maskVideoKey(key: Buffer, videoId: string, nonce: string): Buffer {
+  const mask = createHash('sha256').update(videoKeyMaskMessage(videoId, nonce)).digest();
+  const out = Buffer.alloc(key.length);
+  for (let i = 0; i < key.length; i += 1) out[i] = key[i]! ^ mask[i]!;
+  return out;
 }

@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { posterBesidePlaylist } from '@ayman/contracts/video';
 import { videoPreviewUrlAction } from '@/app/(admin)/admin/courses/actions';
 import { HLS_CONFIG } from '@/components/player/mirror-video';
+import { videoKeyLoader } from '@/components/player/video-key-loader';
 
 const c = copy.admin.lesson;
 
@@ -52,7 +53,7 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
       const { default: Hls } = await import('hls.js');
       if (!live) return;
       if (Hls.isSupported()) {
-        const instance = new Hls(HLS_CONFIG);
+        const instance = new Hls({ ...HLS_CONFIG, loader: videoKeyLoader(Hls) });
         hls = instance;
         /*
          * Without this, any fatal hls.js error (a cold edge on a

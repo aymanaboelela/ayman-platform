@@ -5174,6 +5174,13 @@ export const copy = {
     youtubeNewVideo: 'نزل فيديو جديد على القناة: {title}',
     youtubeNewVideoNoTitle: 'نزل فيديو جديد على القناة',
     youtubeNewVideoSubtitle: 'العنوان والوصف والتاجز مستنيين يتظبطوا',
+    /**
+     * ADMIN — «فيديوهات كتير من حساب واحد». About the ACCOUNT, never a
+     * gendered verb for the student: the platform never asks boy or girl.
+     */
+    videoKeyBurst: '{name}: {count} فيديو اتفتحوا من الحساب ده النهارده',
+    videoKeyBurstNoName: 'حساب طالب',
+    videoKeyBurstSubtitle: 'عدد مش طبيعي — ممكن يكون حد بيحاول ينزّل المحاضرات',
     walletSubtitle: 'المحفظة',
     /*
      * ADMIN, push only — «لوحة التحكم على الموبايل» (`adminMobile`). None of

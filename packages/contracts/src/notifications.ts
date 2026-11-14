@@ -142,6 +142,13 @@ export const NOTIFICATION_KINDS = [
    * fan-out would be a row per staff account for every video.
    */
   'youtube_new_video',
+  /**
+   * ADMIN — «حساب فتح فيديوهات كتير النهارده». One account took the keys of
+   * `KEY_BURST_VIDEOS` distinct lectures in a Cairo day — the shape of someone
+   * downloading a course, not watching it. Once per account per day, to
+   * everyone holding `student:read`. See `VideoKeyWatchService`.
+   */
+  'video_key_burst',
 ] as const;
 
 const base = {
@@ -539,6 +546,19 @@ export const WalletTopupRejectedNotificationSchema = z.object({
   reason: z.string(),
 });
 
+/**
+ * ADMIN — one account opened `videos` distinct lectures today. `studentName`
+ * is a snapshot taken when the alert fired (the account may be renamed or
+ * deleted by the time anyone reads it); `studentId` opens their file.
+ */
+export const VideoKeyBurstNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('video_key_burst'),
+  studentId: z.string(),
+  studentName: z.string(),
+  videos: z.number().int(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -563,6 +583,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   WalletTopupRejectedNotificationSchema,
   SuspectKeyNotificationSchema,
   YoutubeNewVideoNotificationSchema,
+  VideoKeyBurstNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

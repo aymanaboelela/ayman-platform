@@ -24,6 +24,8 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
     static Events = { MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched', FRAG_LOADED: 'fragLoaded', ERROR: 'error' };
     static ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };
     static ErrorDetails = { KEY_LOAD_ERROR: 'keyLoadError', KEY_LOAD_TIMEOUT: 'keyLoadTimeOut' };
+    // The base `videoKeyLoader` extends — never called here, only subclassed.
+    static DefaultConfig = { loader: class {} };
     levels: { height: number }[] = [];
     currentLevel = -1;
     nextLevel = -1;
@@ -78,7 +80,9 @@ describe('MirrorVideo playback tuning', () => {
     await act(async () => {});
 
     expect(built).toHaveLength(1);
-    expect(built[0]).toEqual(HLS_CONFIG);
+    expect(built[0]).toMatchObject(HLS_CONFIG);
+    // The wrapped-key loader rides on every instance — see `video-key-loader.ts`.
+    expect(typeof built[0]!.loader).toBe('function');
     expect(built[0]).toMatchObject({
       startLevel: 0,
       testBandwidth: false,

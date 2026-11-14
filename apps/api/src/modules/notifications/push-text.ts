@@ -317,6 +317,16 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: `youtube-new-${entry.videoId}`,
       };
 
+    // «فيديوهات كتير من حساب واحد» — to the student's file, where the account
+    // can be looked at and, if it is what it looks like, suspended.
+    case 'video_key_burst':
+      return {
+        title: formatCopy(c.videoKeyBurst, { name: entry.studentName || c.videoKeyBurstNoName, count: entry.videos }),
+        body: c.videoKeyBurstSubtitle,
+        url: `/admin/students/${encodeURIComponent(entry.studentId)}`,
+        tag: `video-key-burst-${entry.studentId}`,
+      };
+
     default:
       return null;
   }

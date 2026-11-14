@@ -116,6 +116,10 @@ export function iconFor(entry: StudentNotification) {
       return CircleAlert;
     case 'youtube_new_video':
       return MonitorPlay;
+    // An account taking lectures in bulk — the same `CircleAlert` as every
+    // other «something is wrong» row.
+    case 'video_key_burst':
+      return CircleAlert;
   }
 }
 
@@ -152,6 +156,7 @@ export function toneFor(entry: StudentNotification): NotificationTone {
     case 'subscription_expiring_soon':
     case 'book_order_rejected':
     case 'suspect_key':
+    case 'video_key_burst':
       return 'problem';
     case 'book_order_placed':
     case 'book_order_shipped':

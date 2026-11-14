@@ -463,6 +463,15 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: c.youtubeNewVideoSubtitle,
         href: `/admin/youtube?video=${encodeURIComponent(entry.videoId)}`,
       };
+
+    // «فيديوهات كتير من حساب واحد» — straight to the student's file.
+    case 'video_key_burst':
+      return {
+        title: formatCopy(c.videoKeyBurst, { name: entry.studentName || c.videoKeyBurstNoName, count: entry.videos }),
+        detail: null,
+        subtitle: c.videoKeyBurstSubtitle,
+        href: `/admin/students/${encodeURIComponent(entry.studentId)}`,
+      };
   }
 }
 
