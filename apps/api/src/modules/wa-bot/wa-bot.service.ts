@@ -9,7 +9,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { isOptOutMessage } from '@ayman/contracts/marketing/render';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { copy as bot } from '@ayman/contracts/copy/wa-bot';
-import { looksAutomated } from '@ayman/contracts/wa-bot/intents';
+import { isOnlyGreeting, looksAutomated } from '@ayman/contracts/wa-bot/intents';
 import { normalizeArabic } from '@ayman/contracts/wa-bot/normalize';
 import type {
   LeadList,
@@ -33,7 +33,7 @@ import {
   WhatsappRestrictedError,
 } from '../marketing/whatsapp-device.service';
 import { Prisma, type WaChat } from '../../generated/prisma/client';
-import { BURST_LIMIT, BURST_WINDOW_MS, DEBOUNCE_MS, MUTE_MS } from './policy';
+import { BURST_LIMIT, BURST_WINDOW_MS, DEBOUNCE_MS, GREETING_DEBOUNCE_MS, MUTE_MS } from './policy';
 import { WaBotFactsService } from './wa-bot-facts.service';
 import { WaBotIdentityService, chatPhone } from './wa-bot-identity.service';
 import { WaBotSettingsService } from './wa-bot-settings.service';
@@ -120,7 +120,8 @@ export class WaBotService {
     const automated = looksAutomated(text);
     const preview = text.slice(0, PREVIEW);
     const name = pushName?.trim().slice(0, 120) || null;
-    const due = optOut || automated ? null : new Date(now.getTime() + DEBOUNCE_MS);
+    const wait = isOnlyGreeting(text) ? GREETING_DEBOUNCE_MS : DEBOUNCE_MS;
+    const due = optOut || automated ? null : new Date(now.getTime() + wait);
 
     const chat = await this.prisma.$transaction(async (tx) => {
       const row = await tx.waChat.upsert({

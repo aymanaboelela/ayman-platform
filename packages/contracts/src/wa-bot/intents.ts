@@ -138,7 +138,8 @@ export const DEFAULT_KEYWORDS: Record<BotIntent, readonly string[]> = {
     'shipping', 'delivery', 'sha7n', 'shahn', 'tawsil', 'tawseel', 'molazma', 'mozakra',
   ],
   schedule: [
-    'معاد', 'ميعاد', 'مواعيد', 'المواعيد', 'امتى', 'إمتى', 'امتي', 'الساعة كام', 'جدول',
+    'معاد', 'ميعاد', 'مواعيد', 'المواعيد', 'امتى', 'إمتى', 'امتي', 'امته', 'إمته', 'امتا',
+    'الساعة كام', 'جدول',
     'الجدول', 'بتنزل', 'هتنزل', 'تنزل امتى', 'نزلت', 'لايف', 'سيشن', 'السنتر', 'سنتر',
     'حضوري', 'اونلاين ولا', 'live', 'session', 'schedule', 'timing', 'emta', 'emty',
     'imta', 'mi3ad', 'ma3ad', 'mawa3id', 'mwa3eed', 'center', 'sentar',
@@ -149,13 +150,16 @@ export const DEFAULT_KEYWORDS: Record<BotIntent, readonly string[]> = {
     'رد عليا', 'ردوا عليا', 'ردو', 'خدمة العملاء', 'الدعم', 'الدعم الفني', 'مشكلة',
     'مشكله', 'شكوى', 'شكوي', 'مش شغال', 'مش بيفتح', 'مش راضي', 'مش عارف ادخل',
     'مش عارفة ادخل', 'مش قادر', 'مش قادرة', 'نسيت الباسورد', 'الباسورد', 'كلمة السر',
-    'اتسرق', 'استرجاع', 'فلوسي', 'call me', 'call', 'kalemny', 'kalimny', 'akalem', 'a kalem',
+    'اتسرق', 'استرجاع', 'فلوسي', 'أتواصل', 'اتواصل', 'تواصل مع', 'اكلمك', 'أكلمك',
+    'اغير الرقم', 'أغير الرقم', 'اغير رقمي', 'تغيير الرقم', 'تغيير رقم', 'غير الرقم', 'رقم تاني',
+    'call me', 'call', 'kalemny', 'kalimny', 'akalem', 'a kalem',
     'human', 'agent', 'support', 'problem', 'moshkla', 'mushkila', '7ad yrod', '7ad yekalemny',
   ],
   greeting: [
     'السلام عليكم', 'سلام عليكم', 'السلام', 'سلام', 'أهلا', 'اهلا', 'هاي', 'هلو', 'مرحبا',
     'صباح الخير', 'مساء الخير', 'ازيك', 'إزيك', 'ازيكم', 'hi', 'hello', 'hey', 'salam',
-    'slm', 'salamo 3alekom', 'el salam', 'sba7 el5er', 'msa2 el5er',
+    'slm', 'salamo 3alekom', 'el salam', 'sba7 el5er', 'msa2 el5er', 'مستر', 'يا مستر',
+    'بشمهندس', 'باشمهندس', 'يا هندسة',
   ],
   thanks: [
     'شكرا', 'شكراً', 'متشكر*', 'تسلم', 'تسلمي', 'تسلموا', 'ميرسي', 'جزاك الله', 'ربنا يكرمك',
@@ -439,6 +443,65 @@ const AUTOMATED = [
   'this is an automated', 'do not reply', 'no-reply', 'out of office', 'away message',
   'لا ترد على هذه الرسالة', 'خارج أوقات العمل', 'سنرد عليك في أقرب وقت',
 ];
+
+/**
+ * The person's OWN exam, grade or marking — the one subject the bot never
+ * answers, on rules or on the model.
+ *
+ * 2026-11-14: the Units 1+2 comprehensive was marked and pasted-AI answers
+ * were cancelled. Students wrote in to contest it («أنا حالل بمجهودي»,
+ * «امتحنت على لاب ومعاييش تليفون أغش منه») and Gemini answered «مش بقدر أجاوب
+ * على أي أسئلة ليها علاقة بالغش… مهم إنك تعتمد على مذاكرتك» — a lecture about
+ * cheating, from the teacher's own number, to a student defending their work.
+ * Only the teacher can answer these, so they go to him with one honest line
+ * and the model never sees them.
+ *
+ * «الامتحان امتى؟» is NOT here: «امتحان» alone is a schedule question. Every
+ * entry names a mark, a result, the marking, an accusation, a retake, or a
+ * paper that would not submit.
+ */
+const OWN_EXAM_ISSUE = [
+  'درجه*', 'درجات*', 'الدرجه*', 'نتيجتي', 'نتيجته', 'نتيجه الامتحان', 'نتيجة الامتحان',
+  'اتلغ*', 'لغيت*', 'ملغي*', 'الغاء الدرجه', 'غش*', 'بغش', 'هغش', 'الذكاء الاصطناعي',
+  'ذكاء اصطناعي', 'الذكاء الإصطناعي', 'شات جي بي تي', 'chatgpt', 'chat gpt', 'gpt', 'ai',
+  'حالل', 'حاله بنفسي', 'حليت بنفسي', 'حليته بنفسي', 'حلتها بنفسي', 'بمجهودي', 'مجهودي',
+  'بايدي', 'بإيدي', 'المقالي', 'مقالي', 'التصحيح', 'تصحيح*', 'اتصحح*', 'صححت*', 'مصحح*',
+  'ظلم*', 'ظالم*', 'مش عدل', 'يتسلم', 'اتسلمش', 'متسلمش', 'تسليم الامتحان', 'اعيد الامتحان',
+  'اعاده الامتحان', 'إعادة الامتحان', 'امتحن تاني', 'امتحان تاني', 'الامتحان اتقفل',
+  'الامتحان قفل', 'قفل الامتحان', 'خرجني من الامتحان', 'الامتحان مش',
+];
+
+export function looksLikeOwnExamIssue(text: string): boolean {
+  return scoreKeywords(prepareMessage(text), OWN_EXAM_ISSUE) > 0;
+}
+
+/**
+ * Words that carry nothing but a hello or a «يا مستر» — what is left of a
+ * message once they are gone decides whether it was ONLY a greeting.
+ */
+const GREETING_FILLER = [
+  'السلام عليكم ورحمه الله وبركاته', 'السلام عليكم ورحمه الله', 'السلام عليكم', 'سلام عليكم',
+  'السلام', 'سلام', 'عليكم', 'ورحمه', 'الله', 'وبركاته', 'اهلا', 'هاي', 'هلو', 'مرحبا',
+  'صباح الخير', 'مساء الخير', 'صباح النور', 'مساء النور', 'ازيك', 'ازيكم', 'ازي حضرتك',
+  'عامل ايه', 'اخبارك', 'يا', 'مستر', 'ميستر', 'استاذ', 'استاذي', 'بشمهندس', 'باشمهندس',
+  'مهندس', 'هندسه', 'حضرتك', 'hi', 'hello', 'hey', 'salam', 'slm', 'mr', 'mister',
+];
+
+/**
+ * «السلام عليكم» / «يا مستر» and nothing else — the only message the greeting
+ * menu is for. «السلام عليكم، ممكن أغيّر رقمي؟» used to get the menu because
+ * greeting matched and the question did not, which answers a question nobody
+ * asked and ignores the one they did.
+ */
+export function isOnlyGreeting(text: string): boolean {
+  let rest = ` ${normalizeArabic(text)} `;
+  if (!rest.trim()) return false;
+  for (const phrase of GREETING_FILLER) {
+    const needle = ` ${normalizeArabic(phrase)} `;
+    while (rest.includes(needle)) rest = rest.replace(needle, ' ');
+  }
+  return rest.trim() === '';
+}
 
 /**
  * Hosts a student plausibly links to while asking a real question. Anything

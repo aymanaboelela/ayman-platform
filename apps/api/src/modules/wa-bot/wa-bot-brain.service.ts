@@ -5,7 +5,9 @@ import type { AskTurn } from '@ayman/contracts/assistant/ask';
 import {
   YEAR_INTENTS,
   classify,
+  isOnlyGreeting,
   looksAutomated,
+  looksLikeOwnExamIssue,
   looksLikeSpam,
   parseYear,
   type BotIntent,
@@ -18,7 +20,7 @@ import { masculineAddress, masculineCorrection } from '@ayman/contracts/assistan
 import { isFeatureEnabled } from '../../common/entitlements';
 import { tenantName } from '../../common/tenant';
 import { AssistantAiService } from '../assistant/ai/assistant-ai.service';
-import { HANDOFF_NOTICE_EVERY_MS, MAX_YEAR_ASKS } from './policy';
+import { HANDOFF_NOTICE_EVERY_MS, HOUR_MS, MAX_YEAR_ASKS } from './policy';
 import {
   booksBlock,
   courseBlock,
@@ -44,6 +46,8 @@ export interface BrainChat {
   readonly year: number | null;
   readonly yearAsks: number;
   readonly lastHandoffNoticeAt: Date | null;
+  /** Handed to a person who has not answered yet (cleared when he does). */
+  readonly needsHuman?: boolean;
   /** Whether the bot has answered this number before — the first reply greets. */
   readonly repliedBefore: boolean;
 }
@@ -129,6 +133,9 @@ export class WaBotBrainService {
     if (isOptOutMessage(text)) return silent('optOut');
     if (looksAutomated(text)) return silent('automated');
     if (looksLikeSpam(text, this.ownHosts)) return silent('spam');
+    // Before the rules AND the model: a student contesting a mark is talking
+    // to the teacher, whatever other word («امتى», «الكورس») rides along.
+    if (looksLikeOwnExamIssue(text)) return withSalam(this.handoff(input, {}, ['exam'], 'exam'), text);
 
     const [resolved, catalog] = await Promise.all([this.answers.resolved(), this.facts.catalog()]);
     const { options } = catalog;
@@ -163,7 +170,7 @@ export class WaBotBrainService {
 
     // ── nothing matched ───────────────────────────────────────────────────
     if (intents.length === 0) {
-      if (cls.greeting) {
+      if (cls.greeting && isOnlyGreeting(text)) {
         return {
           action: 'answer',
           reply: this.render(resolved.text.get('greeting') ?? bot.answers.greeting, await this.vars(input, known, catalog.courses), input, cls.greeting, text, true),
@@ -178,13 +185,7 @@ export class WaBotBrainService {
 
     // ── a person, please ──────────────────────────────────────────────────
     if (intents.includes('human')) {
-      return {
-        action: 'handoff',
-        reply: renderTemplate(resolved.text.get('human') ?? bot.answers.human, {}),
-        intents,
-        reason: null,
-        patch: { ...patch, needsHuman: true, handoffNotice: true },
-      };
+      return withSalam(this.handoff(input, patch, intents, 'human', resolved.text.get('human') ?? bot.answers.human), text);
     }
 
     // ── the year first, when the answer depends on it ────────────────────
@@ -261,27 +262,71 @@ export class WaBotBrainService {
   }
 
   private async fallback(input: BrainInput, patch: BrainResult['patch'], intents: readonly string[] = []): Promise<BrainResult> {
+    // Told «هوصّل للفريق» and still waiting: whatever comes next («السؤال أهو
+    // يا مستر», a screenshot caption, the rest of the story) is addressed to
+    // him, not to the bot. A model answer here talked over the handoff it had
+    // just announced («هتتوجه رسالتك للمهندس…» to a student who asked for
+    // him by name). The rules above still answer a plain price question; only
+    // the model keeps quiet, until he replies or the silence window ends.
+    if (input.chat.needsHuman && input.chat.lastHandoffNoticeAt) {
+      const since = input.now.getTime() - input.chat.lastHandoffNoticeAt.getTime();
+      if (since < input.settings.handoffSilenceHours * HOUR_MS) {
+        return { ...silent('waitingForPerson'), intents, patch: { ...patch, needsHuman: true } };
+      }
+    }
     if (input.settings.aiFallback && this.modelAvailable) {
       const answer = await this.askModel(input.text, input.history);
       if (answer) {
         return {
           action: 'model',
-          reply: `${answer}\n\n${bot.reply.modelFooter}`,
+          reply: `${answer}\n\n${renderTemplate(bot.reply.modelFooter, teacherVars())}`,
           intents,
           reason: null,
           patch,
         };
       }
     }
-    const recent =
-      input.chat.lastHandoffNoticeAt &&
-      input.now.getTime() - input.chat.lastHandoffNoticeAt.getTime() < HANDOFF_NOTICE_EVERY_MS;
+    return withSalam(this.handoff(input, patch, intents, 'unknown'), input.text);
+  }
+
+  /**
+   * «This goes to the teacher», said once and not on a loop.
+   *
+   * The inbox on 2026-11-14: 20 of 37 chats ended on the same sentence, and
+   * one student got it twice for the same unanswered «ممكن أغيّر الرقم؟». So:
+   *   · anything but «أكلم حد» with a notice already out recently → silence
+   *     (a student contesting a mark writes five messages in a row, and the
+   *     first one was already told where it went);
+   *   · asking for a person again while the first handoff is still
+   *     unanswered → «لسه عند…», which tells them it was not lost;
+   *   · otherwise the sentence for what they asked.
+   */
+  private handoff(
+    input: BrainInput,
+    patch: BrainResult['patch'],
+    intents: readonly string[],
+    kind: 'human' | 'exam' | 'unknown',
+    template?: string,
+  ): BrainResult {
+    const last = input.chat.lastHandoffNoticeAt;
+    const recent = last !== null && input.now.getTime() - last.getTime() < HANDOFF_NOTICE_EVERY_MS;
+    if (kind !== 'human' && recent) {
+      return { ...silent('handoffNoticeRecent'), intents, patch: { ...patch, needsHuman: true } };
+    }
+    const waiting = input.chat.needsHuman === true && last !== null;
+    const body = waiting
+      ? bot.reply.handoffStill
+      : kind === 'exam'
+        ? bot.reply.handoffExam
+        : kind === 'human'
+          ? (template ?? bot.answers.human)
+          : bot.reply.handoff;
     return {
-      action: recent ? 'silent' : 'handoff',
-      reply: recent ? null : bot.reply.handoff,
+      action: 'handoff',
+      reply: renderTemplate(body, teacherVars()),
       intents,
-      reason: recent ? 'handoffNoticeRecent' : null,
-      patch: { ...patch, needsHuman: true, handoffNotice: !recent },
+      reason: null,
+      patch: { ...patch, needsHuman: true, handoffNotice: true },
     };
   }
 
@@ -394,6 +439,7 @@ export class WaBotBrainService {
       الموقع: appUrl,
       القناة: site.contact.whatsappChannel ?? null,
       المنصة: tenantName(copy.site.platformName),
+      ...teacherVars(),
       اشتراكك:
         personal.length > 0
           ? personalBlock(
@@ -453,6 +499,17 @@ function clip(text: string): string {
 function withSalam(result: BrainResult, text: string): BrainResult {
   if (!result.reply || !/(^| )s?salam|سلام/u.test(normalizeArabic(text))) return result;
   return { ...result, reply: `${bot.reply.greetSalam}\n${result.reply}` };
+}
+
+/**
+ * The teacher, as the handoff sentences name him: `{{المدرس}}` and the same
+ * name after «لـ» (`{{للمدرس}}`), where «لـ» + «ال…» is written «لل…» —
+ * «للمهندس», «للمنصة». Through the tenant gate (CLAUDE.md §2): another
+ * stack gets its own display name, never his.
+ */
+function teacherVars(): Record<string, string> {
+  const name = tenantName(copy.site.instructor);
+  return { المدرس: name, للمدرس: name.startsWith('ال') ? `لل${name.slice(2)}` : `لـ${name}` };
 }
 
 function silent(reason: string): BrainResult {

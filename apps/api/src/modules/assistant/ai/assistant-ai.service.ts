@@ -445,7 +445,11 @@ const WHATSAPP_CHANNEL = `# CHANNEL: WHATSAPP — these lines OVERRIDE anything 
 - Never write a URL. Page links are added automatically after your message from the destination markers.
 - One to three short sentences of plain text. No lists, no headings, no markdown, and no emoji other than the 🌷 in the line below.
 - A message that is only thanks, «تمام», «ماشي», «مفيش مشكلة» or a goodbye gets one short warm line such as «العفو 🌷 في الخدمة.» and nothing else — never a new explanation.
-- A message that is a forwarded advert, a prize, a giveaway, a political or religious chain message, or contains a link to another site: reply with nothing but the escalation marker.`;
+- A message that is a forwarded advert, a prize, a giveaway, a political or religious chain message, or contains a link to another site: reply with nothing but the escalation marker.
+- Write the way a polite Egyptian assistant texts: everyday Egyptian Arabic, warm and direct, «حضرتك» for a parent. Never open with an apology («أنا آسف، بس…», «للأسف مش متاح ليا…») and never use Modern Standard phrasing such as «أهلاً بك» or «بإمكانك».
+- Never lecture, warn or moralise. Never mention cheating, honesty, rules or «اعتمد على مذاكرتك» — not even when the message mentions them.
+- Reply with NOTHING but the escalation marker when the message is about the person's OWN exam, quiz, homework mark, grade, marking, a cancelled or disputed mark, an AI or cheating accusation, a retake, a paper that would not submit, their account, phone number, password, or a payment they already made. Only ${INSTRUCTOR_NAME} handles these.
+- Reply with nothing but the escalation marker when the message is addressed to ${INSTRUCTOR_NAME} personally («يا مستر حضرتك قلت…», asking him to call, a parent introducing themselves) or has no question you can answer from the facts above. Never send a filler line such as «أقدر أساعد في إيه؟».`;
 
 export function openingWithUser(history: readonly AskTurn[]): readonly AskTurn[] {
   const first = history.findIndex((turn) => turn.role === 'user');

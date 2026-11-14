@@ -59,7 +59,7 @@ export interface PolicyInput {
   readonly sentToday: number;
 }
 
-const HOUR_MS = 60 * 60 * 1000;
+export const HOUR_MS = 60 * 60 * 1000;
 
 const CAIRO_PARTS = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Africa/Cairo',
@@ -146,10 +146,19 @@ export const MUTE_MS = 24 * HOUR_MS;
 
 /**
  * How long after an inbound message the replier looks at the chat. Long
- * enough that «السلام عليكم» / «الكورس بكام» / «؟» typed as three messages is
- * read — and answered — as one, short enough to feel like somebody reading.
+ * enough that «الكورس بكام» / «لتانية» / «؟» typed as three messages is read —
+ * and answered — as one, short enough to feel like somebody reading.
  */
-export const DEBOUNCE_MS = 6_000;
+export const DEBOUNCE_MS = 10_000;
+
+/**
+ * A message that is ONLY «السلام عليكم» / «يا مستر» waits longer: the
+ * question almost always follows as a second message. At 6 s a parent's
+ * «السلام عليكم» (15:44:12) got the greeting menu, «مع حضرتك مامت محمد»
+ * (15:44:25) got a second, model-written «أهلاً بحضرتك» half a minute later,
+ * and her actual request came after both.
+ */
+export const GREETING_DEBOUNCE_MS = 25_000;
 
 /** One handoff notice per this long, however many questions go unmatched. */
 export const HANDOFF_NOTICE_EVERY_MS = 6 * HOUR_MS;

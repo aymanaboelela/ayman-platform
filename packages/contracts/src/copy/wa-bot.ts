@@ -43,9 +43,9 @@ export const copy = {
     books: '{{الكتب}}\n\nالطلب من صفحة الكتب: {{الكتب_رابط}}',
     schedule:
       '{{المواعيد}}\nالحصص المسجّلة متاحة على المنصة في أي وقت: {{الموقع}}\nومواعيد الجديد بتتعلن أول بأول على قناة الواتساب: {{القناة}}',
-    human: 'تمام 🙏 هوصّل الرسالة للفريق، والرد هيكون هنا في نفس المحادثة في أقرب وقت.',
+    human: 'تمام 🙏 رسالتك وصلت {{للمدرس}}، والرد هيكون هنا في نفس المحادثة.',
     greeting:
-      'أهلاً وسهلاً 🌷 ده الرد الآلي بتاع {{المنصة}}.\nأقدر أساعد في:\n• الأسعار\n• طريقة الاشتراك والدفع\n• الحصص المجانية\n• الكتب والشحن\n• المواعيد\nوكتابة «أكلم حد» بتوصّل الرسالة للفريق على طول.',
+      'أهلاً وسهلاً 🌷 ده الرد الآلي بتاع {{المنصة}}.\nأقدر أساعد في:\n• الأسعار\n• طريقة الاشتراك والدفع\n• الحصص المجانية\n• الكتب والشحن\n• المواعيد\nوكتابة «أكلم حد» بتوصّل الرسالة {{للمدرس}} على طول.',
     thanks: '',
   },
 
@@ -74,16 +74,31 @@ export const copy = {
     /** `{{الاختيارات}}` is the numbered list, one option per line. */
     yearQuestion: 'علشان أبعت التفاصيل الصح: السنة الدراسية كام؟ ابعتوا رقم الاختيار بس 👇\n{{الاختيارات}}',
     yearRetry: 'مش واضح لي أنهي سنة 🙏 ابعتوا الرقم بس:\n{{الاختيارات}}',
-    /** Sent once when nothing matched and no model answered. */
-    handoff:
-      'شكرًا على الرسالة 🙏 السؤال ده هوصّله للفريق، والرد هيكون هنا في نفس المحادثة في أقرب وقت.',
+    /**
+     * Sent once when nothing matched and no model answered. «الفريق» was the
+     * word here and there is no team: the teacher answers his own number, so
+     * the sentence names him (through the tenant gate, `{{للمدرس}}`).
+     */
+    handoff: 'السؤال ده وصل {{للمدرس}} 🙏 والرد هيكون هنا في نفس المحادثة في أقرب وقت.',
+    /**
+     * The person's own exam, grade or marking (`looksLikeOwnExamIssue`). Says
+     * plainly that the auto-reply does not touch these, so nobody argues with
+     * it, and never comments on what they wrote.
+     */
+    handoffExam:
+      'رسالتك وصلت {{للمدرس}} 🙏 الامتحانات والدرجات الرد الآلي مش بيدخل فيها خالص، والرد هيكون هنا في نفس المحادثة.',
+    /**
+     * Asked again for a person while the first handoff is still unanswered.
+     * The same sentence twice reads as a machine stuck on a loop.
+     */
+    handoffStill: 'رسالتك لسه عند {{المدرس}} ومتعلّم عليها إنها محتاجة رد 🙏 والرد هيكون هنا في نفس المحادثة.',
     greetSalam: 'وعليكم السلام ورحمة الله 🌷',
     greetHello: 'أهلاً وسهلاً 🌷',
     /** `{name}` — a student's own first name. */
     greetStudent: 'أهلاً يا {name} 🌷',
     greetParent: 'أهلاً بحضرتك 🌷',
     /** Under every answer the model wrote, so nobody mistakes it for a person. */
-    modelFooter: '🤖 رد آلي — كتابة «أكلم حد» بتوصّل الرسالة للفريق.',
+    modelFooter: '🤖 رد آلي — كتابة «أكلم حد» بتوصّل الرسالة {{للمدرس}}.',
     /** When the asker's year is unknown and they never chose one. */
     allYears: 'المنصة',
     coursePlansFree: 'مفتوح من غير اشتراك',
@@ -92,7 +107,7 @@ export const copy = {
     planTerm: '{term}',
     planYearly: 'السنة كاملة',
     planMonthlyClosed: 'الشهر (مفيش شهر مفتوح دلوقتي)',
-    noCourses: 'مفيش كورسات منشورة للسنة دي دلوقتي — هوصّل السؤال للفريق.',
+    noCourses: 'مفيش كورسات منشورة للسنة دي دلوقتي.',
     freeLessonsYes: 'أيوه، فيه حصص مجانية تتشاف من غير اشتراك 🎁',
     /** `{title}`, `{count}`, `{url}`. */
     freeLessonsLine: '• {title}: {count} — {url}',
@@ -121,7 +136,7 @@ export const copy = {
     subExpired: '⏳ {who} في «{course}» خلص، والتجديد من هنا: {url}',
     /** `{course}`, `{date}` */
     subPending: '🕓 فيه دفعة لـ«{course}» مستنية المراجعة من {date}، وهتتراجع في أقرب وقت.',
-    subRejected: '⚠️ آخر دفعة لـ«{course}» ماتقبلتش — السبب مكتوب في صفحة الكورس، وكتابة «أكلم حد» بتوصّل للفريق.',
+    subRejected: '⚠️ آخر دفعة لـ«{course}» ماتقبلتش — السبب مكتوب في صفحة الكورس، وكتابة «أكلم حد» بتوصّل الرسالة.',
     jeneh: 'جنيه',
     /** `{url}` — after the first few courses, so one reply never becomes a catalogue. */
     moreCourses: 'وباقي الكورسات على المنصة: {url}',
@@ -144,6 +159,8 @@ export const copy = {
     ['{{الموقع}}', 'رابط المنصة'],
     ['{{القناة}}', 'رابط قناة الواتساب من الإعدادات'],
     ['{{المنصة}}', 'اسم المنصة'],
+    ['{{المدرس}}', 'اسم المدرس'],
+    ['{{للمدرس}}', '«للمدرس» — اسم المدرس بعد «لـ»، زي «رسالتك وصلت {{للمدرس}}»'],
     ['{{اشتراكك}}', 'حالة اشتراك الطالب، لو الرقم بتاع طالب أو ولي أمر'],
   ],
 
