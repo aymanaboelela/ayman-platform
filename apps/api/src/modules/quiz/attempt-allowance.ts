@@ -46,18 +46,37 @@ function hasFinished(attempts: readonly AllowanceAttempt[], paper: QuizPaper): b
  * they were never meant to see first. It is also what keeps this function
  * consistent with `quiz_attempts_improvement_is_not_first`, the database CHECK
  * that refuses an improvement paper as attempt number one.
+ *
+ * ## A granted retake on a quiz that does NOT offer improvement
+ *
+ * «الامتحان هيتعاد بأسئلة مختلفة» — a handful of students whose paper was
+ * cancelled (answers pasted from an AI chat) sit the exam again, on DIFFERENT
+ * questions, while everyone else keeps exactly one sitting. Switching
+ * `allowsImprovement` on would hand a second sitting to the whole cohort, so
+ * the retake rides on the per-student grant instead: when the quiz has an
+ * improvement paper built (`hasImprovementPaper`) and the student has FINISHED
+ * the original, a granted sitting draws that second paper rather than
+ * re-serving the questions they already saw. With no second paper built the
+ * grant keeps its old meaning — the original again — so a grant for a
+ * technical failure behaves exactly as before. The higher score still counts
+ * (`countingAttemptId`); cancelling the first sitting's grade is an override
+ * on that attempt, not something this rule decides.
  */
 export function decideNextSitting(
   allowsImprovement: boolean,
   attempts: readonly AllowanceAttempt[],
+  hasImprovementPaper = false,
 ): NextSitting {
   const granted = attempts.reduce((sum, attempt) => sum + attempt.extraAttempts, 0);
   const allowance = attemptAllowance(allowsImprovement) + granted;
 
   if (attempts.length >= allowance) return { allowed: false, reason: 'no_attempts_left' };
 
+  const retakeOnSecondPaper = granted > 0 && hasImprovementPaper;
   const useImprovement =
-    allowsImprovement && hasFinished(attempts, 'original') && !hasFinished(attempts, 'improvement');
+    (allowsImprovement || retakeOnSecondPaper) &&
+    hasFinished(attempts, 'original') &&
+    !hasFinished(attempts, 'improvement');
 
   return { allowed: true, paper: useImprovement ? 'improvement' : 'original' };
 }

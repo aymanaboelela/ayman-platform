@@ -235,7 +235,7 @@ export class QuizAccessService {
     }
 
     const now = new Date();
-    const sitting = decideNextSitting(quiz.allowsImprovement, attempts);
+    const sitting = decideNextSitting(quiz.allowsImprovement, attempts, Number(quiz.improvementSumMarks) > 0);
 
     let blocked: BlockedReason | null = null;
     if (quiz.openFrom && now < quiz.openFrom) {

@@ -102,6 +102,43 @@ describe('decideNextSitting — admin grants', () => {
   });
 });
 
+describe('decideNextSitting — a granted retake on a second paper', () => {
+  it('draws the second paper for a granted sitting after a finished original', () => {
+    const result = decideNextSitting(
+      false,
+      [attempt({ attemptNo: 1, paper: 'original', state: 'pending_review', extraAttempts: 1 })],
+      true,
+    );
+    expect(result).toEqual({ allowed: true, paper: 'improvement' });
+  });
+
+  it('keeps everyone else at one sitting — no grant, no second sitting', () => {
+    const result = decideNextSitting(false, [attempt({ attemptNo: 1, paper: 'original' })], true);
+    expect(result).toEqual({ allowed: false, reason: 'no_attempts_left' });
+  });
+
+  it('redraws the original when the first sitting never finished, even with a second paper built', () => {
+    const result = decideNextSitting(
+      false,
+      [attempt({ attemptNo: 1, paper: 'original', state: 'abandoned', extraAttempts: 1 })],
+      true,
+    );
+    expect(result).toEqual({ allowed: true, paper: 'original' });
+  });
+
+  it('runs out after the retake is sat', () => {
+    const result = decideNextSitting(
+      false,
+      [
+        attempt({ attemptNo: 1, paper: 'original', extraAttempts: 1 }),
+        attempt({ attemptNo: 2, paper: 'improvement' }),
+      ],
+      true,
+    );
+    expect(result).toEqual({ allowed: false, reason: 'no_attempts_left' });
+  });
+});
+
 describe('countingAttemptId', () => {
   it('is null when nothing has been scored yet', () => {
     expect(countingAttemptId([{ ...attempt({ attemptNo: 1 }), id: 'a' }])).toBeNull();
