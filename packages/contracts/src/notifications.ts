@@ -665,6 +665,22 @@ export const NotificationEventSchema = z.discriminatedUnion('type', [
     queue: LiveQueueSchema,
     waiting: z.number().int().min(0),
   }),
+  /**
+   * «الشات مش ريل تايم» — a conversation moved: a message arrived, was
+   * edited, deleted or reacted to, or the thread was closed or reopened.
+   *
+   * Written to the thread's OWNER (a signed-in student; a guest has no
+   * stream) and to every stream holding `conversation:read`
+   * (`notifications.controller.ts`). Like `queue`, it carries no row: the
+   * screen that is showing the thread re-reads it through the same guarded
+   * endpoint it rendered it from, so a frame can never hand anyone a message
+   * they could not already fetch — and a tab that misses one converges on
+   * its next read.
+   */
+  z.object({
+    type: z.literal('chat'),
+    conversationId: z.uuid(),
+  }),
 ]);
 
 export type NotificationEvent = z.infer<typeof NotificationEventSchema>;

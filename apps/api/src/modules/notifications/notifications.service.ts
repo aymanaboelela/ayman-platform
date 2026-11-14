@@ -785,6 +785,19 @@ export class NotificationsService {
     await this.realtime?.publishQueue(queue, waiting);
   }
 
+  /**
+   * «A conversation moved» — the open chat on both sides and the inbox list
+   * redraw now instead of on the next page load. See the `chat` frame in
+   * `NotificationEventSchema`.
+   *
+   * Same rules as `announceQueue`: AFTER the caller's commit (a frame that
+   * arrives before the row does makes the screen re-read the old thread),
+   * never throws, and a no-op without `realtime`.
+   */
+  async announceChat(conversationId: string, ownerUserId: string | null): Promise<void> {
+    await this.realtime?.publishChat(conversationId, ownerUserId);
+  }
+
   async unreadCount(userId: string): Promise<number> {
     return this.prisma.notification.count({ where: { userId, readAt: null } });
   }
