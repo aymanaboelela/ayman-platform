@@ -16,6 +16,7 @@ import { adminGet } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
 import { InboxStatusChip, inboxTimeFormatter } from './status-chip';
 import { InboxTabs } from './inbox-tabs';
+import { RowTyping } from './row-typing';
 import { ListControl } from '@/components/admin/list-controls';
 import { AdminEmpty } from '@/components/admin/admin-empty';
 import { LiveChatRefresh } from '@/components/admin/live-chat-refresh';
@@ -252,10 +253,12 @@ export default async function AdminInboxPage({
                       {/* «إنت:» when the last word in the thread was his own —
                           otherwise a row where he already replied reads as a
                           student saying something he has not answered. */}
-                      {row.previewAuthor === 'admin' ? (
-                        <span className="text-fg-muted">{c.previewYou} </span>
-                      ) : null}
-                      {row.preview}
+                      <RowTyping conversationId={row.id}>
+                        {row.previewAuthor === 'admin' ? (
+                          <span className="text-fg-muted">{c.previewYou} </span>
+                        ) : null}
+                        {row.preview}
+                      </RowTyping>
                     </span>
 
                     {row.guestPhone ? (

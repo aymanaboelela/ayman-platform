@@ -143,6 +143,26 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
   }
 
   /**
+   * «جارٍ الكتابة…» — to the OTHER side only: a student's typing to the inbox,
+   * the instructor's to the thread's owner (a guest has no stream, so theirs
+   * goes nowhere). Never echoed back to whoever is typing.
+   *
+   * Never throws, for the reason `publish` does not.
+   */
+  async publishTyping(
+    conversationId: string,
+    from: 'visitor' | 'admin',
+    ownerUserId: string | null,
+  ): Promise<void> {
+    const event: NotificationEvent = { type: 'typing', conversationId, from };
+    if (from === 'visitor') {
+      await this.publishOn(CHAT_CHANNEL, event, `typing in ${conversationId}`);
+    } else if (ownerUserId) {
+      await this.publishOn(channelFor(ownerUserId), event, `typing in ${conversationId}`);
+    }
+  }
+
+  /**
    * Registers one open SSE connection. The returned function unregisters it
    * and MUST be called when the response closes, or a browser that navigates
    * away leaves a listener behind for the lifetime of the process.

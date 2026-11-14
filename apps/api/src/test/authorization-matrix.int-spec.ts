@@ -1397,6 +1397,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // zero rows and returns 204 — the same existence-oracle reasoning as the
     // notification read route directly above.
     { label: 'assistant mark read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/read`, actor: 'student', status: 204 },
+    { label: 'assistant typing: anonymous with no thread (silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/typing`, actor: 'anonymous', status: 204 },
+    { label: 'assistant typing: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/typing`, actor: 'student', status: 204 },
     // The open chat. Public for the same reason the rest of المساعد is — the
     // visitor deciding whether to enrol is exactly who types «الكورس بكام؟»
     // into it, and they have no session. A 401 here would answer the question
@@ -1467,6 +1469,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // exactly the split that lets a reply-but-never-close role exist later.
     { label: 'inbox reply: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'anonymous', status: 401, body: () => ({ message: 'أهلاً' }) },
     { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
+    { label: 'inbox typing: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/typing`, actor: 'anonymous', status: 401 },
+    { label: 'inbox typing: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/typing`, actor: 'student', status: 403 },
+    { label: 'inbox typing: admin (unknown id is a silent no-op)', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/typing`, actor: 'admin', status: 204 },
     // «أعدل عليها» / «أمسحها» — the same `conversation:reply`, for the reason
     // the reaction route documents: both land on a student's screen under the
     // instructor's name, so a role trusted to write words there is trusted to

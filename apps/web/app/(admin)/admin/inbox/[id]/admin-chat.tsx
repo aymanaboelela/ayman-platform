@@ -13,6 +13,8 @@ import { ChatMeta } from '@/components/assistant/chat-meta';
 import { ChatViewport } from '@/components/assistant/chat-viewport';
 import { MessageBody } from '@/components/assistant/message-body';
 import { ReplyQuote } from '@/components/assistant/reply-quote';
+import { TypingBubble } from '@/components/assistant/typing-bubble';
+import { usePeerTyping } from '@/components/assistant/use-typing';
 import { ThreadActions } from './thread-actions';
 
 const cc = copy.assistant.chat;
@@ -84,6 +86,8 @@ export function AdminChat({
 }) {
   const [pending, setPending] = useOptimistic<PendingReply | null>(null);
   const [target, setTarget] = useState<ReplyTarget | null>(null);
+  /** «جارٍ الكتابة…» — the student's composer is going. */
+  const studentTyping = usePeerTyping(id, 'visitor');
 
   const followed = pending
     ? { key: `pending:${pending.at}`, at: pending.at, fromSelf: true }
@@ -132,6 +136,7 @@ export function AdminChat({
               </li>
             </ol>
           ) : null}
+          <TypingBubble show={studentTyping && !pending} />
         </ChatViewport>
         <ThreadActions id={id} status={status} onPending={setPending} />
       </section>

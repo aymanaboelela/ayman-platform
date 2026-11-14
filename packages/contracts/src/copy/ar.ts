@@ -5875,6 +5875,9 @@ export const copy = {
       replyDocument: '📄 ملف',
       replyVoice: '🎤 رسالة صوتية',
       replyRecord: 'سجل محادثة المساعد',
+      /* «جارٍ الكتابة…» — the other side has the composer going. A masdar, so
+         it says the same thing whoever is typing, student or instructor. */
+      typing: 'جارٍ الكتابة…',
     },
 
     // ── the visitor's side of an open conversation ─────────────────────

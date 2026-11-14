@@ -702,6 +702,20 @@ export const NotificationEventSchema = z.discriminatedUnion('type', [
     type: z.literal('chat'),
     conversationId: z.uuid(),
   }),
+  /**
+   * «جارٍ الكتابة…» — the other side of the thread has the composer going.
+   *
+   * Ephemeral: nothing is stored, and it says nothing about WHAT is being
+   * typed. A student's typing goes to the inbox channel only; the
+   * instructor's goes to the thread's owner only — never back to whoever is
+   * typing. The screen shows it for a few seconds after the last frame and
+   * drops it the moment a message from that side arrives.
+   */
+  z.object({
+    type: z.literal('typing'),
+    conversationId: z.uuid(),
+    from: z.enum(['visitor', 'admin']),
+  }),
 ]);
 
 export type NotificationEvent = z.infer<typeof NotificationEventSchema>;

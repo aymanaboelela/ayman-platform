@@ -24,6 +24,8 @@ import { MessageAttachmentView } from './message-attachment';
 import { ReplyQuote, chatMessageDomId } from './reply-quote';
 import { SwipeToReply } from './swipe-to-reply';
 import { useAutoGrow } from './use-auto-grow';
+import { TypingBubble } from './typing-bubble';
+import { usePeerTyping, useTypingSignal } from './use-typing';
 
 const c = copy.assistant.thread;
 const cc = copy.assistant.chat;
@@ -46,9 +48,11 @@ const COMPOSER_MAX_PX = 144;
  * the two halves look different because they ARE different, and a student who
  * has crossed from one to the other should be able to feel that they did.
  *
- * No polling. A reply arrives on the next page load, which is what an
- * asynchronous inbox honestly promises — a typing indicator with nobody behind
- * it would be a lie the interface tells every visitor.
+ * Live: the widget re-reads the thread when the stream says it moved (see
+ * `assistant-widget.tsx`), and «جارٍ الكتابة…» shows while he is actually
+ * typing — a real signal from his composer (`useTypingSignal`), never a
+ * decoration, so it is not the lie a typing indicator with nobody behind it
+ * would be.
  */
 export function AssistantThread({
   thread,
@@ -75,6 +79,13 @@ export function AssistantThread({
   const [replyTo, setReplyTo] = useState<MessageReplyRef | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(field, draft, COMPOSER_MAX_PX);
+  /** «جارٍ الكتابة…» — his, shown here; hers, sent from the composer below. */
+  const peerTyping = usePeerTyping(thread.id, 'admin');
+  const signalTyping = useTypingSignal(
+    thread.status === 'closed'
+      ? null
+      : () => apiPostVoid(`/api/assistant/conversations/${thread.id}/typing`),
+  );
 
   /** Who a quote names, from THIS side: the reader's own, or his. */
   const quoteName = (reply: MessageReplyRef) =>
@@ -360,6 +371,7 @@ export function AssistantThread({
             </li>
           </ol>
         ) : null}
+        <TypingBubble show={peerTyping && !pending} />
       </ChatViewport>
 
       {isClosed ? (
@@ -391,7 +403,10 @@ export function AssistantThread({
                 <textarea
                   ref={field}
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    signalTyping(event.target.value);
+                  }}
                   onKeyDown={onKeyDown}
                   placeholder={c.replyPlaceholder}
                   rows={1}

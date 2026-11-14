@@ -24,6 +24,8 @@ import { useAutoGrow } from '@/components/assistant/use-auto-grow';
 import { uploadConversationAttachment, type UploadFailure } from '@/lib/upload-client';
 import { VoiceRecorder } from '@/components/assistant/voice-recorder';
 import { ReplyQuote } from '@/components/assistant/reply-quote';
+import { useTypingSignal } from '@/components/assistant/use-typing';
+import { apiPostVoid } from '@/lib/api';
 import { replyAction, setStatusAction } from '../actions';
 import { useReplyTarget, type PendingReply } from './admin-chat';
 
@@ -89,6 +91,10 @@ export function ThreadActions({
   const [progress, setProgress] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const { target, setTarget } = useReplyTarget();
+  /** «جارٍ الكتابة…» on the student's screen while he types here. */
+  const signalTyping = useTypingSignal(
+    status === 'closed' ? null : () => apiPostVoid(`/api/admin/conversations/${id}/typing`),
+  );
   /*
    * A swipe means «I am about to answer this» — the cursor goes to the box,
    * as it does in WhatsApp, so the next thing typed is the reply.
@@ -321,7 +327,10 @@ export function ThreadActions({
               ref={field}
               id="inbox-reply"
               value={message}
-              onChange={(event) => setMessage(event.target.value)}
+              onChange={(event) => {
+                setMessage(event.target.value);
+                signalTyping(event.target.value);
+              }}
               onKeyDown={onKeyDown}
               placeholder={c.replyPlaceholder}
               rows={1}
