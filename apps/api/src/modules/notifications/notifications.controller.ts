@@ -173,6 +173,19 @@ export class NotificationsController {
       }),
     );
 
+    /*
+      «الشات يبقى ريل تايم» — the inbox hears every conversation move, on the
+      same connection and with the same twice-asked permission as the queues
+      above: `conversation:read` is what guards the list and the thread the
+      frame tells the screen to re-read. A student never subscribes here; their
+      own threads reach them on their user channel (`publishChat`).
+    */
+    const chatUnsubscribe = userHasPermission(user.id, user.role, 'conversation:read')
+      ? this.realtime.subscribeChat((event) => {
+          if (userHasPermission(user.id, user.role, 'conversation:read')) send(event);
+        })
+      : null;
+
     const heartbeat = setInterval(() => {
       send({ type: 'ping' });
     }, HEARTBEAT_MS);
@@ -193,6 +206,7 @@ export class NotificationsController {
       clearTimeout(lifetime);
       unsubscribe();
       for (const off of queueUnsubscribes) off();
+      chatUnsubscribe?.();
       const left = (openStreams.get(user.id) ?? 1) - 1;
       if (left > 0) openStreams.set(user.id, left);
       else openStreams.delete(user.id);
