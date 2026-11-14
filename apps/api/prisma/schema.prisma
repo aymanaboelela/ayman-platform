@@ -5383,6 +5383,9 @@ enum NotificationKind {
   /// seen since the channel was connected. To the admin who connected the
   /// channel only. Carries the video id; the title is read from `youtube_videos`.
   youtube_new_video
+  /// ADMIN — one account took the keys of many distinct lectures in a Cairo
+  /// day (`VideoKeyWatchService`). Payload: studentId, studentName snapshot, videos.
+  video_key_burst
 
   @@map("notification_kind")
   @@schema("app")

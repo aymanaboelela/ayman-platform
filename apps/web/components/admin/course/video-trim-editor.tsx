@@ -8,6 +8,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import { effectiveSeconds, trimProblem, type VideoCut, type VideoTrim } from '@ayman/contracts/video';
 import { cn } from '@ayman/ui/lib/cn';
 import { setVideoTrimAction, videoPreviewUrlAction } from '@/app/(admin)/admin/courses/actions';
+import { videoKeyLoader } from '@/components/player/video-key-loader';
 
 const c = copy.admin.lesson;
 
@@ -66,7 +67,8 @@ export function VideoTrimEditor({
       const { default: Hls } = await import('hls.js');
       if (!live) return;
       if (Hls.isSupported()) {
-        const instance = new Hls();
+        // The key route answers our loader only — see `video-key-loader.ts`.
+        const instance = new Hls({ loader: videoKeyLoader(Hls) });
         hls = instance;
         instance.loadSource(url);
         instance.attachMedia(element);

@@ -167,7 +167,9 @@ export type EmitInput =
       answers: number;
     }
   /** ADMIN — «نزل فيديو جديد». The video id only; the title is read from `youtube_videos`. */
-  | { userId: string; kind: 'youtube_new_video'; videoId: string };
+  | { userId: string; kind: 'youtube_new_video'; videoId: string }
+  /** ADMIN — one account opened `videos` distinct lectures today. Name is a snapshot. */
+  | { userId: string; kind: 'video_key_burst'; studentId: string; studentName: string; videos: number };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set([
@@ -958,6 +960,19 @@ function toEntry(
     const videoId = payloadString(row.payload, 'videoId');
     if (!videoId) return null;
     return { ...base, kind: 'youtube_new_video', videoId, title: youtubeTitles.get(videoId) ?? '' };
+  }
+
+  if (row.kind === 'video_key_burst') {
+    const studentId = payloadString(row.payload, 'studentId');
+    const videos = payloadNumber(row.payload, 'videos');
+    if (!studentId || videos === null) return null;
+    return {
+      ...base,
+      kind: 'video_key_burst',
+      studentId,
+      studentName: payloadString(row.payload, 'studentName') ?? '',
+      videos,
+    };
   }
 
   if (row.kind === 'suspect_key') {

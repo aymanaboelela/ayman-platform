@@ -719,3 +719,53 @@ export function uploadPartSize(sizeBytes: number): number {
 export function uploadPartCount(sizeBytes: number): number {
   return Math.max(1, Math.ceil(sizeBytes / uploadPartSize(sizeBytes)));
 }
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ * The key, wrapped for the trip — «ناس نزّلت المحاضرات ورفعتها على درايف».
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * AES-128 HLS hands the 16 key bytes to whoever the API trusts, and a student
+ * is trusted. So any generic downloader (yt-dlp, IDM, a browser extension)
+ * given the playlist and the student's cookie fetched the key as plainly as
+ * hls.js did and saved the whole lecture. Someone said exactly that to a
+ * teacher, and was right.
+ *
+ * Now the key route answers our player only: the player sends a fresh random
+ * nonce in `VIDEO_KEY_NONCE_HEADER`, and gets the key XORed with
+ * SHA-256(`videoKeyMaskMessage(id, nonce)`)[0..16]. A request without the
+ * header gets a 404 — except from an iPhone, see `isLegacyNativeHlsClient`.
+ *
+ * ⚠️ This is NOT cryptography against the student — the player has to know
+ * how to unwrap, so anyone who reads our JavaScript can too. It is what turns
+ * "paste the link into a downloader" into "reverse-engineer the player", which
+ * is the difference between everyone and almost no one. DRM is the step after.
+ *
+ * The derivation lives here so the API (node:crypto) and the player
+ * (WebCrypto) cannot drift: both specs pin the same vector.
+ */
+export const VIDEO_KEY_NONCE_HEADER = 'x-vk-nonce';
+export const VIDEO_KEY_NONCE_RE = /^[0-9a-f]{32}$/;
+
+export function videoKeyMaskMessage(videoId: string, nonce: string): string {
+  return `ayman:video-key-mask:v1:${videoId}:${nonce}`;
+}
+
+/** The video id inside a key URI our pipeline writes (`…/api/videos/<id>/key`). */
+export function videoIdFromKeyUri(uri: string): string | null {
+  const match = /\/api\/videos\/([0-9a-f]{32})\/key(?:$|[?#])/.exec(uri);
+  return match?.[1] ?? null;
+}
+
+/**
+ * The one client allowed the unwrapped key: an iPhone whose browser cannot
+ * run hls.js and plays HLS itself — before iOS 17.1 there is no
+ * ManagedMediaSource, so Safari's own player fetches the key, and it can send
+ * neither a header nor unwrap anything. The owner's call (2026-11-14): those
+ * students keep watching, knowingly at the price of a door that a spoofed
+ * User-Agent opens. In-app browsers on an iPhone fall here too, which is why
+ * this is not narrowed to an OS version.
+ */
+export function isLegacyNativeHlsClient(userAgent: string | undefined): boolean {
+  return userAgent !== undefined && /\b(iPhone|iPod)\b/.test(userAgent);
+}

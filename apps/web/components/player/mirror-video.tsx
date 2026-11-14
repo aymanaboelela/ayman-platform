@@ -12,6 +12,7 @@ import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
 import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
 import { QualityItem } from './quality-item';
 import { capForWidth, knownBandwidth, saveBandwidth, startRung } from './start-rung';
+import { videoKeyLoader } from './video-key-loader';
 
 const c = copy.player.controls;
 
@@ -303,7 +304,13 @@ export function MirrorVideo({
          * the student had already watched.
          */
         const startPosition = skipCuts(Math.max(startAt, trim?.start ?? 0), trim);
-        const instance = new Hls(startPosition > 0 ? { ...HLS_CONFIG, startPosition } : HLS_CONFIG);
+        /*
+         * `loader`: an encrypted lecture's key comes wrapped, and only for a
+         * request carrying our nonce — see `video-key-loader.ts`. Without it
+         * the key route answers 404 on everything but an iPhone.
+         */
+        const config = { ...HLS_CONFIG, loader: videoKeyLoader(Hls) };
+        const instance = new Hls(startPosition > 0 ? { ...config, startPosition } : config);
         hlsRef.current = instance;
         startsItself.current = true;
 
