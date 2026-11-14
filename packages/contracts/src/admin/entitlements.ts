@@ -410,6 +410,18 @@ export const FEATURE_DECLARATIONS = [
       'مفاتيح بصلاحيات محددة بتختارها، يستخدمها Claude عشان يصحح الواجب والامتحانات ويشتغل على المنصة من غير ما يدخل من المتصفح. كل مفتاح يتلغي بضغطة.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". The SCREEN only — «متابعة التنزيل», the list of accounts
+     * that opened many lectures in a day. The wrapped key, the rate ceiling
+     * and the staff notification protect every stack's uploads and ship to
+     * all; this is the place to watch those accounts over days.
+     */
+    key: 'videoKeyWatch',
+    nameAr: 'متابعة تنزيل المحاضرات',
+    descriptionAr: 'قايمة بالحسابات اللي فتحت محاضرات كتير في يوم واحد، وأنهي محاضرات، وكام مرة اتكررت — عشان تعرف مين بيحاول ينزّل الكورس.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

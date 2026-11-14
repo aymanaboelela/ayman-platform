@@ -11,6 +11,8 @@ import { PlayerService } from './player.service';
 import { VideoKeyController } from './video-key.controller';
 import { VideoKeyService } from './video-key.service';
 import { VideoKeyWatchService } from './video-key-watch.service';
+import { AdminVideoKeyFlagsController } from './video-key-flags.controller';
+import { VideoKeyFlagsService } from './video-key-flags.service';
 
 // `MediaModule` is imported for its `MEDIA_STORAGE` binding only — the player
 // streams resource bytes itself rather than redirecting to the public media
@@ -26,11 +28,12 @@ import { VideoKeyWatchService } from './video-key-watch.service';
   imports: [ProgressModule, EnrollmentModule, MediaModule, HomeworkModule, VideoMirrorModule, NotificationsModule],
   // `VideoKeyController` here and not in `video-mirror`: handing out a key is an
   // access decision, and `LessonAccessService` is this module's to use.
-  controllers: [PlayerController, VideoKeyController],
+  controllers: [PlayerController, VideoKeyController, AdminVideoKeyFlagsController],
   providers: [
     PlayerService,
     VideoKeyService,
     VideoKeyWatchService,
+    VideoKeyFlagsService,
     { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver },
   ],
   exports: [PlayerService, MEDIA_URL_RESOLVER],

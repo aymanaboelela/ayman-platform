@@ -144,6 +144,7 @@ model User {
   // «ربط Claude» — keys this account made. `Cascade`: a key acts AS its
   // creator, so it cannot outlive them.
   agentTokens    AgentToken[]
+  videoKeyFlags  VideoKeyFlag[]
   courses        Course[]
   enrollments    Enrollment[]
   accessGrants   AccessGrant[]   @relation("AccessGrantSubject")
@@ -7561,5 +7562,28 @@ model CenterReservationSettings {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("center_reservation_settings")
+  @@schema("app")
+}
+
+/// «متابعة التنزيل» — one row per account per Cairo day on which it opened
+/// `KEY_BURST_VIDEOS` or more distinct lectures (`VideoKeyWatchService`). The
+/// shape of someone downloading a course, kept so staff can watch the account
+/// over days instead of reading one notification and forgetting it. Updated
+/// as the day goes on: `videos` and `videoIds` grow with every new lecture.
+model VideoKeyFlag {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The Cairo calendar day, not a UTC instant — «النهارده» as staff mean it.
+  day       DateTime @db.Date
+  videos    Int
+  /// Upload ids (`lesson_videos.external_id`) — resolved to lecture titles on read.
+  videoIds  String[] @map("video_ids")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, day])
+  @@index([day(sort: Desc)])
+  @@map("video_key_flags")
   @@schema("app")
 }
