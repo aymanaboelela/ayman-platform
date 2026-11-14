@@ -238,14 +238,81 @@ describe('handing over to a person', () => {
   it('«عاوز أكلم حد» hands over with one sentence and flags the inbox', async () => {
     const result = await ask('عاوز أكلم حد');
     expect(result.action).toBe('handoff');
-    expect(result.reply).toBe(bot.answers.human);
+    expect(result.reply).toBe(bot.answers.human.replace('{{للمدرس}}', 'للمهندس أيمن أبو العلا'));
     expect(result.patch).toMatchObject({ needsHuman: true, handoffNotice: true });
+  });
+
+  /* «الفريق» on 20 of 37 chats, 2026-11-14 — there is no team. */
+  it('names the teacher, never «الفريق», and leaves no placeholder behind', async () => {
+    for (const text of ['عاوز أكلم حد', 'ممكن تشرحلي الـ recursion؟', 'أنا حالل بمجهودي']) {
+      const reply = (await ask(text)).reply ?? '';
+      expect(reply).toContain('للمهندس أيمن أبو العلا');
+      expect(reply).not.toContain('الفريق');
+      expect(reply).not.toContain('{{');
+    }
+  });
+
+  it('asking again while the first handoff waits says it is still with him, not the same line', async () => {
+    const waiting = { needsHuman: true, lastHandoffNoticeAt: new Date('2026-10-28T10:57:00Z') };
+    const result = await ask('عايز اكلم حد ضروري', { chat: waiting });
+    expect(result.action).toBe('handoff');
+    expect(result.reply).toContain('لسه عند المهندس أيمن أبو العلا');
+  });
+
+  it('«السلام عليكم» + a question no rule knows is not answered with the greeting menu', async () => {
+    const result = await ask('السلام عليكم مع حضرتك مامت محمد مدحت');
+    expect(result.action).toBe('handoff');
+    expect(result.reply).toContain('وعليكم السلام');
+    expect(result.reply).not.toContain('أقدر أساعد في');
+  });
+
+  it('«مستر» alone gets the greeting', async () => {
+    expect((await ask('مستر')).intents).toEqual(['greeting']);
+  });
+
+  it('«ممكن أغيّر الرقم؟» goes to him', async () => {
+    expect((await ask('مستر ممكن اغير الرقم ؟')).action).toBe('handoff');
+  });
+});
+
+/*
+ * 2026-11-14, the day the Units 1+2 marks went out: Gemini told students
+ * defending their own answers «مهم إنك تعتمد على مذاكرتك».
+ */
+describe('a student’s own exam or mark', () => {
+  it.each([
+    'لا يامستر أنا حالل بنفسي ازاي يعني ؟؟؟',
+    'طب ازاي هغش وانا مش معايا تليفون',
+    'بس يا مستر أنا بمتحن من تليفون مش داعم للذكاء الإصطناعي',
+    'المقالي كان صح الصراحه',
+    'الإمتحان مش راضي يتسلم 🙂',
+    'المفروض اخد الدرجه كامله',
+  ])('«%s» goes straight to him, and the model is never asked', async (text) => {
+    modelEvents = [{ t: 'delta', text: 'مهم إنك تعتمد على مذاكرتك.' }, { t: 'done', escalate: false }];
+    const calls = (ai.answer as jest.Mock).mock.calls.length;
+    const result = await ask(text);
+    expect(result.action).toBe('handoff');
+    expect(result.reply).toContain('الامتحانات والدرجات الرد الآلي مش بيدخل فيها');
+    expect(result.patch.needsHuman).toBe(true);
+    expect((ai.answer as jest.Mock).mock.calls.length).toBe(calls);
+  });
+
+  it('the next messages of the same complaint wait silently', async () => {
+    const told = { needsHuman: true, lastHandoffNoticeAt: new Date('2026-10-28T10:00:00Z') };
+    const result = await ask('بس يافندم أنا المفروض مليش دعوه أنا حالل بمجهودي', { chat: told });
+    expect(result.action).toBe('silent');
+    expect(result.patch.needsHuman).toBe(true);
+  });
+
+  it('«الامتحان هيبدا امته» is a schedule question, not a complaint', async () => {
+    const result = await ask('الامتحان هيبدا امته', { chat: { yearSystem: 'bacalorya', year: 2 } });
+    expect(result.intents).toContain('schedule');
   });
 
   it('an unmatched question with no model goes to a person', async () => {
     const result = await ask('ممكن تشرحلي الـ recursion؟');
     expect(result.action).toBe('handoff');
-    expect(result.reply).toBe(bot.reply.handoff);
+    expect(result.reply).toBe(bot.reply.handoff.replace('{{للمدرس}}', 'للمهندس أيمن أبو العلا'));
     expect(result.patch.needsHuman).toBe(true);
   });
 
@@ -266,7 +333,7 @@ describe('the model fallback', () => {
     expect(result.action).toBe('model');
     expect(result.reply).toContain('الدالة بتنده نفسها');
     expect(result.reply).toContain(`الكورسات: ${APP}/courses`);
-    expect(result.reply).toContain(bot.reply.modelFooter);
+    expect(result.reply).toContain(bot.reply.modelFooter.replace('{{للمدرس}}', 'للمهندس أيمن أبو العلا'));
   });
 
   it('a model that is not sure hands over instead of guessing', async () => {

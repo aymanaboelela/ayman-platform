@@ -3,6 +3,8 @@ import {
   BOT_INTENTS,
   DEFAULT_KEYWORDS,
   classify,
+  isOnlyGreeting,
+  looksLikeOwnExamIssue,
   looksLikeSpam,
   looksAutomated,
   parseYear,
@@ -298,5 +300,40 @@ describe('looksLikeSpam', () => {
   it('leaves an ordinary question alone', () => {
     expect(looksLikeSpam('الكورس بكام؟')).toBe(false);
     expect(looksLikeSpam('ازاي احصل على الكتاب')).toBe(false);
+  });
+});
+
+describe('looksLikeOwnExamIssue', () => {
+  it.each([
+    'أنا حالل بمجهودي',
+    'المفروض اخد الدرجه كامله',
+    'الدرجة اتلغت ليه',
+    'طب ازاي هغش',
+    'مش معايا تليفون ولا بستخدم الذكاء الاصطناعي',
+    'الامتحان مش راضي يتسلم',
+    'ممكن امتحن تاني',
+    'المقالي كان صح',
+  ])('«%s» is about their own exam', (text) => {
+    expect(looksLikeOwnExamIssue(text)).toBe(true);
+  });
+
+  it.each(['الامتحان امتى', 'ممكن اعرف معاد الإمتحان', 'الكورس بكام', 'السلام عليكم', 'شكرا يا مستر'])(
+    '«%s» is not',
+    (text) => {
+      expect(looksLikeOwnExamIssue(text)).toBe(false);
+    },
+  );
+});
+
+describe('isOnlyGreeting', () => {
+  it.each(['السلام عليكم', 'سلام عليكم ورحمة الله وبركاته', 'مستر', 'يا مستر', 'صباح الخير يا باشمهندس', 'hi'])(
+    '«%s» is only a greeting',
+    (text) => {
+      expect(isOnlyGreeting(text)).toBe(true);
+    },
+  );
+
+  it.each(['السلام عليكم الكورس بكام', 'مستر ممكن اغير الرقم', 'مع حضرتك مامت محمد', '', '؟'])('«%s» is not', (text) => {
+    expect(isOnlyGreeting(text)).toBe(false);
   });
 });
