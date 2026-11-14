@@ -299,6 +299,7 @@ export class AttemptService {
           ...attempt,
           scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
         })),
+        quiz.improvementSumMarks > 0,
       );
       if (!sitting.allowed) {
         throw new ForbiddenException({ code: sitting.reason });

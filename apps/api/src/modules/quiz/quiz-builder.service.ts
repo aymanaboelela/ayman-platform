@@ -49,8 +49,9 @@ export class QuizBuilderService {
    * stated here from the builder side.
    */
   async upsertForLesson(lessonId: string, settings: QuizSettings): Promise<string> {
-    // ⚠️ `allowsImprovement` is the ONLY thing that grants a second sitting
-    // (تحسين), and `assertPaperAllowed` reads nothing but this boolean. The
+    // ⚠️ `allowsImprovement` is the ONLY thing that grants EVERY student a second
+    // sitting (تحسين). (A built second paper without it is a retake paper that
+    // only a per-student grant reaches — see `decideNextSitting`.) The
     // "course exams only" rule everyone assumes exists was, until now, a UI
     // convention plus a publish-time check — `settingsData` below writes the
     // flag unconditionally, so any caller of this method could flip it on any
@@ -550,13 +551,22 @@ export class QuizBuilderService {
       throw new BadRequestException({ code: 'quiz_has_no_slots' });
     }
 
-    if (quiz.allowsImprovement) {
-      // An improvement sitting a student cannot actually sit is worse than no
-      // improvement at all: they are told they have a second chance, spend it,
-      // and are handed a blank paper.
-      if (improvement.length === 0) {
-        throw new BadRequestException({ code: 'improvement_paper_empty' });
-      }
+    // An improvement sitting a student cannot actually sit is worse than no
+    // improvement at all: they are told they have a second chance, spend it,
+    // and are handed a blank paper.
+    if (quiz.allowsImprovement && improvement.length === 0) {
+      throw new BadRequestException({ code: 'improvement_paper_empty' });
+    }
+
+    /*
+     * A second paper on a quiz that does NOT offer improvement is no longer an
+     * orphan: it is the retake paper a per-student grant draws
+     * (`decideNextSitting`'s `hasImprovementPaper`) — «الامتحان هيتعاد بأسئلة
+     * مختلفة» for the few whose first paper was cancelled. Whichever way it is
+     * reached, the same two rules hold: it must not repeat the original's
+     * questions, and it must be marked out of something.
+     */
+    if (improvement.length > 0) {
 
       /*
        * The refusal this whole feature exists for. An improvement paper built
@@ -586,10 +596,6 @@ export class QuizBuilderService {
       if (Number(quiz.improvementSumMarks) <= 0) {
         throw new BadRequestException({ code: 'improvement_sum_marks_must_be_positive' });
       }
-    } else if (improvement.length > 0) {
-      // Turning improvement back off with a paper still attached would leave
-      // questions no student can ever be served — silently, and for good.
-      throw new BadRequestException({ code: 'improvement_paper_orphaned' });
     }
 
     for (const slot of quiz.slots) {
@@ -667,21 +673,19 @@ export class QuizBuilderService {
   }
 
   /**
-   * Only a course's final exam may carry an improvement paper.
-   *
-   * Checked on the WRITE rather than only at publish: an instructor who builds
-   * a whole improvement paper on an ordinary lesson quiz and is told at the end
-   * that it was never allowed has wasted real work.
+   * Which papers a slot may be written to. Kept as one seam so a future rule
+   * about second papers has a single home.
    */
   private async assertPaperAllowed(quizId: string, paper: QuizPaper): Promise<void> {
     if (paper === 'original') return;
-    const quiz = await this.prisma.quiz.findUniqueOrThrow({
-      where: { id: quizId },
-      select: { allowsImprovement: true },
-    });
-    if (!quiz.allowsImprovement) {
-      throw new BadRequestException({ code: 'improvement_not_enabled' });
-    }
+    /*
+     * A second paper no longer needs `allowsImprovement`: without it the paper
+     * is a RETAKE paper, reached only by a student an admin granted an extra
+     * sitting after they finished the original (see `decideNextSitting`). It
+     * hands nobody else a second sitting, so it needs no course-exam gate.
+     * Still a real quiz: an unknown id is a 404, not a silent no-op.
+     */
+    await this.prisma.quiz.findUniqueOrThrow({ where: { id: quizId }, select: { id: true } });
   }
 
   /**
