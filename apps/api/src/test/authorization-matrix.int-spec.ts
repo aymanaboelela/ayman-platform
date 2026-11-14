@@ -3812,6 +3812,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'POST /api/assistant/conversations',
           'POST /api/assistant/conversations/:id/messages',
           'POST /api/assistant/conversations/:id/read',
+          'POST /api/assistant/conversations/:id/typing',
           /*
            * The open chat. Public, `@RequireCsrf()`, and the only route on
            * this list that costs money per call — which is why its throttle is
