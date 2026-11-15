@@ -334,6 +334,20 @@ export class VideoLibraryService implements OnApplicationBootstrap {
       mirrorError: null,
       mirrorProgress: 100,
       mirrorAttempts: 0,
+      /*
+       * ⚠️ Written explicitly, never inherited. This is an UPDATE of whatever
+       * row the lesson already had, and a flag left out keeps that row's value
+       * — so a lesson that used to play a YouTube id or a plain upload
+       * (`false`) handed `false` to an AES-128 ladder, and the key route
+       * refused the key: «الفيديو مارضيش يشتغل» for every student
+       * (2026-11-15, «Cryptographic Technologies and Authentication»).
+       *
+       * `archived_videos` does not record the flag, so it cannot be copied.
+       * `true` is the safe guess: a plain ladder's playlists have no
+       * `#EXT-X-KEY`, so its key is never asked for, while `false` on an
+       * encrypted ladder is a lecture nobody can watch.
+       */
+      encrypted: true,
       // Back whole: a trim belonged to the lesson the video used to be on.
       trimStartSeconds: null,
       trimEndSeconds: null,
@@ -486,6 +500,7 @@ export class VideoLibraryService implements OnApplicationBootstrap {
         mirrorBytes: true,
         posterKey: true,
         captions: true,
+        encrypted: true,
         trimStartSeconds: true,
         trimEndSeconds: true,
         trimCuts: true,
@@ -506,6 +521,9 @@ export class VideoLibraryService implements OnApplicationBootstrap {
       mirrorBytes: source.mirrorBytes,
       posterKey: source.posterKey,
       captions: (source.captions as Prisma.InputJsonValue | null) ?? Prisma.DbNull,
+      // The source's own flag: an upsert that leaves it out keeps the target
+      // lesson's old value. See `restore` above.
+      encrypted: source.encrypted,
       mirrorStatus: 'ready' as const,
       mirrorError: null,
       mirrorProgress: 100,

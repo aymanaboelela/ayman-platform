@@ -30,6 +30,7 @@ interface Row {
   mirrorStatus: 'uploading' | 'pending' | 'mirroring' | 'ready' | 'failed' | 'disabled';
   mirrorBytes: bigint | null;
   sourceBytes: bigint | null;
+  encrypted?: boolean;
 }
 
 function build(options: {
@@ -381,5 +382,29 @@ describe('«اختار فيديو متروفع قبل كده»', () => {
     const { service } = build({ rows: [row('l1', UP('b'), { mirrorStatus: 'mirroring' })] });
     await expect(service.attach(UP('b'), 'l9')).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.attach(UP('d'), 'l9')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+/*
+ * The lesson's row is UPDATED in place, so a flag the upsert leaves out keeps
+ * the value of the video it replaced. A lesson that used to play a YouTube id
+ * (`encrypted = false`) handed that to an AES-128 ladder and the key route
+ * refused the key — a lecture nobody could watch (2026-11-15).
+ */
+describe('the encrypted flag travels with the video, not the lesson', () => {
+  it('attach copies the source video\'s flag', async () => {
+    const on = build({ rows: [row('l1', UP('a'), { encrypted: true })] });
+    await on.service.attach(UP('a'), 'l9');
+    expect(on.upserted()).toMatchObject({ encrypted: true });
+
+    const off = build({ rows: [row('l1', UP('a'), { encrypted: false })] });
+    await off.service.attach(UP('a'), 'l9');
+    expect(off.upserted()).toMatchObject({ encrypted: false });
+  });
+
+  it('restore writes true — the archive keeps no flag, and false on an encrypted ladder is unplayable', async () => {
+    const { service, upserted } = build({ rows: [], kept: [UP('9')] });
+    await service.restore(UP('9'), 'l9');
+    expect(upserted()).toMatchObject({ encrypted: true });
   });
 });
