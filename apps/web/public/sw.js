@@ -514,11 +514,17 @@ self.addEventListener('fetch', (event) => {
   if (MARK && url.pathname === MARK) {
     event.respondWith(
       (async () => {
-        const hit = await caches.match(request);
+        // Cache failures (a full disk) must fall through to the network — see
+        // the `/_next/static/` branch below.
+        const hit = await caches.match(request).catch(() => undefined);
         const fresh = fetch(request).then(async (response) => {
           if (response.ok && response.status === 200) {
-            const cache = await caches.open(STATIC_CACHE);
-            await cache.put(request, response.clone());
+            try {
+              const cache = await caches.open(STATIC_CACHE);
+              await cache.put(request, response.clone());
+            } catch {
+              // No room to keep it; the response itself is still good.
+            }
           }
           return response;
         });
@@ -558,20 +564,40 @@ self.addEventListener('fetch', (event) => {
   if (isImmutable) {
     event.respondWith(
       (async () => {
-        const current = await caches.open(STATIC_CACHE);
-        const own = await current.match(request);
-        if (own) return own;
+        /*
+         * ⚠️ Every Cache API call here is allowed to THROW, and a throw must
+         * cost the cache, never the file.
+         *
+         * On a device whose disk is full, `caches.open()` itself rejects. This
+         * branch used to await it bare, so `respondWith` rejected and EVERY
+         * stylesheet and chunk on the site failed with `net::ERR_FAILED` —
+         * the page rendered as raw HTML in Times, the hero image at its
+         * natural 1536px, while `/`, `/api/*` and `/brand/*` (which never
+         * touch the cache) loaded fine. Seen live on 2026-11-15. A phone
+         * with no free space is the normal case for this audience, not an
+         * edge one; the cache is an optimisation and the network is the
+         * answer whenever it cannot be used.
+         */
+        let current = null;
+        try {
+          current = await caches.open(STATIC_CACHE);
+          const own = await current.match(request);
+          if (own) return own;
 
-        // An older build's cache still has it: answer from there — that is
-        // exactly what keeps a still-open old tab's lazy chunks working — and
-        // copy it forward if the page asking is on this build. See `promoteFor`.
-        const elsewhere = await caches.match(request);
-        if (elsewhere) {
-          event.waitUntil(promoteFor(event.clientId, request, elsewhere.clone()).catch(() => {}));
-          return elsewhere;
+          // An older build's cache still has it: answer from there — that is
+          // exactly what keeps a still-open old tab's lazy chunks working — and
+          // copy it forward if the page asking is on this build. See `promoteFor`.
+          const elsewhere = await caches.match(request);
+          if (elsewhere) {
+            event.waitUntil(promoteFor(event.clientId, request, elsewhere.clone()).catch(() => {}));
+            return elsewhere;
+          }
+        } catch {
+          current = null;
         }
 
         const response = await fetch(request);
+        if (!current) return response;
         // Only store a clean 200. An opaque or partial response cached here
         // would be indistinguishable from the real thing on the next load.
         if (response.ok && response.status === 200) {
@@ -636,7 +662,7 @@ self.addEventListener('fetch', (event) => {
           try {
             return await fetch(request);
           } catch {
-            const offline = await caches.match(OFFLINE_URL);
+            const offline = await caches.match(OFFLINE_URL).catch(() => undefined);
             return (
               offline ??
               new Response('', { status: 503, statusText: 'Offline' })

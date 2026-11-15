@@ -377,3 +377,22 @@ describe('sw.js — what the current build uses moves forward, with no second do
     expect(worker.caches.urlsIn(NEW_CACHE)).toContain(asset('brand-new'));
   });
 });
+
+describe('sw.js — a cache that cannot be used costs the cache, never the file', () => {
+  /*
+   * A full disk makes `caches.open()` / `caches.match()` reject. The asset
+   * branch used to await them bare, so `respondWith` rejected and every
+   * stylesheet and chunk failed with `net::ERR_FAILED` — the live site
+   * rendered as unstyled HTML (2026-11-15). The network must answer instead.
+   */
+  it('serves a static file from the network when Cache Storage throws', async () => {
+    const worker = evaluateWorker({ scriptUrl: NEW, activeScriptUrl: NEW, existingCaches: {} });
+    const quota = () => Promise.reject(new DOMException('no space', 'QuotaExceededError'));
+    worker.caches.api.open = quota;
+    worker.caches.api.match = quota;
+
+    const response = await worker.fetchAsset(asset('styles'), 'tab-new');
+    expect(await response!.text()).toBe(`network ${asset('styles')}`);
+    expect(worker.fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
