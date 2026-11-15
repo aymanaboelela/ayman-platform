@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthModule } from '../../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SettingsModule } from '../admin/settings/settings.module';
 import { MediaModule } from '../media/media.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
@@ -72,6 +73,8 @@ import { AdminAssistantQuestionsController } from './ai/admin-questions.controll
     PrismaModule,
     AuthModule,
     NotificationsModule,
+    // «ردود جاهزة» are stored in site settings — `AdminInboxController`.
+    SettingsModule,
     MediaModule,
     CatalogModule,
     DashboardModule,

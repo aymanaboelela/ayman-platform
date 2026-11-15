@@ -4,6 +4,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
 import { PushService } from './push.service';
+import { PresenceService } from './presence.service';
 
 /**
  * `NotificationsService` is EXPORTED, unlike most feature services here,
@@ -32,9 +33,9 @@ import { PushService } from './push.service';
 @Module({
   imports: [PrismaModule],
   controllers: [NotificationsController],
-  providers: [NotificationsService, NotificationsRealtimeService, PushService],
+  providers: [NotificationsService, NotificationsRealtimeService, PushService, PresenceService],
   // `PushService` for the admin app's own pushes, which are not feed rows —
   // see `AdminMobileService`.
-  exports: [NotificationsService, PushService],
+  exports: [NotificationsService, PushService, PresenceService],
 })
 export class NotificationsModule {}

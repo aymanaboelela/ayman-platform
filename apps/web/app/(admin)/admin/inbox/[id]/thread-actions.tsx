@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -9,7 +10,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { CheckCircle2, Loader2, Lock, Paperclip, RotateCcw, SendHorizontal, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Lock, Paperclip, RotateCcw, SendHorizontal, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy';
 import {
@@ -19,6 +20,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { ALLOWED_DOCUMENT_EXT, ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
 import { Button } from '@ayman/ui/components/button';
+import { cn } from '@ayman/ui/lib/cn';
 import { formatBytes } from '@/components/assistant/message-attachment';
 import { useAutoGrow } from '@/components/assistant/use-auto-grow';
 import { uploadConversationAttachment, type UploadFailure } from '@/lib/upload-client';
@@ -28,6 +30,7 @@ import { useTypingSignal } from '@/components/assistant/use-typing';
 import { apiPostVoid } from '@/lib/api';
 import { replyAction, setStatusAction } from '../actions';
 import { useReplyTarget, type PendingReply } from './admin-chat';
+import { QuickRepliesPanel } from './quick-replies';
 
 const c = copy.assistant.inbox;
 const cc = copy.assistant.chat;
@@ -91,6 +94,16 @@ export function ThreadActions({
   const [progress, setProgress] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const { target, setTarget } = useReplyTarget();
+  /** «ردود جاهزة» — the panel above the composer row. */
+  const [showReplies, setShowReplies] = useState(false);
+  const closeReplies = useCallback(() => setShowReplies(false), []);
+  /** A picked reply lands in the box — appended on its own line if he had
+   *  already started typing — and the cursor goes back there to send it. */
+  const pickReply = useCallback((text: string) => {
+    setMessage((before) => (before.trim().length > 0 ? `${before.trimEnd()}\n${text}` : text));
+    setShowReplies(false);
+    field.current?.focus();
+  }, []);
   /** «جارٍ الكتابة…» on the student's screen while he types here. */
   const signalTyping = useTypingSignal(
     status === 'closed' ? null : () => apiPostVoid(`/api/admin/conversations/${id}/typing`),
@@ -293,6 +306,8 @@ export function ThreadActions({
           </p>
         ) : null}
 
+        {showReplies ? <QuickRepliesPanel onPick={pickReply} onClose={closeReplies} /> : null}
+
         <div className="chat-composer__row">
           <div className="chat-composer__field">
             {/*
@@ -318,6 +333,17 @@ export function ThreadActions({
               className="chat-icon-button"
             >
               <Paperclip className="size-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setShowReplies((open) => !open)}
+              aria-label={c.quickReplies}
+              aria-expanded={showReplies}
+              title={c.quickReplies}
+              className={cn('chat-icon-button', showReplies && 'text-accent-text')}
+            >
+              <Zap className="size-5" aria-hidden="true" />
             </button>
 
             <label htmlFor="inbox-reply" className="sr-only">

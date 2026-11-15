@@ -21,6 +21,7 @@ import {
   emitChatFrame,
   emitQueueFrame,
   emitStreamDown,
+  emitPresence,
   emitStreamOpen,
   emitTyping,
   isChatOnScreen,
@@ -144,11 +145,15 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
         `notification` frame below.
       */
       if (event.type === 'chat') {
-        emitChatFrame(event.conversationId);
+        emitChatFrame(event.conversationId, event.author);
         return;
       }
       if (event.type === 'typing') {
         emitTyping(event.conversationId, event.from);
+        return;
+      }
+      if (event.type === 'presence') {
+        emitPresence(event.userId, event.online, event.lastSeenAt);
         return;
       }
       if (event.type !== 'notification') return;
@@ -168,7 +173,12 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
         n.kind === 'instructor_message' ||
         n.kind === 'homework_reviewed'
       ) {
-        emitChatFrame('conversationId' in n ? n.conversationId : null);
+        emitChatFrame(
+          'conversationId' in n ? n.conversationId : null,
+          // A reply already has its own `chat` frame carrying the author; the
+          // other two are messages that arrive ONLY as this row.
+          n.kind === 'conversation_reply' ? undefined : 'admin',
+        );
         // Already on screen — the bubble IS the notification. The badge
         // above still moved; the thread marks itself read.
         if ('conversationId' in n && isChatOnScreen(n.conversationId)) return;

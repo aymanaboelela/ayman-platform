@@ -21,6 +21,8 @@ import { formatCopy } from '@ayman/contracts/format';
 import { parseAdminUnreadCount } from '@ayman/contracts/assistant/summary';
 import { apiGetNarrow } from '@/lib/api';
 import { onStreamOpen, subscribeChat } from '@/components/notifications/live-bus';
+import { playChatSound } from '@/lib/chat-sound';
+import { useTitleBadge } from '@/lib/use-title-badge';
 
 const c = copy.assistant.inbox;
 
@@ -168,7 +170,11 @@ export function InboxAlertsProvider({ children }: { children: ReactNode }) {
       if (burst !== null) clearTimeout(burst);
       burst = setTimeout(refresh, 400);
     };
-    const offChat = subscribeChat(soon);
+    const offChat = subscribeChat((_id, author) => {
+      // «صوت رسالة جديدة» — a student wrote, on whatever admin screen this is.
+      if (author === 'visitor') playChatSound();
+      soon();
+    });
     const offOpen = onStreamOpen(soon);
 
     // Coming back to the tab is the moment the number is most likely to be
@@ -183,6 +189,9 @@ export function InboxAlertsProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', tick);
     };
   }, [refresh]);
+
+  // «(٣)» in the tab title — threads waiting on a reply.
+  useTitleBadge(count);
 
   return <InboxCountContext.Provider value={count}>{children}</InboxCountContext.Provider>;
 }

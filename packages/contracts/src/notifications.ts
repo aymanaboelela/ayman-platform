@@ -701,6 +701,12 @@ export const NotificationEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('chat'),
     conversationId: z.uuid(),
+    /**
+     * Who wrote, when the frame IS a new message — the one case a screen
+     * plays a sound for. Absent for an edit, a reaction, a status change or
+     * a read receipt, which redraw silently.
+     */
+    author: z.enum(['visitor', 'admin']).optional(),
   }),
   /**
    * «جارٍ الكتابة…» — the other side of the thread has the composer going.
@@ -711,6 +717,18 @@ export const NotificationEventSchema = z.discriminatedUnion('type', [
    * typing. The screen shows it for a few seconds after the last frame and
    * drops it the moment a message from that side arrives.
    */
+  /**
+   * «متصل دلوقتي» / «آخر ظهور» — someone's first tab opened, or their last
+   * one closed. To the inbox only (the same channel and permission as
+   * `chat`); `userId` is an account id (a nanoid, NOT a uuid), and the inbox
+   * draws it beside whichever thread that account owns.
+   */
+  z.object({
+    type: z.literal('presence'),
+    userId: z.string().min(1),
+    online: z.boolean(),
+    lastSeenAt: z.iso.datetime().nullable(),
+  }),
   z.object({
     type: z.literal('typing'),
     conversationId: z.uuid(),

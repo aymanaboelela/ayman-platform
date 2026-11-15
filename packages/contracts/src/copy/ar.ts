@@ -6097,6 +6097,35 @@ export const copy = {
       attachHint: 'صورة (٨ ميجا) أو PDF / PowerPoint / Word / Excel (٩٥ ميجا)',
       attaching: 'بنرفع…',
       attachRemove: 'إزالة الملف',
+      /* «متصل دلوقتي» — beside the student's name: the platform is open in
+         one of their tabs right now. Otherwise when they last closed it.
+         `{when}` is a relative time («قبل ١٠ دقائق»). */
+      presenceOnline: 'متصل دلوقتي',
+      /* «صوت الرسايل» — the chime when a student writes, per browser. */
+      soundOn: 'صوت الرسايل شغّال',
+      soundOff: 'صوت الرسايل مقفول',
+      presenceLastSeen: 'آخر ظهور {when}',
+      /* «ردود جاهزة» — saved answers one tap from the composer. */
+      quickReplies: 'ردود جاهزة',
+      quickRepliesEdit: 'تعديل الردود',
+      quickRepliesBack: 'رجوع للردود',
+      quickRepliesAdd: 'إضافة رد',
+      quickRepliesSave: 'حفظ الردود',
+      quickRepliesSaved: 'اتحفظت الردود',
+      quickRepliesFailed: 'الردود ماتحفظتش — جرّب تاني',
+      quickRepliesEmpty: 'مفيش ردود محفوظة لسه — «تعديل الردود» وضيف اللي بتكتبه كتير.',
+      quickRepliesPlaceholder: 'نص الرد…',
+      quickRepliesRemove: 'مسح الرد ده',
+      /* The starter set, offered until the list is saved once. Written TO a
+         student, so no imperatives and nothing that assumes boy or girl. */
+      quickRepliesDefaults: [
+        'أهلاً، تحت أمرك 🙏',
+        'تمام، هبعتلك الحل بعد شوية.',
+        'ممكن صورة السؤال عشان أشوفه؟',
+        'الإجابة موجودة في الدرس ده بالتفصيل 👌',
+        'تم تفعيل الاشتراك ✅ بالتوفيق!',
+        'شكرًا على سؤالك 🌟',
+      ],
       attachTooLarge: 'الملف كبير أوي.',
       attachBadType: 'نوع الملف ده مش مدعوم.',
       attachFailed: 'مقدرناش نرفع الملف. نحاول تاني.',

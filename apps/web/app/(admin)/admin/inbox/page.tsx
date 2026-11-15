@@ -17,6 +17,8 @@ import { assistantPathLabels } from '@/lib/assistant-path';
 import { InboxStatusChip, inboxTimeFormatter } from './status-chip';
 import { InboxTabs } from './inbox-tabs';
 import { RowTyping } from './row-typing';
+import { PresenceDot } from '@/components/admin/student-presence';
+import { ChatSoundToggle } from '@/components/admin/chat-sound-toggle';
 import { ListControl } from '@/components/admin/list-controls';
 import { AdminEmpty } from '@/components/admin/admin-empty';
 import { LiveChatRefresh } from '@/components/admin/live-chat-refresh';
@@ -89,7 +91,10 @@ export default async function AdminInboxPage({
       <p className="text-[length:var(--fs-mono-label)] uppercase tracking-wide text-accent-text">
         {c.eyebrow}
       </p>
-      <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
+        <ChatSoundToggle />
+      </div>
       <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
 
       {/*
@@ -168,6 +173,7 @@ export default async function AdminInboxPage({
                     row.unreadForAdmin ? 'border-accent/40' : 'border-line',
                   )}
                 >
+                  <span className="relative shrink-0">
                   <span
                     aria-hidden="true"
                     className={cn(
@@ -189,6 +195,11 @@ export default async function AdminInboxPage({
                     ) : (
                       <MessageSquareText className="size-5" />
                     )}
+                  </span>
+                  {/* «متصل دلوقتي» — live from the stream's presence frames. */}
+                  {row.userId && row.presence ? (
+                    <PresenceDot userId={row.userId} initial={row.presence} />
+                  ) : null}
                   </span>
 
                   <div className="min-w-0 flex-1">

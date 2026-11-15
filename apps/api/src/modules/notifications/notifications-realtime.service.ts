@@ -132,8 +132,12 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    *
    * Never throws, for the reason `publish` does not.
    */
-  async publishChat(conversationId: string, ownerUserId: string | null): Promise<void> {
-    const event: NotificationEvent = { type: 'chat', conversationId };
+  async publishChat(
+    conversationId: string,
+    ownerUserId: string | null,
+    author?: 'visitor' | 'admin',
+  ): Promise<void> {
+    const event: NotificationEvent = { type: 'chat', conversationId, ...(author ? { author } : {}) };
     await Promise.all([
       this.publishOn(CHAT_CHANNEL, event, `conversation ${conversationId} to the inbox`),
       ownerUserId
@@ -160,6 +164,15 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
     } else if (ownerUserId) {
       await this.publishOn(channelFor(ownerUserId), event, `typing in ${conversationId}`);
     }
+  }
+
+  /** «متصل دلوقتي» flipped — to the inbox channel. Never throws. */
+  async publishPresence(userId: string, online: boolean, lastSeenAt: string | null): Promise<void> {
+    await this.publishOn(
+      CHAT_CHANNEL,
+      { type: 'presence', userId, online, lastSeenAt },
+      `presence of ${userId}`,
+    );
   }
 
   /**

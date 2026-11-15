@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Optional, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import {
@@ -14,6 +14,7 @@ import { userHasPermission, type Permission } from '../../auth/permissions';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
 import { PushService } from './push.service';
+import { PresenceService } from './presence.service';
 import { PushSubscribeDto, PushUnsubscribeDto } from './push.dto';
 
 /**
@@ -90,7 +91,24 @@ export class NotificationsController {
     private readonly notifications: NotificationsService,
     private readonly realtime: NotificationsRealtimeService,
     private readonly push: PushService,
+    /** `@Optional()` for the cut-down authz fixtures — see the realtime service. */
+    @Optional() private readonly presence?: PresenceService,
   ) {}
+
+  /**
+   * «متصل دلوقتي» — tracked for the people the inbox talks TO, never for the
+   * staff who read it: an assistant's or the instructor's own comings and
+   * goings are nobody's business on this screen.
+   */
+  private async markPresence(userId: string, online: boolean): Promise<void> {
+    if (!this.presence) return;
+    if (online) {
+      if (await this.presence.touch(userId)) await this.realtime.publishPresence(userId, true, null);
+      return;
+    }
+    const lastSeenAt = await this.presence.leave(userId);
+    await this.realtime.publishPresence(userId, false, lastSeenAt);
+  }
 
   /**
    * The live feed — Server-Sent Events, one connection per open tab.
@@ -186,8 +204,12 @@ export class NotificationsController {
         })
       : null;
 
+    const tracked = !userHasPermission(user.id, user.role, 'conversation:read');
+    if (tracked) void this.markPresence(user.id, true).catch(() => undefined);
+
     const heartbeat = setInterval(() => {
       send({ type: 'ping' });
+      if (tracked) void this.markPresence(user.id, true).catch(() => undefined);
     }, HEARTBEAT_MS);
 
     // Ending the response fires `close` below, which does all the cleanup.
@@ -209,7 +231,10 @@ export class NotificationsController {
       chatUnsubscribe?.();
       const left = (openStreams.get(user.id) ?? 1) - 1;
       if (left > 0) openStreams.set(user.id, left);
-      else openStreams.delete(user.id);
+      else {
+        openStreams.delete(user.id);
+        if (tracked) void this.markPresence(user.id, false).catch(() => undefined);
+      }
       response.end();
     });
   }

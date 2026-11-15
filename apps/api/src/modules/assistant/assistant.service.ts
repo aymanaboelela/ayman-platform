@@ -239,7 +239,7 @@ export class AssistantService {
       return conversation;
     });
 
-    await this.announce(created.id, input.userId);
+    await this.announce(created.id, input.userId, 'visitor');
 
     return {
       thread: await this.threadById(created.id),
@@ -485,7 +485,7 @@ export class AssistantService {
       });
     });
 
-    await this.announce(conversation.id, userId);
+    await this.announce(conversation.id, userId, 'visitor');
 
     return this.threadById(conversation.id);
   }
@@ -906,7 +906,7 @@ export class AssistantService {
       }
     });
 
-    await this.announce(id, conversation.userId);
+    await this.announce(id, conversation.userId, 'admin');
   }
 
   /**
@@ -1031,7 +1031,12 @@ export class AssistantService {
    * Never throws. The write already happened; a screen that misses the frame
    * catches up on its next read, and a reply must not 500 over a redraw.
    */
-  private async announce(conversationId: string, ownerUserId?: string | null): Promise<void> {
+  private async announce(
+    conversationId: string,
+    ownerUserId?: string | null,
+    /** Set only for a NEW message — the frame screens play a sound for. */
+    author?: 'visitor' | 'admin',
+  ): Promise<void> {
     try {
       const owner =
         ownerUserId !== undefined
@@ -1042,7 +1047,7 @@ export class AssistantService {
                 select: { userId: true },
               })
             )?.userId ?? null);
-      await this.notifications.announceChat(conversationId, owner);
+      await this.notifications.announceChat(conversationId, owner, author);
     } catch {
       // See above — a redraw is never worth failing the write it follows.
     }
@@ -1386,6 +1391,8 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
     unreadForAdmin:
       (row.messages[0]?.author ?? 'visitor') === 'visitor' &&
       (!row.adminReadAt || row.lastMessageAt > row.adminReadAt),
+    // Filled by `AdminInboxController` from Redis — see `StudentPresenceSchema`.
+    presence: null,
   };
 }
 

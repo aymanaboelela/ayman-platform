@@ -3,6 +3,7 @@ import { BRAND_IMAGE_FIELDS, BRAND_IMAGE_SLOTS } from '@ayman/contracts/admin/br
 import { OG_PAGES } from '@ayman/contracts/admin/seo-pages';
 import {
   BrandingReadSchema,
+  QuickRepliesSchema,
   SeoReadSchema,
   SECTION_SCHEMAS,
   SiteSettingsSchema,
@@ -236,6 +237,37 @@ export class SettingsService {
     });
 
     return next.socialCounts;
+  }
+
+  /** «ردود جاهزة» — `null` when never set up (the composer offers defaults). */
+  async readQuickReplies(): Promise<string[] | null> {
+    return (await this.read()).inbox.quickReplies ?? null;
+  }
+
+  /**
+   * Replaces the whole list — the editor always sends all of it, in order.
+   * Same transaction-and-audit path as every other settings write.
+   */
+  async updateQuickReplies(payload: unknown): Promise<string[]> {
+    const result = QuickRepliesSchema.safeParse(payload);
+    if (!result.success) {
+      throw new BadRequestException({
+        message: 'invalid quick replies',
+        issues: result.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+      });
+    }
+    const next = await this.persist('inbox', (current: SiteSettings) => ({
+      ...current.inbox,
+      quickReplies: result.data,
+    }));
+    await this.audit.record({
+      action: 'settings:update',
+      resourceType: AUDIT_RESOURCES.siteSettings,
+      resourceId: String(SITE_SETTINGS_ID),
+      outcome: 'success',
+      metadata: { section: 'inbox.quickReplies', count: result.data.length },
+    });
+    return next.inbox.quickReplies ?? [];
   }
 
   /**
