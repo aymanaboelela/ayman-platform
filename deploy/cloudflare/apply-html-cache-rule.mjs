@@ -36,7 +36,8 @@
  *   CLOUDFLARE_API_TOKEN=… node deploy/cloudflare/apply-html-cache-rule.mjs teacher-one.com teacher-two.com …
  *   node deploy/cloudflare/apply-html-cache-rule.mjs --verify teacher-one.com   # no token needed
  *
- * Each argument is a site's host, which is also its zone's name. The token
+ * Each argument is a site's host; its zone is found by name, falling back to
+ * the parent domain for a teacher on a subdomain. The token
  * needs Zone → Zone → Read and Zone → Cache Rules → Edit on those zones.
  * Re-running is safe: the rule is found by `ref` (or description) and updated.
  *
@@ -47,8 +48,13 @@
 
 const API = 'https://api.cloudflare.com/client/v4';
 const PHASE = 'http_request_cache_settings';
-const RULE_REF = 'anonymous-public-pages-edge-cache';
-const RULE_DESCRIPTION = 'Anonymous public pages: cacheable when the origin says so';
+/*
+ * Per HOST, not per zone: a teacher can live on a subdomain of another
+ * teacher's zone (the Arabic stack is a subdomain), and one shared ref would
+ * make the second run overwrite the first one's rule with its own host.
+ */
+const ruleRef = (host) => `edge-cache-${host.replace(/[^a-z0-9]/gi, '-')}`;
+const ruleDescription = (host) => `Anonymous public pages on ${host}: cacheable when the origin says so`;
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
@@ -79,8 +85,8 @@ function expressionFor(host) {
 
 function ruleFor(host) {
   return {
-    ref: RULE_REF,
-    description: RULE_DESCRIPTION,
+    ref: ruleRef(host),
+    description: ruleDescription(host),
     enabled: true,
     expression: expressionFor(host),
     action: 'set_cache_settings',
@@ -110,11 +116,20 @@ async function cf(pathname, init = {}) {
   return { ok: true, result: body.result };
 }
 
+/** The zone holding `host`: the host itself, else its nearest parent domain. */
+async function zoneFor(host) {
+  const labels = host.split('.');
+  for (let i = 0; i < labels.length - 1; i++) {
+    const name = labels.slice(i).join('.');
+    const zones = await cf(`/zones?name=${encodeURIComponent(name)}`);
+    if (!zones.ok) die(`${host}: zone lookup failed — ${zones.detail}`);
+    if (zones.result?.[0]) return zones.result[0];
+  }
+  die(`${host}: no zone for it (or a parent) on this token's account`);
+}
+
 async function apply(host) {
-  const zones = await cf(`/zones?name=${encodeURIComponent(host)}`);
-  if (!zones.ok) die(`${host}: zone lookup failed — ${zones.detail}`);
-  const zone = zones.result?.[0];
-  if (!zone) die(`${host}: no zone with that name on this token's account`);
+  const zone = await zoneFor(host);
 
   const rule = ruleFor(host);
   const entry = await cf(`/zones/${zone.id}/rulesets/phases/${PHASE}/entrypoint`);
@@ -134,7 +149,7 @@ async function apply(host) {
 
   const ruleset = entry.result;
   const existing = (ruleset.rules ?? []).find(
-    (r) => r.ref === RULE_REF || r.description === RULE_DESCRIPTION,
+    (r) => r.ref === ruleRef(host) || r.description === ruleDescription(host),
   );
   const others = (ruleset.rules ?? []).length - (existing ? 1 : 0);
   console.log(`  ${host}: ${others} other cache rule(s) left untouched`);
