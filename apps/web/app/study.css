@@ -6796,3 +6796,37 @@ label.runner-option {
   background: var(--e-600);
   color: var(--n-1);
 }
+
+/* «Cinema» posters — `course-art.tsx`'s fallback for a cover-less course on
+   his stack. The image fills the slot the generated scene would have; a
+   blue-black scrim from the bottom edge keeps the subject label (and, on the
+   course cards, the % badge) legible on any part of the artwork. */
+.course-art--poster {
+  background: var(--e-950);
+}
+
+.course-art--poster::before {
+  content: none;
+}
+
+.course-art__poster {
+  object-fit: cover;
+}
+
+.course-art--poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgb(10 16 32 / 0.82) 0%, rgb(10 16 32 / 0.15) 55%, transparent 100%);
+  pointer-events: none;
+}
+
+.course-art--poster .course-art__subject {
+  position: absolute;
+  inset-block-end: var(--s-12);
+  inset-inline-start: var(--s-16);
+  z-index: 1;
+  font-family: inherit;
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}

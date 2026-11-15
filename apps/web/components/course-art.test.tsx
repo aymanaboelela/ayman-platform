@@ -1,5 +1,5 @@
 import { cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CourseArt } from './course-art';
 
 afterEach(() => {
@@ -56,16 +56,43 @@ describe('CourseArt', () => {
     expect(img?.style.position).toBe('absolute');
   });
 
-  it('falls back to the generated scene when there is no cover', () => {
-    // The fallback is a gradient panel with NO intrinsic height, which is why
-    // the call sites keep their aspect box for this branch — without one it
-    // collapses to nothing.
+  it('on his stack, a cover-less course wears one of his posters (stable per course)', () => {
+    // `TENANT_KEY` is unset in this harness, which `lib/tenant.ts` reads as his
+    // stack — so `getBrandAsset` resolves and the «Cinema» poster renders.
     const { container } = render(
       <CourseArt coverKey={null} subjectNameAr="البرمجة" seed="a-course" />
     );
 
-    expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('svg.course-art__shapes')).not.toBeNull();
+    const img = container.querySelector('img.course-art__poster');
+    expect(img).not.toBeNull();
+    expect(decodeURIComponent(img?.getAttribute('src') ?? '')).toContain('/brand/');
+    expect(container.querySelector('svg.course-art__shapes')).toBeNull();
+
+    const first = img?.getAttribute('src');
+    cleanup();
+    const again = render(
+      <CourseArt coverKey={null} subjectNameAr="البرمجة" seed="a-course" />
+    ).container.querySelector('img.course-art__poster');
+    expect(again?.getAttribute('src')).toBe(first);
+  });
+
+  it('on any other stack, falls back to the generated scene — his art never leaks', async () => {
+    // The fallback is a gradient panel with NO intrinsic height, which is why
+    // the call sites keep their aspect box for this branch — without one it
+    // collapses to nothing.
+    vi.resetModules();
+    vi.stubEnv('TENANT_KEY', 'sabry');
+    try {
+      const { CourseArt: OtherStack } = await import('./course-art');
+      const { container } = render(
+        <OtherStack coverKey={null} subjectNameAr="البرمجة" seed="a-course" />
+      );
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector('svg.course-art__shapes')).not.toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
   });
 
   it('hides the art from assistive tech on every branch', () => {

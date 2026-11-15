@@ -22,6 +22,31 @@ import {
 } from 'lucide-react';
 import { mediaUrl } from '@ayman/ui/branding';
 import { artVariant, subjectArt, type SubjectGlyph } from '@/lib/subject-art';
+import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
+
+/*
+ * «Cinema» — on his stack a course with no uploaded cover wears one of his own
+ * poster images instead of the generated gradient scene: «الكورسات بوسترات
+ * أفلام». Almost no course has a `cover_key`, so without this every card was
+ * the same drawn panel. Three text-free images (the track posters carry a
+ * year in their artwork and would mislabel a course), picked by the same
+ * per-course seed `artVariant` already uses, so a course keeps its poster.
+ *
+ * `getBrandAsset` is gated by `aymanOnly()`: on any other stack every entry is
+ * `undefined`, `posterFor` returns nothing, and the generated scene renders
+ * exactly as before (CLAUDE.md §2).
+ */
+const POSTERS: readonly { kind: BrandAssetKind; position: string }[] = [
+  { kind: 'practiceGuide', position: '35% center' },
+  { kind: 'hero', position: '20% center' },
+  { kind: 'portrait', position: 'center 28%' },
+];
+
+function posterFor(seed: string) {
+  const pick = POSTERS[artVariant(seed)];
+  const asset = pick ? getBrandAsset(pick.kind) : undefined;
+  return asset && pick ? { src: asset.src, position: pick.position } : undefined;
+}
 
 const GLYPHS: Record<SubjectGlyph, LucideIcon> = {
   sigma: Sigma,
@@ -250,6 +275,26 @@ export function CourseArt({
           className={`course-art__photo${className ? ` ${className}` : ''}`}
         />
       )
+    );
+  }
+
+  const poster = posterFor(seed);
+  if (poster) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`course-art course-art--poster${compact ? ' course-art--compact' : ''}${className ? ` ${className}` : ''}`}
+      >
+        <Image
+          src={poster.src}
+          alt=""
+          fill
+          sizes={sizes ?? (compact ? '128px' : '(min-width: 1024px) 560px, 94vw')}
+          className="course-art__poster"
+          style={{ objectPosition: poster.position }}
+        />
+        {compact ? null : <span className="course-art__subject">{subjectNameAr}</span>}
+      </span>
     );
   }
 
