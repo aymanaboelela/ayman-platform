@@ -859,8 +859,29 @@ jobs:
     # until somebody pushes something" into one click on the Actions tab, with
     # every check still required first. The `refs/heads/main` guard is what
     # keeps that from becoming "deploy any branch to production by hand".
+    #
+    # ## Why a merge no longer deploys (2026-11-15)
+    #
+    # Every stack builds on the ONE production VPS, clean, ~12 minutes of all
+    # four cores each (`no_cache`, see `every-deploy` in docker-compose.yml) —
+    # four stacks per merge. 11 merges on 2026-11-15 kept the box building for
+    # hours while students used it: load 10 on 4 cores, swap thrashing, 30%
+    # iowait, every page slow on every stack (CLAUDE.md §5).
+    #
+    # So production now changes ONCE a night, on the 02:00 UTC (04:00 Cairo)
+    # `schedule` run — the quietest hour — after the full suite has passed on
+    # main HEAD. An urgent fix: Actions → CI → "Run workflow" on main
+    # (`workflow_dispatch`); every check still runs first.
+    #
+    # The other half lives in Dokploy, not here: each compose's `triggerType`
+    # is `tag`, not `push`, so the GitHub App no longer builds on every push.
+    # `autoDeploy` must stay TRUE — Dokploy's `/api/deploy/compose/<token>`
+    # webhook (what this job calls) refuses with «Automatic deployments are
+    # disabled» otherwise, and it does not read `triggerType` at all. A new
+    # teacher stack needs the same two settings, and its webhook in
+    # `DOKPLOY_TENANT_DEPLOY_URLS`.
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Its own poll loop is 150 x 10s = 25 minutes (30 at most, once a restart
@@ -937,58 +958,36 @@ jobs:
 
       # ── Does this run need to ask Dokploy for anything? ─────────────────
       #
-      # Dokploy's own GitHub integration rebuilds EVERY stack on every push to
-      # main, twenty minutes before this job gets here. So this job's webhooks
-      # were a second full build of the same commit on every stack, every
-      # merge — and a merge burst multiplied it: measured 2026-09-30, four
-      # merges inside five minutes produced ten builds of the last one per
-      # stack, and one earlier merge was built three times. Each build
-      # restarts the API, which kills any video encode in flight (see
-      # `STALE_CLAIM_MS` in video-mirror.service.ts) and drops every open SSE
-      # stream.
+      # A manual dispatch always deploys — somebody pressed the button for a
+      # reason. The nightly skips only when nothing reached `main` since the
+      # previous nightly: rebuilding an unchanged tree is twelve minutes of all
+      # four cores per stack, and a restart drops every open SSE stream and any
+      # video encode in flight (`STALE_CLAIM_MS` in video-mirror.service.ts).
       #
-      # The webhooks stay — they are the backstop for the day the push hook
-      # does not fire — but a run now skips them in the two cases where they
-      # can only duplicate work:
+      # The old two skips (SUPERSEDED, ALREADY SHIPPED) assumed Dokploy's push
+      # hook had built the commit. There is no push hook now, so either of
+      # them would leave a commit undeployed until the next night. Dokploy
+      # still clones `main` HEAD at build time, so a merge landing while this
+      # run's tests ran ships too — the old "superseded" case is free.
       #
-      #   · SUPERSEDED — main has moved past this commit. The newer push was
-      #     built by the push hook with this commit inside it, and the newer
-      #     commit's own run will do this job's checking for both.
-      #   · ALREADY SHIPPED — production's API booted after this commit was
-      #     pushed, and the commit before it is at least ten minutes older,
-      #     so that boot can only be this push's build. The same two facts the
-      #     wait step already accepts as proof, read before triggering instead
-      #     of fifteen minutes after.
-      #
-      # Anything uncertain — a back-to-back merge, a missing `startedAt`, an
-      # API error — falls through to triggering, which is what happened
-      # before this step existed.
+      # 26h, not 24h: GitHub delays `schedule` runs by up to an hour under
+      # load, and a skipped night costs a whole day; an extra build costs 12m.
       - name: Decide whether a rebuild is still needed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha' 2>/dev/null || true)
-          if [ -n "$head" ] && [ "$head" != "$GITHUB_SHA" ]; then
-            echo "main is at ${head:0:8} now, past ${GITHUB_SHA:0:8} — the push hook built it with this commit inside."
-            echo "SKIP_DEPLOY=superseded by ${head:0:8}" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" != 'schedule' ]; then
+            echo "$GITHUB_EVENT_NAME — deploying main as asked"
             exit 0
           fi
-          started="${API_STARTED_BEFORE:-}"
-          pushed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.committer.date' 2>/dev/null || true)
-          parent=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.parents[0].sha' 2>/dev/null || true)
-          parent_at=''
-          [ -n "$parent" ] && parent_at=$(gh api "repos/$GITHUB_REPOSITORY/commits/$parent" \
-            --jq '.commit.committer.date' 2>/dev/null || true)
-          if [ -z "$started" ] || [ -z "$pushed" ] || [ -z "$parent_at" ]; then
-            echo "not enough to tell (startedAt='${started}', pushed='${pushed}', parent='${parent_at}') — triggering as before"
-            exit 0
-          fi
-          gap=$(( $(date -u -d "$pushed" +%s) - $(date -u -d "$parent_at" +%s) ))
-          if [ "$started" \> "$pushed" ] && [ "$gap" -ge 600 ]; then
-            echo "pushed $pushed; the API has been up since $started, and the commit before this one is ${gap}s older"
-            echo "SKIP_DEPLOY=the push hook already shipped it (API up since $started)" >> "$GITHUB_ENV"
+          since=$(date -u -d '26 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          count=$(gh api "repos/$GITHUB_REPOSITORY/commits?sha=main&since=$since&per_page=1" \
+            --jq 'length' 2>/dev/null || echo unknown)
+          if [ "$count" = '0' ]; then
+            echo "nothing reached main since $since — production already runs it"
+            echo "SKIP_DEPLOY=no new commits on main since $since" >> "$GITHUB_ENV"
           else
-            echo "no proof the push hook shipped this yet (API up since $started, pushed $pushed, gap ${gap}s) — triggering"
+            echo "main has new commits since $since (count probe: $count) — deploying"
           fi
 
       - name: Trigger the Dokploy deploy

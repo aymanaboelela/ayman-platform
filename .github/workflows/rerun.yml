@@ -59,10 +59,12 @@ permissions: {}
 jobs:
   rerun:
     name: retry a red main once
+    # `schedule` too since 2026-11-15: the nightly run is now the one that
+    # deploys (ci.yml, `deploy`), so a flaky shard there costs a whole day.
     if: >-
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'schedule') &&
       github.event.workflow_run.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
