@@ -55,6 +55,8 @@ export function ShareCardDialog({
   const fontsRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  /** «محاولة تانية» — bumped to run the draw again after a failure. */
+  const [attempt, setAttempt] = useState(0);
   const state = outcome ?? { kind: 'rendering' as const };
 
   useEffect(() => {
@@ -62,9 +64,9 @@ export function ShareCardDialog({
     let cancelled = false;
     let url: string | null = null;
     (async () => {
-      const host = fontsRef.current;
-      if (!host) throw new Error('font host not mounted');
-      const fonts = resolveFonts(host);
+      // The host only carries the display faces' variables; without it the
+      // card is drawn in the fallback families, which beats no card.
+      const fonts = resolveFonts(fontsRef.current ?? document.body);
       // A failed hero is not a failed card: the card has its own fire for that.
       // Same for the signature: without it the name is set in the script face.
       const [, hero, signature] = await Promise.all([
@@ -79,14 +81,21 @@ export function ShareCardDialog({
       canvasRef.current = canvas;
       url = URL.createObjectURL(blob);
       setOutcome({ kind: 'ready', url, blob });
-    })().catch(() => {
+    })().catch((cause: unknown) => {
+      // The one trace of WHY — the dialog itself can only say «ماتجهّزتش».
+      console.error('[share-card] could not draw the card', cause);
       if (!cancelled) setOutcome({ kind: 'failed' });
     });
     return () => {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [open, heroSrc, signatureSrc, draw]);
+  }, [open, heroSrc, signatureSrc, draw, attempt]);
+
+  const retry = useCallback(() => {
+    setOutcome(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
   const file = useMemo(
     () => (outcome?.kind === 'ready' ? new File([outcome.blob], `${fileName}.png`, { type: 'image/png' }) : null),
@@ -139,8 +148,15 @@ export function ShareCardDialog({
           <div className="share-card-dialog__stage" data-state={state.kind}>
             {state.kind === 'ready' ? (
               <img src={state.url} alt={title} className="share-card-dialog__img" />
+            ) : state.kind === 'failed' ? (
+              <div className="share-card-dialog__failed">
+                <p className="share-card-dialog__status">{c.failed}</p>
+                <Button variant="secondary" onClick={retry}>
+                  {c.retry}
+                </Button>
+              </div>
             ) : (
-              <p className="share-card-dialog__status">{state.kind === 'failed' ? c.failed : c.rendering}</p>
+              <p className="share-card-dialog__status">{c.rendering}</p>
             )}
           </div>
 

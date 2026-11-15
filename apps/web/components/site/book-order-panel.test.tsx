@@ -3,7 +3,7 @@ import type { BookOrder } from '@ayman/contracts/book-orders';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { apiPost } from '@/lib/api';
+import { ApiRequestError, apiPost } from '@/lib/api';
 import { BookOrderPanel } from './book-order-panel';
 
 /**
@@ -199,5 +199,70 @@ describe('BookOrderPanel — the payment numbers are read live', () => {
     liveContact = { instapay: null, vodafoneCash: null };
     renderWithEmptyProps();
     expect(await screen.findByText(copy.bookOrder.noNumber)).toBeTruthy();
+  });
+});
+
+/**
+ * «كمّل الدفع» — `/store/orders/<id>/pay` opens this panel with an order id and
+ * nothing else. Editing the address there used to POST a body with neither
+ * `courseId` nor `items`, which the API refuses — see `basketPayload`.
+ */
+describe('BookOrderPanel — resumed from «كتبي» with only an order id', () => {
+  function renderResume() {
+    vi.mocked(apiPost).mockClear();
+    render(
+      <BookOrderPanel
+        resumeOrderId={ORDER_ID}
+        itemsCents={15000}
+        shippingRates={{ cairo_giza: 15000, delta: 15000, far: 15000 }}
+        instapay={null}
+        vodafoneCash="+201021196367"
+        onCancel={() => undefined}
+      />,
+    );
+  }
+
+  /** Payment step → «تعديل العنوان» → a changed street → «التالي — الدفع». */
+  async function editStreetAndSubmit() {
+    fireEvent.click(await screen.findByRole('button', { name: copy.bookOrder.editAddress }));
+    fireEvent.change(await screen.findByDisplayValue('شارع تجربة'), { target: { value: 'شارع جديد' } });
+    fireEvent.click(screen.getByRole('button', { name: copy.bookOrder.addressSubmit }));
+  }
+
+  it('re-posts the ORDER’s own lines when the address is edited', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ ...stored, addressStreet: 'شارع جديد' });
+    renderResume();
+    await editStreetAndSubmit();
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(apiPost).mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(body).toMatchObject({
+      items: [{ bookId: BOOK, quantity: 1 }],
+      addressStreet: 'شارع جديد',
+      reuseOpenOrder: true,
+    });
+    expect('courseId' in body).toBe(false);
+  });
+
+  it('says «محاولات كتير» on a 429, not «حصل خطأ»', async () => {
+    vi.mocked(apiPost).mockRejectedValueOnce(new ApiRequestError(429, '/api/book-orders'));
+    renderResume();
+    await editStreetAndSubmit();
+    expect(await screen.findByText(copy.bookOrder.tooManyAttempts)).toBeTruthy();
+  });
+
+  it('shows the server’s own Arabic sentence on a 400, and hides an English one', async () => {
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiRequestError(400, '/api/book-orders', { statusCode: 400, message: 'في كتاب في السلة مش متاح دلوقتي — حدّث الصفحة' }),
+    );
+    renderResume();
+    await editStreetAndSubmit();
+    expect(await screen.findByText('في كتاب في السلة مش متاح دلوقتي — حدّث الصفحة')).toBeTruthy();
+
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiRequestError(400, '/api/book-orders', { statusCode: 400, message: 'Validation failed' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: copy.bookOrder.addressSubmit }));
+    expect(await screen.findByText(copy.bookOrder.genericError)).toBeTruthy();
+    expect(screen.queryByText('Validation failed')).toBeNull();
   });
 });

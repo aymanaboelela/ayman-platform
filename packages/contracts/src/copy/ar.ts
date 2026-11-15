@@ -3362,6 +3362,13 @@ export const copy = {
     receiptAlreadyUsed:
       'صورة التحويل دي اتبعتت قبل كده على طلب تاني، فما ينفعش تتحسب مرتين. لو ده تحويل جديد ارفع صورته هو، ولو كنت عايز نسخة تانية كلّمنا على واتساب.',
     genericError: 'حصل خطأ، نحاول تاني.',
+    /**
+     * 429 from `POST /api/book-orders` — one submit per ten seconds, and the
+     * student pressed again inside them. Logged 2026-11-15: one 400 followed
+     * by nine 429s in four seconds, every one of them shown as «حصل خطأ» — a
+     * sentence that invites the very retry that keeps producing it.
+     */
+    tooManyAttempts: 'محاولات كتير ورا بعض. ثواني بس، وبعدين محاولة تانية.',
     uploadError: 'مقدرناش نرفع الصورة. صورة تانية أو اتصال أقوى بالنت غالبًا بيحلّوها.',
     screenshotRequired: 'صورة إثبات التحويل مطلوبة',
     senderPhoneRequired: 'رقم الموبايل اللي اتحوّل منه مطلوب',
@@ -3762,6 +3769,53 @@ export const copy = {
       hide: 'إخفاء',
       show: 'إظهار',
       helpShort: 'سؤال عن الكورس؟',
+    },
+
+    /**
+     * The lesson page after the 2026-11 clean-up — «المنصة للطالب زحمة أوي».
+     *
+     * One bar under the video (title, unit, the finish button), one row of
+     * TABS under that for everything the lecture carries, and the outline as
+     * unit CARDS with the current unit open. Every string a student reads on
+     * that screen that is not the lecture's own content lives in this block.
+     */
+    header: {
+      /** The chip under the title — «الوحدة ٢ · أساسيات البرمجة». */
+      unit: 'الوحدة {n}',
+      /** Lectures only; a quiz hanging off a lecture is not counted. */
+      lessonOf: 'المحاضرة {n} من {m}',
+    },
+    tabs: {
+      label: 'أقسام المحاضرة',
+      homework: 'الواجب',
+      materials: 'المرفقات',
+      summary: 'الملخص',
+      notes: 'ملاحظاتي',
+      quiz: 'امتحان المحاضرة',
+    },
+    units: {
+      /** The eyebrow on the open unit's card. */
+      youAreHere: 'إنت هنا',
+      /** On the row of the lesson the student is sitting in — a label, not a
+       *  control: there is nothing to press on the lesson you are already on. */
+      watching: 'بتتفرج دلوقتي',
+      /** The one quiet chip in the list — the lecture right after this one. */
+      nextChip: 'التالي',
+      /** A whole unit the subscription does not cover yet. */
+      openMonth: 'افتح الشهر',
+      done: 'خلصت',
+    },
+    sheet: {
+      /** The phone's door to the outline, under the video. */
+      open: 'محتوى الكورس',
+      close: 'إغلاق',
+    },
+    nextBar: {
+      label: 'المحاضرة التالية',
+      open: 'افتح المحاضرة التالية',
+    },
+    sideLinks: {
+      help: 'مساعدة',
     },
 
     /**
@@ -7549,7 +7603,10 @@ export const copy = {
     share: 'مشاركة',
     close: 'إغلاق',
     rendering: 'بنجهّز الصورة…',
-    failed: 'الصورة ماتجهّزتش — محاولة تانية؟',
+    /** The button under it is `retry` — a noun, no imperative, same rule as
+     *  the card copy above. It used to be a question with nothing to press. */
+    failed: 'الصورة ماتجهّزتش.',
+    retry: 'محاولة تانية',
     resultKicker: 'نتيجتي في',
     scoreOf: 'من {total}',
     studyWith: 'بذاكر مع {teacher}',
