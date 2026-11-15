@@ -6,6 +6,7 @@ import { cn } from '@ayman/ui';
 import { CourseArt } from '@/components/course-art';
 import { ExamLockedDialog } from '@/components/library/exam-locked-dialog';
 import { LtrRatio } from '@/components/ltr-ratio';
+import { IS_AYMAN } from '@/lib/tenant';
 import { CourseClosedDialog } from './course-closed-dialog';
 
 const c = copy.path;
@@ -88,7 +89,16 @@ function CourseStep({ course, index, open }: { course: PathCourse; index: number
   const head = (
     <div className="ptl__head">
       <span className="ptl__art" aria-hidden="true">
-        <CourseArt coverKey={course.coverKey} subjectNameAr={course.subjectNameAr} seed={course.slug} compact sizes="5rem" />
+        <CourseArt
+          coverKey={course.coverKey}
+          subjectNameAr={course.subjectNameAr}
+          seed={course.slug}
+          compact
+          // «Cinema» stretches this to the card's full width as a poster
+          // strip (path.css), so his stack asks for a wide image; everyone
+          // else keeps the 72px thumbnail.
+          sizes={IS_AYMAN ? '(min-width: 1024px) 56rem, 100vw' : '5rem'}
+        />
       </span>
       <span className="ptl__text">
         <span className="ptl__eyebrow">
@@ -114,7 +124,13 @@ function CourseStep({ course, index, open }: { course: PathCourse; index: number
   return (
     <li className="ptl__step">
       {marker}
-      <div className={cn('ptl__card', open && 'ptl__card--open', !course.published && 'ptl__card--closed')} id={`course-${course.id}`}>
+      <div
+        className={cn('ptl__card', open && 'ptl__card--open', !course.published && 'ptl__card--closed')}
+        id={`course-${course.id}`}
+        // Where this course stands, for the stylesheet: «Cinema» dims the
+        // poster of a course not started yet. No visual change elsewhere.
+        data-state={done ? 'done' : open ? 'now' : course.clearedLessons > 0 ? 'started' : 'todo'}
+      >
         {head}
         {open && course.nodes.length > 0 ? <LessonWindow course={course} /> : null}
         {open && course.nodes.length === 0 ? <p className="ptl__empty">{c.nothingOpen}</p> : null}

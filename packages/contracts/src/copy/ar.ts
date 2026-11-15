@@ -3999,9 +3999,14 @@ export const copy = {
      *  `library.lockedClose`, written down here so the next dialog does not
      *  rediscover it. */
     closedClose: 'تمام',
-    /** The side column beside the timeline (first-round design). */
+    /** «Cinema» side column on /path (his stack): the next lectures in the
+     *  course in progress, the totals so far, and the month's exam. */
     upNextTitle: 'اللي جاي',
-    upNextEmpty: 'مفيش محاضرات مستنياك دلوقتي.',
+    upNextLead: 'الجاي في الكورس الحالي',
+    upNextOpen: 'افتح',
+    soFarTitle: 'لحد دلوقتي',
+    soFarLessons: 'محاضرة خلصت',
+    soFarCourses: 'كورس خلص',
     examTitle: 'امتحان الشهر',
     examOpen: 'مفتوح دلوقتي',
     examUpcoming: 'قرّب',
