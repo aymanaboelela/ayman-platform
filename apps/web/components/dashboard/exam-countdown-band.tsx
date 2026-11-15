@@ -32,6 +32,15 @@ const stamp = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
   minute: '2-digit',
 });
 
+/** The «Cinema» date tile's three lines — same pinned zone as `stamp`, same
+ *  server-only rule. */
+const tileParts = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+  timeZone: 'Africa/Cairo',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+});
+
 /**
  * «امتحان الشهر» — the band directly under `<DashboardHero>`, in the two phases
  * where the exam is still ahead of the student.
@@ -80,10 +89,16 @@ export function ExamCountdownBand({
    *  machine's `Date.now()`, so the band and the payload can never disagree
    *  about how far away the exam is. */
   serverTime,
+  /** `'cinema'` — his stack's home (`page.tsx`, `IS_AYMAN`): a night-blue band
+   *  opened by a date tile, from the approved Home2 board. Styled in
+   *  `components/dashboard/home-cinema.css`; the default is the band every
+   *  other stack has always had. */
+  variant = 'band',
 }: {
   /** `bandExam(...)` — the one exam this band gets, or `null`. */
   exam: StudentExam | null;
   serverTime: string;
+  variant?: 'band' | 'cinema';
 }) {
   if (exam === null) return null;
 
@@ -118,6 +133,15 @@ export function ExamCountdownBand({
   const closesAt = exam.openUntil === null ? null : stamp.format(new Date(exam.openUntil));
   const opensAt = exam.openFrom === null ? null : stamp.format(new Date(exam.openFrom));
 
+  /*
+   * The tile states the day that matters NOW: the day it shuts while it is
+   * open, the day it opens while it is ahead. Absent when that date is not set.
+   */
+  const tileIso = variant === 'cinema' ? (isOpen ? exam.openUntil : exam.openFrom) : null;
+  const tile = tileIso === null ? null : tileParts.formatToParts(new Date(tileIso));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    tile?.find((entry) => entry.type === type)?.value ?? null;
+
   return (
     /*
      * `<section>` with a real label rather than a `<div>`: on a page that is
@@ -125,7 +149,18 @@ export function ExamCountdownBand({
      * screen reader landing on «امتحان قرب» followed by the exam's own title is
      * the whole band in two lines.
      */
-    <section className="exam-band mb-6" aria-labelledby="exam-band-title">
+    <section
+      className={variant === 'cinema' ? 'exam-band exam-band--cinema' : 'exam-band mb-6'}
+      data-phase={variant === 'cinema' ? exam.phase : undefined}
+      aria-labelledby="exam-band-title"
+    >
+      {tile ? (
+        <p className="exam-band__date">
+          <span className="exam-band__date-day">{part('weekday')}</span>
+          <span className="exam-band__date-num">{part('day')}</span>
+          <span className="exam-band__date-month">{part('month')}</span>
+        </p>
+      ) : null}
       <div className="exam-band__main">
         <p className="exam-band__eyebrow">
           <AlarmClock size={16} aria-hidden="true" />

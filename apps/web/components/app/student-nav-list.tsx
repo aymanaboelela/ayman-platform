@@ -16,7 +16,7 @@ import { STUDENT_NAV, STUDENT_NAV_GROUPS, activeStudentNav, type StudentNavItem 
  * عادية بس، فتح تاب جديد أو دوسة طويلة يفضلوا زي ما هم). `onNavigate` لسه
  * بيتنفّذ عشان شيت الموبايل يقفل حتى لو الوجهة نفسها.
  */
-function guardActiveLink(isActive: boolean, onNavigate?: () => void) {
+export function guardActiveLink(isActive: boolean, onNavigate?: () => void) {
   return (event: MouseEvent<HTMLAnchorElement>) => {
     onNavigate?.();
     if (isActive && isPlainPress(event)) event.preventDefault();

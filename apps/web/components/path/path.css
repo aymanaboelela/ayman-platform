@@ -968,7 +968,7 @@ button.ptl__row:hover {
 }
 
 :root:has(.shell[data-cinema]) .ptl__mark--done {
-  background: color-mix(in oklch, var(--ok) 16%, var(--n-1));
+  background: color-mix(in oklab, var(--ok) 16%, var(--n-1));
   color: var(--ok);
 }
 

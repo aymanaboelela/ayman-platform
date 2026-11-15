@@ -1,0 +1,723 @@
+/* ===========================================================================
+   The course page (/library/[slug]) — «Cinema», the owner's second board.
+
+   One rule above the rest: «مش بحب الزحمة للطالب». Every area of the page has
+   at most ONE orange press — the hero's «نكمّل», the exam's «نبدأ الامتحان»,
+   the next lecture's chip — and everything else is the outlined weight. Blue
+   (`--e-*`) is where you are; orange (`--a-*`) is what to press.
+
+   Everything is scoped under `.cp-page` (the `<main>`), so it outranks the
+   shared `study.css` objects it restyles without depending on which stylesheet
+   chunk loads first, and so none of it reaches the lesson rail or the home
+   page, which draw the same `.unit` / `.lesson-row` objects.
+
+   Breakpoints are CONTAINER queries on `.cp-page`, not the viewport: the
+   student shell's rail takes a third of a laptop, and what decides whether the
+   side column fits is the width the page actually has.
+
+   Logical properties throughout. The two `to left` gradients are the one
+   exception, and the same one `study.css` makes for `.stage::before`: a
+   `to <side>` keyword cannot be logical, and this surface is always RTL — the
+   words start at the right, so the night has to be solid there.
+   =========================================================================== */
+
+.cp-page {
+  container: cp / inline-size;
+}
+
+/* ── the hero ───────────────────────────────────────────────────────────── */
+
+/* Night instead of the ember band: the poster is the colour now, and a flat
+   dark fill is what lets it fade in rather than sit in a box. `--e-950` is
+   the structure ramp's darkest step — navy on his stack, and on every other
+   teacher's the dark end of their own ramp. */
+.cp-page .cp-hero {
+  background: var(--e-950);
+  box-shadow: var(--shadow-md);
+}
+
+/* The dot texture belongs to the ember band; over a photograph it is noise. */
+.cp-page .cp-hero::before {
+  content: none;
+}
+
+/* Phone first: the poster on top, at a cinema ratio, fading down into the
+   night the words sit on. Its own width and no overlay text, so a designed
+   cover with a title in its artwork is not covered by ours. */
+.cp-hero__art {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+}
+
+/* Whatever `<CourseArt>` rendered — the uploaded cover (a natural-height
+   `<img>`), his poster (a span with a `fill` image) or the generated scene —
+   is stretched over the slot. The cover crops to fill here on purpose: this
+   box is a backdrop, and the course's own name is printed beside it. */
+.cp-page .cp-hero__art > * {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.cp-page .cp-hero__art .course-art__photo {
+  object-fit: cover;
+}
+
+/* The subject is already the eyebrow two lines down. */
+.cp-page .cp-hero__art .course-art__subject {
+  display: none;
+}
+
+.cp-hero__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    var(--e-950) 0%,
+    color-mix(in oklch, var(--e-950), transparent 40%) 35%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* The words ride up into the poster's fade instead of starting under it. */
+.cp-page .cp-hero__body {
+  display: grid;
+  gap: var(--s-8);
+  justify-items: start;
+  margin-block-start: calc(-1 * var(--s-48));
+  padding: var(--s-20);
+}
+
+.cp-page .cp-hero__body > * {
+  max-inline-size: 100%;
+}
+
+/* The identity line as a glass chip, like the board. Still `.stage__eyebrow`
+   (the a11y spec measures it), just set in the reading face. */
+.cp-page .cp-hero__eyebrow {
+  padding: var(--s-2) var(--s-12);
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.1);
+  font-family: inherit;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+}
+
+.cp-page .cp-hero .stage__title {
+  margin-block-start: 0;
+  font-weight: var(--fw-bold);
+}
+
+.cp-page .cp-hero .stage__sub,
+.cp-page .cp-hero .stage__facts {
+  margin-block-start: 0;
+}
+
+.cp-page .cp-hero .stage__progress {
+  inline-size: 100%;
+  max-inline-size: 26rem;
+  margin-block-start: var(--s-8);
+}
+
+.cp-page .cp-hero .stage__progress-label {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+}
+
+/* Full width on a phone: it is the one thing on the first screen to press. */
+.cp-page .cp-hero .stage__resume {
+  justify-self: stretch;
+  justify-content: center;
+  block-size: 3rem;
+  font-size: var(--fs-text-base);
+}
+
+@container cp (min-width: 40rem) {
+  .cp-page .cp-hero {
+    min-block-size: 19rem;
+  }
+
+  /* The poster takes the inline-end half and fades to night toward the
+     words. Over half, so the fade has room to happen behind the text column
+     rather than as a hard edge beside it. */
+  .cp-hero__art {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    inline-size: 58%;
+    aspect-ratio: auto;
+  }
+
+  .cp-hero__art::after {
+    background: linear-gradient(
+      to left,
+      var(--e-950) 0%,
+      color-mix(in oklch, var(--e-950), transparent 25%) 18%,
+      transparent 55%
+    );
+  }
+
+  .cp-page .cp-hero__body {
+    inline-size: 60%;
+    min-block-size: 19rem;
+    align-content: start;
+    margin-block-start: 0;
+    padding: var(--s-32);
+  }
+
+  .cp-page .cp-hero .stage__resume {
+    justify-self: start;
+    block-size: 2.75rem;
+  }
+}
+
+/* ── the layout ─────────────────────────────────────────────────────────── */
+
+/* Phone: exam strip and tiles, then the units, then «عن الكورس». Wide: the
+   units beside a 20rem column, the about card under the column's top half. */
+.cp-layout {
+  display: grid;
+  grid-template-areas:
+    'top'
+    'main'
+    'about';
+  gap: var(--s-20);
+}
+
+.cp-layout__top {
+  grid-area: top;
+  display: grid;
+  gap: var(--s-12);
+  min-inline-size: 0;
+}
+
+.cp-layout__main {
+  grid-area: main;
+  display: grid;
+  gap: var(--s-24);
+  min-inline-size: 0;
+}
+
+.cp-layout__about {
+  grid-area: about;
+  min-inline-size: 0;
+}
+
+/* An empty course renders no outline: no empty row in the phone's stack. */
+.cp-layout__main:empty {
+  display: none;
+}
+
+/* Nothing to put there (no exam, no row, no month offer): no empty row and
+   no doubled gap above the units on a phone. */
+.cp-layout__top:not(:has(.cp-exam, .cp-link, .mo-card)) {
+  display: none;
+}
+
+@container cp (min-width: 56rem) {
+  .cp-layout {
+    grid-template-areas:
+      'main top'
+      'main about';
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-rows: auto 1fr;
+    align-items: start;
+    column-gap: var(--s-24);
+    row-gap: var(--s-12);
+  }
+}
+
+/* ── «امتحان الشهر» ─────────────────────────────────────────────────────── */
+
+/* A night card, like the hero — the board's strip on a phone, a card in the
+   column on a wide screen. The one orange press in the column is its button. */
+.cp-exam {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--e-950);
+  color: var(--ink-fg);
+  /* The hairline keeps a night card from dissolving into the dark theme's
+     page; on the light one it is invisible against the fill. */
+  box-shadow:
+    inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.08),
+    var(--shadow-sm);
+}
+
+.cp-exam__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-9);
+}
+
+.cp-exam__text {
+  display: grid;
+  min-inline-size: 0;
+  line-height: 1.4;
+}
+
+.cp-exam__tag,
+.cp-exam__meta {
+  font-size: var(--fs-text-xs);
+  color: rgb(255 255 255 / 0.78);
+}
+
+.cp-exam__title {
+  overflow: hidden;
+  margin: 0;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-exam__go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 2.5rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.cp-exam__go:hover {
+  background: var(--a-10);
+}
+
+/* A paper already sat: its result, not a second invitation. */
+.cp-exam__go--quiet {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.24);
+  color: var(--ink-fg);
+}
+
+.cp-exam__go--quiet:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.cp-exam__go-long {
+  display: none;
+}
+
+@container cp (min-width: 56rem) {
+  .cp-exam {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: var(--s-16);
+  }
+
+  .cp-exam__title {
+    white-space: normal;
+  }
+
+  .cp-exam__go {
+    grid-column: 1 / -1;
+    block-size: 2.75rem;
+  }
+
+  .cp-exam__go-long {
+    display: inline;
+  }
+
+  .cp-exam__go-short {
+    display: none;
+  }
+}
+
+/* ── the small rows: group · book · certificates ────────────────────────── */
+
+/* Phone: a strip of equal tiles, icon over a two-word label. */
+.cp-links {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--s-8);
+}
+
+/* Nothing behind any row (the certificates resolve later, so this cannot be
+   decided in the component). */
+.cp-links:not(:has(.cp-link)) {
+  display: none;
+}
+
+.cp-link {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  min-block-size: 5.25rem;
+  padding: var(--s-8);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+  color: var(--n-12);
+  text-align: center;
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+a.cp-link:hover {
+  border-color: var(--e-tint-line);
+}
+
+.cp-link__disc {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+.cp-link--group .cp-link__disc {
+  background: color-mix(in oklch, var(--ok), transparent 86%);
+  color: var(--ok);
+}
+
+.cp-link--book .cp-link__disc {
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+  color: var(--a-11);
+}
+
+.cp-link--certs .cp-link__disc {
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.cp-link__text {
+  display: grid;
+  min-inline-size: 0;
+  line-height: 1.35;
+}
+
+.cp-link__title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* On a tile the sub-line, the «دخول» chip and the chevron are dropped: the
+   tile IS the button, and two words are all a quarter of a phone holds. */
+.cp-link__sub,
+.cp-link__go,
+.cp-link__chevron {
+  display: none;
+}
+
+.cp-link__count {
+  position: absolute;
+  inset-block-start: var(--s-8);
+  inset-inline-end: var(--s-8);
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 1.25rem;
+  block-size: 1.25rem;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-full);
+  background: var(--e-600);
+  color: var(--n-1);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+
+/* The book's tile is `BookOrderButton`'s own trigger (`.side-link`), so the
+   dialog is the shared one. On a tile the row's disc and words step aside and
+   the trigger becomes the tile: its book glyph drawn as the disc, its
+   «اطلب الكتاب» as the label. */
+.cp-link--book {
+  padding: 0;
+}
+
+.cp-link--book .cp-link__disc,
+.cp-link--book .cp-link__text {
+  display: none;
+}
+
+.cp-page .cp-link--book .side-link {
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-4);
+  inline-size: 100%;
+  padding: var(--s-8);
+  border: 0;
+  border-radius: inherit;
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: normal;
+}
+
+.cp-page .cp-link--book .side-link svg {
+  box-sizing: content-box;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  padding: var(--s-8);
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+  color: var(--a-11);
+}
+
+/* Wide: one card of rows in the column — disc, words, a quiet button. */
+@container cp (min-width: 56rem) {
+  .cp-links {
+    grid-auto-flow: row;
+    gap: 0;
+    overflow: hidden;
+    border: var(--hairline) solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--n-2);
+  }
+
+  .cp-link {
+    flex-direction: row;
+    justify-content: start;
+    gap: var(--s-12);
+    min-block-size: 3.75rem;
+    padding: var(--s-8) var(--s-16);
+    border: 0;
+    border-radius: 0;
+    background: none;
+    text-align: start;
+  }
+
+  .cp-link + .cp-link {
+    border-block-start: var(--hairline) solid var(--border-subtle);
+  }
+
+  a.cp-link:hover {
+    background: var(--n-3);
+  }
+
+  .cp-link__text {
+    flex: 1;
+  }
+
+  .cp-link__sub {
+    display: block;
+    overflow: hidden;
+    font-size: var(--fs-text-xs);
+    color: var(--n-11);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cp-link__go,
+  .cp-page .cp-link--book .side-link {
+    display: inline-flex;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-4);
+    inline-size: auto;
+    block-size: 2.25rem;
+    min-block-size: 0;
+    padding-inline: var(--s-12);
+    border: var(--hairline) solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--n-1);
+    color: var(--n-12);
+    font-size: var(--fs-text-sm);
+    font-weight: var(--fw-semibold);
+    white-space: nowrap;
+  }
+
+  .cp-page .cp-link--book .side-link:hover {
+    background: var(--n-3);
+  }
+
+  .cp-page .cp-link--book .side-link svg {
+    display: none;
+  }
+
+  /* The cohort group is the row the owner wants seen: its button wears the
+     platform green (the same `--ok` its card always used, not WhatsApp's
+     hex) instead of the neutral outline the other rows get. */
+  .cp-link--group .cp-link__go {
+    border-color: color-mix(in oklch, var(--ok), transparent 55%);
+    background: color-mix(in oklch, var(--ok), transparent 90%);
+    color: var(--ok);
+  }
+
+  .cp-link--book {
+    padding: var(--s-8) var(--s-16);
+  }
+
+  .cp-link--book .cp-link__disc {
+    display: grid;
+  }
+
+  .cp-link--book .cp-link__text {
+    display: grid;
+  }
+
+  .cp-link__count {
+    position: static;
+  }
+
+  .cp-link__chevron {
+    display: block;
+    flex-shrink: 0;
+    color: var(--n-11);
+  }
+}
+
+/* ── the units ──────────────────────────────────────────────────────────── */
+
+/* Cards with a poster crop at the head, as on the board. Same `<details>`,
+   same rows, same gate — this is a restyle of `course-outline.tsx`. */
+.cp-page .unit {
+  background: var(--n-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.cp-page .unit + .unit {
+  margin-block-start: var(--s-12);
+}
+
+/* Closed units read as a card, not a grey bar: the head shares the card's
+   surface, and only the unit the student is in is tinted. */
+.cp-page .unit__head,
+.cp-page .unit[open] > .unit__head {
+  gap: var(--s-12);
+  padding: var(--s-8);
+  padding-inline-end: var(--s-16);
+  background: transparent;
+}
+
+.cp-page .unit__head:hover,
+.cp-page .unit[open] > .unit__head:hover {
+  background: var(--n-3);
+}
+
+.cp-page .unit[open] {
+  border-color: var(--border);
+}
+
+.cp-page .unit[open] > .unit__head {
+  border-block-end: var(--hairline) solid var(--border-subtle);
+}
+
+/* «بنذاكرها دلوقتي» — blue, whichever units are open. */
+.cp-page .unit--current,
+.cp-page .unit--current[open] {
+  border-color: var(--e-tint-line);
+}
+
+.cp-page .unit--current > .unit__head,
+.cp-page .unit--current[open] > .unit__head {
+  background: var(--e-tint);
+}
+
+/* The poster crop: wider than the old square, with the unit's progress as a
+   thin orange track along its bottom edge. */
+.unit__thumb {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--r-md);
+}
+
+.cp-page .unit__art {
+  inline-size: 5.25rem;
+  block-size: 3.5rem;
+  border-radius: 0;
+}
+
+.unit__track {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 3px;
+  background: rgb(255 255 255 / 0.35);
+}
+
+.unit__track > span {
+  display: block;
+  block-size: 100%;
+  background: var(--a-9);
+}
+
+.cp-page .unit__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+}
+
+/* A finished unit's counter as a chip — blue, not green: `--ok` is the quiz's
+   «right answer» and is not spent on «watched» (the rule `study.css` gives
+   for `.lesson-row--done`). */
+.cp-page .unit__count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.cp-page .unit--done .unit__count {
+  block-size: 1.75rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--e-tint);
+  box-shadow: inset 0 0 0 var(--hairline) var(--e-tint-line);
+}
+
+@container cp (min-width: 40rem) {
+  .cp-page .unit__art {
+    inline-size: 7rem;
+    block-size: 4.25rem;
+  }
+
+  .cp-page .unit__head,
+  .cp-page .unit[open] > .unit__head {
+    padding: var(--s-12);
+    padding-inline-end: var(--s-16);
+  }
+}
+
+/* ── the lecture rows ───────────────────────────────────────────────────── */
+
+/* The next lecture: tinted, with a blue edge on the reading side — the one
+   row whose chip is the solid orange. `box-shadow` has no logical form, so
+   the negative x is the right edge, which is the inline start on this
+   always-RTL surface (see the banner). */
+.cp-page .lesson-row--next {
+  background: var(--e-tint);
+  box-shadow: inset -3px 0 0 var(--e-600);
+}
+
+.cp-page .lesson-row--next .lesson-row__title {
+  font-weight: var(--fw-bold);
+}
+
+/* Every other open row: the outlined weight. Still clearly a button, and
+   never confused with the one orange press. */
+.cp-page .chip--open {
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  color: var(--n-12);
+}
+
+.cp-page .chip--open:hover {
+  background: var(--n-3);
+}

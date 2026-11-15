@@ -1,0 +1,485 @@
+/* ===========================================================================
+   THE LESSON PAGE, finished to the board — `Lesson2` (desktop) / `Lesson2M`.
+
+   A layer OVER study.css's «THE LESSON PAGE, 2026-11» block, not a second
+   page: same class names, same markup, and every rule here is either a
+   finish the board asks for or a new piece the board has (the teacher's face
+   in the title bar, the exam strip, the banner on the open unit, the links
+   strip as its own card).
+
+   Every override of a study.css rule carries one class more than the rule it
+   overrides (`.lp-main …`, `.outline …`), because the order two stylesheets
+   from different chunks land in is not something this file can rely on.
+
+   Colour, per the owner: `--e-*` (blue on his stack) says WHERE — the chip,
+   the open unit, the current row, the ring around his face; `--a-*` (orange)
+   is the ONE thing to press in each area — «خلاص · التالي» under the video,
+   «نبدأ» on the exam strip. «مش بحب الزحمة للطالب»: nothing else is orange.
+   ======================================================================== */
+
+/* ── the title bar ───────────────────────────────────────────────────────── */
+.lp-main .lp-head {
+  flex-wrap: wrap;
+  gap: var(--s-12) var(--s-16);
+  padding: var(--s-16) var(--s-20);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+/* His face, small and round, ringed in the structure colour — the board's
+   «المدرّس» beside the title. Decorative: the page is his course, and the
+   name is in the shell already. */
+.lp-head__face {
+  display: block;
+  flex-shrink: 0;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  box-shadow:
+    0 0 0 2px var(--n-1),
+    0 0 0 4px var(--e-600);
+}
+
+.lp-head__face-img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+
+.lp-main .lp-head__text {
+  gap: var(--s-4);
+}
+
+.lp-main .lp-head__title {
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+}
+
+.lp-main .lp-head__meta {
+  gap: var(--s-8) var(--s-12);
+}
+
+/* «الوحدة ٢ · أساسيات البرمجة» — a blue pill, the board's `chip-ember`. */
+.lp-main .lp-unit {
+  min-block-size: 1.75rem;
+  padding-inline: var(--s-12);
+  border-color: transparent;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-xs);
+}
+
+.lp-head__dur {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.lp-head__dot {
+  inline-size: 4px;
+  block-size: 4px;
+  margin-inline-end: var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--n-7);
+}
+
+.lp-main .lp-head__time {
+  font-size: var(--fs-text-sm);
+}
+
+/* The one orange button under the video. Explicit ramp steps rather than
+   the Button's `bg-accent`, so it is the board's orange on his stack and the
+   teacher's own accent everywhere else — `--a-*` is the action ramp on every
+   stack. */
+.lp-main .lp-finish {
+  min-block-size: 2.75rem;
+  padding-inline: var(--s-20);
+  border-radius: var(--r-lg);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-weight: var(--fw-semibold);
+}
+
+.lp-main .lp-finish:hover {
+  background: var(--a-10);
+}
+
+.lp-main .lp-ghost {
+  border-radius: var(--r-lg);
+  font-weight: var(--fw-semibold);
+}
+
+/* Phone: face + title on one line, the place under it, the chip on a line of
+   its own, then the finish button full width with «الدرس السابق» as a small
+   link under it — `Lesson2M`. */
+@media (max-width: 39.999rem) {
+  .lp-main .lp-head {
+    padding: var(--s-16);
+  }
+
+  .lp-head__face {
+    inline-size: 3rem;
+    block-size: 3rem;
+  }
+
+  /* Beside the face, never under it: the shipped `flex-basis: 16rem` is
+     wider than what is left of a 390px screen once the face is in. */
+  .lp-main .lp-head__text {
+    flex: 1 1 0;
+  }
+
+  .lp-main .lp-head__title {
+    font-size: var(--fs-title-3);
+  }
+
+  /* The chip drops to its own line after «المحاضرة ٥ من ٨ · 48:10». */
+  .lp-main .lp-head__meta::after {
+    content: '';
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  .lp-main .lp-unit {
+    order: 2;
+  }
+
+  .lp-main .lp-actions__row {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: var(--s-4);
+  }
+
+  .lp-main .lp-actions__row > .lp-finish,
+  .lp-main .lp-actions__row > [aria-haspopup='dialog'] {
+    order: -1;
+    flex: 1 0 100%;
+    min-block-size: 3rem;
+    font-size: var(--fs-text-base);
+  }
+
+  /* Back to a word: study.css shrinks these to a glyph so they could share
+     the finish button's row; under it they have a row to themselves. */
+  .lp-main .lp-ghost {
+    inline-size: auto;
+    min-block-size: 2rem;
+    padding-inline: 0;
+    border-color: transparent;
+    background: transparent;
+    font-size: var(--fs-text-xs);
+  }
+
+  .lp-main .lp-ghost:hover {
+    background: transparent;
+    color: var(--e-ink);
+  }
+
+  .lp-main .lp-ghost__label {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+}
+
+/* ── «امتحان الشهر» — one dark strip ─────────────────────────────────────── */
+.lx-strips {
+  display: grid;
+  gap: var(--s-8);
+}
+
+.lx-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--ink-line);
+  border-radius: var(--r-lg);
+  background: var(--e-950);
+  color: var(--ink-fg);
+}
+
+.lx-strip__disc {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-lg);
+  background: var(--ink-line);
+  color: var(--a-9);
+}
+
+.lx-strip[data-late] .lx-strip__disc {
+  color: var(--ink-fg-2);
+}
+
+.lx-strip__text {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+  line-height: 1.4;
+}
+
+.lx-strip__name {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+}
+
+.lx-strip__meta {
+  font-size: var(--fs-text-xs);
+  color: var(--ink-fg-2);
+}
+
+.lx-strip__go,
+.lx-strip__review {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  min-block-size: 2.5rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.lx-strip__go {
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.lx-strip__go:hover {
+  background: var(--a-10);
+}
+
+.lx-strip__review {
+  border: var(--hairline) solid var(--ink-line);
+  color: var(--ink-fg);
+}
+
+.lx-strip__review:hover {
+  background: var(--ink-line);
+}
+
+/* ── the unit picture ────────────────────────────────────────────────────── */
+.outline .unit-art,
+.odoor .unit-art {
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+}
+
+.unit-art--poster {
+  background: var(--e-950);
+}
+
+.unit-art__lock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-fg);
+}
+
+/* ── the open unit as a poster banner ────────────────────────────────────── */
+.outline .ocard__head--banner {
+  position: relative;
+  align-items: flex-end;
+  min-block-size: 6.25rem;
+  padding: var(--s-12) var(--s-16) var(--s-16);
+  overflow: hidden;
+  background: var(--e-950);
+}
+
+.outline .ocard[open] > .ocard__head--banner,
+.outline .ocard[open] > .ocard__head--banner:hover {
+  background: var(--e-950);
+}
+
+.outline .ocard__head--banner .unit-art--banner {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 0;
+}
+
+/* The generated tile's glyph would sit dead centre behind the title. */
+.outline .unit-art--banner > svg {
+  display: none;
+}
+
+.ocard__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, color-mix(in oklab, var(--e-950) 94%, transparent), transparent 75%);
+}
+
+.outline .ocard__head--banner > :not(.unit-art, .ocard__scrim, .ocard__track) {
+  position: relative;
+}
+
+.outline .ocard__head--banner .ocard__eyebrow {
+  color: var(--ink-fg-2);
+}
+
+.outline .ocard__head--banner .ocard__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+}
+
+.outline .ocard__head--banner .ocard__ratio,
+.outline .ocard__head--banner .ocard__chevron {
+  color: var(--ink-fg);
+}
+
+.ocard__track {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 4px;
+  background: var(--ink-line);
+}
+
+.ocard__fill {
+  display: block;
+  block-size: 100%;
+  background: var(--a-9);
+}
+
+.outline .ocard__title {
+  font-size: var(--fs-text-base);
+}
+
+/* ── the rows of the open unit ───────────────────────────────────────────── */
+.outline .orow__mark {
+  inline-size: 1.625rem;
+  block-size: 1.625rem;
+}
+
+/* The lecture's number in the ring of a row still ahead — «٦», «٧». */
+.orow__n {
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A lecture quiz not sat yet: the clipboard, in the warning ink — an exam is
+   a different act from a video. */
+.outline .orow--quiz:not(.orow--done, .orow--locked) .orow__mark {
+  border-color: transparent;
+  color: var(--warn);
+}
+
+/* The row you are on: two lines, a bar along its inline start. */
+.outline .orow--current {
+  min-block-size: 3.5rem;
+}
+
+.outline .orow--current::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  border-radius: var(--r-full);
+  background: var(--e-600);
+}
+
+.orow__stack {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+  line-height: 1.4;
+}
+
+.outline .orow__stack .orow__state {
+  font-weight: var(--fw-medium);
+}
+
+/* «دخول الامتحان» — blue outline, the board's «امتحن»: the rail's one
+   orange stays the exam strip's. */
+.outline .orow--quiz .orow__chip.chip--solid {
+  border: var(--hairline) solid var(--e-tint-line);
+  background: var(--n-1);
+  color: var(--e-ink);
+}
+
+.outline .orow--quiz .orow__chip.chip--solid:hover {
+  background: var(--e-tint);
+}
+
+/* «التالي ›» — a neutral ghost. */
+.outline .orow__chip--next {
+  border-color: var(--border);
+  color: var(--n-12);
+}
+
+.outline .orow__chip--next:hover {
+  background: var(--n-3);
+}
+
+/* ── «جروب الدفعة · مساعدة · اطلب الكتاب» — its own card ─────────────────── */
+.outline__foot.lp-links {
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.lp-links .side-link {
+  min-block-size: 3.25rem;
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.lp-links .side-link > svg {
+  color: var(--n-11);
+}
+
+/* The cohort group is the one the owner wants seen: its glyph in the
+   structure colour, the other two neutral. */
+.lp-links .side-link--group > svg {
+  color: var(--e-ink);
+}
+
+/* ── the phone's door ────────────────────────────────────────────────────── */
+.odoor .unit-art {
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+}
+
+.odoor .odoor__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+}
+
+/* «المحاضرة التالية» — dark, not orange: on a phone the finish button is
+   already the orange one on screen. */
+.next-bar .next-bar__go {
+  background: var(--e-950);
+  color: var(--ink-fg);
+}
+
+.next-bar:hover .next-bar__go {
+  background: var(--e-900);
+}
+
+/* The phone copies — the exam strip and the links above and below the door
+   — go away where the rail carries them. */
+@media (min-width: 64rem) {
+  .lx-strips.lx-strips--door,
+  .outline__foot.lp-links--door {
+    display: none;
+  }
+}

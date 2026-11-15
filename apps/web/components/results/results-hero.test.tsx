@@ -36,12 +36,12 @@ const rows: QuizHistoryRow[] = points.map((p) => ({
 const low = { quizzesTaken: 3, attemptsTotal: 3, averagePercent: 18, bestPercent: 27, passedCount: 0 };
 
 describe('ResultsHero', () => {
-  it('puts the average on the gauge and names its band without calling it a fail', () => {
+  it('puts the average in the ring and says the low band as a way forward, not a fail', () => {
     const { container } = render(<ResultsHero summary={low} series={points} rows={rows} />);
 
-    expect(container.querySelector('.rs-gauge__num')?.textContent).toBe('18');
+    expect(container.querySelector('.rs-ring__num')?.textContent).toBe('18%');
+    expect(container.querySelector('.rs-ring__arc')?.getAttribute('stroke-dasharray')).toBe('18 100');
     expect(container.querySelector('.rs-hero')?.getAttribute('data-band')).toBe('low');
-    expect(screen.getByText(copy.results.bandLow)).toBeTruthy();
     expect(container.querySelector('.rs-hero__mood')?.textContent).toBe(copy.results.moodLow);
   });
 
@@ -52,15 +52,28 @@ describe('ResultsHero', () => {
     expect(screen.getAllByText(copy.results.statAttempts)).toHaveLength(1);
   });
 
-  it('shows passed-of-sat as figures, pips and a sentence a screen reader can say', () => {
+  it('draws one bar per sitting, oldest first, the newest marked and a failed paper red', () => {
     const { container } = render(<ResultsHero summary={low} series={points} rows={rows} />);
 
-    expect(container.querySelectorAll('.rs-pips i')).toHaveLength(3);
-    expect(container.querySelectorAll('.rs-pips i[data-on]')).toHaveLength(0);
-    expect(screen.getByText('0 من 3')).toBeTruthy();
+    const bars = [...container.querySelectorAll('.rs-bar')];
+    expect(bars.map((bar) => bar.querySelector('b')?.textContent)).toEqual(['27', '12', '1']);
+    expect(bars.map((bar) => bar.getAttribute('data-state'))).toEqual(['failed', 'failed', 'failed']);
+    expect(bars.at(-1)?.hasAttribute('data-latest')).toBe(true);
+    expect(bars[0]?.hasAttribute('data-latest')).toBe(false);
+    // A 1% still draws a stub, not nothing.
+    expect((bars.at(-1)?.querySelector('i') as HTMLElement).style.blockSize).toBe('4%');
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('27%، 12%، 1%');
   });
 
-  it('switches to «امتياز» at 90, and celebrates a clean sheet over the plain pass line', () => {
+  it('keeps the bars to the last eight sittings', () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({ ...points[0]!, attemptId: `m${index}`, scorePercent: index }));
+    const { container } = render(<ResultsHero summary={low} series={many} rows={rows} />);
+
+    const bars = [...container.querySelectorAll('.rs-bar b')].map((b) => b.textContent);
+    expect(bars).toEqual(['4', '5', '6', '7', '8', '9', '10', '11']);
+  });
+
+  it('celebrates a clean sheet at «امتياز» in the sentence', () => {
     const flat = points.map((p) => ({ ...p, scorePercent: 92, passed: true }));
 
     const { container } = render(
@@ -70,7 +83,7 @@ describe('ResultsHero', () => {
         rows={rows}
       />,
     );
-    expect(screen.getByText(copy.results.bandHigh)).toBeTruthy();
+    expect(container.querySelector('.rs-hero')?.getAttribute('data-band')).toBe('high');
     expect(container.querySelector('.rs-hero__mood')?.textContent).toBe(copy.results.moodHigh);
   });
 
@@ -82,12 +95,12 @@ describe('ResultsHero', () => {
     expect(screen.getByText(copy.results.pendingNote)).toBeTruthy();
   });
 
-  it('shows a bar instead of pips once they can no longer be counted', () => {
+  it('says «لسه» in the ring rather than 0% when nothing is graded', () => {
     const { container } = render(
-      <ResultsHero summary={{ ...low, quizzesTaken: 20, passedCount: 5 }} series={points} rows={rows} />,
+      <ResultsHero summary={{ ...low, averagePercent: null }} series={points} rows={rows} />,
     );
 
-    expect(container.querySelector('.rs-pips')).toBeNull();
-    expect(container.querySelector<HTMLElement>('.rs-meter i')?.style.inlineSize).toBe('25%');
+    expect(container.querySelector('.rs-ring__num')?.textContent).toBe(copy.results.noneYet);
+    expect(container.querySelector('.rs-ring__arc')).toBeNull();
   });
 });

@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RetiredCoursesSchema } from '@ayman/contracts/path';
 import { RetiredCoursePage } from '@/components/app/retired-course';
-import { CourseCertificatesSlot } from '@/components/share-card/share-slots';
 import { ArrowRight, Clock, Layers, Play } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
 import { z } from '@ayman/contracts/zod';
@@ -12,12 +11,15 @@ import { apiGetAuthed } from '@/lib/api-server';
 import { getCourse } from '@/lib/catalog';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { buildCourseOutline } from '@/lib/course-outline';
-import { CourseCover } from '@/components/library/course-cover';
+import { courseBookCtaVisible } from '@/lib/course-book';
+import { getBookShippingRates } from '@/lib/books';
+import { bandExam, getStudentExamsOrEmpty } from '@/lib/exams';
+import { CourseArt } from '@/components/course-art';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { isolateLtrRuns } from '@/components/dashboard/ltr-runs';
 import { LtrRatio } from '@/components/ltr-ratio';
 import { CourseOutlineView } from '@/components/library/course-outline';
-import { CourseGroupCard } from '@/components/player/course-group-card';
+import { CourseCertificatesLink, CourseExamCard, CourseLinks } from '@/components/library/course-side';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { formatDuration } from '@/components/site/course-card';
@@ -25,6 +27,7 @@ import { RichText } from '@/components/content/rich-text';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { StudentExternalBookSummarySchema } from '@ayman/contracts/quiz/external-books';
 import { ExternalBooksSection } from '@/components/library/external-books-section';
+import '@/components/library/course-page.css';
 
 const c = copy.library;
 
@@ -65,8 +68,9 @@ export async function generateMetadata({
  *
  * ## The shape
  *
- * The page opens on a `.stage` — the ember band from `study.css` — carrying
- * the back link, the identity line, the title, the two facts, and the cover.
+ * The page opens on a `.stage` carrying the back link, the identity line, the
+ * title, the two facts, and the cover — since «Cinema» a night band with the
+ * poster filling its inline-end half (`components/library/course-page.css`).
  * It replaces a bare `<h1>` over a grey meta line, which is the single biggest
  * reason the signed-in area read as black and white while the marketing page
  * did not. The colour rule holds through the rest of the page: ember is
@@ -151,7 +155,8 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
    * وبتفشل بهدوء: `[]` معناها مفيش سطر، وهو نفس اللي بيحصل للطالب اللي مالوش
    * شهور فاضية. سطر طمأنة ضايع أرخص من صفحة بتقع.
    */
-  const [ownership, externalBooks] = await Promise.all([
+  const hasBook = courseBookCtaVisible(course);
+  const [ownership, externalBooks, studentExams, shippingRates] = await Promise.all([
     apiGetAuthed(
       `/api/payments/courses/${course.id}/months/mine`,
       OwnedMonthsSchema,
@@ -162,6 +167,12 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           z.array(StudentExternalBookSummarySchema),
         ).catch(() => [])
       : Promise.resolve([]),
+    // «امتحان الشهر» — never throws, and answers an empty list on a stack
+    // without monthly exams, so the card simply does not render there.
+    outline.enrolled ? getStudentExamsOrEmpty() : Promise.resolve(null),
+    // `'use cache'` on one coarse tag (`lib/books.ts`), so this is shared
+    // with every other page that quotes delivery — not a per-view request.
+    hasBook ? getBookShippingRates() : Promise.resolve(null),
   ]);
   const ownedMonthIds = new Set(ownership?.ownedMonthIds ?? []);
 
@@ -204,93 +215,118 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       .flatMap((section) => section.entries.flatMap((entry) => [entry.lecture, ...entry.quizzes]))
       .find((lesson) => lesson.id === outline.nextLessonId)?.title ?? null;
 
+  // THIS course's exam only — `bandExam` over the student's whole list would
+  // put another course's paper on this page.
+  const exam = studentExams
+    ? bandExam(studentExams.exams.filter((entry) => entry.courseId === course.id))
+    : null;
+
+  const book =
+    hasBook && shippingRates
+      ? {
+          courseId: course.id,
+          bookTitle: course.bookTitle as string,
+          bookPriceCents: course.bookPriceCents as number,
+          shippingRates,
+          instapay: contact.instapay,
+          vodafoneCash: contact.vodafoneCash,
+        }
+      : null;
+
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
-      <section className="stage mb-8">
-        <div className="stage__body">
-          <p className="mb-5">
+    <main className="cp-page mx-auto w-full max-w-[var(--w-shell)] px-4 py-6 md:px-6 md:py-10">
+      {/*
+        «Cinema» — the course's poster fills the inline-end half of the hero
+        and fades into night behind the title, the progress and the one
+        button. On a phone the poster sits on top at its own width and the
+        words follow under its fade (`course-page.css`).
+
+        Still a `.stage` with the `.stage__*` text classes: the a11y spec
+        measures those against the band, and every one of them is a white
+        alpha that clears 4.5:1 on the night fill with room to spare.
+
+        The art is `<CourseArt>` — the uploaded cover, or on his stack one of
+        his posters (`getBrandAsset`, gated), or the generated scene on any
+        other stack. Decorative: the title beside it says what it is.
+      */}
+      <section className="stage cp-hero mb-6">
+        <div className="cp-hero__art" aria-hidden="true">
+          <CourseArt
+            coverKey={course.coverKey}
+            subjectNameAr={course.subjectNameAr}
+            seed={course.slug}
+            sizes="(min-width: 1024px) 40rem, 100vw"
+          />
+        </div>
+
+        <div className="stage__body cp-hero__body">
+          <p>
             <Link href="/library" className="stage__back">
               <ArrowRight size={15} aria-hidden="true" className="icon-inline" />
               {c.backToLibrary}
             </Link>
           </p>
 
-          {/* Text at the inline start, art at the inline end — on a phone the
-              art drops below the facts rather than shrinking to a stripe, so
-              it is still the first thing seen on scroll. */}
-          <div className="grid items-center gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:gap-10">
-            <div className="min-w-0">
-              <p className="stage__eyebrow">
-                {course.systemNameAr}
-                {course.trackLabelAr ? ` · ${course.trackLabelAr}` : ''} · {course.subjectNameAr}
-              </p>
+          <p className="stage__eyebrow cp-hero__eyebrow">
+            {course.systemNameAr}
+            {course.trackLabelAr ? ` · ${course.trackLabelAr}` : ''} · {course.subjectNameAr}
+          </p>
 
-              <h1 className="stage__title">{course.title}</h1>
+          <h1 className="stage__title">{course.title}</h1>
 
-              {course.subtitle ? <p className="stage__sub">{course.subtitle}</p> : null}
+          {course.subtitle ? <p className="stage__sub">{course.subtitle}</p> : null}
 
-              <div className="stage__facts">
-                <span className="stage__fact">
-                  <Layers size={14} aria-hidden="true" className="icon-inline" />
-                  {c.lessonCount.replace('{n}', String(outline.totalLessons))}
+          <div className="stage__facts">
+            <span className="stage__fact">
+              <Layers size={14} aria-hidden="true" className="icon-inline" />
+              {c.lessonCount.replace('{n}', String(outline.totalLessons))}
+            </span>
+            <span className="stage__fact tabular">
+              <Clock size={14} aria-hidden="true" className="icon-inline" />
+              {formatDuration(course.totalSeconds)}
+            </span>
+          </div>
+
+          {/* Where the student stands, and the ONE button, inside the hero. */}
+          {outline.enrolled && outline.totalLessons > 0 ? (
+            <div className="stage__progress">
+              <div className="stage__progress-head">
+                <span className="stage__progress-label">
+                  {outline.progressPercent === 100
+                    ? course.contentComplete
+                      ? c.courseDone
+                      : c.courseUpToDate
+                    : isolateLtrRuns(
+                        c.percentDone.replace('{percent}', String(outline.progressPercent)),
+                      )}
                 </span>
-                <span className="stage__fact tabular">
-                  <Clock size={14} aria-hidden="true" className="icon-inline" />
-                  {formatDuration(course.totalSeconds)}
+                <span className="stage__progress-ratio">
+                  <LtrRatio value={outline.clearedLessons} of={outline.totalLessons} />
                 </span>
               </div>
-
-              {/* Where the student stands, and the ONE button, inside the hero
-                  — it used to be a separate panel under it, so the first
-                  screen was a banner, then a bar, then a code card, and the
-                  lectures started below the fold. */}
-              {outline.enrolled && outline.totalLessons > 0 ? (
-                <div className="stage__progress">
-                  <div className="stage__progress-head">
-                    <span className="stage__progress-label">
-                      {outline.progressPercent === 100
-                        ? course.contentComplete
-                          ? c.courseDone
-                          : c.courseUpToDate
-                        : isolateLtrRuns(
-                            c.percentDone.replace('{percent}', String(outline.progressPercent)),
-                          )}
-                    </span>
-                    <span className="stage__progress-ratio">
-                      <LtrRatio value={outline.clearedLessons} of={outline.totalLessons} />
-                    </span>
-                  </div>
-                  <span
-                    className="stage__progress-bar"
-                    role="progressbar"
-                    aria-label={course.title}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(outline.progressPercent)}
-                  >
-                    <span style={{ inlineSize: `${Math.min(100, Math.max(0, outline.progressPercent))}%` }} />
+              <span
+                className="stage__progress-bar"
+                role="progressbar"
+                aria-label={course.title}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(outline.progressPercent)}
+              >
+                <span style={{ inlineSize: `${Math.min(100, Math.max(0, outline.progressPercent))}%` }} />
+              </span>
+              {outline.nextLessonId ? (
+                <Link
+                  href={`/courses/${course.slug}/lessons/${outline.nextLessonId}`}
+                  className="stage__resume"
+                >
+                  <Play size={15} aria-hidden="true" className="icon-inline" />
+                  <span className="min-w-0 truncate">
+                    {nextTitle ? c.resumeTo.replace('{title}', nextTitle) : c.resume}
                   </span>
-                  {outline.nextLessonId ? (
-                    <Link
-                      href={`/courses/${course.slug}/lessons/${outline.nextLessonId}`}
-                      className="stage__resume"
-                    >
-                      <Play size={15} aria-hidden="true" className="icon-inline" />
-                      <span className="min-w-0 truncate">
-                        {nextTitle ? c.resumeTo.replace('{title}', nextTitle) : c.resume}
-                      </span>
-                    </Link>
-                  ) : null}
-                </div>
+                </Link>
               ) : null}
             </div>
-
-            <CourseCover
-              coverKey={course.coverKey}
-              subjectNameAr={course.subjectNameAr}
-              seed={course.slug}
-            />
-          </div>
+          ) : null}
         </div>
       </section>
 
@@ -372,24 +408,39 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       )}
 
       {/*
-        The course's content beside a narrow column of small things — from the
-        first-round design the owner chose: the units are the page, and the
-        month offer, the cohort group, the certificates and «عن الكورس» sit at
-        the side instead of stacking as big cards above the lectures.
+        The units beside a narrow column — the owner's board: the units are
+        the page; the month's exam, the small rows and «عن الكورس» sit at the
+        side. On a phone the SAME blocks reorder by grid area: the exam strip
+        and the row of tiles come straight under the hero, before the units,
+        and «عن الكورس» goes last. One DOM, so nothing renders twice.
 
-        «عندك كود؟» is no longer here: the side menu's «كود الكورس» (/codes)
-        is the one place a code is typed, so the course page does not repeat it.
+        «عندك كود؟» is not here on purpose: the side menu's «كود الكورس»
+        (/codes) is the one place a code is typed.
 
         «جروب الدفعة» is read off `/api/me/path`, the ONLY course payload on this
         page behind an enrolment — `course` is the shared catalog detail served
         to anybody, and a cohort's invite on it would publish the link.
       */}
-      <div className="course-layout">
-        <div className="course-layout__main">
-          {outline.enrolled && externalBooks.length > 0 ? (
-            <ExternalBooksSection books={externalBooks} courseSlug={course.slug} />
-          ) : null}
+      <div className="cp-layout">
+        <div className="cp-layout__top">
+          {exam ? <CourseExamCard exam={exam} /> : null}
 
+          <CourseLinks
+            groupUrl={pathCourse?.whatsappGroupUrl ?? null}
+            book={book}
+            certificates={
+              outline.enrolled ? (
+                <Suspense fallback={null}>
+                  <CourseCertificatesLink courseId={course.id} />
+                </Suspense>
+              ) : null
+            }
+          />
+
+          {monthOffer ? <MonthOfferCard courseSlug={course.slug} offer={monthOffer} /> : null}
+        </div>
+
+        <div className="cp-layout__main">
           {/* Skipped outright when the course is empty, and for a PRICED
               course this student has not subscribed to yet: every row there is
               a `CourseEntry`, and a locked lesson pressed here fails the same
@@ -408,28 +459,18 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
               pendingMonths={emptyOwnedMonths}
             />
           ) : null}
+
+          {outline.enrolled && externalBooks.length > 0 ? (
+            <ExternalBooksSection books={externalBooks} courseSlug={course.slug} />
+          ) : null}
         </div>
 
-        <aside className="course-layout__side">
-          {monthOffer ? <MonthOfferCard courseSlug={course.slug} offer={monthOffer} /> : null}
-
-          {pathCourse?.whatsappGroupUrl ? <CourseGroupCard url={pathCourse.whatsappGroupUrl} /> : null}
-
-          {/* The certificates this student already holds in this course.
-              Nothing renders until there is one. */}
-          {outline.enrolled ? (
-            <Suspense fallback={null}>
-              <CourseCertificatesSlot courseId={course.id} />
-            </Suspense>
-          ) : null}
-
-          {course.description ? (
-            <section className="panel course-about">
-              <h2 className="course-about__title">{c.aboutTitle}</h2>
-              <RichText html={course.description} />
-            </section>
-          ) : null}
-        </aside>
+        {course.description ? (
+          <section className="panel course-about cp-layout__about">
+            <h2 className="course-about__title">{c.aboutTitle}</h2>
+            <RichText html={course.description} />
+          </section>
+        ) : null}
       </div>
     </main>
   );

@@ -1,0 +1,485 @@
+/* =============================================================================
+   «نتيجة الامتحان» — `/quizzes/:lessonId/attempt/:attemptId/review`.
+
+   The 2026-11 board: a dark result hero (confetti on a pass, calm under the
+   line), صح / غلط tiles, the questions worth revisiting, the actions with ONE
+   orange button, then the full paper. «مش بحب الزحمة للطالب» — one primary
+   per area, everything else quiet.
+
+   The hero is dark in BOTH themes, so it draws on the `--ink*` panel tokens
+   (which do not invert) and the brand ramps; everything below it sits on the
+   page's own neutrals. Blue (`--e-*`) is structure, orange (`--a-*`) is the
+   one action. Every status-over-neutral mix is `in oklab`
+   (`lib/neutral-mix-space.test.ts`).
+   ========================================================================== */
+
+.rvc {
+  max-inline-size: min(100%, 60rem);
+}
+
+.rvc-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.rvc-flip { transform: scaleX(-1); }
+
+.rvc-h1 {
+  margin-block-end: 1rem;
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.rvc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+@media (min-width: 48rem) {
+  .rvc-stack { gap: 1.25rem; }
+}
+
+/* The section heads: a short blue rule, then the words — the board's `.h2`. */
+.rvc-h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+.rvc-h2::before {
+  content: '';
+  flex-shrink: 0;
+  inline-size: 0.25rem;
+  block-size: 1.125rem;
+  border-radius: var(--r-full);
+  background: var(--e-600);
+}
+
+.rvc-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* ── the hero ───────────────────────────────────────────────────────────── */
+
+.rvc-hero {
+  --rvc-ring: var(--a-9);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  color: var(--ink-fg);
+  background:
+    radial-gradient(80% 70% at 50% 0%, color-mix(in oklab, var(--e-600) 38%, transparent) 0%, transparent 70%),
+    linear-gradient(to bottom, color-mix(in oklab, var(--e-950) 70%, var(--ink)) 0%, var(--ink) 100%);
+  box-shadow: var(--shadow-md);
+}
+/* Under the line the ring is amber — never red: the verdict chip already says
+   it, in words, and the screen's job now is the way forward. */
+.rvc-hero[data-band='low'] {
+  --rvc-ring: color-mix(in oklab, var(--warn) 55%, var(--ink-fg));
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--e-950) 55%, var(--ink)) 0%, var(--ink) 100%);
+}
+.rvc-hero[data-band='pending'] {
+  --rvc-ring: color-mix(in oklab, var(--e-400) 70%, var(--ink-fg));
+}
+
+.rvc-hero[data-poster] { background: var(--e-950); }
+
+.rvc-hero__poster {
+  z-index: -3;
+  object-fit: cover;
+  object-position: 60% 20%;
+}
+
+/* The poster is a backdrop, not a picture to look at: the scrim rises from
+   the bottom, where the words are, and leaves the top lit for the confetti. */
+.rvc-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: linear-gradient(
+    to top,
+    color-mix(in oklab, var(--e-950) 98%, transparent) 0%,
+    color-mix(in oklab, var(--e-950) 90%, transparent) 45%,
+    color-mix(in oklab, var(--e-950) 50%, transparent) 75%,
+    color-mix(in oklab, var(--e-950) 20%, transparent) 100%
+  );
+}
+
+.rvc-confetti {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: -1;
+  inline-size: 100%;
+  block-size: 13rem;
+  pointer-events: none;
+}
+.rvc-c1 { fill: var(--a-9); }
+.rvc-c2 { fill: var(--ink-fg); }
+.rvc-c3 { fill: var(--e-400); }
+.rvc-c4 { fill: color-mix(in oklab, var(--a-9) 30%, var(--ink-fg)); }
+.rvc-c5 { fill: color-mix(in oklab, var(--ok) 60%, var(--ink-fg)); }
+.rvc-curl {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.rvc-curl.rvc-c4 { stroke: color-mix(in oklab, var(--a-9) 30%, var(--ink-fg)); }
+.rvc-curl.rvc-c3 { stroke: var(--e-400); }
+
+.rvc-hero__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1.25rem 1.5rem;
+  text-align: center;
+}
+.rvc-hero[data-poster] .rvc-hero__inner { padding-block-start: 5rem; }
+
+.rvc-hero__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  max-inline-size: 32rem;
+}
+
+.rvc-hero__eyebrow {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-fg-2);
+}
+
+.rvc-hero__quiz {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--ink-fg-2);
+}
+
+.rvc-hero__title {
+  margin: 0;
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.rvc-hero__line {
+  font-size: var(--fs-text-base);
+  line-height: 1.7;
+  color: var(--ink-fg);
+  opacity: 0.88;
+  text-wrap: pretty;
+}
+
+.rvc-hero__small {
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--ink-fg-2);
+}
+
+/* The verdict, in words — a chip, drawn on the ink so it reads in both themes. */
+.rvc-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-block-size: 2rem;
+  padding: 0 0.875rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+}
+.rvc-verdict[data-tone='ok'] {
+  background: color-mix(in oklab, var(--ok) 30%, var(--ink));
+  color: color-mix(in oklab, var(--ok) 45%, var(--ink-fg));
+}
+.rvc-verdict[data-tone='warn'] {
+  background: color-mix(in oklab, var(--warn) 28%, var(--ink));
+  color: color-mix(in oklab, var(--warn) 40%, var(--ink-fg));
+}
+.rvc-verdict[data-tone='pending'] {
+  background: color-mix(in oklab, var(--ink-fg) 12%, var(--ink));
+  color: var(--ink-fg);
+}
+
+/* Desktop: the ring at inline-start, the words beside it. Same order, same
+   elements — only the axis turns. */
+@media (min-width: 48rem) {
+  .rvc-hero__inner {
+    flex-direction: row;
+    align-items: center;
+    gap: 2.5rem;
+    padding: 2.5rem 2.75rem;
+    text-align: start;
+  }
+  .rvc-hero[data-poster] .rvc-hero__inner { padding-block-start: 6rem; }
+  .rvc-hero__text { align-items: flex-start; }
+  .rvc-hero__title { font-size: var(--fs-title-1); }
+}
+
+/* ── the ring ───────────────────────────────────────────────────────────── */
+
+.rvc-ring {
+  position: relative;
+  flex-shrink: 0;
+  inline-size: 10.75rem;
+  block-size: 10.75rem;
+}
+
+/* `scaleX(-1) rotate(-90deg)`: start at twelve o'clock, fill toward the
+   inline-start — the reading direction of an RTL page. */
+.rvc-ring__svg {
+  inline-size: 100%;
+  block-size: 100%;
+  transform: scaleX(-1) rotate(-90deg);
+}
+
+.rvc-ring__track {
+  fill: color-mix(in oklab, var(--ink) 60%, transparent);
+  stroke: color-mix(in oklab, var(--ink-fg) 18%, transparent);
+  stroke-width: 12;
+}
+
+.rvc-ring__arc {
+  fill: none;
+  stroke: var(--rvc-ring);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.rvc-ring__centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+}
+
+.rvc-ring__pct {
+  font-size: 2.75rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.rvc-ring__mark {
+  font-size: var(--fs-text-sm);
+  color: var(--ink-fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── صح / غلط ───────────────────────────────────────────────────────────── */
+
+.rvc-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.625rem;
+}
+
+.rvc-stat {
+  --rvc-tone: var(--info);
+  display: grid;
+  justify-items: start;
+  gap: 0.25rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+}
+.rvc-stat[data-tone='ok'] { --rvc-tone: var(--ok); }
+.rvc-stat[data-tone='err'] { --rvc-tone: var(--err); }
+
+.rvc-stat__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 1.875rem;
+  block-size: 1.875rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--rvc-tone) 14%, var(--n-2));
+  color: var(--rvc-tone);
+}
+
+.rvc-stat__value {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-12);
+}
+
+.rvc-stat__label {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+/* ── the questions worth revisiting ─────────────────────────────────────── */
+
+.rvc-mistakes {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.rvc-mistake {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+}
+
+.rvc-mistake__num {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 3.25rem;
+  min-block-size: 2.5rem;
+  padding-inline: 0.25rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--err) 12%, var(--n-2));
+  color: var(--err);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.rvc-mistake__text {
+  display: grid;
+  flex: 1;
+  gap: 0.2rem;
+  min-inline-size: 0;
+}
+
+/* One line on a phone, two on a wide screen — the full stem is in the card
+   it links to. `plaintext` so a stem that is mostly code reads in its own
+   direction. */
+.rvc-mistake__stem {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.55;
+  color: var(--n-12);
+  unicode-bidi: plaintext;
+}
+
+.rvc-mistake__answers {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+.rvc-more {
+  font-size: var(--fs-text-sm);
+}
+.rvc-more a {
+  color: var(--e-ink);
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* ── buttons ────────────────────────────────────────────────────────────── */
+
+.rvc-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-block-size: 2.75rem;
+  padding: 0 1.125rem;
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out);
+}
+.rvc-btn--sm {
+  min-block-size: 2.5rem;
+  padding: 0 0.75rem;
+  font-size: var(--fs-text-xs);
+}
+.rvc-btn--primary {
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+.rvc-btn--primary:hover { background: var(--a-10); }
+.rvc-btn--quiet {
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  color: var(--n-12);
+}
+.rvc-btn--quiet:hover {
+  border-color: var(--e-tint-line);
+  background: var(--e-tint);
+}
+.rvc-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--e-600);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Two equal halves on a phone (the board's pair); on a wide screen they sit
+   at the end of the row at their own width, orange last. */
+.rvc-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.625rem;
+}
+.rvc-actions .rvc-btn {
+  padding-inline: 0.75rem;
+  white-space: normal;
+  text-align: center;
+}
+@media (min-width: 48rem) {
+  .rvc-actions .rvc-btn {
+    padding-inline: 1.125rem;
+    white-space: nowrap;
+  }
+  .rvc-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+/* ── the full paper ─────────────────────────────────────────────────────── */
+
+.rvc-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-block-start: 0.5rem;
+  scroll-margin-block-start: 5rem;
+}
+
+/* «عرض الحل» lands here — clear of the sticky top bar. */
+.review-anchor { scroll-margin-block-start: 5rem; }
+
+/* ── motion: the ring fills once, the confetti settles once ─────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .rvc-ring__arc { animation: rvc-fill 400ms var(--ease-out) 120ms both; }
+  .rvc-confetti { animation: rvc-drop 400ms var(--ease-out) both; }
+
+  @keyframes rvc-fill {
+    from { stroke-dasharray: 0 100; }
+  }
+  @keyframes rvc-drop {
+    from { opacity: 0; transform: translateY(-0.75rem); }
+  }
+}

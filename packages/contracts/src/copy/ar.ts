@@ -438,6 +438,14 @@ export const copy = {
      */
     menuMore: 'حاجات تانية',
     menuQuick: 'الوصول السريع',
+    /** The phone menu's foot tile for `/` — «الموقع الرئيسي» in a third of a
+     *  330px sheet wrapped onto two lines, and the tile's globe already says
+     *  which site. */
+    menuSite: 'الموقع',
+    /** Beside the overall % under the student's name in the phone menu. «إحنا»,
+     *  not «إنت»: the platform's own voice («نكمّل»), and it never has to guess
+     *  who is holding the phone. */
+    menuProgress: 'خلّصنا',
     /** The rail's section headings — `STUDENT_NAV_GROUPS` in `student-nav-items.ts`. */
     groupStudy: 'المذاكرة',
     groupGrades: 'درجاتي',
@@ -2255,6 +2263,27 @@ export const copy = {
     aboutTitle: 'عن الكورس',
     /** The hero's one button: the next lecture by name. */
     resumeTo: 'نكمّل: {title}',
+    /**
+     * The course page's side column — the month's exam, then one row each for
+     * the cohort group, the printed book and the certificates. On a phone the
+     * rows become a strip of small tiles, so every label stays two words.
+     * Nouns and «نـ» forms only: «ادخل» / «افتح» are said to a boy.
+     */
+    side: {
+      linksLabel: 'روابط الكورس',
+      examTag: 'امتحان الشهر',
+      examOpen: 'مفتوح دلوقتي',
+      examUpcoming: 'قرّب',
+      examStart: 'نبدأ الامتحان',
+      examStartShort: 'نبدأ',
+      examResult: 'النتيجة',
+      examUntil: 'لحد {date}',
+      examOpensAt: 'بيفتح {date}',
+      examMinutes: { one: 'دقيقة', two: 'دقيقتين', few: '{count} دقايق', many: '{count} دقيقة' },
+      groupGo: 'دخول',
+      bookSub: '{price} جنيه · بيوصل لحد البيت',
+      certificates: 'شهاداتي',
+    },
     notStarted: 'لسه مابدأناش',
     courseDone: 'خلّصنا الكورس',
     /**
@@ -3804,11 +3833,14 @@ export const copy = {
       quiz: 'امتحان المحاضرة',
     },
     units: {
-      /** The eyebrow on the open unit's card. */
-      youAreHere: 'إنت هنا',
+      /** The eyebrow on the open unit's card. The inclusive plural, not
+       *  «إنت هنا» — «إنت» is the masculine pronoun (`compose.spec.ts`). */
+      youAreHere: 'بنذاكرها دلوقتي',
       /** On the row of the lesson the student is sitting in — a label, not a
-       *  control: there is nothing to press on the lesson you are already on. */
-      watching: 'بتتفرج دلوقتي',
+       *  control: there is nothing to press on the lesson you are already on.
+       *  «إحنا هنا» rather than the board's «بتتفرج دلوقتي», which addresses
+       *  a boy, and which is wrong on a text or quiz lesson anyway. */
+      watching: 'إحنا هنا',
       /** The one quiet chip in the list — the lecture right after this one. */
       nextChip: 'التالي',
       /** A whole unit the subscription does not cover yet. */
@@ -3826,6 +3858,21 @@ export const copy = {
     },
     sideLinks: {
       help: 'مساعدة',
+      /** The strip's own name, for screen readers. */
+      label: 'روابط الكورس',
+    },
+    /**
+     * The month's exam as ONE dark strip above «محتوى الكورس» — the exam of
+     * this course the student can still sit, else the one the dashboard
+     * counts down to (`bandExam`). Nouns and the inclusive plural only: the
+     * board's «ابدأ» would address a boy.
+     */
+    examStrip: {
+      /** `{date}` — «الخميس 20 نوفمبر». */
+      openUntil: 'مفتوح لحد {date}',
+      opensOn: 'بيفتح {date}',
+      minutes: '{n} دقيقة',
+      go: 'نبدأ',
     },
 
     /**
@@ -4316,6 +4363,23 @@ export const copy = {
      */
     /** The grid of study and challenge pages on the dashboard — `StudyTiles`. */
     studyTilesTitle: 'المذاكرة والتحديات',
+    /** «Cinema» home (his stack): the line over the lecture in the hero's
+     *  resume card — what to continue, and in which course. */
+    resumeEyebrow: 'نكمّل من مكانك · {course}',
+    /**
+     * «معانا على طول» — the «Cinema» home's one card for every way to reach
+     * the platform and each other: the cohort's WhatsApp group (one row per
+     * enrolled course that has one), the WhatsApp channel, the Facebook group.
+     * First-person plural on every button, never an imperative to one gender.
+     */
+    reach: {
+      title: 'معانا على طول',
+      groupTitle: 'جروب الواتساب',
+      groupCta: 'ندخل الجروب',
+      channelLead: 'كل جديد بيوصلك أول بأول',
+      facebookLead: 'زمايلك وأسئلتهم',
+      facebookCta: 'ننضم',
+    },
     tipOfDayTitle: 'نصيحة اليوم',
     /*
      * ⚠️ ولا جملة فيهم بتكلّم ولد. النسخة الأولى كان فيها سبعة من عشرة
@@ -4952,6 +5016,29 @@ export const copy = {
     emptyStep1: 'مذاكرة الدرس',
     emptyStep2: 'امتحان قصير بعده',
     emptyStep3: 'الدرجة والمراجعة هنا',
+    // ── the 2026-11 board ─────────────────────────────────────────────────
+    /** Inside the hero's ring, under the average. */
+    ringLabel: 'المتوسط',
+    /** The hero's small bar chart: one bar per sitting, oldest first. */
+    barsTitle: 'درجاتك بالترتيب',
+    /** The bars' one sentence for a screen reader — the drawing is hidden. */
+    barsLabel: 'درجات آخر {count} محاولات: {scores}',
+    /** The highlighted card for an exam whose improvement sitting is still unused. */
+    improveTitle: 'فرصة تحسين',
+    improveBadge: 'محاولة تانية متاحة',
+    /** Every exam, as a row. */
+    allExamsTitle: 'كل الامتحانات',
+    /** The filter chips. Nouns about the EXAM, never verbs about the student. */
+    filterLabel: 'فلترة الامتحانات',
+    filterAll: 'الكل',
+    filterPassed: 'اتعدّت',
+    filterFailed: 'محتاجة مراجعة',
+    filterPending: 'بتتصحّح',
+    /** The row's quiet button; its accessible name is `reviewRowLabel`. */
+    reviewShort: 'مراجعة',
+    reviewRowLabel: 'مراجعة الإجابات: {title}',
+    /** On a two-sitting row, after the verdict. */
+    latestShort: 'آخر محاولة {score}%',
   },
 
   /** Slice 3 — `/profile`. */
@@ -6638,6 +6725,36 @@ export const copy = {
     scoreBandNeedsWork: 'الدرس محتاج مراجعة تانية',
     reviewLockedDuringBody: 'مراجعة الإجابات بتفتح بعد تسليم المحاولة.',
     unansweredChipLabel: 'سؤال {n}',
+    /**
+     * «نتيجة الامتحان» — the review page's 2026-11 board. The board's own
+     * words «نجحت»، «حسّن درجتك»، «شوف الحل» and «محتاج تراجعها» are each
+     * the masculine form, so every line here is a noun or about the PAPER.
+     */
+    reviewBoard: {
+      /** The passed hero's headline, before the quiz's title. */
+      passedTitle: 'برافو!',
+      passedLine: 'درجة تستاهل، والمجهود باين فيها.',
+      highLine: 'درجة امتياز. نظرة سريعة على الشرح بتثبّت المعلومة.',
+      /** The calm hero for a paper under its pass mark. */
+      lowTitle: 'لسه في الطريق',
+      lowLine: 'الدرجة دي بداية مش نهاية. الخطوة الجاية: مراجعة الغلطات مع الشرح، وبعدها رجوع للدرس.',
+      /** Under the percentage in the ring. */
+      markOf: '{score} من {total}',
+      statCorrect: 'صح',
+      statWrong: 'غلط',
+      statPending: 'بتتصحّح',
+      mistakesTitle: 'أسئلة محتاجة مراجعة',
+      /** A mistake row: what was picked, and the right one. */
+      picked: 'إجابتك: {answer}',
+      right: 'الصح: {answer}',
+      notPicked: 'من غير إجابة',
+      solution: 'عرض الحل',
+      /** Past the rows shown, the rest are in the full paper below. */
+      moreMistakes: 'و{n} كمان في الإجابات تحت',
+      answersTitle: 'إجاباتك',
+      nextLecture: 'المحاضرة الجاية',
+      nextQuiz: 'الامتحان الجاي',
+    },
   },
   /**
    * The gate a student passes through before their FIRST question, and the

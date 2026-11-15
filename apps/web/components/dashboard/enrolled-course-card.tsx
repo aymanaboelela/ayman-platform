@@ -60,6 +60,7 @@ export function EnrolledCourseCard({
   shippingRates,
   instapay,
   vodafoneCash,
+  variant = 'card',
 }: {
   course: EnrolledCourse;
   /** The three delivery rates, from `getBookShippingRates()` — see `BookOrderButton`. */
@@ -69,6 +70,10 @@ export function EnrolledCourseCard({
   instapay: string | null;
   /** `contact.vodafoneCash` — the second payment rail, threaded the same way. */
   vodafoneCash: string | null;
+  /** `'poster'` — his stack's «Cinema» home (`page.tsx`, `IS_AYMAN`): the art
+   *  fills the card under a night scrim, the progress is an orange line along
+   *  the bottom edge. Same states, same links, same book button. */
+  variant?: 'card' | 'poster';
 }) {
   // Shared with the rail's «كورساتي» list — see `lib/course-href.ts`. The
   // local copy this replaced fell back to the PUBLIC course page, so a student
@@ -128,6 +133,83 @@ export function EnrolledCourseCard({
   // per request; it is `notification-view.ts`'s CLIENT components that must
   // never read the clock mid-render.
   const expiry = subscriptionExpiryLabel(course.subscriptionValidUntil, new Date());
+
+  const status = closed
+    ? copy.path.closedBadge
+    : done
+      ? course.contentComplete
+        ? copy.dashboard.courseDone
+        : copy.dashboard.courseUpToDate
+      : cta;
+
+  if (variant === 'poster') {
+    /*
+      «Cinema» — a poster, from the approved Home2 board. `CourseArt` is the
+      course's cover, or his poster art when it has none (`getBrandAsset`, his
+      stack only). The title's stretched link covers the poster; the book
+      button sits UNDER the poster rather than on it, so it is never inside
+      that overlay and the art stays clear of a second control.
+    */
+    const percent = Math.min(100, Math.max(0, Math.round(course.progressPercent)));
+    return (
+      <article className="home-course" data-state={closed ? 'closed' : done ? 'done' : undefined}>
+        <div className="home-poster">
+          <span className="home-poster__art" aria-hidden="true">
+            <CourseArt
+              coverKey={course.coverKey}
+              subjectNameAr={course.subjectNameAr}
+              seed={course.slug}
+              compact
+              sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 12rem"
+            />
+          </span>
+          <span className="home-poster__scrim" aria-hidden="true" />
+          {closed || comingSoon || done ? (
+            <span className="home-poster__tag">{status}</span>
+          ) : null}
+          <div className="home-poster__cap">
+            <h3 className="home-poster__title">
+              {closed ? (
+                course.title
+              ) : (
+                <Link href={href} className="after:absolute after:inset-0 after:content-['']">
+                  {course.title}
+                </Link>
+              )}
+            </h3>
+            <p className="home-poster__meta">
+              {course.completedLessons} {copy.dashboard.lessonsOf} {course.totalLessons}{' '}
+              {copy.dashboard.lessonsWord}
+            </p>
+            {closed || comingSoon ? null : (
+              <span className="home-poster__row">
+                <span className="home-poster__pct">{percent}%</span>
+                <span className="home-poster__btn">{cta}</span>
+              </span>
+            )}
+          </div>
+          <span className="home-poster__line" aria-hidden="true">
+            <span style={{ inlineSize: `${percent}%` }} />
+          </span>
+        </div>
+
+        {expiry ? <p className="home-course__note">{expiry}</p> : null}
+
+        {showBookCta ? (
+          <div className="home-course__book enrolled-course-card__book">
+            <BookOrderButton
+              courseId={course.id}
+              bookTitle={course.bookTitle as string}
+              bookPriceCents={course.bookPriceCents as number}
+              shippingRates={shippingRates}
+              instapay={instapay}
+              vodafoneCash={vodafoneCash}
+            />
+          </div>
+        ) : null}
+      </article>
+    );
+  }
 
   return (
     <article
@@ -207,13 +289,7 @@ export function EnrolledCourseCard({
                       : 'chip--solid',
               )}
             >
-              {closed
-                ? copy.path.closedBadge
-                : done
-                  ? course.contentComplete
-                    ? copy.dashboard.courseDone
-                    : copy.dashboard.courseUpToDate
-                  : cta}
+              {status}
             </span>
           </div>
 
