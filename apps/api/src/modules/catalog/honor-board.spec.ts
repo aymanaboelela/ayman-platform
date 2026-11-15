@@ -80,8 +80,8 @@ describe('toHonorBoardRounds', () => {
     const [round] = toHonorBoardRounds([
       pin({ name: 'زياد', at: '2026-09-17T04:00:00Z', course: ARABIC }),
       pin({ name: 'أميرة', at: '2026-09-17T04:01:00Z', course: LANGUAGES }),
-      pin({ name: 'كيرلس', at: '2026-09-17T04:02:00Z', course: ARABIC }),
-      pin({ name: 'معاذ', at: '2026-09-17T04:03:00Z', course: LANGUAGES }),
+      pin({ name: 'كيرلس', at: '2026-09-17T04:02:00Z', course: ARABIC, score: 96 }),
+      pin({ name: 'معاذ', at: '2026-09-17T04:03:00Z', course: LANGUAGES, score: 96 }),
     ]);
 
     expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
@@ -90,6 +90,91 @@ describe('toHonorBoardRounds', () => {
       ['كيرلس', 2],
       ['معاذ', 2],
     ]);
+  });
+
+  it('gives every 100 the first place, and the next mark the second', () => {
+    /*
+     * THE owner's rule (2026-11-15): «كل اللي جاب ١٠٠ هو الأول». The
+     * 2026-10-22 round printed thirty-six 100s as places 1…36 and the 99s
+     * from 37 on, because the place was the position in the query.
+     */
+    const [round] = toHonorBoardRounds([
+      pin({ name: 'أ', at: '2026-10-22T10:00:00Z', score: 100 }),
+      pin({ name: 'ب', at: '2026-10-22T10:01:00Z', score: 100 }),
+      pin({ name: 'ج', at: '2026-10-22T10:02:00Z', score: 100 }),
+      pin({ name: 'د', at: '2026-10-22T10:03:00Z', score: 99 }),
+      pin({ name: 'ه', at: '2026-10-22T10:04:00Z', score: 99 }),
+      pin({ name: 'و', at: '2026-10-22T10:05:00Z', score: 97 }),
+    ]);
+    expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
+      ['أ', 1],
+      ['ب', 1],
+      ['ج', 1],
+      ['د', 2],
+      ['ه', 2],
+      ['و', 3],
+    ]);
+  });
+
+  it('orders the cards by score however the rows arrive', () => {
+    // The place no longer depends on the caller's order, and neither does the
+    // column: a 97 handed in first still prints under the 100.
+    const [round] = toHonorBoardRounds([
+      pin({ name: 'سبعة وتسعين', at: '2026-10-22T10:00:00Z', score: 97 }),
+      pin({ name: 'مية', at: '2026-10-22T10:01:00Z', score: 100 }),
+      pin({ name: 'تسعة وتسعين', at: '2026-10-22T10:02:00Z', score: 99 }),
+    ]);
+    expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
+      ['مية', 1],
+      ['تسعة وتسعين', 2],
+      ['سبعة وتسعين', 3],
+    ]);
+  });
+
+  it('ranks on the exact mark, not the rounded percent', () => {
+    // 99.75 rounds to a «100%», but it is not a 100: it is the next place.
+    // And 48/50 is the same result as 96/100 on a second paper that day.
+    const [round] = toHonorBoardRounds([
+      pin({ name: 'مية', at: '2026-10-22T10:00:00Z', score: 100 }),
+      pin({ name: 'تسعة وتسعين ونص', at: '2026-10-22T10:01:00Z', score: 99.75 }),
+      pin({ name: 'ستة وتسعين', at: '2026-10-22T10:02:00Z', score: 96 }),
+      {
+        ...pin({ name: 'تمانية وأربعين من خمسين', at: '2026-10-22T10:03:00Z' }),
+        scaledScore: 48,
+        gradeOutOf: 50,
+      },
+    ]);
+    expect(round.entries.map((e) => [e.studentName, e.rank, e.percent])).toEqual([
+      ['مية', 1, 100],
+      ['تسعة وتسعين ونص', 2, 100],
+      ['ستة وتسعين', 3, 96],
+      ['تمانية وأربعين من خمسين', 3, 96],
+    ]);
+  });
+
+  it('alternates the courses inside a shared place, so the landing shows both', () => {
+    // The landing takes the first four cards. Five عربي 100s ahead of the
+    // لغات ones must not fill all four and drop لغات off the page.
+    const arabic = ['أ', 'ب', 'ج', 'د', 'ه'].map((name, i) =>
+      pin({ name, at: `2026-10-22T10:0${i}:00Z`, course: ARABIC }),
+    );
+    const languages = ['Ali', 'Mona'].map((name, i) =>
+      pin({ name, at: `2026-10-22T11:0${i}:00Z`, course: LANGUAGES }),
+    );
+    const [round] = toHonorBoardRounds([...arabic, ...languages]);
+    expect(round.entries.slice(0, 4).map((e) => e.studentName)).toEqual(['أ', 'Ali', 'ب', 'Mona']);
+    expect(round.entries.every((e) => e.rank === 1)).toBe(true);
+  });
+
+  it('runs past the tenth place on a board of quarter marks', () => {
+    // 100 down to 97 in quarters is thirteen distinct marks. The contract
+    // has no ceiling on `rank`, and the cards fall back to «المركز 11».
+    const scores = Array.from({ length: 13 }, (_, i) => 100 - i * 0.25);
+    const [round] = toHonorBoardRounds(
+      scores.map((score, i) => pin({ name: `ط${i}`, at: '2026-10-22T10:00:00Z', score })),
+    );
+    expect(round.entries.map((e) => e.rank)).toEqual(scores.map((_, i) => i + 1));
+    expect(() => HonorBoardPeriodSchema.parse(round)).not.toThrow();
   });
 
   it('buckets a round by the CAIRO day, not the UTC one', () => {
@@ -226,42 +311,37 @@ describe('toHonorBoardRounds — the two sources on one board', () => {
     expect(rounds[0].entries.map((e) => e.studentName)).toEqual(['زياد', 'ندى']);
   });
 
-  it('lets a hand-added first place take the place, and walks the paper past it', () => {
+  it('lets a hand-added first stand BESIDE the exam’s 100, not above it', () => {
     /*
      * The instructor typed 1 for ندى on a round whose exam already had a
-     * first place. The stated place WINS and زياد's paper becomes التاني.
-     *
-     * The alternative — both cards reading «المركز الأول» in the SAME course
-     * — is the one outcome the board must never print: two firsts are honest
-     * across عربي and لغات because they never sat the same paper, and a
-     * contradiction inside one course. The instructor can see the effective
-     * place on `/admin/honor-board`, which warns before it happens.
+     * 100. This used to push زياد's paper to التاني; with ties a shared
+     * first is the ordinary board, and pushing a 100 down is the one thing
+     * «اللي جاب ١٠٠ هو الأول» forbids. Both read «المركز الأول».
      */
     const [round] = toHonorBoardRounds(
       [pin({ name: 'زياد', at: '2026-09-17T04:00:00Z' })],
       [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1 })],
     );
     expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
+      ['زياد', 1],
       ['ندى', 1],
-      ['زياد', 2],
     ]);
   });
 
-  it('walks a derived place PAST one a hand-added row has claimed', () => {
-    // Two papers and a hand-added second place. Without the skip the second
-    // paper is also numbered 2 and one board carries two «المركز التاني» in
-    // the same course, which is a result that does not exist.
+  it('never renumbers the papers around a hand-added place', () => {
+    // Two papers (100, 96) and a hand-added second. The papers' places come
+    // from their marks alone, so the 96 is still التاني — beside ندى.
     const [round] = toHonorBoardRounds(
       [
-        pin({ name: 'زياد', at: '2026-09-17T04:00:00Z' }),
-        pin({ name: 'كيرلس', at: '2026-09-17T04:01:00Z' }),
+        pin({ name: 'زياد', at: '2026-09-17T04:00:00Z', score: 100 }),
+        pin({ name: 'كيرلس', at: '2026-09-17T04:01:00Z', score: 96 }),
       ],
       [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 2 })],
     );
     expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
       ['زياد', 1],
+      ['كيرلس', 2],
       ['ندى', 2],
-      ['كيرلس', 3],
     ]);
   });
 

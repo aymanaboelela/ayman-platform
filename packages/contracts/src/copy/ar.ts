@@ -2016,8 +2016,10 @@ export const copy = {
       ],
       /** بعد العاشر مفيش كلمة مكتوبة — «المركز ١١». */
       placeRankPrefix: 'المركز',
-      /** «عرض الكل» — من اللوحة على الصفحة الرئيسية لصفحة الأرشيف. */
-      viewAll: 'عرض العشرة الأوائل',
+      /** «عرض الكل» — من اللوحة على الصفحة الرئيسية لصفحة الأرشيف. مش
+       *  «العشرة»: المركز بقى بالدرجة، وكل اللي جابوا ١٠٠ هما «الأول»، فالدور
+       *  ممكن يبقى فيه خمسين اسم. */
+      viewAll: 'عرض كل الأوائل',
       /** عنوان صفحة الأرشيف. */
       archiveTitle: 'لوحة الشرف — كل الأسماء',
       /** تحت العنوان في صفحة الأرشيف. */
@@ -2035,8 +2037,9 @@ export const copy = {
       hostCaption: 'م. {name}',
       /** Above the three podium places. */
       podiumTitle: 'الأوائل',
-      /** Above places 4–10. */
-      restTitle: 'باقي العشرة الأوائل',
+      /** Above the list under the podium — not «العشرة»: places come from
+       *  the score now, and one round can list dozens of names. */
+      restTitle: 'باقي الأوائل',
       /** `{score}` and `{outOf}` are Western digits, isolated by the card. */
       score: '{score} من {outOf}',
       /** The landing cards are links now — the accessible name of each one. */

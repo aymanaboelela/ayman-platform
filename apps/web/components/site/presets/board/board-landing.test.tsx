@@ -609,6 +609,43 @@ describe('BoardHonors — the empty board', () => {
   });
 
   /*
+   * «اللي جابوا ١٠٠ كلهم الأول» (2026-11-15): places come from the score, so
+   * a race can have several firsts. Crowning one of them on the podium would
+   * contradict the board, so a shared top place sends the whole race down
+   * the roll — every first, then the second, each with its word.
+   */
+  it('draws no podium when a top place is shared, and lists the ties in order', () => {
+    const row = (name: string, rank: number) => ({
+      studentName: name,
+      avatarKey: null,
+      photoKey: null,
+      title: 'امتحان الشهر',
+      courseLabel: 'برمجة — تانية بكالوريا',
+      rank,
+      scaledScore: 50,
+      gradeOutOf: 50,
+      percent: 100,
+    });
+    const { container } = render(
+      <BoardHonors
+        entries={[row('أ', 1), row('ب', 1), row('ج', 1), row('د', 2)]}
+        level={2}
+      />,
+    );
+
+    expect(container.querySelector('.board-podium')).toBeNull();
+    const rows = [...container.querySelectorAll('.board-roll .board-honor')];
+    expect(rows.map((li) => li.querySelector('.board-honor__name')?.textContent)).toEqual([
+      'أ',
+      'ب',
+      'ج',
+      'د',
+    ]);
+    expect(screen.getAllByText(copy.landing.honorBoard.placeRanks[0])).toHaveLength(3);
+    expect(screen.getAllByText(copy.landing.honorBoard.placeRanks[1])).toHaveLength(1);
+  });
+
+  /*
    * The board names a minor on the one page a stranger reads, and the owner
    * asked for the face not to go with the name. `avatarKey` stays in the
    * contract so instructor screens can still show who a row is, which means

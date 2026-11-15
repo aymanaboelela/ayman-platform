@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Crown, ExternalLink, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
-import { copy as siteCopy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { AdminHonorBoardSchema } from '@ayman/contracts/admin/honor-board';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { getEntitlements } from '@/lib/entitlements';
+import { honorPlaceWord } from '@/lib/honor-place';
 import { HonorPinDialog } from './honor-pin-dialog';
 import { HonorPinActions } from './honor-pin-actions';
 import { HonorExamActions } from './honor-exam-actions';
@@ -236,9 +236,10 @@ export default async function AdminHonorBoardPage() {
 }
 
 /** «المركز الأول» — الكلمة، مش الرقم: نفس الكلمة اللي بتتطبع على الكارت
- *  العام بالظبط، عشان الشاشة تعرض اللي هينزل مش وصف ليه. */
+ *  العام بالظبط (نفس الدالة)، عشان الشاشة تعرض اللي هينزل مش وصف ليه —
+ *  ومن غير فراغ بعد العاشر، لأن المركز بقى بالدرجة وممكن يوصل ١١. */
 function rankWord(rank: number): string {
-  return siteCopy.landing.honorBoard.placeRanks[rank - 1] ?? '';
+  return honorPlaceWord(rank);
 }
 
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {

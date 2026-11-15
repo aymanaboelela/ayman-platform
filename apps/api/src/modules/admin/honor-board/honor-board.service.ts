@@ -16,7 +16,13 @@ import {
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { chipFromProfile, courseChip, honorDayKey } from '../../catalog/honor-board';
+import {
+  chipFromProfile,
+  courseChip,
+  denseRanks,
+  honorDayKey,
+  placeScore,
+} from '../../catalog/honor-board';
 import { AUDIT_RESOURCES } from '../admin.constants';
 
 /**
@@ -124,17 +130,22 @@ export class AdminHonorBoardService {
 
     for (const pin of pins) round(honorDayKey(pin.honoredAt)).manual.push(toPinRow(pin));
 
-    /* المركز على الورقة بيتحسب بنفس المشية بتاعت اللوحة العامة: ١، ٢، ٣ جوّه
-       الكورس، بترتيب الريكويست. مش بيتحسب هنا من الأول — بيتمشّى على نفس
-       الترتيب، فاللي المدرّس بيشوفه هو نفس اللي على الصفحة. */
-    const walked = new Map<string, number>();
-    for (const attempt of attempts) {
+    /* المركز على الورقة بيتحسب بنفس قاعدة اللوحة العامة (`denseRanks`): كل
+       اللي جابوا نفس الدرجة في نفس الكورس ونفس الدور ليهم نفس المركز — كل
+       الـ١٠٠ «الأول»، واللي بعدهم «التاني». نفس الدالة، فاللي المدرّس بيشوفه
+       هنا هو نفس الرقم اللي على الصفحة. والصفوف اليدوية مابتأثرش على الرقم
+       ده، زي الصفحة بالظبط (اقرا `toHonorBoardRounds`). */
+    const places = denseRanks(
+      attempts,
+      (attempt) =>
+        `${honorDayKey(attempt.honorBoardAt as Date)}::${courseChip(attempt.quiz.lesson.course)}`,
+      (attempt) => placeScore(attempt.scaledScore, attempt.gradeOutOf),
+    );
+    for (const [index, attempt] of attempts.entries()) {
       const at = attempt.honorBoardAt as Date;
       const key = honorDayKey(at);
       const courseLabel = courseChip(attempt.quiz.lesson.course);
-      const seen = `${key}::${courseLabel}`;
-      const rank = (walked.get(seen) ?? 0) + 1;
-      walked.set(seen, rank);
+      const rank = places[index] as number;
       const scaledScore = attempt.scaledScore === null ? null : Number(attempt.scaledScore);
       const gradeOutOf = Number(attempt.gradeOutOf);
       round(key).fromExams.push({
@@ -163,7 +174,9 @@ export class AdminHonorBoardService {
           key,
           pinnedAt: newestOf(key, group),
           manual: group.manual,
-          fromExams: group.fromExams,
+          // بالمركز، فالعمود بيتقري لتحت زي الصفحة: كل الـ١٠٠ الأول. الترتيب
+          // ثابت (stable)، فاللي في نفس المركز بيفضلوا بترتيب الريكويست.
+          fromExams: [...group.fromExams].sort((a, b) => a.rank - b.rank),
         })),
       courses: courses.map((course) => ({
         id: course.id,
