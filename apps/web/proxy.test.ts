@@ -17,6 +17,8 @@ import {
   resolveMarkdownRewrite,
   type AuthState,
   isGuardianRoute,
+  isEdgeCacheable,
+  EDGE_CACHE_HEADER,
   proxy,
 } from './proxy';
 import { NextRequest } from 'next/server';
@@ -1001,5 +1003,48 @@ describe('proxy — an anonymous address rendering pages like a bot', () => {
     }
     expect(last?.status).not.toBe(429);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('isEdgeCacheable — what Cloudflare may serve from its own cache', () => {
+  const req = (path: string, init?: ConstructorParameters<typeof NextRequest>[1]) =>
+    new NextRequest(`http://localhost${path}`, init);
+
+  it('marks the anonymous landing page and the public catalogue', () => {
+    for (const path of ['/', '/courses', '/courses/some-course', '/books', '/news/x', '/years/y2']) {
+      expect(isEdgeCacheable(req(path)), path).toBe(true);
+    }
+  });
+
+  it('never marks a request carrying a session cookie, in either spelling', () => {
+    expect(isEdgeCacheable(req('/', { headers: { cookie: '__Host-session_token=a' } }))).toBe(false);
+    expect(isEdgeCacheable(req('/courses', { headers: { cookie: 'x=1; session_token=a' } }))).toBe(false);
+  });
+
+  it('never marks an RSC request — same URL, different body', () => {
+    expect(isEdgeCacheable(req('/courses?_rsc=abc'))).toBe(false);
+    expect(isEdgeCacheable(req('/courses', { headers: { rsc: '1' } }))).toBe(false);
+  });
+
+  it('never marks a write, a money flow, a protected page or the player', () => {
+    expect(isEdgeCacheable(req('/', { method: 'POST' }))).toBe(false);
+    expect(isEdgeCacheable(req('/subscribe'))).toBe(false);
+    expect(isEdgeCacheable(req('/dashboard'))).toBe(false);
+    expect(isEdgeCacheable(req('/courses/c/lessons/l'))).toBe(false);
+    expect(isEdgeCacheable(req('/login'))).toBe(false);
+  });
+});
+
+describe('proxy — an edge-cacheable page sets no cookie', () => {
+  it('marks the page and skips the CSRF mint, which would stop Cloudflare caching it', async () => {
+    const response = await proxy(new NextRequest('http://localhost/courses'));
+    expect(response.headers.get(EDGE_CACHE_HEADER)).toMatch(/max-age=60/);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('still mints the CSRF cookie everywhere else', async () => {
+    const response = await proxy(new NextRequest('http://localhost/subscribe'));
+    expect(response.headers.get(EDGE_CACHE_HEADER)).toBeNull();
+    expect(response.headers.get('set-cookie')).toContain('__Host-csrf=');
   });
 });

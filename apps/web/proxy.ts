@@ -1176,6 +1176,79 @@ function ensureCsrfCookie(request: NextRequest, response: NextResponse): void {
   });
 }
 
+/**
+ * The public pages Cloudflare may serve from its own cache to anonymous
+ * visitors — the `(site)` group, minus `/subscribe` (a money flow; it gains
+ * nothing worth the risk of a stale price).
+ *
+ * ## Why at all
+ *
+ * Every stack shares one 4-core VPS (CLAUDE.md §5). Before this, every
+ * visitor's page view reached it: `cf-cache-status: DYNAMIC` on `/` and
+ * `/courses`. A surge of new visitors — a campaign, results day — is
+ * therefore a surge of renders on the box that also runs three other
+ * teachers. With this, Cloudflare answers repeat requests for the same page
+ * itself, and the origin renders it about once a minute per edge location.
+ *
+ * ## The contract with Cloudflare (`deploy/cloudflare/apply-html-cache-rule.mjs`)
+ *
+ * The zone's Cache Rule makes anonymous GETs ELIGIBLE and takes its TTL from
+ * the origin, bypassing when the origin names none. So Cloudflare caches
+ * exactly the responses that carry `Cloudflare-CDN-Cache-Control` and nothing
+ * else — this function is the single place that decides. Cloudflare strips the
+ * header before the browser sees it; the browser still gets Next's own
+ * `private, no-store`.
+ *
+ * Every condition below is one a cached copy must never cross:
+ *
+ *   · No session cookie — the nav renders the signed-in pill from it
+ *     (`SiteAccountSlot`). The rule checks the same thing at the edge, so a
+ *     signed-in request is never answered from cache either.
+ *   · Not an RSC request (`rsc` header / `_rsc` param) — same URL, different
+ *     body. Cloudflare ignores `Vary`, so the request must not even be
+ *     eligible; the rule excludes both too.
+ *   · GET or HEAD only.
+ *
+ * ⚠️ A response marked here must not set a cookie. With an origin TTL,
+ * Cloudflare refuses to cache a response carrying `Set-Cookie` — so the CSRF
+ * mint is skipped on exactly these responses, and `readCsrfToken()` mints the
+ * cookie in the browser instead (see `lib/csrf.ts`).
+ *
+ * `max-age=60`: an admin's edit reaches visitors within a minute.
+ * `stale-while-revalidate`: past that minute one visitor gets the old copy
+ * while Cloudflare refetches, instead of every visitor waiting on the origin.
+ * `stale-if-error`: if the origin answers 5xx — the shared box choking — the
+ * landing page stays up from cache for a day.
+ */
+const EDGE_CACHEABLE_PREFIXES = [
+  '/about',
+  '/books',
+  '/courses',
+  '/essentials',
+  '/honor-board',
+  '/news',
+  '/pdfs',
+  '/practice',
+  '/privacy',
+  '/terms',
+  '/years',
+] as const;
+
+export const EDGE_CACHE_HEADER = 'Cloudflare-CDN-Cache-Control';
+export const EDGE_CACHE_POLICY = 'public, max-age=60, stale-while-revalidate=300, stale-if-error=86400';
+
+export function isEdgeCacheable(request: NextRequest): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  if (hasSessionCookie(request)) return false;
+  if (request.headers.has('rsc') || request.nextUrl.searchParams.has('_rsc')) return false;
+  const { pathname } = request.nextUrl;
+  if (isProtectedRoute(pathname)) return false;
+  return (
+    pathname === '/' ||
+    EDGE_CACHEABLE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  );
+}
+
 /** One per process — the counts must outlive a single request. See `lib/flood-guard.ts`. */
 const floodGuard = createFloodGuard();
 
@@ -1348,7 +1421,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     response.headers.set(CSP_HEADER_NAME, buildPublicCsp(DEV));
     // Discovery relations are `<link>` elements on the public shell now, not a
     // header set from here — see the block above `CSRF_COOKIE` for why.
-    ensureCsrfCookie(request, response);
+    if (isEdgeCacheable(request)) {
+      // No CSRF mint here: a `Set-Cookie` would keep Cloudflare from caching
+      // the page. See `isEdgeCacheable`.
+      response.headers.set(EDGE_CACHE_HEADER, EDGE_CACHE_POLICY);
+    } else {
+      ensureCsrfCookie(request, response);
+    }
     return response;
   }
 
