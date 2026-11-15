@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowLeft, BookOpenCheck, Flag, Route } from 'lucide-react';
@@ -8,10 +7,7 @@ import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PathTimeline } from '@/components/path/path-timeline';
 import { PathArt } from '@/components/path/path-art';
-import { PathAside } from '@/components/path/path-aside';
-import { IS_AYMAN } from '@/lib/tenant';
 import { CountUp } from '@/components/rank/count-up';
-import { getBrandAsset } from '@/lib/brand-assets';
 import '@/components/path/path.css';
 
 const c = copy.path;
@@ -77,16 +73,7 @@ export default async function PathPage() {
 
       {/* The courses as one timeline — a card each, only the current one
           open to the few lectures around what is next. See `PathTimeline`. */}
-      {IS_AYMAN ? (
-        // «Cinema»: the timeline beside a side column of what is next — his
-        // stack first (new features ship to him, other teachers opt in).
-        <div className="pth-layout">
-          <PathTimeline path={path} />
-          <PathAside path={path} />
-        </div>
-      ) : (
-        <PathTimeline path={path} />
-      )}
+      <PathTimeline path={path} />
     </main>
   );
 }
@@ -103,27 +90,8 @@ function PathHero({ path }: { path: LearningPath }) {
   const course = path.courses.find((entry) => entry.id === path.currentCourseId);
   const next = course?.published ? course.nodes.find((node) => node.id === course.nextLessonId) : undefined;
 
-  // «Cinema» — his poster art behind the band, his stack only: `getBrandAsset`
-  // is gated by `aymanOnly()`, so elsewhere this is undefined and the band is
-  // the drawn gradient it always was (CLAUDE.md §2).
-  const poster = getBrandAsset('hero');
-
   return (
-    <section className="pth-hero mb-8" data-poster={poster ? '' : undefined}>
-      {poster ? (
-        <>
-          <Image
-            src={poster.src}
-            alt=""
-            aria-hidden="true"
-            fill
-            priority
-            sizes="(min-width: 1024px) 1100px, 100vw"
-            className="pth-hero__poster"
-          />
-          <span className="pth-hero__scrim" aria-hidden="true" />
-        </>
-      ) : null}
+    <section className="pth-hero mb-8">
       <div className="pth-hero__shapes" aria-hidden="true">
         <span className="pth-shape pth-shape--ring" />
         <span className="pth-shape pth-shape--blob" />

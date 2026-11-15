@@ -3995,14 +3995,6 @@ export const copy = {
      *  `library.lockedClose`, written down here so the next dialog does not
      *  rediscover it. */
     closedClose: 'تمام',
-    /** «Cinema» side column on /path (his stack): the next lectures in the
-     *  course in progress, and the totals so far. */
-    upNextTitle: 'اللي جاي',
-    upNextLead: 'الجاي في الكورس الحالي',
-    upNextOpen: 'افتح',
-    soFarTitle: 'لحد دلوقتي',
-    soFarLessons: 'محاضرة خلصت',
-    soFarCourses: 'كورس خلص',
   },
   /* صفحة ولي الأمر — `copy/guardian.ts` (موديول لوحده، زي `copy/backlog.ts`). */
 

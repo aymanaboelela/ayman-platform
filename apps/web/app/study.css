@@ -6717,36 +6717,6 @@ label.runner-option {
   --a-12: oklch(0.920 0.070 65);
 }
 
-/* The dashboard band with his poster art behind it — `dashboard-hero.tsx`,
-   gated by `getBrandAsset`. The art sits under a blue-black scrim that is
-   solid where the greeting is (the inline start) and opens toward the far
-   edge, so the picture shows without a word ever sitting on a bright patch.
-   The drawn rings and the rocket scene step aside: the poster IS the art. */
-.dash-hero[data-poster] {
-  background: var(--e-950);
-}
-
-.dash-hero__poster {
-  z-index: -2;
-  object-fit: cover;
-  object-position: left center;
-}
-
-.dash-hero__scrim {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(to left, rgb(10 16 32 / 0.94) 0%, rgb(10 16 32 / 0.78) 38%, rgb(10 16 32 / 0.25) 100%),
-    linear-gradient(to top, rgb(10 16 32 / 0.6) 0%, transparent 55%);
-}
-
-.dash-hero[data-poster]::before,
-.dash-hero[data-poster] .dash-hero__art,
-.dash-hero[data-poster] .dash-hero__scene {
-  display: none;
-}
-
 /* «Cinema»: WHERE YOU ARE is blue, what to PRESS is orange. The shipped rule
    put the current position on amber too («Amber is ACTION … plus THE CURRENT
    POSITION»), which with a true orange made the rail's current item look like
