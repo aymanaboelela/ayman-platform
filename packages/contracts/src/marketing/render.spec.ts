@@ -16,8 +16,18 @@ describe('renderCampaignBody', () => {
 
   it('never substitutes a gendered placeholder word', () => {
     const out = renderCampaignBody({ body: 'يا {{الاسم}}', name: null, linkUrl: null });
-    expect(out).toBe('يا');
+    // The vocative goes with the name: a bare «يا» is a sentence that broke.
+    expect(out).toBe('');
     expect(out).not.toMatch(/طالب|طالبة/u);
+  });
+
+  it('drops «يا» with the name, and greets an initial with no name at all', () => {
+    expect(
+      renderCampaignBody({ body: 'أهلاً يا {{الاسم}}، المحاضرة نزلت', name: null, linkUrl: null }),
+    ).toBe('أهلاً، المحاضرة نزلت');
+    expect(
+      renderCampaignBody({ body: 'يا {{الاسم}}، المحاضرة نزلت', name: 'M. Ahmed Anwar', linkUrl: null }),
+    ).toBe('المحاضرة نزلت');
   });
 
   it('appends the link as its own paragraph when the body does not place it', () => {

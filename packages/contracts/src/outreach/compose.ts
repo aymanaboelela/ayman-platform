@@ -3,11 +3,15 @@ import {
   COURSE_LINK_LINE,
   FOCUS_INTROS,
   FOCUS_ITEM,
+  FOCUS_FEW,
+  FOCUS_MANY,
+  FOCUS_RESTART,
   FOCUS_SINGLE,
   FOCUS_SINGLE_NAMED,
   FOCUS_SINGLE_PLAIN,
   FOCUS_ITEM_UNTITLED,
   FOCUS_TAILS,
+  FOCUS_TWO,
   FOLLOW_UP_ASKS,
   FOLLOW_UP_CLOSERS,
   FOLLOW_UP_LESSON_MANY,
@@ -249,6 +253,12 @@ const BAND_FAIR = 50;
 
 /** At most this many bullets, so the message stays a message. */
 const MAX_FOCUS_TOPICS = 3;
+/**
+ * More wrong answers than this and the numbers are not listed at all. Six
+ * still reads as a sentence («سؤال 2 و 4 و 5 و 7 و 9 و 11»); past that it is
+ * a column of figures in a chat bubble, which nobody acts on.
+ */
+const MAX_LISTED_QUESTIONS = 6;
 /** Naming five things someone is good at reads as filler, not praise. */
 const MAX_STRENGTH_TOPICS = 2;
 
@@ -280,12 +290,33 @@ export function bandFor(scorePercent: number): OutreachBand {
 }
 
 /**
- * «محمد أحمد السيد» → «محمد»، and «MARAWAN» → «Marawan».
+ * «محمد أحمد السيد» → «محمد»، «عبد الرحمن خالد» → «عبد الرحمن»، and
+ * «MARAWAN» → «Marawan».
  *
- * A message that opens with someone's full three-part name is a bank letter.
- * Falls back to the whole string when there is no space, and to an empty
- * string for an empty name — the greeting pools all tolerate `{name}` being
- * blank better than they tolerate the word "undefined".
+ * A message that opens with someone's full three-part name is a bank letter,
+ * so the greeting takes the first name. Returns an EMPTY string whenever the
+ * first word is not safely a name, and every caller drops the «يا {name}»
+ * around it (`omitName`) rather than print a guess.
+ *
+ * ## Why "the first word" was not enough
+ *
+ * It is what this function used to return, and live messages showed what that
+ * costs: «يا عبد» for «عبد الرحمن …» (half a compound name, and on its own a
+ * word nobody wants to be called), «يا M.» for «M. Ahmed Anwar», and a student
+ * greeted by a title or a parent's word that headed the account name. So:
+ *
+ *   · **compound first names stay whole.** «عبد»/«أبو» (and their Latin
+ *     spellings) always take the next word, and a second word from the short
+ *     list of compound tails — «نور الدين»، «سيف الإسلام»، «جاد الله» — joins
+ *     the first. The tails are a LIST, not "anything starting with ال", because
+ *     «محمد السيد» is a first name and a father's name, and greeting someone as
+ *     both is its own kind of wrong.
+ *   · **an initial, an abbreviation or a title means no name.** «M.»، «م»،
+ *     «أ/»، «Mr»، «الطالب»، «ولي» — the next word is NOT promoted in their
+ *     place, because after a title or an initial nothing says which word is
+ *     the student's own: in «M. Ahmed Anwar», «Ahmed» is most likely the
+ *     father. A greeting without a name reads as a person who did not use it;
+ *     a greeting with the wrong one reads as a machine that guessed.
  *
  * ## Why the case is touched at all
  *
@@ -301,11 +332,119 @@ export function bandFor(scorePercent: number): OutreachBand {
  * is a no-op on almost every student the platform has.
  */
 export function firstNameOf(fullName: string): string {
-  const first = fullName.trim().split(/\s+/u)[0] ?? '';
-  const shouting = /\p{Lu}/u.test(first) && !/\p{Ll}/u.test(first);
-  // Per LETTER RUN, so «ANNE-MARIE» and «O'BRIEN» keep the capital after the
-  // separator rather than becoming «Anne-marie».
-  return shouting ? first.replace(/\p{L}+/gu, (run) => run[0] + run.slice(1).toLowerCase()) : first;
+  const words = fullName.trim().split(/\s+/u).filter((word) => word.length > 0);
+  const first = words[0];
+  if (first === undefined || !isNameWord(first) || NOT_A_NAME.has(fold(first))) return '';
+
+  const second = words[1];
+  const third = words[2];
+  let picked: string[] = [first];
+
+  if (COMPOUND_HEADS.has(fold(first))) {
+    // «عبد» / «أبو» alone is exactly the «يا عبد» this exists to stop.
+    if (second === undefined || !isNameWord(second)) return '';
+    // «Abd El Rahman» — the Latin spelling often splits the article off.
+    picked =
+      LATIN_ARTICLES.has(fold(second)) && third !== undefined && isNameWord(third)
+        ? [first, second, third]
+        : [first, second];
+  } else if (second !== undefined && COMPOUND_TAILS.has(fold(second))) {
+    picked = [first, second];
+  } else if (
+    second !== undefined &&
+    third !== undefined &&
+    LATIN_ARTICLES.has(fold(second)) &&
+    LATIN_TAILS.has(fold(third))
+  ) {
+    // «Nour El Din».
+    picked = [first, second, third];
+  }
+
+  return picked.map(unshout).join(' ');
+}
+
+/**
+ * Letters only (plus the joiners a real name carries — «O'Brien»،
+ * «Anne-Marie», tatweel, harakat), and at least two of them. That one test
+ * turns away «M.»، «م»، «أ/»، «A»، a phone number and an email address.
+ */
+function isNameWord(word: string): boolean {
+  if (!/^[\p{L}\p{M}][\p{L}\p{M}'’ـ-]*$/u.test(word)) return false;
+  return (word.match(/\p{L}/gu) ?? []).length >= 2;
+}
+
+/** Lowercase, hamza-folded — «أبو» and «ابو» are one word to a keyboard. */
+function fold(word: string): string {
+  return word.toLowerCase().replace(/[أإآ]/gu, 'ا');
+}
+
+/** Per LETTER RUN, so «ANNE-MARIE» and «O'BRIEN» keep the capital after the separator. */
+function unshout(word: string): string {
+  const shouting = /\p{Lu}/u.test(word) && !/\p{Ll}/u.test(word);
+  return shouting ? word.replace(/\p{L}+/gu, (run) => run[0] + run.slice(1).toLowerCase()) : word;
+}
+
+/** Folded. Always take the next word: «عبد الرحمن»، «أبو بكر»، «Abdel Rahman». */
+const COMPOUND_HEADS: ReadonlySet<string> = new Set([
+  'عبد', 'ابو', 'abd', 'abdel', 'abdul', 'abdal', 'abd-el', 'abu', 'abo', 'abou',
+]);
+
+/** Folded. A second word that is part of the FIRST name, never a father's name. */
+const COMPOUND_TAILS: ReadonlySet<string> = new Set([
+  'الدين', 'الاسلام', 'الله', 'الرحمن', 'الرحيم', 'الحق', 'النبي', 'الرب',
+  'eldin', 'el-din', 'aldin', 'al-din', 'eldeen', 'el-deen', 'eddin', 'uddin', 'allah',
+]);
+
+const LATIN_ARTICLES: ReadonlySet<string> = new Set(['el', 'al']);
+const LATIN_TAILS: ReadonlySet<string> = new Set(['din', 'deen', 'islam', 'eslam']);
+
+/**
+ * Folded. Titles, roles and kinship words that head an account name typed by
+ * someone other than the student, or by the student out of habit. None of
+ * them is the student's name, and the word after them is not reliably one.
+ */
+const NOT_A_NAME: ReadonlySet<string> = new Set([
+  'mr', 'mrs', 'ms', 'miss', 'dr', 'eng', 'student',
+  'مستر', 'ميس', 'مس', 'دكتور', 'دكتوره', 'دكتورة', 'مهندس', 'مهندسه', 'مهندسة',
+  'استاذ', 'استاذه', 'استاذة', 'الاستاذ', 'الاستاذه', 'الاستاذة', 'المهندس', 'الدكتور',
+  'طالب', 'طالبه', 'طالبة', 'الطالب', 'الطالبه', 'الطالبة',
+  'ولي', 'والد', 'والده', 'والدة', 'ام', 'حاج', 'الحاج', 'حاجه', 'الحاجه', 'كابتن',
+]);
+
+/**
+ * Takes the «يا {name}» out of a line when there is no name to put in it.
+ *
+ * `firstNameOf` returns '' rather than guess, and a blank in a greeting is
+ * worse than no name: «يا ، كتابك…» / «أهلاً يا » read as a template that
+ * broke. Handles the three shapes the pools use — the name leading the line
+ * («{name}، أخبارك إيه؟»، «يا {name}، إزيك؟») and the vocative inside it
+ * («إزيك يا {name} 👋») — and blanks any other occurrence.
+ *
+ * `token` is the literal placeholder, so the campaign renderer's own
+ * «{{الاسم}}» works the same as `{name}`.
+ */
+export function omitName(text: string, token: string): string {
+  const t = token.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return text
+    .replace(new RegExp(`(^|\\n)[^\\S\\n]*(?:يا[^\\S\\n]+)?${t}[^\\S\\n]*[،,]?[^\\S\\n]*`, 'gu'), '$1')
+    .replace(new RegExp(`[^\\S\\n]*يا[^\\S\\n]+${t}`, 'gu'), '')
+    .split(token)
+    .join('');
+}
+
+/**
+ * A `{name}` template addressed to someone by their account or order name —
+ * the first name when there safely is one, and no vocative at all when there
+ * is not. For the one-off notices (the book's shipping and courier messages)
+ * that greet a student outside `composeOutreach`.
+ */
+export function formatWithName(
+  template: string,
+  fullName: string,
+  vars: Record<string, string | number> = {},
+): string {
+  const name = firstNameOf(fullName);
+  return formatCopy(name ? template : omitName(template, '{name}'), { ...vars, name });
 }
 
 export function composeOutreach(input: ComposeInput): ComposedOutreach {
@@ -329,7 +468,12 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
     name: input.firstName,
     instructor: input.instructorName,
   };
-  const blocks: string[][] = [[formatCopy(take('g', OUTREACH_GREETINGS), vars)]];
+  // No name (`firstNameOf` refused to guess) → no «يا {name}» either; a
+  // greeting with a hole in it is worse than one without the name.
+  const greeting = take('g', OUTREACH_GREETINGS);
+  const blocks: string[][] = [
+    [formatCopy(input.firstName ? greeting : omitName(greeting, '{name}'), vars)],
+  ];
 
   const wantsGroup = shouldAddGroup(input, history);
 
@@ -345,7 +489,30 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
       ]);
 
       const weak = facts.weakTopics.slice(0, MAX_FOCUS_TOPICS);
-      if (weak.length > 0) {
+      /*
+       * ⚠️ The wording is chosen by the number of wrong QUESTIONS, never by
+       * the number of topics.
+       *
+       * A topic is a question-bank category, and a paper whose questions carry
+       * none arrives as ONE nameless topic holding every wrong answer. Keyed
+       * on `weak.length === 1`, a 0% paper went out as «فيه غلطة واحدة …
+       * (سؤال 1 و 2 و 3 … و 40) — دقيقة مراجعة مش أكتر»: the count wrong,
+       * forty numbers in a chat bubble, and a "tiny slip" framing on a paper
+       * that needs the lesson again. So:
+       *
+       *   · a paper in the weak band gets `FOCUS_RESTART` — no numbers, no
+       *     "it was one small thing", one honest line that the lesson is the
+       *     place to start, which the weak score line above already softened;
+       *   · more wrong answers than fit in a sentence get `FOCUS_MANY` — no
+       *     numbers either, because a list of fifteen is a bill, not help;
+       *   · otherwise the wording names the real count: one, two, or a few.
+       */
+      const wrongCount = facts.weakTopics.reduce((sum, topic) => sum + topic.questionNumbers.length, 0);
+      if (wrongCount > 0 && band === 'weak') {
+        blocks.push([take('fr', FOCUS_RESTART)]);
+      } else if (wrongCount > MAX_LISTED_QUESTIONS) {
+        blocks.push([take('fm', FOCUS_MANY)]);
+      } else if (weak.length > 0) {
         /*
          * ⚠️ ONE mistake is a SENTENCE, not a bulleted list with a heading
          * over it and a reassurance under it.
@@ -363,7 +530,11 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
          * topic is folded into one line. Same facts, a third of the message.
          */
         if (weak.length === 1) {
-          blocks.push([formatCopy(take('f1', FOCUS_SINGLE), { topic: renderFocusInline(weak[0]!) })]);
+          // Same one-line shape, but the sentence has to say how many: «غلطة
+          // واحدة» over «سؤال 2 و 4 و 5» is the message that shipped.
+          const [slot, pool] =
+            wrongCount === 1 ? ['f1', FOCUS_SINGLE] : wrongCount === 2 ? ['f2', FOCUS_TWO] : ['f3', FOCUS_FEW];
+          blocks.push([formatCopy(take(slot, pool), { topic: renderFocusInline(weak[0]!) })]);
         } else {
           blocks.push([
             take('f', FOCUS_INTROS),
