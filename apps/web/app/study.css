@@ -6629,3 +6629,30 @@ label.runner-option {
 .study-tile__label {
   line-height: 1.35;
 }
+
+/* «كورساتي» and «كورسات في مسارك» on a phone: one row that slides sideways,
+   each card most of the screen wide with the next one peeking in, instead of
+   a column of full cards — on a 390px screen that column was most of a
+   nine-thousand-pixel page. From `sm` up the utilities' grid takes over. */
+@media (max-width: 39.999rem) {
+  .dash-shelf {
+    grid-auto-flow: column;
+    grid-auto-columns: 82%;
+    margin-inline: calc(-1 * var(--s-16));
+    padding-inline: var(--s-16);
+    padding-block-end: var(--s-4);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline mandatory;
+    scroll-padding-inline: var(--s-16);
+    scrollbar-width: none;
+  }
+
+  .dash-shelf::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dash-shelf > * {
+    scroll-snap-align: start;
+  }
+}

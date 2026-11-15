@@ -18,10 +18,18 @@ import { STUDENT_NAV } from '@/components/app/student-nav-items';
  */
 const HUES = [35, 250, 295, 150, 75, 210, 340, 190, 20, 270, 120, 55] as const;
 
+/**
+ * Pages «النهارده» (`TodayStrip`) already draws as a row with today's state —
+ * the streak, the plan's share, the league standing. A tile for each beside it
+ * was the same door twice on one screen.
+ */
+const ON_TODAY_STRIP = new Set(['/daily', '/plan', '/focus', '/cards', '/league', '/badges']);
+
 export function StudyTiles({ features, title }: { features: Entitlements; title: string }) {
   const items = STUDENT_NAV.filter(
     (item) =>
       (item.group === 'study' || item.group === 'play') &&
+      !ON_TODAY_STRIP.has(item.href) &&
       (item.feature === undefined || features[item.feature]),
   );
   if (items.length === 0) return null;

@@ -464,7 +464,7 @@ export default async function DashboardPage() {
             ) : null}
           </div>
           {hasCourses ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="dash-shelf grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {dashboard.enrolledCourses.map((course) => (
                 <EnrolledCourseCard
                   key={course.id}
@@ -496,7 +496,7 @@ export default async function DashboardPage() {
                 {c.recommendedSeeAll}
               </Link>
             </div>
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="dash-shelf grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {recommended.map((course) => (
                 <LibraryCourseCard course={course} key={course.id} />
               ))}
