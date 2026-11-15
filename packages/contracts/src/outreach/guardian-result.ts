@@ -92,7 +92,11 @@ export function composeGuardianResult(input: GuardianResultInput): string {
     [pick('g', GUARDIAN_RESULT_GREETINGS), formatCopy(pick('i', GUARDIAN_RESULT_INTROS), vars)].join('\n'),
     formatCopy(pick(`s.${band}`, GUARDIAN_RESULT_SCORE_LINES[band]), vars),
     formatCopy(pick('c', GUARDIAN_RESULT_CLOSERS), vars),
-  ].join('\n\n');
+  ]
+    .join('\n\n')
+    // An empty name (an initial, a title — see `firstNameOf`) leaves a double
+    // space mid-sentence; «نتيجة في …» reads better than a visible hole.
+    .replace(/ {2,}/gu, ' ');
 }
 
 /** FNV-1a, 32-bit — the same choice `compose.ts` makes, for the same reasons. */

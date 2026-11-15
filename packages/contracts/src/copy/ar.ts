@@ -3178,8 +3178,7 @@ export const copy = {
    * model doc in schema.prisma for the full reasoning.
    */
   /**
-   * The WhatsApp message a student gets the moment his order is marked
-   * shipped — «هنبعتلهم رسالة على الواتس نقول إن ده اتشحن النهاردة».
+   * The message a student gets the moment the order is marked shipped — «هنبعتلهم رسالة على الواتس نقول إن ده اتشحن النهاردة».
    *
    * `{name}` is the name on the ORDER, not the account: guest orders have no
    * account, and the order's own `fullName` is the one the parcel is
@@ -3194,9 +3193,13 @@ export const copy = {
    * student is about to phone about. «اتشحن» reads as "it is on your street"
    * and makes day two a complaint; naming the courier also explains, without
    * a second message, why the number that calls them is not ours.
+   *
+   * ⚠️ «المندوب هيتصل بيك» shipped here: «بيك» is «بيكي» to a girl (CLAUDE.md
+   * §7). `{name}` is the FIRST name (`firstNameOf`), and the «يا {name}، » is
+   * dropped when there is none — `compose.spec.ts` guards both.
    */
   bookShipNotice:
-    'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
+    'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
 
   /**
    * «شركة الشحن» — what the student is told when the COURIER reports a status,
@@ -3365,6 +3368,13 @@ export const copy = {
     receiptAlreadyUsed:
       'صورة التحويل دي اتبعتت قبل كده على طلب تاني، فما ينفعش تتحسب مرتين. لو ده تحويل جديد ارفع صورته هو، ولو كنت عايز نسخة تانية كلّمنا على واتساب.',
     genericError: 'حصل خطأ، نحاول تاني.',
+    /**
+     * 429 from `POST /api/book-orders` — one submit per ten seconds, and the
+     * student pressed again inside them. Logged 2026-11-15: one 400 followed
+     * by nine 429s in four seconds, every one of them shown as «حصل خطأ» — a
+     * sentence that invites the very retry that keeps producing it.
+     */
+    tooManyAttempts: 'محاولات كتير ورا بعض. ثواني بس، وبعدين محاولة تانية.',
     uploadError: 'مقدرناش نرفع الصورة. صورة تانية أو اتصال أقوى بالنت غالبًا بيحلّوها.',
     screenshotRequired: 'صورة إثبات التحويل مطلوبة',
     senderPhoneRequired: 'رقم الموبايل اللي اتحوّل منه مطلوب',
@@ -5084,7 +5094,8 @@ export const copy = {
     bookOrderShipped: 'كتابك اتشحن — {book}',
     /** The second line on the card. Split from the title so the row reads at a
      *  glance and the date is there for the reader who stops on it. */
-    bookOrderShippedDetail: 'هيوصلك خلال {days} أيام عمل، والمندوب هيتصل بيك قبل ما يوصل.',
+    // No «بيك»: it is «بيكي» to a girl, and the call needs no object.
+    bookOrderShippedDetail: 'هيوصلك خلال {days} أيام عمل، والمندوب هيتصل قبل ما يوصل.',
     bookOrderDelivered: 'الكتاب وصلك — {book}',
     /** The reason follows on the card, verbatim, exactly as with a rejected
      *  payment. This line is only the lead-in. */
@@ -7599,7 +7610,10 @@ export const copy = {
     share: 'مشاركة',
     close: 'إغلاق',
     rendering: 'بنجهّز الصورة…',
-    failed: 'الصورة ماتجهّزتش — محاولة تانية؟',
+    /** The button under it is `retry` — a noun, no imperative, same rule as
+     *  the card copy above. It used to be a question with nothing to press. */
+    failed: 'الصورة ماتجهّزتش.',
+    retry: 'محاولة تانية',
     resultKicker: 'نتيجتي في',
     scoreOf: 'من {total}',
     studyWith: 'بذاكر مع {teacher}',

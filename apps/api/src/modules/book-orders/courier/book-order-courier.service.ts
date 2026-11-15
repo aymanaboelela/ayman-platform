@@ -8,7 +8,7 @@ import type {
 } from '@ayman/contracts/admin/book-orders';
 import type { BookOrderStatus } from '@ayman/contracts/book-orders';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatWithName } from '@ayman/contracts/outreach/compose';
 
 import { AuditService } from '../../../audit/audit.service';
 import { isFeatureEnabled } from '../../../common/entitlements';
@@ -380,7 +380,6 @@ export class BookOrderCourierService {
     from: BookOrderStatus,
     to: BookOrderStatus,
   ): Promise<void> {
-    const name = fullName.trim().split(/\s+/)[0] ?? fullName;
     const note = entry.status_Note ? ` — «${entry.status_Note}»` : '';
     const notice = copy.bookCourierNotice;
 
@@ -391,8 +390,8 @@ export class BookOrderCourierService {
     if (entry.status_ID === TOROD_STATUS.withAgent) {
       const text =
         entry.delivery_Name && entry.delivery_Phone
-          ? formatCopy(notice.withAgent, { name, agent: entry.delivery_Name, phone: entry.delivery_Phone })
-          : formatCopy(notice.withAgentUnnamed, { name });
+          ? formatWithName(notice.withAgent, fullName, { agent: entry.delivery_Name, phone: entry.delivery_Phone })
+          : formatWithName(notice.withAgentUnnamed, fullName);
       // Quietly when this report is what shipped it (`book_order_shipped`
       // already rang the bell); as a message that rings otherwise.
       if (to === 'shipped' && from !== 'shipped') await this.outreach.postAdminMessage(studentId, text);
@@ -400,7 +399,7 @@ export class BookOrderCourierService {
       return;
     }
     if (entry.status_ID === TOROD_STATUS.delivered && to === 'delivered' && from !== 'delivered') {
-      await this.outreach.postAdminMessage(studentId, formatCopy(notice.delivered, { name }));
+      await this.outreach.postAdminMessage(studentId, formatWithName(notice.delivered, fullName));
       return;
     }
     const template =
@@ -410,7 +409,7 @@ export class BookOrderCourierService {
           ? notice.returned
           : null;
     if (template === null) return;
-    await this.ringWith(studentId, formatCopy(template, { name, note }));
+    await this.ringWith(studentId, formatWithName(template, fullName, { note }));
   }
 
   /** A thread message that rings the bell as a message — for the statuses
