@@ -175,9 +175,13 @@ const MAX_ROUNDS = 24;
 interface Draft {
   at: Date;
   courseLabel: string;
-  /** Null on a hand-added row: the instructor states the place, and it is
-   *  taken as written rather than negotiated with the derived ones. */
+  /** Null on a paper: its place is DERIVED from `score` once the round is
+   *  known. Set on a hand-added row: the instructor states the place, and it
+   *  is taken as written rather than negotiated with the derived ones. */
   rank: number | null;
+  /** `placeScore` of the paper, or null on a hand-added row — the only thing
+   *  a derived place is decided on. */
+  score: number | null;
   /**
    * ورقة ولا إيد.
    *
@@ -208,6 +212,7 @@ function draftFromAttempt(row: PinnedAttempt): Draft {
     at: row.honorBoardAt,
     courseLabel: courseChip(row.quiz.lesson.course),
     rank: null,
+    score: placeScore(row.scaledScore, row.gradeOutOf),
     fromExam: true,
     entry: {
       studentName: row.user.studentProfile?.fullName ?? '—',
@@ -237,6 +242,7 @@ function draftFromPin(row: ManualPin): Draft {
     at: row.honoredAt,
     courseLabel: row.course ? courseChip(row.course) : chipFromProfile(profile),
     rank: row.rank,
+    score: null,
     // A pin ranked from a month exam names that exam in the archive rail,
     // exactly like a paper pinned from the grading screen.
     fromExam: mark !== null,
@@ -275,13 +281,60 @@ function markOf(
 }
 
 /**
+ * The number a derived place is decided on: the paper's share of its own
+ * total, clamped exactly like `percent`, in millionths.
+ *
+ * A share and not `scaledScore`, because one course can sit two papers with
+ * different totals on the same day and 48/50 is the same result as 96/100.
+ * NOT the rounded `percent`, because 99.75 rounds to 100 and «a 100 is الأول»
+ * means a real 100 — 99.75 is the next place down. Millionths, so two equal
+ * shares reached through different divisions compare equal as integers.
+ */
+export function placeScore(scaledScore: unknown, gradeOutOf: unknown): number {
+  const score = Number(scaledScore ?? 0);
+  const outOf = Number(gradeOutOf);
+  if (!Number.isFinite(score) || !(outOf > 0)) return 0;
+  return Math.round(Math.min(Math.max(score / outOf, 0), 1) * 1_000_000);
+}
+
+/**
+ * Dense rank by score within each group: every row on the top score is 1, the
+ * next DISTINCT score is 2, and so on — `[100, 100, 100, 99, 98]` is
+ * `[1, 1, 1, 2, 3]`, never `1, 2, 3, 4, 5`.
+ *
+ * «اللي جاب ١٠٠ هو الأول» is the owner's rule, and the only honest one:
+ * thirty-six students on 100/100 did not finish in thirty-six different
+ * places, and numbering them in the order they happened to be pinned printed
+ * «المركز ٣٧» under a student who scored 99. Dense rather than competition
+ * ranking («1, 1, 1, 4») because he asked for the next mark down to be
+ * «التاني»: the board lists marks worth honouring, not who beat how many.
+ *
+ * The input order does not matter — a place comes from the score alone. The
+ * admin screen and the public board both call this, so they cannot disagree.
+ */
+export function denseRanks<T>(
+  rows: readonly T[],
+  groupOf: (row: T) => string,
+  scoreOf: (row: T) => number,
+): number[] {
+  const scores = new Map<string, number[]>();
+  for (const row of rows) {
+    const list = scores.get(groupOf(row)) ?? [];
+    if (!list.includes(scoreOf(row))) list.push(scoreOf(row));
+    scores.set(groupOf(row), list);
+  }
+  for (const list of scores.values()) list.sort((a, b) => b - a);
+  return rows.map((row) => (scores.get(groupOf(row)) as number[]).indexOf(scoreOf(row)) + 1);
+}
+
+/**
  * Rounds, newest first.
  *
- * ⚠️ `attempts` must already be ordered the way the board ranks — rating desc,
- * then score desc. Derived `rank` is assigned by WALKING that order per
- * course, so a caller that hands this an unordered list gets plausible-looking
- * ranks that are wrong. The one caller's `orderBy` does exactly that; this is
- * the contract between them.
+ * A paper's place is its dense rank by score within its course and round
+ * (`denseRanks`), so the order `attempts` arrive in no longer decides any
+ * place. It still decides the order of cards that SHARE a place — the
+ * caller's `orderBy` (rating desc, then pin time) — because the sort below is
+ * stable.
  *
  * `pins` carry their own rank and are not ordered by anything here.
  */
@@ -311,39 +364,61 @@ export function toHonorBoardRounds(
         /*
          * `rank` is 1-based WITHIN a course, and this is where that is
          * decided. Two entries on one board are both `rank: 1` when they are
-         * the firsts of different courses — that is the intended reading, and
-         * the card prints the course chip beside the word so it reads as one.
+         * the firsts of different courses — and, since ties share a place,
+         * when they are two 100s in the SAME course. The card prints the
+         * course chip beside the word, so either reads as one.
          *
-         * A hand-added row states its place; a derived one is given the next
-         * place in its course that nothing has claimed. So «حطه تاني على
-         * اللوحة دي» does not renumber the exam's own first place, and two
-         * cards never both read «المركز التاني» because one of them counted.
+         * A paper's place is its dense rank among the round's papers in its
+         * course. A hand-added row keeps the place the instructor typed.
+         *
+         * ## Why a hand-added place no longer pushes the papers down
+         *
+         * This used to walk each derived place PAST any number a hand-added
+         * row had claimed, because two «المركز الأول» in one course read as a
+         * contradiction. With ties that is the ordinary board, and the walk
+         * became the very bug this rule removes: a manual first would have
+         * turned every 100 on the exam into «التاني». A hand-added row has no
+         * mark, so it cannot be fitted INTO the score order either — it is
+         * taken at its word and stands beside the papers on the same number.
+         * The papers' places depend on the papers alone, which is also what
+         * lets the admin screen compute the same numbers.
          */
-        const taken = new Map<string, Set<number>>();
-        for (const row of group) {
-          if (row.rank === null) continue;
-          const claimed = taken.get(row.courseLabel) ?? new Set<number>();
-          claimed.add(row.rank);
-          taken.set(row.courseLabel, claimed);
-        }
+        const papers = group.filter((row) => row.rank === null);
+        const derived = denseRanks(
+          papers,
+          (row) => row.courseLabel,
+          (row) => row.score ?? 0,
+        );
+        const placeOf = new Map(papers.map((row, index) => [row, derived[index] as number]));
+        const ranked = group.map((row) => ({
+          ...row,
+          rank: row.rank ?? (placeOf.get(row) as number),
+        }));
 
-        const walked = new Map<string, number>();
-        const ranked = group.map((row) => {
-          if (row.rank !== null) return { ...row, rank: row.rank };
-          const claimed = taken.get(row.courseLabel) ?? new Set<number>();
-          let next = (walked.get(row.courseLabel) ?? 0) + 1;
-          while (claimed.has(next)) next += 1;
-          walked.set(row.courseLabel, next);
-          return { ...row, rank: next };
-        });
-
-        /* Sorted by place, not by source. Stable, so cards sharing a place —
-           the first of عربي and the first of لغات — keep the order above.
-           Without this a hand-added first place would print under the exam's
-           third, and the column of rank words would not read downwards. */
+        /*
+         * Sorted by place, so the rank words read downwards and a paper's
+         * card sits under every higher mark — and inside a place, ONE card
+         * per course at a time.
+         *
+         * The landing shows the first four cards (`LANDING_HONOR_PLACES`).
+         * With one first per course that read «الأول عربي، الأول لغات، …»;
+         * with thirty-five عربي 100s ahead of the لغات ones in the input, a
+         * plain place sort would fill all four with عربي and drop لغات off
+         * the landing. So inside a place the cards alternate course by course
+         * (every course's first card, then every course's second), and inside
+         * one course and place they keep the input order — `index` is the
+         * last key. The archive groups by course anyway, so this only changes
+         * which names the landing picks.
+         */
+        const turns = new Map<string, number>();
         const entries = ranked
-          .map((row, index) => ({ row, index }))
-          .sort((a, b) => a.row.rank - b.row.rank || a.index - b.index)
+          .map((row, index) => {
+            const slot = `${row.courseLabel}::${row.rank}`;
+            const turn = turns.get(slot) ?? 0;
+            turns.set(slot, turn + 1);
+            return { row, index, turn };
+          })
+          .sort((a, b) => a.row.rank - b.row.rank || a.turn - b.turn || a.index - b.index)
           .map(({ row }) => ({ ...row.entry, courseLabel: row.courseLabel, rank: row.rank }));
 
         return {
