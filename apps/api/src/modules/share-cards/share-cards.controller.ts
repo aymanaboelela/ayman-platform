@@ -1,8 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Req, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Logger, Param, ParseUUIDPipe, Post, Req, UsePipes } from '@nestjs/common';
 import { Throttle, seconds } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   ShareCardRenderFailureSchema,
   type CertificatesPayload,
@@ -24,10 +23,12 @@ class ShareCardRenderFailureDto extends createZodDto(ShareCardRenderFailureSchem
 @RequireFeature('shareCards')
 @RequirePermission('quiz:read')
 export class ShareCardsController {
-  constructor(
-    private readonly cards: ShareCardsService,
-    @InjectPinoLogger(ShareCardsController.name) private readonly logger: PinoLogger,
-  ) {}
+  /* Nest's `Logger`, not an injected `PinoLogger`: the authorization matrix
+     builds this module without `LoggerModule`, and an injected logger there is
+     an unresolvable dependency that takes down every row of the matrix. */
+  private readonly logger = new Logger(ShareCardsController.name);
+
+  constructor(private readonly cards: ShareCardsService) {}
 
   @Get('attempts/:attemptId')
   resultCard(
@@ -58,6 +59,6 @@ export class ShareCardsController {
     @Body() body: ShareCardRenderFailureDto,
   ): void {
     const userAgent = String(request.headers['user-agent'] ?? '').slice(0, 300);
-    this.logger.warn({ shareCardFailure: { ...body, userId: user.id, userAgent } }, 'share card failed to render');
+    this.logger.warn(`share card failed to render ${JSON.stringify({ ...body, userId: user.id, userAgent })}`);
   }
 }
