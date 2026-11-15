@@ -739,3 +739,31 @@ button.ptl__row:hover {
     inline-size: 3.25rem;
   }
 }
+
+/* «Cinema» — the band with his poster art (`page.tsx`, gated by
+   `getBrandAsset`). Blue-black scrim solid behind the words at the inline
+   start, opening toward the art; the drawn shapes and the illustration step
+   aside because the poster is the picture. */
+.pth-hero[data-poster] {
+  background: var(--e-950);
+}
+
+.pth-hero__poster {
+  z-index: -3;
+  object-fit: cover;
+  object-position: left center;
+}
+
+.pth-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    linear-gradient(to left, rgb(10 16 32 / 0.95) 0%, rgb(10 16 32 / 0.8) 40%, rgb(10 16 32 / 0.2) 100%),
+    linear-gradient(to top, rgb(10 16 32 / 0.55) 0%, transparent 55%);
+}
+
+.pth-hero[data-poster] .pth-hero__shapes,
+.pth-hero[data-poster] .pth-hero__visual {
+  display: none;
+}
