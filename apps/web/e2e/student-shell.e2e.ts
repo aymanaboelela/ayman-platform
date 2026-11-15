@@ -208,10 +208,10 @@ test.describe('student shell', () => {
     // failed at 2 without anything being wrong. The landmark is what
     // distinguishes "the page's own list" from "the shell's navigation".
     const content = page.getByRole('main').filter({ visible: true });
-    // جوّه الخريطة (`ol.path-run`): زرار «نكمّل: …» في هيرو «مساري» بيحمل نفس
+    // جوّه صفوف الكورس المفتوح (`ol.ptl__rows`): زرار «نكمّل: …» في هيرو «مساري» بيحمل نفس
     // عنوان الدرس عن قصد، والمطابقة الجزئية بتاعة `name` كانت هتعدّه.
     const lesson = content
-      .locator('ol.path-run')
+      .locator('ol.ptl__rows')
       .getByRole('link', { name: 'اختبار تجريبي' })
       .filter({ visible: true });
     await expect(lesson).toHaveCount(1);

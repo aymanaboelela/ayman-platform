@@ -95,13 +95,11 @@ function CourseStep({ course, index, open }: { course: PathCourse; index: number
           {c.courseIndex.replace('{n}', String(n))}
           {open && !done ? ` · ${copy.player.units.youAreHere}` : ''}
         </span>
-        {course.published ? (
-          <Link href={`/library/${course.slug}`} className="ptl__title">
-            {course.title}
-          </Link>
-        ) : (
-          <span className="ptl__title">{course.title}</span>
-        )}
+        {/* An <h2> — the page's own heading is the <h1>, and a course is a
+            section of it; navigating by heading has to land on each course. */}
+        <h2 className="ptl__title">
+          {course.published ? <Link href={`/library/${course.slug}`}>{course.title}</Link> : course.title}
+        </h2>
         <span className="ptl__bar" aria-hidden="true">
           <span style={{ inlineSize: `${Math.min(100, Math.max(0, course.progressPercent))}%` }} />
         </span>
@@ -237,7 +235,13 @@ function LessonRow({
       <Link href={href} className={className} aria-current={isNext ? 'step' : undefined}>
         {mark}
         <span className="ptl__rowtitle">{node.title}</span>
-        {isNext ? <span className="chip chip--solid ptl__rowchip">{c.timelineResume}</span> : null}
+        {/* «نبدأ من هنا» on a course not started yet, «نكمّل» after — the
+            word is INSIDE the link, so pressing it opens the lesson. */}
+        {isNext ? (
+          <span className="chip chip--solid ptl__rowchip">
+            {course.clearedLessons === 0 ? c.startHere : c.timelineResume}
+          </span>
+        ) : null}
         {!isNext && node.isExam ? <span className="ptl__rowtag">{c.exam}</span> : null}
       </Link>
     </li>

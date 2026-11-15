@@ -568,7 +568,11 @@
   color: var(--n-12);
 }
 
-a.ptl__title:hover {
+.ptl__title {
+  margin: 0;
+}
+
+.ptl__title a:hover {
   color: var(--e-ink);
 }
 
