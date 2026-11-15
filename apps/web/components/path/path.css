@@ -111,24 +111,6 @@
   text-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
 }
 .pth-hero__unit { font-size: 0.45em; opacity: 0.8; }
-.pth-hero__bar {
-  position: relative;
-  height: 0.75rem;
-  margin-top: 1rem;
-  max-width: 32rem;
-  border-radius: var(--r-full);
-  background: rgb(255 255 255 / 0.2);
-  overflow: hidden;
-}
-.pth-hero__bar > span {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: var(--pth-fill);
-  border-radius: inherit;
-  background: linear-gradient(to left, var(--a-9), color-mix(in oklab, var(--a-9), #fff 45%));
-  box-shadow: 0 0 14px color-mix(in oklab, var(--a-9) 70%, transparent);
-}
 .pth-hero__chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
 .pth-chip {
   display: inline-flex;
@@ -227,14 +209,6 @@
   border-radius: var(--r-full);
   background: color-mix(in oklab, var(--hue) 14%, transparent);
   overflow: hidden;
-}
-.pth-rail__bar > span {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: var(--pth-fill);
-  border-radius: inherit;
-  background: var(--hue);
 }
 
 /* ── راس الكورس ─────────────────────────────────────────────────────────── */
@@ -368,7 +342,6 @@
   .pth-shape--ring { animation: pth-float 9s ease-in-out infinite; }
   .pth-shape--blob { animation: pth-morph 12s ease-in-out infinite; }
   .pth-shape--dot { animation: pth-float 5s ease-in-out infinite reverse; }
-  .pth-hero__bar > span { animation: pth-fill 1.2s var(--ease-out) 300ms both; }
   .pth-art__road-done { animation: pth-road 1.6s var(--ease-out) 300ms both; }
   .pth-art__cloud { animation: pth-drift 14s ease-in-out infinite; }
   .pth-art__cloud--2 { animation-duration: 18s; animation-direction: reverse; }
@@ -376,7 +349,6 @@
   .pth-art__spark { animation: pth-twinkle 2.4s ease-in-out infinite; }
   .pth-art__spark--2 { animation-delay: 700ms; }
   .pth-art__spark--3 { animation-delay: 1400ms; }
-  .pth-rail__bar > span { animation: pth-fill 1s var(--ease-out) 200ms both; }
   .pth-stop[data-state='current']::after { animation: pth-pulse 2.2s ease-out infinite; }
   /* الشارة مابتتحركش لوحدها عن قصد: حاجة بتتهز على طول مش «stable» عند
      Playwright، فمابيعرفش يدوس عليها (`student-course-entry.e2e.ts`) — والهالة
@@ -738,4 +710,186 @@ button.ptl__row:hover {
   .ptl__art {
     inline-size: 3.25rem;
   }
+}
+
+/* ===========================================================================
+   The first-round design (owner: «عاوزها تبقى شبه الديمو»).
+
+   The hero is ONE ROW — ring, title + summary, the one button — on the band
+   it already had, and the timeline sits beside a narrow side column. The
+   rules below override the tall band above; the old hero's pieces (percent,
+   bar, chips, illustration) are no longer rendered.
+   ======================================================================== */
+.pth-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-16) var(--s-20);
+  padding: var(--s-20);
+}
+
+@media (min-width: 768px) {
+  .pth-hero {
+    flex-wrap: nowrap;
+    padding: var(--s-20) var(--s-24);
+  }
+}
+
+.pth-hero__ring {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.pth-hero .pth-hero__copy {
+  display: grid;
+  flex: 1 1 14rem;
+  gap: var(--s-4);
+  min-inline-size: 0;
+}
+
+.pth-hero__title {
+  margin: 0;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+  color: #fff;
+}
+
+.pth-hero__summary {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: rgb(255 255 255 / 0.86);
+}
+
+.pth-hero .pth-hero__cta {
+  flex-shrink: 0;
+  max-inline-size: 100%;
+  margin: 0;
+}
+
+.pth-layout {
+  display: grid;
+  gap: var(--s-24);
+  container-type: inline-size;
+}
+
+@container (min-width: 56rem) {
+  .pth-layout {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    align-items: start;
+  }
+}
+
+.pth-side {
+  display: grid;
+  gap: var(--s-12);
+  min-inline-size: 0;
+}
+
+.pth-side__card {
+  display: grid;
+  gap: var(--s-8);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.pth-side__title {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.pth-side__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pth-side__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-block-size: 2.25rem;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+a.pth-side__row:hover {
+  background: var(--n-2);
+}
+
+.pth-side__row[data-locked] {
+  color: var(--n-11);
+}
+
+.pth-side__mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border: var(--hairline) solid var(--n-6);
+  border-radius: var(--r-full);
+  color: var(--n-11);
+}
+
+.pth-side__mark[data-quiz] {
+  border-radius: var(--r-sm);
+}
+
+.pth-side__mark[data-now] {
+  border-color: transparent;
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.pth-side__name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pth-side__empty {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.pth-side__exam {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  border-color: var(--e-tint-line);
+  background: var(--e-tint);
+}
+
+.pth-side__exam-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.pth-side__exam-tag {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--e-ink);
+}
+
+.pth-side__exam-name {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
 }

@@ -3999,6 +3999,13 @@ export const copy = {
      *  `library.lockedClose`, written down here so the next dialog does not
      *  rediscover it. */
     closedClose: 'تمام',
+    /** The side column beside the timeline (first-round design). */
+    upNextTitle: 'اللي جاي',
+    upNextEmpty: 'مفيش محاضرات مستنياك دلوقتي.',
+    examTitle: 'امتحان الشهر',
+    examOpen: 'مفتوح دلوقتي',
+    examUpcoming: 'قرّب',
+    examGo: 'ادخل',
   },
   /* صفحة ولي الأمر — `copy/guardian.ts` (موديول لوحده، زي `copy/backlog.ts`). */
 

@@ -1,13 +1,13 @@
-import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowLeft, BookOpenCheck, Flag, Route } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { LearningPathSchema, copy, type LearningPath } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PathTimeline } from '@/components/path/path-timeline';
-import { PathArt } from '@/components/path/path-art';
-import { CountUp } from '@/components/rank/count-up';
+import { PathSide } from '@/components/path/path-side';
+import { bandExam, getStudentExamsOrEmpty } from '@/lib/exams';
+import { ProgressRing } from '@/components/progress-ring';
 import '@/components/path/path.css';
 
 const c = copy.path;
@@ -23,7 +23,11 @@ export const metadata: Metadata = { title: c.title };
  * the gate on every request and 404s a locked lesson.
  */
 export default async function PathPage() {
-  const path = await apiGetAuthed('/api/me/path', LearningPathSchema);
+  const [path, exams] = await Promise.all([
+    apiGetAuthed('/api/me/path', LearningPathSchema),
+    getStudentExamsOrEmpty(),
+  ]);
+  const exam = bandExam(exams.exams);
 
   if (path.courses.length === 0) {
     return (
@@ -54,12 +58,7 @@ export default async function PathPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
-      <header className="study-head">
-        <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
-        <h1 className="study-head__title">{c.title}</h1>
-        <p className="study-head__lead">{c.subtitle}</p>
-      </header>
+    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-8 md:py-10">
 
       {/*
         «إنت فين» — هيرو ملوّن مش شريط.
@@ -73,7 +72,13 @@ export default async function PathPage() {
 
       {/* The courses as one timeline — a card each, only the current one
           open to the few lectures around what is next. See `PathTimeline`. */}
-      <PathTimeline path={path} />
+      {/* The timeline beside a narrow side column — the first-round design
+          the owner picked: «اللي جاي» and the month's exam at the side,
+          stacked under the timeline on a phone. */}
+      <div className="pth-layout">
+        <PathTimeline path={path} />
+        <PathSide path={path} exam={exam} />
+      </div>
     </main>
   );
 }
@@ -90,52 +95,34 @@ function PathHero({ path }: { path: LearningPath }) {
   const course = path.courses.find((entry) => entry.id === path.currentCourseId);
   const next = course?.published ? course.nodes.find((node) => node.id === course.nextLessonId) : undefined;
 
+  /*
+   * One row, from the first-round design: the ring, what this page is and
+   * how far along, and the one button. It was a tall band with a count-up,
+   * a bar, two chips and an illustration — five ways of saying the same
+   * number before the first course appeared.
+   */
   return (
-    <section className="pth-hero mb-8">
-      <div className="pth-hero__shapes" aria-hidden="true">
-        <span className="pth-shape pth-shape--ring" />
-        <span className="pth-shape pth-shape--blob" />
-        <span className="pth-shape pth-shape--dot" />
-      </div>
+    <section className="pth-hero mb-6">
+      <ProgressRing percent={path.percent} size={76} tone="ink">
+        <span className="pth-hero__ring">{Math.round(path.percent)}%</span>
+      </ProgressRing>
 
       <div className="pth-hero__copy">
-        <span className="pth-hero__pill">
-          <Route className="size-3.5" aria-hidden="true" />
+        <h1 className="pth-hero__title">{c.title}</h1>
+        <p className="pth-hero__summary">
           {summary}
-        </span>
-
-        <p className="pth-hero__percent">
-          <CountUp to={Math.round(path.percent)} />
-          <span className="pth-hero__unit">%</span>
-          <span className="sr-only">{c.percentComplete.replace('{percent}', String(path.percent))}</span>
+          {' · '}
+          {left > 0 ? c.heroLeft.replace('{n}', String(left)) : c.heroAllDone}
         </p>
-
-        <div className="pth-hero__bar" aria-hidden="true">
-          <span style={{ '--pth-fill': `${path.percent}%` } as CSSProperties} />
-        </div>
-
-        <div className="pth-hero__chips">
-          <span className="pth-chip">
-            <BookOpenCheck className="size-3.5" aria-hidden="true" />
-            {c.heroCourses.replace('{n}', String(path.courses.length))}
-          </span>
-          <span className="pth-chip">
-            <Flag className="size-3.5" aria-hidden="true" />
-            {left > 0 ? c.heroLeft.replace('{n}', String(left)) : c.heroAllDone}
-          </span>
-        </div>
-
-        {next && course ? (
-          <Link href={`/courses/${course.slug}/lessons/${next.lessonId}`} className="pth-hero__cta">
-            <span className="min-w-0 truncate">{c.heroNext.replace('{title}', next.title)}</span>
-            <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
-          </Link>
-        ) : null}
+        <span className="sr-only">{c.percentComplete.replace('{percent}', String(path.percent))}</span>
       </div>
 
-      <div className="pth-hero__visual">
-        <PathArt percent={path.percent} />
-      </div>
+      {next && course ? (
+        <Link href={`/courses/${course.slug}/lessons/${next.lessonId}`} className="pth-hero__cta">
+          <span className="min-w-0 truncate">{c.heroNext.replace('{title}', next.title)}</span>
+          <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+        </Link>
+      ) : null}
     </section>
   );
 }
