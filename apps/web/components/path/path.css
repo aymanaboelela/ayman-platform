@@ -397,3 +397,31 @@
   0% { transform: scale(0.92); opacity: 1; }
   100% { transform: scale(1.18); opacity: 0; }
 }
+
+/* ── the fold under a course header — `PathMap open` ───────────────────── */
+/* Only the course the student is in opens on arrival; the others are their
+   header and this one row. The row's words swap with `[open]` — CSS, so the
+   disclosure stays a Server Component. */
+.pth-fold__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  min-block-size: 2.75rem;
+  margin: 0 var(--s-16) var(--s-8);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+  color: var(--e-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  list-style: none;
+  transition: background var(--d-hover) var(--ease-out);
+}
+.pth-fold__toggle::-webkit-details-marker { display: none; }
+.pth-fold__toggle::marker { content: ''; }
+.pth-fold__toggle:hover { background: var(--n-3); }
+.pth-fold__chevron { transition: transform var(--d-hover) var(--ease-out); }
+.pth-fold[open] .pth-fold__chevron { transform: rotate(180deg); }
+.pth-fold[open] .pth-fold__show,
+.pth-fold:not([open]) .pth-fold__hide { display: none; }

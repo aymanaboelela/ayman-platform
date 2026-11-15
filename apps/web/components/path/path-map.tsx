@@ -10,7 +10,7 @@ import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { LtrRatio } from '@/components/ltr-ratio';
 import { ProgressRing } from '@/components/progress-ring';
-import { Trophy } from 'lucide-react';
+import { Trophy, ChevronDown } from 'lucide-react';
 import { PATH_HUES } from './path-hues';
 
 const c = copy.path;
@@ -272,7 +272,21 @@ function PathStop({
   );
 }
 
-export function PathMap({ course, index }: { course: PathCourse; index: number }) {
+export function PathMap({
+  course,
+  index,
+  open = true,
+}: {
+  course: PathCourse;
+  index: number;
+  /**
+   * Whether the course's stops are showing on arrival. `/path` opens only the
+   * course the student is in — four courses of twelve stops each, all drawn,
+   * was a screen of stations to scroll past to find where they were. The rest
+   * fold under their header and open on press (`<details>`, no JS).
+   */
+  open?: boolean;
+}) {
   const isDone = course.totalLessons > 0 && course.clearedLessons === course.totalLessons;
 
   return (
@@ -416,6 +430,14 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
         </span>
       </header>
 
+      <details className="pth-fold" open={open}>
+        <summary className="pth-fold__toggle">
+          <span className="pth-fold__show">
+            {c.showLessons} · <LtrRatio value={course.clearedLessons} of={course.totalLessons} />
+          </span>
+          <span className="pth-fold__hide">{c.hideLessons}</span>
+          <ChevronDown className="pth-fold__chevron size-4" aria-hidden="true" />
+        </summary>
       {course.nodes.length === 0 ? (
         <p className="px-5 py-4 text-fg-muted">{c.nothingOpen}</p>
       ) : (
@@ -449,6 +471,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
           </li>
         </ol>
       )}
+      </details>
     </section>
   );
 }

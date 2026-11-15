@@ -2535,6 +2535,79 @@ html[data-player-fullscreen] .route-fade {
   color: var(--n-11);
 }
 
+/* A folding group in the STUDENT rail and phone sheet — `student-nav-list.tsx`.
+   The head is a real button; the body is hidden while folded, EXCEPT in the
+   icon-only rail, where the head (a `.rail__label`) is gone and a folded body
+   would leave its icons unreachable — see the rule after `.rail__label`'s. */
+.nav-fold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.nav-fold__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+  text-align: start;
+  transition: background var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out);
+}
+
+.nav-fold__head:hover {
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+.nav-fold[data-open='true'] > .nav-fold__head {
+  color: var(--e-ink);
+}
+
+.nav-fold__count {
+  margin-inline-start: auto;
+  min-inline-size: 1.25rem;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-full);
+  background: var(--n-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+  text-align: center;
+}
+
+.nav-fold__chevron {
+  flex-shrink: 0;
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+.nav-fold[data-open='true'] .nav-fold__chevron {
+  transform: rotate(180deg);
+}
+
+.nav-fold[data-open='false'] > .nav-fold__body {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  html[data-rail='collapsed'] .nav-fold > .nav-fold__body,
+  .shell[data-rail-forced='true'] .nav-fold > .nav-fold__body {
+    display: flex;
+  }
+}
+
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  html:not([data-rail='expanded']) .nav-fold > .nav-fold__body {
+    display: flex;
+  }
+}
+
 /* Collapsing is NOT re-implemented here. Every rail link keeps `.rail__item`
    alongside `.nav-pill`, so the existing `html[data-rail='collapsed']` rules —
    which are guarded by `@media (min-width: 48rem)` for a reason documented at

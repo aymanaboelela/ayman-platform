@@ -47,13 +47,13 @@ import { PromoBannerStrip } from '@/components/dashboard/promo-banner-strip';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { HonorBoardCard } from '@/components/dashboard/honor-board-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
-import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
 import { GuardianCodeCard } from '@/components/dashboard/guardian-code-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 import { FacebookGroupCard } from '@/components/dashboard/facebook-group-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { TodayStrip } from '@/components/engagement/today-strip';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
+import { StudyTiles } from '@/components/dashboard/study-tiles';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
 
@@ -345,547 +345,215 @@ export default async function DashboardPage() {
     : undefined;
 
   return (
+    /*
+      ## The 2026-11 order — «المنصة للطالب زحمة أوي»
+
+      The page was sixteen blocks in two columns, six metres of scroll on a
+      phone, and the owner approved a mock-up of this order before it was
+      built. One column for the student's own work, top to bottom in the order
+      it is asked for:
+
+        1. the band (who, how far) and, right under it, «نكمّل من مكانك» —
+           a returning student's one reason to be here
+        2. «امتحان الشهر» — DATED, so it outranks everything standing; asked
+           for by name: «عاوز دي تبقى فوق»
+        3. the open month, «ناقصك كده وخلاص», anything addressed to them
+        4. «كورساتي» three across, then courses in their track
+        5. exams and results beside today's habits and the study tiles
+        6. books, then the ways to reach us, then what is ABOUT them
+
+      «نصيحة اليوم» is gone: it was the same sentence for every student and
+      the lightest thing on a page that was too heavy. Everything else kept its
+      component and its gate; only its place changed.
+    */
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
-      <DashboardHero
-        // `session` is null only in the torn-session case `AccountMenu`
-        // documents — `proxy.ts` has already redirected the navigation by then.
-        // The profile's own name is the better fallback either way: it is what
-        // the student typed during onboarding, while `session.name` can still
-        // be whatever Google supplied.
-        name={me.profile?.fullName ?? session?.name ?? ''}
-        image={session?.image ?? null}
-        greetingName={name}
-        yearLabel={identity?.yearLabelAr ?? null}
-        trackLabel={identity?.trackLabelAr ?? null}
-        schoolName={me.profile?.schoolName ?? null}
-        overallPercent={overallPercent}
-        courseCount={dashboard.enrolledCourses.length}
-        completedLessons={completedLessons}
-        averageScore={averageScore}
-        /*
-         * The three figures the band prints big. They were a `<StatsRow>` in
-         * the main column below, and the three counts above are the ones the
-         * band used to state a second time as small inline links — one set of
-         * numbers now, in one place, at a size worth reading. `statFigures`
-         * (in `stats-row.tsx`) is where the pairing lives and argues itself.
-         *
-         * ⚠️ `highestTier` is called HERE, in the Server Component, and comes
-         * from the plain `lib/achievements.ts` rather than from either of the
-         * two components that consume its answer. Its own ⚠️ has the argument:
-         * the day `stats-row.tsx` or `stat-tile.tsx` takes a `'use client'`, a
-         * helper exported from one of them stops being callable from the server
-         * and this route 500s on the first real request, with typecheck and
-         * every unit test still green.
-         */
-        xp={xp}
-        learningSeconds={learningSeconds}
-        badgesEarned={earnedCount(badges)}
-        badgeTier={highestTier(badges)}
-        // «مواعيد المحاضرات» — the band picks the courses that carry a
-        // `scheduleNote` out of this itself (`scheduleLines`), rather than the
-        // page pre-filtering, so the rule sits next to the markup that depends
-        // on it. Passing the array costs nothing: it is the same one the cards
-        // below already render from.
-        courses={dashboard.enrolledCourses}
-      />
-
-      {/* «الكورس ده خلص دوره في رحلتك» — right under the band, the first thing
-          below the greeting, until «تمام، فهمت». Nothing on the ordinary day. */}
-      <RetiredCourseNotice retired={dashboard.retiredCourses ?? []} />
-
-      {/*
-        «امتحان الشهر» — full width, directly under the band, ABOVE «ناقصك كده
-        وخلاص».
-
-        This position is the one thing on the page that outranks «ناقصك كده
-        وخلاص», and only because it is DATED. Everything else in this column
-        describes an outstanding quantity that will still be outstanding
-        tomorrow; an exam window opens on Friday at eight and shuts, and a
-        student who scrolls past it does not get another one — `attemptAllowance`
-        is 1 and there is no second sitting to catch it with. Under the hero is
-        where a student's eye already is, and it is the only place on this
-        screen that is unmissable.
-
-        Absent entirely except in the two phases where the exam is still ahead
-        of them — which is most students on most days, and is also what a failed
-        `/api/me/exams` produces. The page then looks exactly as it did before
-        this existed; see the read's own note in the `Promise.all` above for why
-        that ambiguity is the safe way round.
-      */}
-      <ExamCountdownBand exam={monthlyExam} serverTime={studentExams.serverTime} />
-
-      {/*
-        «شهر جديد اتفتح» — تحت الباند، وفوق «ناقصك كده وخلاص».
-
-        تحت الامتحان وليس فوقه: الامتحان **بميعاد**، بيفتح الجمعة ٨ ويقفل، وطالب
-        دوّس عليه بالغلط مافيش جلسة تانية يلحقها (`attemptAllowance` واحد). الشهر
-        مش كده — بيفضل مفتوح لحد ما المدرّس يقفله. فاللي بيقفل النهارده بياخد
-        المكان اللي فوق.
-
-        وفوق «ناقصك كده وخلاص» لأن ده فلوس والتاني تقدّم. الطالب اللي شهره التاني
-        اتفتح وهو مش ماسكه، أهم حاجة يعرفها إن فيه محاضرات مقفولة عليه — «فاضلك
-        درسين» في الشهر اللي خلّصه بتبقى الجملة التانية، مش الأولى.
-
-        `quiet` لما يكون فيه امتحان مفتوح: الشاشة عليها زرار أمبر واحد بس، وفي
-        الساعات دي هو «نبدأ الامتحان». نفس السبب اللي الصفحة بتوقّف
-        `<NextUpBlock>` عشانه تحت بالظبط — بس ده بيهدّى وماينزلش، لأن الفلوس
-        والباب الوحيد ليها مايختفوش عشان فيه امتحان.
-
-        مابيرسمش حاجة خالص للأغلبية الساحقة: الأراي فاضية لأي حد مش دافع بالشهر،
-        أو ماسك الترم، أو ماسك كل الشهور المفتوحة. الشرط كله في
-        `DashboardMonthOfferSchema`.
-      */}
-      <MonthNewsBand offers={dashboard.monthOffers} quiet={monthlyExam?.phase === 'open'} />
-
-      {/* «ناقصك كده وخلاص» — the band above states the percentage, this states
-          what to do about it. Directly under the hero because those two are one
-          thought: «عاوز يبقى فيه حاجة تحت… أعرف اللي ناقصني وأضبطها».
-          `showRing={false}` — the band's own 104px ring is right there, and a
-          second ring with the same number in it reads as a second measurement.
-          At 100% this is where the celebration lands.
-
-          ⚠️ IT STANDS DOWN while a monthly exam is OPEN, and that is this
-          page's «exactly one accent-filled primary action» rule being kept
-          rather than excepted. `<ExamCountdownBand>` carries «نبدأ الامتحان» in
-          `--a-9` in that phase, and every row of this block ends in an amber
-          pill of its own — two amber answers to "what do I press" on one
-          screen is precisely the state the rebuild at the top of this file
-          exists to prevent. For the few hours a window is open, the exam IS
-          what to do next; «فاضلك درسين» is still true and is still one press
-          away on «مسارك».
-
-          It does NOT stand down for an `upcoming` exam. That band has nothing
-          pressable on it at all — there is no door yet — so it takes no action
-          away from this block. */}
-      {monthlyExam?.phase === 'open' ? null : (
-        <NextUpBlock
-          dashboard={dashboard}
-          percent={overallPercent}
+      <div className="dash-flow">
+        <DashboardHero
+          // `session` is null only in the torn-session case `AccountMenu`
+          // documents — `proxy.ts` has already redirected the navigation by
+          // then. The profile's own name is the better fallback either way.
+          name={me.profile?.fullName ?? session?.name ?? ''}
+          image={session?.image ?? null}
           greetingName={name}
-          showRing={false}
+          yearLabel={identity?.yearLabelAr ?? null}
+          trackLabel={identity?.trackLabelAr ?? null}
+          schoolName={me.profile?.schoolName ?? null}
+          overallPercent={overallPercent}
+          courseCount={dashboard.enrolledCourses.length}
+          completedLessons={completedLessons}
+          averageScore={averageScore}
+          xp={xp}
+          learningSeconds={learningSeconds}
+          badgesEarned={earnedCount(badges)}
+          badgeTier={highestTier(badges)}
+          courses={dashboard.enrolledCourses}
         />
-      )}
 
-      {/*
-        FULL WIDTH, above the split — and only when something is actually
-        waiting, which is most days not at all.
+        {/* «الكورس ده خلص دوره في رحلتك» — under the greeting, until «تمام،
+            فهمت». Nothing on the ordinary day. */}
+        <RetiredCourseNotice retired={dashboard.retiredCourses ?? []} />
 
-        A message from the instructor addressed to this student by name
-        outranks every standing block on the page for as long as it is unread,
-        and it stops existing the moment they read it. Putting it in the aside
-        with the other "not your own work" blocks would be the one case where
-        that grouping is wrong: it IS addressed to them.
-      */}
-      {/* الكارت ده بيفتح ويدجت المساعد بـ`openAssistant()`. لو الفيتشر
-          مقفولة، الويدجت مش متركّب أصلًا (`assistant-slot.tsx`) — فالكارت
-          كان هيبقى زرار مابيعملش حاجة، وهو بالظبط الفخ اللي CLAUDE.md §٢
-          قاعدة ٣ بتحكيه: جيت بيفتح تناقض في الشاشة اللي حواليه. */}
-      {features.assistant ? <InstructorMessageCard /> : null}
+        {/*
+          «نكمّل من مكانك», straight under the band — the band says how far,
+          this says where to press. When there is nothing to resume the
+          first-run card takes the slot; when both apply (mid-course, no quiz
+          sat yet) the steps card follows in its `plain` tone so the page keeps
+          one accent-tinted surface.
+        */}
+        {resume ? (
+          <ContinueWatchingCard
+            item={resume}
+            coverKey={resumeCourse?.coverKey ?? null}
+            subjectNameAr={resumeCourse?.subjectNameAr ?? null}
+          />
+        ) : null}
+        {showSteps ? <StartHereCard steps={steps} tone={resume ? 'plain' : 'hero'} /> : null}
 
-      {/*
-        «مبروك! اسمك على لوحة الشرف» — تحت رسالة المهندس وفوق كل حاجة تانية.
+        {/*
+          «امتحان الشهر» — the one thing that outranks «ناقصك كده وخلاص»,
+          because it is DATED: a window opens and shuts, `attemptAllowance` is
+          1, and a student who scrolls past it gets no second sitting. Absent
+          outside the two phases where it is still ahead of them.
+        */}
+        <ExamCountdownBand exam={monthlyExam} serverTime={studentExams.serverTime} />
 
-        نفس منطق الكارت اللي فوقه بالظبط: ده خبر مخصوص بالطالب ده، عمره
-        أسبوعين بالكتير، وبعدها بيختفي لوحده من السيرفر. فوق كل بلوك ثابت في
-        الصفحة طول ما هو موجود، ومش في العمود الجانبي — «اسمك اتنشر» مش من نوع
-        «حاجات مش شغلك» اللي الجنب بيجمّعها.
+        {/* «شهر جديد اتفتح» — under the exam (which shuts today; a month stays
+            open), above «ناقصك» (money before progress). `quiet` while an exam
+            is open so the screen keeps one amber action. Renders nothing for
+            almost everyone. */}
+        <MonthNewsBand offers={dashboard.monthOffers} quiet={monthlyExam?.phase === 'open'} />
 
-        ⚠️ ورا `features.honorBoard`: ستاك مقفول فيه الفيتشر مالوش صفحة لوحة
-        أصلاً، والزرار كان هيودّي على `notFound()` — نفس فخ قاعدة ٣ في
-        CLAUDE.md §٢ اللي الكارت اللي فوق اتلفّ فيه.
-      */}
-      {features.honorBoard && dashboard.honorBoard ? (
-        <HonorBoardCard standing={dashboard.honorBoard} />
-      ) : null}
+        {/* «ناقصك كده وخلاص». Stands down while a monthly exam is OPEN — the
+            exam band carries «نبدأ الامتحان» in amber then, and every row here
+            ends in an amber pill of its own. */}
+        {monthlyExam?.phase === 'open' ? null : (
+          <NextUpBlock
+            dashboard={dashboard}
+            percent={overallPercent}
+            greetingName={name}
+            showRing={false}
+          />
+        )}
 
-      {/*
-        «البانرات الترويجية» — the instructor's own pictures, full width, last
-        thing above the two columns.
+        {/* Addressed to THIS student, and gone once read / after two weeks —
+            so above every standing block while they exist. Each is gated on
+            its feature: a card whose door is switched off is a dead button. */}
+        {features.assistant ? <InstructorMessageCard /> : null}
+        {features.honorBoard && dashboard.honorBoard ? (
+          <HonorBoardCard standing={dashboard.honorBoard} />
+        ) : null}
+        {features.promoBanners ? (
+          <PromoBannerStrip banners={bannersFor(promoBanners, me.profile?.year ?? null)} />
+        ) : null}
 
-        Below everything addressed to THIS student (the exam, the open month,
-        «ناقصك كده وخلاص», the instructor's message, the honour board): those
-        are about their own work and outrank an offer. Above the columns,
-        because a banner is the instructor talking to everyone — it belongs to
-        neither the student's work in the main column nor the side matter.
+        {/*
+          «كورساتي» — three across from `lg`, two from `sm`. It used to be one
+          wide card a row in a column beside an aside, so four courses were a
+          screen and a half; across the full width the same four are one row
+          and a bit. ONE grid, no «المكتملة» tab — a course published as it
+          goes is "finished" only until next week's lecture.
+        */}
+        <section>
+          <div className="group-head">
+            <span className="group-head__mark" aria-hidden="true" />
+            <h2 className="group-head__title">{c.myCourses}</h2>
+            {hasCourses ? (
+              <span className="group-head__count">
+                {copy.library.courseCount.replace('{n}', String(dashboard.enrolledCourses.length))}
+              </span>
+            ) : null}
+          </div>
+          {hasCourses ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {dashboard.enrolledCourses.map((course) => (
+                <EnrolledCourseCard
+                  key={course.id}
+                  course={course}
+                  shippingRates={bookCatalog.shippingRates}
+                  instapay={settings.contact.instapay}
+                  vodafoneCash={settings.contact.vodafoneCash}
+                />
+              ))}
+            </div>
+          ) : (
+            // Quiet on purpose: the first-run card above already carries this
+            // exact link with the accent button on it.
+            <div className="empty">
+              <SpotIllustration name="courses" />
+              <p className="empty__body">{c.noCoursesYet}</p>
+            </div>
+          )}
+        </section>
 
-        Not to be confused with the «site banner» `DashboardHero`'s note
-        mentions: that is the `<header>` LANDMARK (role=banner) the shell owns,
-        a matter of document semantics. This is a `<section>` with its own
-        accessible name, so the two can never collide.
-
-        Gated twice and both are needed: `features` hides it on a stack where
-        the owner switched the feature off, and `bannersFor` keeps only what is
-        in its dated window today and aimed at this student's year. Nothing
-        renders at all when that leaves nothing.
-      */}
-      {features.promoBanners ? (
-        <PromoBannerStrip banners={bannersFor(promoBanners, me.profile?.year ?? null)} />
-      ) : null}
-
-      {/*
-        ## Two columns, and what decides which side a block goes to
-
-        Reported with a screenshot of a dashboard that was one long ribbon of
-        full-width rows: «إنت بتهدسلي كله تحت بعض… أنا عايز يبقى حاجات على
-        الجنب وحاجات في النص». Every block had the same width and therefore the
-        same weight, so «قناة الواتساب» and «نصيحة اليوم» — neither of which is
-        the student's own work — sat between the resume card and their courses
-        at exactly the size of the thing they were interrupting.
-
-        The rule the split encodes: **the main column is the student's work**
-        (what to resume, what they are enrolled in, what to take next, how they
-        did, the book) **and the aside is everything about them or around them**
-        (the channel, the tip, their markers, their weak topics).
-
-        `.dash-split` is a grid only from 80rem — a measured threshold, not a
-        guess; see the rule in `study.css` for the four widths it was taken
-        from. Below it the two columns stack in DOM order, which is why the
-        aside is written second even though CSS pins it to column 2 explicitly:
-        on a phone «كورساتي» must not be under four cards of side matter.
-
-        ⚠️ Every grid inside the main column is sized against that, and the
-        breakpoints look one step too high on purpose. `xl:grid-cols-1` on the
-        course grid is not a typo — at `xl` (1280) the split has just switched
-        on and the main track is 592px, so two course cards there are 284px
-        each. They go back to two across at `2xl`, where the track is 752px.
-        Tailwind's breakpoints are VIEWPORT widths and this column is 296px of
-        rail plus an aside away from being one.
-      */}
-      <div className="dash-split">
-        <div className="dash-split__main space-y-8">
-          {/*
-            The hero slot. Resume wins it whenever there is something to resume
-            — a returning student's one reason to be here — and the first-run
-            card takes it otherwise. When BOTH apply (a student mid-course who
-            has yet to sit a quiz) the steps card renders below in its `plain`
-            tone, so the page still has exactly one accent-tinted surface.
-          */}
-          {resume ? (
-            <section>
-              <ContinueWatchingCard
-                item={resume}
-                // The resume target's own course, out of the payload already on
-                // screen — see the card for why the artwork is not on
-                // `ContinueWatchingSchema` itself, and why a miss is survivable.
-                coverKey={resumeCourse?.coverKey ?? null}
-                subjectNameAr={resumeCourse?.subjectNameAr ?? null}
-              />
-            </section>
-          ) : null}
-
-          {showSteps ? (
-            <section>
-              <StartHereCard steps={steps} tone={resume ? 'plain' : 'hero'} />
-            </section>
-          ) : null}
-
+        {/* «كورسات في مسارك» — the same object in its other state, directly
+            under. Absent when there is nothing in their cell left to join. */}
+        {recommended.length > 0 ? (
           <section>
-            {/* `.group-head` — the ember mark is what turns a page of stacked
-                lists into a page of named sections. The count is
-                `copy.library.courseCount`, the one «{n} كورس» string in the
-                table; the dashboard has no count string of its own and adding a
-                duplicate would mean two keys that must be translated the same
-                way forever. */}
             <div className="group-head">
               <span className="group-head__mark" aria-hidden="true" />
-              <h2 className="group-head__title">{c.myCourses}</h2>
-              {hasCourses ? (
-                <span className="group-head__count">
-                  {copy.library.courseCount.replace(
-                    '{n}',
-                    String(dashboard.enrolledCourses.length),
-                  )}
-                </span>
-              ) : null}
+              <h2 className="group-head__title">{c.recommended}</h2>
+              <Link href="/library" className="group-head__count hover:text-accent-text">
+                {c.recommendedSeeAll}
+              </Link>
             </div>
-
-            {/*
-              ⚠️ ONE GRID. There were two tabs here — «الدورات الحالية» and
-              «المكتملة» — and they are gone by name: «ميبقاش كلمة مكتمل دي
-              أصلاً، لا، يبقوا جنب بعض».
-
-              He is right, and the reason is worth keeping because the tabs
-              looked like a reasonable idea. This platform's courses are
-              PUBLISHED AS THEY GO — new lectures land in a course all term —
-              so "finished" is a state a course leaves again the following
-              week. A tab called «المكتملة» promises an archive, and what it
-              actually held was courses that happen to have no unwatched
-              lecture TODAY. Worse, it hid them: a student with two courses saw
-              one card and an empty half of the screen (that is the screenshot
-              this changed on), because the other course was behind a tab whose
-              own label said it was done with.
-
-              The state has not gone anywhere — every card still carries its own
-              meter, its lesson count and «خلّصنا اللي نزل» when that is true.
-              The card says it, per course, instead of a filter deciding for
-              the student which of their courses they are allowed to see.
-            */}
-            {hasCourses ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                {dashboard.enrolledCourses.map((course) => (
-                  <EnrolledCourseCard
-                    key={course.id}
-                    course={course}
-                    shippingRates={bookCatalog.shippingRates}
-                    instapay={settings.contact.instapay}
-                    vodafoneCash={settings.contact.vodafoneCash}
-                  />
-                ))}
-              </div>
-            ) : (
-              /*
-                Deliberately quiet, and deliberately NOT a second call to
-                action: a student with no courses is already looking at the
-                first-run card above, whose step 1 is this exact link with an
-                accent button on it. Two competing "اختار كورس" buttons on one
-                screen is the pattern this rebuild exists to remove.
-              */
-              <div className="empty">
-                <SpotIllustration name="courses" />
-                <p className="empty__body">{c.noCoursesYet}</p>
-              </div>
-            )}
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {recommended.map((course) => (
+                <LibraryCourseCard course={course} key={course.id} />
+              ))}
+            </ul>
           </section>
+        ) : null}
 
-          {/*
-            «كورسات في مسارك» — every published course in this student's own
-            (year, track) cell they have not enrolled in yet. Absent entirely
-            when there is nothing to show: no identity, or already enrolled in
-            everything their track offers — see `recommendedCourses`.
-
-            Directly under «كورساتي» and in the same column, which is the
-            answer to «كورسات اللي المفروض لازم يشترك فيها… طيب هو مشترك خلاص
-            يبقى قدامه يتفرج عليه»: the two lists are the same object in two
-            states, so they belong one under the other where the difference is
-            legible. A card up there carries a meter and «نكمّل»; a card down
-            here carries a price and «اشترك».
-          */}
-          {recommended.length > 0 ? (
-            <section>
-              <div className="group-head">
-                <span className="group-head__mark" aria-hidden="true" />
-                <h2 className="group-head__title">{c.recommended}</h2>
-                <Link href="/library" className="group-head__count hover:text-accent-text">
-                  {c.recommendedSeeAll}
-                </Link>
-              </div>
-              <ul className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-                {recommended.map((course) => (
-                  <LibraryCourseCard course={course} key={course.id} />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {/*
-            «امتحانات الشهر» — where a monthly exam retires to once its window
-            has shut, directly ABOVE «امتحاناتك».
-
-            That order is the argument. This shelf is the month's papers, which
-            is the smaller and more consequential list; «امتحاناتك» below it is
-            every quiz ever sat, most of them a lecture's five questions. A
-            student looking for «جبت كام في امتحان الشهر؟» should not have to
-            find it among four lecture quizzes that happened to be sat more
-            recently.
-
-            In the MAIN column and not the aside for the same measured reason
-            «امتحاناتك» is: every row ends in its own chip, and a 23rem column
-            wraps that to three lines.
-
-            Absent entirely for a student with no monthly exams at all, which is
-            most of them until the first one is scheduled. `<MonthlyExamsSection>`
-            takes the whole array and does its own filtering — the rule lives
-            next to the markup that depends on it, the same call
-            `<DashboardHero>` makes with `scheduleLines`.
-          */}
-          <MonthlyExamsSection exams={studentExams.exams} />
-
-          {/*
-            «امتحاناتك» — the dashboard's account of what a student has SAT.
-
-            ⚠️ It said «the ONLY account of marks» and that stopped being true
-            the day «امتحانات الشهر» landed directly above it. The rule that
-            actually held is narrower and is the one to keep: there is ONE
-            account per question. "How did I do overall" is this list; "how did
-            I do on the month's paper" is the shelf above, which also carries
-            the row this one structurally cannot draw — the exam that closed
-            with no attempt on it.
-
-            There was a genuine duplicate once: an «آخر النتائج» strip in a
-            right-hand rail, five percentages with nothing to press. It went,
-            and this replaced it rather than joining it — both answered "how did
-            I do", and the strip answered it worse: no verdict, no sense of what
-            is outstanding, and nowhere to go. `/results` is still one link away
-            for the full history.
-
-            In the MAIN column, not the aside, because every row ends in its
-            own action — «راجع إجاباتك», or «ادخل امتحان التحسين» — and an
-            action needs room beside a title and a verdict. In a 23rem column
-            it wraps to three lines per row; that measurement is why the old
-            rail was dropped in the first place and it has not changed.
-          */}
-          <ExamsSection quizzes={quizzes.quizzes} />
-
-          {/*
-            «الكتب», last in the column and deliberately so. Everything above it
-            is the student's own work, and a shop placed among those competes
-            with them. Down here it is what a student finds when they have
-            finished reading their own screen, which is the moment «فيه كتاب
-            مطبوع كمان» is worth reading.
-
-            The catalogue is ALREADY in hand: the same cached response feeds the
-            per-course «اطلب الكتاب» button, so this section costs no extra
-            request. Shelves are flattened because the grouping `/books` uses
-            (subject, then term) renders as a heading above a heading above two
-            covers when one subject is on sale.
-
-            SIX, not four. The section shows the first two as wide cards and
-            puts the remainder in the compact «كتب تانية» row underneath — with
-            a cap of four there was at most one book in that row, which is a
-            heading over a single chip.
-          */}
-          {/*
-            «كتبي», directly ABOVE the shop and below everything that is the
-            student's own work.
-
-            The order of those two is the argument: what you already bought
-            outranks what you might buy. A student with a book in transit
-            scrolling past a shop to find out where it got to reads as a product
-            that would rather sell them a second one than tell them about the
-            first — and «اطلب كتاب تاني» at the foot of this section is what
-            hands them to the shop underneath when they are ready.
-
-            Absent entirely for a student with no orders, which is most of them:
-            the page then looks exactly as it did before this existed. That is
-            also what an unreachable API produces — see the read's own note in
-            the `Promise.all` above for why the ambiguity is the safe way round.
-
-            `settings.contact.whatsapp` is the SUPPORT number (the one the
-            footer's «كلّمنا» button dials), not `whatsappChannel`, which is a
-            broadcast nobody can answer in. `waMeHref` returns `null` when it is
-            unset and the link is then simply not rendered.
-          */}
-          <MyBookOrdersSection
-            orders={myBookOrders}
-            supportHref={waMeHref(settings.contact.whatsapp)}
-          />
-
-          <BooksSection
-            books={bookCatalog.shelves
-              .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
-              .slice(0, 6)}
-          />
+        {/*
+          Marks beside habits. The month's papers above every quiz ever sat
+          (the smaller, more consequential list first); on the other side the
+          day's habits, the study tiles and the exams still waiting. Every
+          exam row ends in its own chip, so that side gets the wider track.
+        */}
+        <div className="dash-pair">
+          <div className="dash-pair__main space-y-8">
+            <MonthlyExamsSection exams={studentExams.exams} />
+            <ExamsSection quizzes={quizzes.quizzes} />
+          </div>
+          <div className="dash-pair__side space-y-6">
+            <PendingExamsCard exams={dashboard.pendingExams} />
+            <Suspense fallback={null}>
+              <TodayStrip features={features} />
+            </Suspense>
+            <StudyTiles features={features} title={copy.dashboard.studyTilesTitle} />
+          </div>
         </div>
 
-        <aside className="dash-split__side mt-8 space-y-4 lg:mt-0">
-          {/*
-            «قناة الواتساب» first in the column — «حطها في جنب في بوكس لوحدها
-            فوق كده بشكل حلو». It keeps the top of the aside because it is the
-            one block on the whole page whose job is to reach a student who is
-            NOT on the platform; everything else here describes someone already
-            looking at it. Green rather than amber, and the reason is in the
-            component: the page's one amber action is the resume card, and this
-            button leaves the product.
-          */}
+        {/* «كتبي» above the shop: what you already bought outranks what you
+            might buy. Both absent when there is nothing to show. */}
+        <MyBookOrdersSection orders={myBookOrders} supportHref={waMeHref(settings.contact.whatsapp)} />
+        <BooksSection
+          books={bookCatalog.shelves
+            .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
+            .slice(0, 6)}
+        />
+
+        {/* The ways to reach us and each other — the channel nobody can reply
+            into, the Facebook group, and one card per course cohort that HAS a
+            group (titled per course, or two identical buttons). */}
+        <div className="dash-cards">
           <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
-
-          {/* «جروب الفيسبوك» right under it: the other place students are
-              reached off the platform, so the two read as a pair. */}
           <FacebookGroupCard href={settings.contact.facebookGroup} />
-
-          {/*
-            «النهارده» — «سؤال اليوم», the plan's share for today, and the
-            month's recap in its first week. Second in the aside: these are
-            the daily habits, and the aside is where a habit sits without
-            competing with the resume card's one amber action. Its own
-            Suspense boundary, so its reads stream in after the page.
-          */}
-          <Suspense fallback={null}>
-            <TodayStrip features={features} />
-          </Suspense>
-
-          {/*
-            «كود ولي الأمر» — الحاجة الوحيدة على الصفحة اللي الطالب بياخدها
-            ويدّيها لحد تاني.
-
-            تحت كارت القناة عن قصد: الاتنين بيوصلوا حد **برّه** المنصة —
-            القناة بتوصل الطالب لما يكون مش فاتح، وده بيوصل أبوه أصلًا. وباقي
-            الصفحة كله بيوصف اللي قدام الشاشة دلوقتي.
-
-            بيختفي خالص لو مفيش بروفايل: الحساب اللي لسه ما كمّلش التسجيل
-            مالوش كود، وكارت فاضي بيسأل أسئلة أكتر ما بيجاوب.
-          */}
-          {me.profile?.guardianCode ? (
-            <GuardianCodeCard code={me.profile.guardianCode} />
-          ) : null}
-
-          {/*
-            «جروب الدفعة» — one per enrolled course that HAS one.
-            «كلور بالواتساب بتاع الدفعة اللي مشترك في الكورس».
-
-            Directly under the channel card because the two answer the same
-            impulse and are not the same thing: the card above is the one-way
-            BROADCAST nobody can reply into, and these are the rooms this
-            student's own cohorts are talking in. Keeping them apart is the
-            whole reason `Course.whatsappGroupUrl` is per-course — عربي and
-            لغات are two cohorts on two different nights.
-
-            Courses with no group produce nothing at all (`CourseGroupCard`
-            returns null), so a student whose courses have none sees exactly
-            what they saw before. Most days this renders zero or one card, which
-            is why it is safe this high in the column.
-
-            Titled per course, because a student in two courses would otherwise
-            get two identical «جروب الدفعة» buttons and no way to tell which
-            room each one opens.
-          */}
           {dashboard.enrolledCourses
             .filter((course) => course.whatsappGroupUrl !== null)
             .map((course) => (
-              <CourseGroupCard
-                key={course.id}
-                url={course.whatsappGroupUrl}
-                courseTitle={course.title}
-              />
+              <CourseGroupCard key={course.id} url={course.whatsappGroupUrl} courseTitle={course.title} />
             ))}
+        </div>
 
-          {/*
-            «امتحانات في انتظارك» — a course genuinely finished with its exam
-            sitting untouched. Not a duplicate of «امتحاناتك» in the main
-            column: that section is every exam a student HAS sat, this is the
-            ones they have not. Absent entirely when nothing is waiting, which
-            is most days — which is also why it is safe this high in the
-            column.
-          */}
-          {/* Draws its own card and head now, like every card in this column —
-              and still renders nothing at all when nothing is waiting. */}
-          <PendingExamsCard exams={dashboard.pendingExams} />
-
-          {/*
-            «نقوّي النقط دي» (was «ذاكر ده») — the only block on the page that
-            names a CAUSE rather than a quantity, and the reason the aside
-            exists at all rather than being three decorative cards. It draws
-            its own card and coloured head (`PanelHead`).
-
-            `null` when the read failed, and the card is simply absent then —
-            see `lib/mastery.ts`. This is an enhancement to a screen that was
-            complete without it, and this page has been taken down once already
-            by an added read that threw.
-          */}
+        {/* What is ABOUT them rather than their work: the code they hand a
+            parent, the topics to strengthen, the markers earned. Last, and
+            kept — the guardian code lives nowhere else on the platform. */}
+        <div className="dash-cards">
+          {me.profile?.guardianCode ? <GuardianCodeCard code={me.profile.guardianCode} /> : null}
           {mastery ? <MasteryCard mastery={mastery} /> : null}
-
-          {/*
-            «إنجازاتك» — the one block that reports what a student has DONE
-            rather than what is left. Every other thing on this page describes
-            an outstanding quantity, which is the right emphasis for a study
-            tool and is also relentless.
-          */}
           <Achievements achievements={badges} earned={earnedCount(badges)} variant="aside" />
-
-          {/* «نصيحة اليوم», last: it is the lightest thing on the screen and
-              it is the same for every student on a given day. */}
-          <TipOfDayCard />
-        </aside>
+        </div>
       </div>
     </main>
   );

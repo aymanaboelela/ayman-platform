@@ -113,7 +113,11 @@ export default async function PathPage() {
               {/* `index` is what numbers the course in its own header ring.
                   Without it `index + 1` was `NaN`, and every course on this
                   screen introduced itself as "الكورس NaN". */}
-              <PathMap course={course} index={i} />
+              <PathMap
+                course={course}
+                index={i}
+                open={course.id === (path.currentCourseId ?? path.courses[0]?.id)}
+              />
             </div>
           ))}
         </div>
