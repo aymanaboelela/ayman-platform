@@ -1,396 +1,374 @@
+import { Fragment, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Lock } from 'lucide-react';
+import { Check, ChevronDown, Lock, Play } from 'lucide-react';
 import { copy, type CourseOutline } from '@ayman/contracts';
-import type { BookShippingRates } from '@ayman/contracts/books';
-import { Badge, cn } from '@ayman/ui';
+import { cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
 import {
   groupIntoEntries,
   isLessonFinished,
-  lessonStateLabel,
-  lessonStateMark,
   remainingLectures,
   type RemainingLecture,
 } from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
 import { MonthLockedDialog } from '@/components/library/month-locked-dialog';
-import { BookOrderButton } from '@/components/site/book-order-button';
-import { courseBookCtaVisible } from '@/lib/course-book';
-import { LessonKindIcon } from './lesson-kind-icon';
+import { UnitArt } from '@/components/library/unit-art';
+import { LtrRatio } from '@/components/ltr-ratio';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 import { LessonProgressBar } from './lesson-progress-bar';
 
 const c = copy.library;
+const u = copy.player.units;
 
 type Lesson = CourseOutline['sections'][number]['lessons'][number];
-type Entry = { lecture: Lesson; quizzes: Lesson[] };
+type Section = CourseOutline['sections'][number];
 
 export interface CourseOutlineSidebarProps {
   outline: CourseOutline;
   activeLessonId: string;
-  /** The three delivery rates, from `getBookShippingRates()`. Quoted on the CTA so
-   *  «اطلب الكتاب» names the total the form will ask for. */
-  shippingRates: BookShippingRates;
-  /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
-   *  takes everywhere else it appears. */
-  instapay: string | null;
-  /** `contact.vodafoneCash` — the second payment rail, threaded the same way. */
-  vodafoneCash: string | null;
+  /**
+   * The lecture right after the active one in reading order — the player
+   * payload's `next`. It is the one row that wears a chip («التالي»); every
+   * other open row is simply a link, see `Row`.
+   */
+  nextLessonId: string | null;
+  /** «جروب الدفعة» · «مساعدة» · «اطلب الكتاب» — `CourseSideLinks`, or nothing. */
+  footer?: ReactNode;
+}
+
+/** Shared by every row of a unit — what the locked rows need to explain themselves. */
+interface RowContext {
+  courseSlug: string;
+  activeLessonId: string;
+  nextLessonId: string | null;
+  /** Whether this course sells by month at all — the padlock says «شهر تاني»
+   *  only when there is a month to name. See `MonthLockedDialog`. */
+  byMonth: boolean;
+  /** What the locked exam is still waiting on — course-wide. */
+  remaining: number;
+  totalLessons: number;
+  left: readonly RemainingLecture[];
 }
 
 /**
- * What the row's chip offers to DO.
- *
- * «امتحن» is an invitation to start something, and a lecture quiz has exactly
- * one sitting — so offering it to a student who has already sat the quiz asks
- * them to do a thing the server will refuse. `cleared` is handled by the
- * caller (a passed quiz reads «راجع» like any other finished lesson); this is
- * the FAILED-or-never-sat case, which the gate alone cannot tell apart.
+ * What a quiz row offers to DO. «دخول الامتحان» invites a sitting, and a
+ * lecture quiz has exactly one — so a quiz already sat (passed OR failed)
+ * offers the result instead, and a cleared one reads «مراجعة» like any other
+ * finished lesson.
  */
-function actionLabel(lesson: Lesson): string {
-  if (lesson.kind !== 'quiz') return c.watch;
+function quizLabel(lesson: Lesson): string {
+  if (lesson.gate === 'cleared') return c.review;
   const sat = lesson.state === 'failed' || lesson.state === 'passed';
   return sat ? c.quizDone : c.takeQuiz;
 }
 
-function LessonChip({ lesson, courseSlug }: { lesson: Lesson; courseSlug: string }) {
-  const cleared = lesson.gate === 'cleared';
-  const finished = isLessonFinished(lesson);
-  const label = cleared ? c.review : actionLabel(lesson);
-
-  return (
-    <Link
-      href={`/courses/${courseSlug}/lessons/${lesson.id}`}
-      // The visible word is «مشاهدة» on every row; the title is appended, never
-      // substituted, so a screen reader pulling up the links list still gets
-      // one distinct name per row rather than a wall of identical «مشاهدة».
-      aria-label={`${label} — ${lesson.title}`}
-      className={cn('chip lesson-row__link', finished ? 'chip--done' : 'chip--solid')}
-    >
-      {label}
-    </Link>
-  );
-}
-
 /**
- * One lesson row: kind icon, title, meta, and its one chip.
+ * One lesson row, and the rule that replaced «مشاهدة» on forty rows.
  *
- * The row itself is never a link — exactly one control per row, or every
- * lesson lands twice in the tab order and is announced twice. `.lesson-row__link`
- * (on the chip) stretches the pointer target over the whole row without adding
- * a second tab stop — see `study.css`.
+ * The old row was icon + title + a meta line («المحاضرة ٥ · 48:10 · لسه
+ * ماشوفتهاش») + a solid chip on every row. In a 380px rail that is three lines
+ * per lecture and a wall of amber; the student reported the page as crowded.
+ * Now a row is a state mark, the title and the duration — and exactly ONE
+ * thing is a control:
+ *
+ *   - the row you are ON is not a control at all; it says so («بتتفرج دلوقتي»)
+ *   - a quiz keeps a chip, because sitting an exam is a different act from
+ *     opening a video and must not be a tap on a title
+ *   - the NEXT lecture keeps a quiet chip, because it is the one row a
+ *     student looks for after the video ends
+ *   - a locked row keeps the padlock chip that explains itself
+ *   - every other row IS the link, title and all, so a tap anywhere opens it
+ *
+ * Still one tab stop per row (the chip rows stretch the chip's hit area over
+ * the row with `.orow__chip::after`), so a screen reader gets one entry per
+ * lesson rather than two.
  */
-function LessonRow({
+function Row({
   lesson,
-  courseSlug,
-  isActive,
   isQuiz = false,
+  ctx,
 }: {
   lesson: Lesson;
-  courseSlug: string;
-  isActive: boolean;
   /** A quiz hanging off the lecture above it — indented, not a lecture of its own. */
   isQuiz?: boolean;
+  ctx: RowContext;
 }) {
+  const isActive = lesson.id === ctx.activeLessonId;
   const finished = isLessonFinished(lesson);
-  const mark = lessonStateMark(lesson);
+  const locked = lesson.gate === 'locked';
+  const href = `/courses/${ctx.courseSlug}/lessons/${lesson.id}`;
+  const time = lesson.estimatedSeconds ? formatDuration(lesson.estimatedSeconds) : null;
 
-  const meta = [
-    isQuiz ? c.lessonQuiz : null,
-    lesson.isExam ? c.exam : null,
-    lesson.estimatedSeconds ? formatDuration(lesson.estimatedSeconds) : null,
-    lessonStateLabel(lesson),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const mark = (
+    <span className="orow__mark" aria-hidden="true">
+      {finished ? (
+        <Check className="size-3" strokeWidth={3} />
+      ) : isActive ? (
+        <Play className="size-3" fill="currentColor" />
+      ) : locked ? (
+        <Lock className="size-3" />
+      ) : null}
+    </span>
+  );
+  const text = (
+    <>
+      <span className="orow__title">{lesson.title}</span>
+      {time ? <span className="orow__time">{time}</span> : null}
+    </>
+  );
+  const className = cn(
+    'orow',
+    finished && 'orow--done',
+    isActive && 'orow--current',
+    isQuiz && 'orow--quiz',
+    locked && 'orow--locked',
+  );
+
+  if (isActive) {
+    return (
+      <li className={className} aria-current="true">
+        {mark}
+        {text}
+        <span className="orow__state">{u.watching}</span>
+      </li>
+    );
+  }
+
+  if (locked) {
+    /*
+     * `locked` has TWO causes and they need opposite dialogs — the same split
+     * `library/course-outline.tsx` makes. The final exam is waiting on WORK;
+     * a lecture in a month the subscription does not cover is waiting on a
+     * PAYMENT, and the padlock exists so there is something to press.
+     */
+    return (
+      <li className={className}>
+        {mark}
+        {text}
+        {lesson.isExam ? (
+          <LockedExam
+            remaining={ctx.remaining}
+            total={ctx.totalLessons}
+            left={ctx.left}
+            courseSlug={ctx.courseSlug}
+          />
+        ) : (
+          <MonthLockedDialog
+            courseSlug={ctx.courseSlug}
+            month={lesson.month}
+            byMonth={ctx.byMonth}
+            triggerClassName="chip chip--locked orow__chip"
+          >
+            <Lock className="size-3.5" />
+            {ctx.byMonth ? c.lessonMonthLocked : c.lessonLocked}
+          </MonthLockedDialog>
+        )}
+      </li>
+    );
+  }
+
+  if (lesson.kind === 'quiz') {
+    const label = quizLabel(lesson);
+    return (
+      <li className={className}>
+        {mark}
+        {text}
+        <Link
+          href={href}
+          // The visible word is the same on every quiz row; the title is
+          // appended so the links list reads one distinct name per row.
+          aria-label={`${label} — ${lesson.title}`}
+          className={cn('chip orow__chip', finished ? 'chip--done' : 'chip--solid')}
+        >
+          {label}
+        </Link>
+      </li>
+    );
+  }
+
+  if (lesson.id === ctx.nextLessonId) {
+    return (
+      <li className={className}>
+        {mark}
+        {text}
+        <Link
+          href={href}
+          aria-label={`${u.nextChip} — ${lesson.title}`}
+          className="chip chip--quiet orow__chip"
+        >
+          {u.nextChip}
+        </Link>
+      </li>
+    );
+  }
 
   return (
-    <li
-      className={cn(
-        'lesson-row',
-        finished && 'lesson-row--done',
-        mark === 'new' && 'lesson-row--new',
-        mark === 'started' && 'lesson-row--started',
-        isQuiz && 'lesson-row--quiz',
-        isActive && 'outline-row--current',
-      )}
-      aria-current={isActive ? 'true' : undefined}
-    >
-      <span className="lesson-row__well" aria-hidden="true">
-        <LessonKindIcon kind={lesson.kind} className="h-4 w-4" />
-      </span>
-
-      <div className="lesson-row__text">
-        <p className="lesson-row__title">{lesson.title}</p>
-        <p className="lesson-row__meta truncate">{meta}</p>
-        {lesson.isFreePreview ? <Badge tone="accent">{copy.catalog.freePreview}</Badge> : null}
-      </div>
-
-      <LessonChip lesson={lesson} courseSlug={courseSlug} />
+    <li className={className}>
+      <Link href={href} className="orow__link">
+        {mark}
+        {text}
+      </Link>
     </li>
   );
 }
 
 /**
- * One lecture, collapsed to its title until pressed — «اللي على الشمال ده
- * عايزك تكبّرها وتوضّح فيها زرار المشاهدة وزرار الامتحان لما بضغط عليها».
+ * One unit as a CARD: its picture, its name, how far along it is — and its
+ * lessons only while it is open.
  *
- * Only entries that actually carry a quiz collapse at all. A lecture with
- * nothing hanging off it has exactly one action, and hiding a single chip
- * behind a click adds a tap with nothing to show for it — that case stays the
- * plain, always-visible row it always was.
+ * Every section used to be a flat label over every one of its rows, all
+ * expanded, so a four-unit course was forty rows the student scrolled past to
+ * find where they were. The unit holding the active lesson is the only one
+ * open; a finished unit folds to a tick; a unit the subscription does not
+ * cover yet is a greyed card with the one thing to press on it.
  *
- * Native `<details>`, not client state: the disclosure needs no JavaScript,
- * works from the keyboard for free, and keeps this file a Server Component —
- * same call `/library/[slug]`'s own `<Unit>` accordion already made.
+ * Native `<details>`: the disclosure needs no JavaScript, works from the
+ * keyboard, and keeps this file a Server Component — the same call
+ * `/library/[slug]`'s `<Unit>` made.
  */
-function LectureEntry({
-  entry,
-  courseSlug,
-  activeLessonId,
-  remaining,
-  totalLessons,
-  left,
-  byMonth,
-}: {
-  entry: Entry;
-  courseSlug: string;
-  activeLessonId: string;
-  /** Whether this course sells by month at all — the padlock says «شهر
-   *  تاني» only when there is a month to name. See `MonthLockedDialog`. */
-  byMonth: boolean;
-  /** What the locked exam is still waiting on — course-wide, not this entry's. */
-  remaining: number;
-  totalLessons: number;
-  /** The same waiting-on, by name — the dialog lists them. */
-  left: readonly RemainingLecture[];
-}) {
-  const { lecture, quizzes } = entry;
+function UnitCard({ section, index, ctx }: { section: Section; index: number; ctx: RowContext }) {
+  const entries = groupIntoEntries(section.lessons);
+  const lectures = entries.map((entry) => entry.lecture);
+  const done = lectures.filter(isLessonFinished).length;
+  const isCurrent = section.lessons.some((lesson) => lesson.id === ctx.activeLessonId);
+  const allDone = lectures.length > 0 && done === lectures.length;
+  const unitLabel = copy.player.header.unit.replace('{n}', String(index + 1));
 
-  if (lecture.gate === 'locked') {
-    /*
-     * `locked` has TWO causes, and they need opposite dialogs — the same split
-     * `library/course-outline.tsx` makes, and for the same reason.
-     *
-     * The final exam is waiting on WORK and the dialog it opens has nothing to
-     * offer but a dismiss. A lecture in a month the subscription does not cover
-     * is waiting on a PAYMENT, and the whole point of drawing a padlock rather
-     * than hiding the row is that there is something to press. Sending a
-     * month-locked row into `<LockedExam>` told the student «باقي ٣ محاضرات»
-     * about a lecture no amount of studying would open.
-     *
-     * Either way it stays a plain row: an exam is excluded from
-     * `groupIntoEntries`' quiz-adjacency rule and a locked lecture has nothing
-     * to reveal by expanding it, only a reason it will not open yet.
-     */
+  /*
+   * A unit whose EVERY lecture is month-locked is a month the student has not
+   * bought: one card, one «افتح الشهر». Opening it to show six padlocks would
+   * be six copies of the same answer. The exam is excluded from the test —
+   * it locks for a different reason (work, not payment).
+   */
+  const monthLocked =
+    !isCurrent &&
+    lectures.length > 0 &&
+    lectures.every((lesson) => lesson.gate === 'locked' && !lesson.isExam);
+  const month = lectures.find((lesson) => lesson.month !== null)?.month ?? null;
+
+  if (monthLocked) {
     return (
-      <li className="mb-2">
-        <div className="lesson-row lesson-row--locked">
-          <span className="lesson-row__well" aria-hidden="true">
-            <LessonKindIcon kind={lecture.kind} className="h-4 w-4" />
+      <li className="ocard ocard--locked">
+        <div className="ocard__head ocard__head--static">
+          <UnitArt coverKey={section.coverKey} seed={section.id} locked />
+          <span className="ocard__text">
+            <span className="ocard__eyebrow">
+              {unitLabel}
+              {month ? ` · ${month.title}` : ''}
+            </span>
+            <span className="ocard__title">{section.title}</span>
           </span>
-          <div className="lesson-row__text">
-            <p className="lesson-row__title">{lecture.title}</p>
-          </div>
-          {lecture.isExam ? (
-            <LockedExam
-              remaining={remaining}
-              total={totalLessons}
-              left={left}
-              courseSlug={courseSlug}
-            />
-          ) : (
-            <MonthLockedDialog
-              courseSlug={courseSlug}
-              month={lecture.month}
-              byMonth={byMonth}
-              triggerClassName="chip chip--locked"
-            >
-              <Lock className="h-4 w-4" />
-              {byMonth ? c.lessonMonthLocked : c.lessonLocked}
-            </MonthLockedDialog>
-          )}
+          <MonthLockedDialog
+            courseSlug={ctx.courseSlug}
+            month={month}
+            byMonth={ctx.byMonth}
+            triggerClassName="chip chip--quiet"
+          >
+            <Lock className="size-3.5" />
+            {u.openMonth}
+          </MonthLockedDialog>
         </div>
       </li>
     );
   }
 
-  if (quizzes.length === 0) {
-    return (
-      <LessonRow
-        lesson={lecture}
-        courseSlug={courseSlug}
-        isActive={lecture.id === activeLessonId}
-      />
-    );
-  }
-
-  const isOpen =
-    lecture.id === activeLessonId || quizzes.some((quiz) => quiz.id === activeLessonId);
-
   return (
-    <li className="mb-2">
-      <details className="unit" open={isOpen}>
-        <summary className="unit__head">
-          <span className="lesson-row__well" aria-hidden="true">
-            <LessonKindIcon kind={lecture.kind} className="h-4 w-4" />
+    <li>
+      <details className="ocard" open={isCurrent}>
+        <summary className="ocard__head">
+          <UnitArt coverKey={section.coverKey} seed={section.id} />
+          <span className="ocard__text">
+            <span className="ocard__eyebrow">
+              {unitLabel}
+              {isCurrent ? ` · ${u.youAreHere}` : ''}
+            </span>
+            <span className="ocard__title">{section.title}</span>
           </span>
-          {/* A `<p>`, not a heading — the section label above it (`.map` in
-              `CourseOutlineSidebar`) is plain text too, so nesting an `<h4>`
-              under nothing would open a heading level the panel never
-              started. */}
-          <p className="unit__title">{lecture.title}</p>
-          <span className="unit__count">
-            {lecture.estimatedSeconds ? formatDuration(lecture.estimatedSeconds) : null}
-          </span>
-          <ChevronDown size={18} aria-hidden="true" className="unit__chevron" />
+          {allDone ? (
+            <span className="chip chip--done ocard__done">
+              <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
+              <LtrRatio value={done} of={lectures.length} />
+            </span>
+          ) : (
+            <span className="ocard__ratio">
+              <LtrRatio value={done} of={lectures.length} />
+            </span>
+          )}
+          <ChevronDown size={18} aria-hidden="true" className="ocard__chevron" />
         </summary>
 
-        <ul className="unit__body">
-          <LessonRow
-            lesson={lecture}
-            courseSlug={courseSlug}
-            isActive={lecture.id === activeLessonId}
-          />
-          {quizzes.map((quiz) => (
-            <LessonRow
-              lesson={quiz}
-              courseSlug={courseSlug}
-              isActive={quiz.id === activeLessonId}
-              isQuiz
-              key={quiz.id}
-            />
+        <ol className="ocard__body">
+          {entries.map((entry) => (
+            <Fragment key={entry.lecture.id}>
+              <Row lesson={entry.lecture} ctx={ctx} />
+              {entry.quizzes.map((quiz) => (
+                <Row lesson={quiz} isQuiz ctx={ctx} key={quiz.id} />
+              ))}
+            </Fragment>
           ))}
-        </ul>
+        </ol>
       </details>
     </li>
   );
 }
 
 /**
- * RTL-native, not mirrored. Nothing here knows about left or right — the
- * grid column order in the page layout follows the writing mode, and the
- * study.css classes this renders (`.lesson-row`, `.unit`, `.chip`) are all
- * built the same way.
+ * «محتوى الكورس» in the lesson page: the course's progress, then its units as
+ * cards, then the three side links. Rendered once in the desktop rail and
+ * once inside the phone's bottom sheet (`OutlineSheet`) — same element, two
+ * slots.
+ *
+ * RTL-native, not mirrored. Nothing here knows about left or right.
  */
 export function CourseOutlineSidebar({
   outline,
   activeLessonId,
-  shippingRates,
-  instapay,
-  vodafoneCash,
+  nextLessonId,
+  footer,
 }: CourseOutlineSidebarProps) {
-  const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
-  // Same list the library outline builds, off the flat payload this screen
-  // already has — the locked exam explains itself identically in both places.
-  const left = remainingLectures(outline.sections.flatMap((section) => section.lessons));
-  // A lecture carrying a month anywhere means the course sells by month; none
-  // at all means a padlock here is a code-only student's, not a month's.
-  const byMonth = outline.sections.some((section) =>
-    section.lessons.some((lesson) => lesson.month !== null),
-  );
-  // Title, price and placement — the same predicate the public course page and
-  // `EnrolledCourseCard` read, so the linked book's `showOnCourse` cannot end
-  // up honoured on two surfaces out of three.
-  const hasBook = courseBookCtaVisible(outline.course);
+  const lessons = outline.sections.flatMap((section) => section.lessons);
+  const ctx: RowContext = {
+    courseSlug: outline.course.slug,
+    activeLessonId,
+    nextLessonId,
+    // A lecture carrying a month anywhere means the course sells by month;
+    // none at all means a padlock here is a code-only student's, not a month's.
+    byMonth: lessons.some((lesson) => lesson.month !== null),
+    remaining: Math.max(0, outline.totalLessons - outline.completedLessons),
+    totalLessons: outline.totalLessons,
+    // Same list the library outline builds — the locked exam explains itself
+    // identically in both places.
+    left: remainingLectures(lessons),
+  };
 
   return (
-    <nav
-      aria-label={copy.player.outline}
-      data-course-outline=""
-      className={cn(
-        'rounded-lg border border-line bg-surface-2',
-        /*
-          `w-full min-w-0` is what keeps this panel inside its own column, and
-          both halves are needed.
-
-          This panel used to carry `lg:self-start` for its sticky offset, and
-          in its column flexbox that is `align-self: flex-start` on the INLINE
-          axis — it takes the panel out of the stretch, so its width falls back
-          to `fit-content`. And `fit-content` is floored at min-content, which
-          here is the widest `.lesson-row__meta`: those are `truncate`, i.e.
-          `white-space: nowrap`, so a long «الامتحان النهائي · 45:00 · لسه ما
-          خلصتهاش» sized the whole panel. Measured at 1280: a 473px card in a
-          380px track, hanging 93px past the page and clipping every chip in
-          the column.
-
-          `w-full` puts the width back on the track; `min-w-0` stops the
-          automatic minimum size from overriding it again. The rows then do
-          what `truncate` says instead of pushing.
-        */
-        'w-full min-w-0',
-        'max-h-[60dvh] overflow-y-auto',
-        /*
-          On `lg` the STICKING is the lesson page's, not this panel's: a
-          wrapper there pins this outline and «الجروب والمساعدة» together and
-          caps them at the viewport, because a panel that stuck on its own slid
-          down over the links after it. So here the panel only gives way —
-          `max-h-none` hands the bound to that wrapper, and `min-h-0` lets the
-          flex column shrink it below its content, which is what turns it into
-          the scroller instead of the page.
-        */
-        'lg:max-h-none lg:min-h-0',
-      )}
-    >
-      <div className="border-b border-line-subtle px-5 py-5">
-        <p className="mb-3 text-[length:var(--fs-title-4)] font-semibold text-fg">
-          {copy.player.outline}
-        </p>
+    <nav aria-label={copy.player.outline} data-course-outline="" className="outline">
+      <div className="outline__head">
+        <div className="outline__row">
+          <span className="outline__title">{copy.player.outline}</span>
+          <span className="outline__ratio tabular">
+            <LtrRatio value={outline.completedLessons} of={outline.totalLessons} />
+            {' · '}
+            <bdi dir="ltr">{`${Math.round(outline.progressPercent)}%`}</bdi>
+          </span>
+        </div>
         <LessonProgressBar percent={outline.progressPercent} label={copy.player.courseProgress} />
-        <p className="mono mt-2.5 text-[length:var(--fs-text-sm)] tabular text-fg-muted">
-          {outline.completedLessons} {copy.player.lessonsCompleted} {outline.totalLessons}
-        </p>
-
-        {/* «اطلب الكتاب» — the same entry point the public course page and
-            `EnrolledCourseCard` offer, here too: a student watching a lesson
-            is arguably the most "inside" this course they ever are. No `z-`
-            wrapper needed — unlike the dashboard card, nothing in this
-            header carries a stretched link. `BookOrderButton`'s own
-            `.course-start` wrapper supplies the top spacing. */}
-        {hasBook ? (
-          <BookOrderButton
-            courseId={outline.course.id}
-            bookTitle={outline.course.bookTitle as string}
-            bookPriceCents={outline.course.bookPriceCents as number}
-            shippingRates={shippingRates}
-            instapay={instapay}
-            vodafoneCash={vodafoneCash}
-          />
-        ) : null}
       </div>
 
-      <ol className="py-2">
-        {outline.sections.map((section, sectionIndex) => (
-          <li key={section.id} className="mb-3">
-            <p className="flex items-baseline gap-2 px-5 pb-1 pt-2">
-              <span className="mono shrink-0 text-[length:var(--fs-mono-label)] tabular text-fg-muted">
-                {String(sectionIndex + 1).padStart(2, '0')}
-              </span>
-              <span className="min-w-0 font-semibold text-fg">{section.title}</span>
-            </p>
-
-            <ol className="px-2">
-              {groupIntoEntries(section.lessons).map((entry) => (
-                <LectureEntry
-                  entry={entry}
-                  courseSlug={outline.course.slug}
-                  activeLessonId={activeLessonId}
-                  remaining={remaining}
-                  totalLessons={outline.totalLessons}
-                  left={left}
-                  byMonth={byMonth}
-                  key={entry.lecture.id}
-                />
-              ))}
-            </ol>
-          </li>
+      {/* `data-outline-scroller`: on a desktop this list is the part that
+          scrolls inside the sticky rail, so `OutlineScrollToCurrent` centres
+          the current row in IT rather than in the panel. */}
+      <ol className="outline__units" data-outline-scroller="">
+        {outline.sections.map((section, index) => (
+          <UnitCard section={section} index={index} ctx={ctx} key={section.id} />
         ))}
       </ol>
 
-      {/* Renders nothing. A bounded panel that opens at lesson 1 of 40 is a
+      {footer}
+
+      {/* Renders nothing. A bounded list that opens at lesson 1 of 40 is a
           worse answer than an unbounded one, so the box has to arrive already
-          showing where the student is. Still finds `[aria-current]` on the
-          panel — `LessonRow` above sets it the same way the old flat list did. */}
+          showing where the student is. */}
       <OutlineScrollToCurrent activeLessonId={activeLessonId} />
     </nav>
   );

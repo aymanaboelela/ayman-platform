@@ -7,22 +7,13 @@ afterEach(() => {
   cleanup();
 });
 
-/**
- * The tick in the player's sidebar, and the one row it refused to draw.
- *
- * A lecture quiz gets ONE sitting. A student who sat it and came in under the
- * pass mark has a grade, a result page and nothing left to do with that row —
- * and the tick stayed blank on it forever, because `isDone` asked whether the
- * lesson was CLEARED and `failed` is not a cleared state. Reported as «أنا
- * امتحنت أصلاً ومعايا الدرجة وكل حاجة، يبقى عليها علامة صح».
- *
- * The row now shares `/library/[slug]`'s own vocabulary (`.lesson-row`,
- * `isLessonFinished`) rather than a player-only tick icon, so "done" is read
- * off the row's own `lesson-row--done` class and the state word off its
- * (now VISIBLE, not `sr-only`) `.lesson-row__meta` line — see
- * `components/player/course-outline.tsx`.
- */
-function lesson(over: Partial<CourseOutline['sections'][number]['lessons'][number]> = {}) {
+const u = copy.player.units;
+const c = copy.library;
+
+type Lesson = CourseOutline['sections'][number]['lessons'][number];
+type Section = CourseOutline['sections'][number];
+
+function lesson(over: Partial<Lesson> = {}): Lesson {
   return {
     id: 'l1',
     title: 'الدرس',
@@ -34,156 +25,160 @@ function lesson(over: Partial<CourseOutline['sections'][number]['lessons'][numbe
     completion: 0,
     gate: 'available',
     isExam: false,
+    month: null,
     ...over,
-  } as CourseOutline['sections'][number]['lessons'][number];
+  } as Lesson;
 }
 
-function outline(lessons: CourseOutline['sections'][number]['lessons']): CourseOutline {
+function section(id: string, title: string, lessons: Lesson[], over: Partial<Section> = {}): Section {
+  return { id, title, position: 1, coverKey: null, lessons, ...over } as Section;
+}
+
+function outline(sections: Section[], over: Partial<CourseOutline> = {}): CourseOutline {
+  const lessons = sections.flatMap((s) => s.lessons);
   return {
     course: { id: 'c1', slug: 'course', title: 'الكورس', bookTitle: null, bookPriceCents: null },
-    sections: [{ id: 's1', title: 'الوحدة', position: 1, lessons }],
+    sections,
     enrollmentId: 'e1',
     progressPercent: 50,
     lastLessonId: null,
     completedLessons: 1,
     totalLessons: lessons.length,
     examLessonId: null,
+    ...over,
   } as CourseOutline;
 }
 
-function isDone(title: string): boolean {
-  const row = screen.getByText(title).closest('li');
-  return row?.classList.contains('lesson-row--done') ?? false;
+function rowOf(title: string): HTMLElement | null {
+  return screen.getByText(title).closest('li');
 }
 
 /**
- * What the row says about the student — the `.lesson-row__meta` line, which
- * joins the state word in with the kind/duration/exam facts. `toContain` at
- * the call site, not equality: this reads the whole joined string.
+ * The rail after the 2026-11 clean-up: unit cards, the current unit open,
+ * and exactly ONE control per row — see `Row`'s own note for the rule.
  */
-function stateWord(title: string): string {
-  const row = screen.getByText(title).closest('li');
-  return row?.querySelector('.lesson-row__meta')?.textContent ?? '';
-}
-
-describe('CourseOutlineSidebar — the tick', () => {
+describe('CourseOutlineSidebar — rows', () => {
   it('ticks a lecture quiz that was sat and failed', () => {
     render(
       <CourseOutlineSidebar
         outline={outline([
-          lesson({ id: 'l1', title: 'المحاضرة التانية', state: 'completed', gate: 'cleared' }),
-          lesson({
-            id: 'q1',
-            title: 'كويز المحاضرة التانية',
-            kind: 'quiz',
-            position: 2,
-            state: 'failed',
-          }),
+          section('s1', 'الوحدة', [
+            lesson({ id: 'lec', title: 'المحاضرة', state: 'completed', gate: 'cleared', completion: 1 }),
+            lesson({ id: 'q', title: 'كويز المحاضرة', kind: 'quiz', state: 'failed', gate: 'available', completion: 0.4 }),
+          ]),
         ])}
-        activeLessonId="l1"
-        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
-        instapay={null} vodafoneCash={null}
+        activeLessonId="lec"
+        nextLessonId={null}
       />,
     );
-
-    expect(isDone('كويز المحاضرة التانية')).toBe(true);
+    expect(rowOf('كويز المحاضرة')?.classList.contains('orow--done')).toBe(true);
+    // Sat once; the chip offers the result, not a second sitting.
+    expect(screen.getByRole('link', { name: new RegExp(c.quizDone) })).toBeInTheDocument();
   });
 
-  /**
-   * ⚠️ This used to assert `text-transparent` — an invisible tick holding the
-   * column open.
-   *
-   * That was survivable while the sidebar was a run of padlocks with one open
-   * row at the front: the SHAPE of the list said where the student was. Every
-   * lecture opens now (`gate-rule.ts`), so a forty-lesson course would be forty
-   * identical blanks with nothing saying which had been watched — «بس ابقى
-   * علّم عليها إن هو ما شافهاش». The blank is a visible ring, and the word
-   * beside it is what a screen reader gets.
-   */
-  it('marks a quiz nobody has sat as not sat, rather than leaving it blank', () => {
+  it('marks the row the student is on as current, and makes it no control at all', () => {
     render(
       <CourseOutlineSidebar
         outline={outline([
-          lesson({ id: 'l1', title: 'المحاضرة التانية', state: 'completed', gate: 'cleared' }),
-          lesson({ id: 'q1', title: 'كويز لسه', kind: 'quiz', position: 2, state: 'not_started' }),
+          section('s1', 'الوحدة', [
+            lesson({ id: 'a', title: 'الأولى', state: 'completed', gate: 'cleared' }),
+            lesson({ id: 'b', title: 'التانية', state: 'in_progress', completion: 0.3 }),
+            lesson({ id: 'c', title: 'التالتة' }),
+          ]),
         ])}
-        activeLessonId="l1"
-        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
-        instapay={null} vodafoneCash={null}
+        activeLessonId="b"
+        nextLessonId="c"
       />,
     );
-
-    expect(isDone('كويز لسه')).toBe(false);
-    // «ماشوفتهاش» is the wrong verb for a paper — you do not watch a quiz.
-    expect(stateWord('كويز لسه')).toContain(copy.library.lessonQuizNew);
+    const current = rowOf('التانية')!;
+    expect(current).toHaveAttribute('aria-current', 'true');
+    expect(current.querySelector('a')).toBeNull();
+    expect(current.textContent).toContain(u.watching);
   });
 
-  it('distinguishes a half-watched lecture from one never opened', () => {
+  it('gives the NEXT lecture its quiet chip and every other open row the whole-row link', () => {
     render(
       <CourseOutlineSidebar
         outline={outline([
-          lesson({ id: 'l1', title: 'المحاضرة الأولى', state: 'in_progress' }),
-          lesson({ id: 'l2', title: 'المحاضرة التانية', position: 2, state: 'not_started' }),
+          section('s1', 'الوحدة', [
+            lesson({ id: 'a', title: 'الأولى', state: 'completed', gate: 'cleared' }),
+            lesson({ id: 'b', title: 'التانية' }),
+            lesson({ id: 'c', title: 'التالتة' }),
+            lesson({ id: 'd', title: 'الرابعة' }),
+          ]),
         ])}
-        activeLessonId="l1"
-        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
-        instapay={null} vodafoneCash={null}
+        activeLessonId="b"
+        nextLessonId="c"
       />,
     );
+    const next = screen.getByRole('link', { name: `${u.nextChip} — التالتة` });
+    expect(next).toHaveAttribute('href', '/courses/course/lessons/c');
 
-    expect(stateWord('المحاضرة الأولى')).toContain(copy.library.lessonStarted);
-    expect(stateWord('المحاضرة التانية')).toContain(copy.library.lessonNew);
-  });
-
-  it('leaves a FAILED exam unticked — an improvement sitting may still be open', () => {
-    render(
-      <CourseOutlineSidebar
-        outline={outline([
-          lesson({ id: 'l1', title: 'المحاضرة', state: 'completed', gate: 'cleared' }),
-          lesson({
-            id: 'ex',
-            title: 'الامتحان النهائي',
-            kind: 'quiz',
-            position: 2,
-            state: 'failed',
-            isExam: true,
-          }),
-        ])}
-        activeLessonId="l1"
-        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
-        instapay={null} vodafoneCash={null}
-      />,
-    );
-
-    expect(isDone('الامتحان النهائي')).toBe(false);
+    // The finished row and the one two ahead: one link each, named by the row.
+    expect(rowOf('الأولى')?.querySelectorAll('a')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /الرابعة/ })).toHaveAttribute('href', '/courses/course/lessons/d');
+    // No «مشاهدة» wall any more.
+    expect(screen.queryByText(c.watch)).toBeNull();
   });
 });
 
-describe('CourseOutlineSidebar — the book CTA', () => {
-  it('shows no book CTA when the course has no book configured', () => {
+describe('CourseOutlineSidebar — unit cards', () => {
+  it('opens only the unit holding the active lesson, and folds a finished unit to a tick', () => {
     render(
       <CourseOutlineSidebar
-        outline={outline([lesson()])}
-        activeLessonId="l1"
-        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
-        instapay="+201021196367" vodafoneCash="+201555555555"
+        outline={outline([
+          section('s1', 'الوحدة الأولى', [
+            lesson({ id: 'a', title: 'أ', state: 'completed', gate: 'cleared' }),
+            lesson({ id: 'b', title: 'ب', state: 'completed', gate: 'cleared' }),
+          ]),
+          section('s2', 'الوحدة التانية', [lesson({ id: 'c', title: 'ج' }), lesson({ id: 'd', title: 'د' })]),
+          section('s3', 'الوحدة التالتة', [lesson({ id: 'e', title: 'هـ' })]),
+        ])}
+        activeLessonId="c"
+        nextLessonId="d"
       />,
     );
-    expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
+    const cards = document.querySelectorAll<HTMLDetailsElement>('details.ocard');
+    expect(cards).toHaveLength(3);
+    expect(cards[0]!.open).toBe(false);
+    expect(cards[1]!.open).toBe(true);
+    expect(cards[2]!.open).toBe(false);
+
+    expect(cards[0]!.querySelector('.ocard__done')).not.toBeNull();
+    expect(cards[1]!.textContent).toContain(u.youAreHere);
+    expect(cards[2]!.querySelector('.ocard__done')).toBeNull();
   });
 
-  it('shows the book CTA when the course has a book configured', () => {
-    const withBook = outline([lesson()]);
-    withBook.course = { ...withBook.course, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 };
-
+  it('collapses a unit whose every lecture is month-locked into one «افتح الشهر»', () => {
+    const month = { id: '0198c3a2-0000-7000-8000-0000000000aa', title: 'شهر ٣', lessonCount: 4 };
     render(
       <CourseOutlineSidebar
-        outline={withBook}
-        activeLessonId="l1"
-        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
-        instapay="+201021196367" vodafoneCash="+201555555555"
+        outline={outline([
+          section('s1', 'الوحدة', [lesson({ id: 'a', title: 'أ' })]),
+          section('s2', 'المشروع النهائي', [
+            lesson({ id: 'x', title: 'س', gate: 'locked', month }),
+            lesson({ id: 'y', title: 'ص', gate: 'locked', month }),
+          ]),
+        ])}
+        activeLessonId="a"
+        nextLessonId={null}
       />,
     );
-    expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: new RegExp(u.openMonth) })).toBeInTheDocument();
+    // The six padlocks it replaces are not drawn.
+    expect(screen.queryByText('س')).toBeNull();
+    expect(document.querySelector('.ocard--locked')?.textContent).toContain('شهر ٣');
+  });
+
+  it('renders the footer it is handed under the units', () => {
+    render(
+      <CourseOutlineSidebar
+        outline={outline([section('s1', 'الوحدة', [lesson({ id: 'a', title: 'أ' })])])}
+        activeLessonId="a"
+        nextLessonId={null}
+        footer={<div data-testid="foot" />}
+      />,
+    );
+    expect(screen.getByTestId('foot')).toBeInTheDocument();
   });
 });

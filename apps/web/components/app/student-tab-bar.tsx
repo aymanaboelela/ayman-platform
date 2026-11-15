@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import { isPlainPress } from '@/lib/welcome-motion';
-import { STUDENT_TABS, activeStudentNav } from './student-nav-items';
+import { STUDENT_TABS, activeStudentNav, isLessonPlayerRoute } from './student-nav-items';
 
 /**
  * الشريط السفلي — أربع وجهات على بعد لمسة واحدة، على الموبايل بس.
@@ -40,6 +40,10 @@ import { STUDENT_TABS, activeStudentNav } from './student-nav-items';
 export function StudentTabBar() {
   const pathname = usePathname();
   const active = activeStudentNav(pathname);
+
+  // The lesson player pins its own «المحاضرة التالية» bar where this one
+  // sits — see `isLessonPlayerRoute`.
+  if (isLessonPlayerRoute(pathname)) return null;
 
   return (
     <nav className="tabbar md:hidden" aria-label={copy.nav.mainNav}>

@@ -699,7 +699,7 @@ export async function setSectionPublishedAction(
 export async function updateSectionAction(
   courseId: string,
   sectionId: string,
-  input: { title?: string; summary?: string | null; termId?: string | null },
+  input: { title?: string; summary?: string | null; termId?: string | null; coverKey?: string | null },
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/sections/${sectionId}`, z.object({ id: z.uuid() }), input);

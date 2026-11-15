@@ -1087,6 +1087,7 @@ export class CourseService {
             id: true,
             title: true,
             summary: true,
+            coverKey: true,
             position: true,
             isPublished: true,
             termId: true,

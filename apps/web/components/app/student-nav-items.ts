@@ -331,5 +331,18 @@ export function isAttemptRoute(pathname: string): boolean {
  * not overwritten. Leaving the lesson restores whatever they had chosen.
  */
 export function isRailForcedCollapsed(pathname: string): boolean {
+  return isLessonPlayerRoute(pathname);
+}
+
+/**
+ * `/courses/:slug/lessons/:id` — the lesson player.
+ *
+ * Two pieces of chrome read this. The rail collapses to its icon width
+ * (above). The phone's tab bar goes away entirely: the player pins its own
+ * «المحاضرة التالية» bar to the bottom edge (`NextLessonBar`), in the strip
+ * `.shell main` keeps clear below `md`, and two bars stacked there would cover
+ * the homework. The topbar's menu still reaches every tab.
+ */
+export function isLessonPlayerRoute(pathname: string): boolean {
   return /^\/courses\/[^/]+\/lessons\/[^/]+/.test(pathname);
 }

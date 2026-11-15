@@ -44,6 +44,12 @@ describe('StudentTabBar — re-tapping the current tab does not push a duplicate
     expect(fireEvent.click(current)).toBe(false);
   });
 
+  it('stays off the lesson player, whose own «المحاضرة التالية» bar takes its place', () => {
+    nav.pathname = '/courses/programming-year-2/lessons/0198c3a2-0000-7000-8000-000000000001';
+    const { container } = render(<StudentTabBar />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('does not interfere with a modified press — middle-click, ⌘-click still work', () => {
     render(<StudentTabBar />);
     const current = screen.getByRole('link', { current: 'page' });

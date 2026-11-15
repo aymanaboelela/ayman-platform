@@ -301,6 +301,13 @@ export const OutlineSectionSchema = z.object({
   id: z.string(),
   title: z.string(),
   position: z.number().int(),
+  /**
+   * «صورة الوحدة» — `CourseSection.coverKey`, a storage key the web turns into
+   * a `/media/` URL. `.default(null)` so a payload from an API still on the
+   * previous build parses during a rolling deploy; the reader draws the
+   * generated tile for `null` either way.
+   */
+  coverKey: z.string().nullable().default(null),
   lessons: z.array(OutlineLessonSchema),
 });
 

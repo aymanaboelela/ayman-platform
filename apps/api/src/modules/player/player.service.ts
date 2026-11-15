@@ -106,6 +106,7 @@ export class PlayerService {
             id: true,
             title: true,
             position: true,
+            coverKey: true,
             lessons: {
               where: { isPublished: true },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -198,6 +199,7 @@ export class PlayerService {
       id: section.id,
       title: section.title,
       position: section.position,
+      coverKey: section.coverKey,
       lessons: section.lessons.map((lesson) => {
         const progress = progressByLesson.get(lesson.id);
         const state = (progress?.state ?? 'not_started') as LessonProgressState;

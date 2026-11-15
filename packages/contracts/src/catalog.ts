@@ -66,6 +66,8 @@ export const CatalogSectionSchema = z.object({
   id: z.uuid(),
   title: z.string(),
   summary: z.string().nullable(),
+  /** «صورة الوحدة» — see `OutlineSectionSchema.coverKey`. */
+  coverKey: z.string().nullable().default(null),
   lessons: z.array(CatalogLessonSchema),
 });
 
