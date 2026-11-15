@@ -3962,6 +3962,11 @@ export const copy = {
     heroAllDone: 'كل اللي نزل خلص — برافو',
     /** آخر محطة في كل كورس. */
     finish: 'خط النهاية',
+    /** «مساري» as a timeline — `path-timeline.tsx`. */
+    timelineResume: 'نكمّل',
+    timelineStart: 'نبدأ',
+    moreLessons: '+{n} محاضرة كمان',
+    allLessons: 'كل المحاضرات',
 
     // ── a course the instructor has taken down ───────────────────────────
     /**
@@ -4293,6 +4298,8 @@ export const copy = {
      * particular. A tip that does not admit it is a tip reads as any of the
      * three.
      */
+    /** The grid of study and challenge pages on the dashboard — `StudyTiles`. */
+    studyTilesTitle: 'المذاكرة والتحديات',
     tipOfDayTitle: 'نصيحة اليوم',
     /*
      * ⚠️ ولا جملة فيهم بتكلّم ولد. النسخة الأولى كان فيها سبعة من عشرة
