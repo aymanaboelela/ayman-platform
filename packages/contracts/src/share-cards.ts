@@ -75,6 +75,30 @@ export const CertificatesPayloadSchema = z.object({
   exams: z.array(ExamCertificateSchema),
 });
 
+/**
+ * `POST /api/me/share-cards/render-failures` — the card could not be drawn on
+ * the student's phone.
+ *
+ * The image is drawn in the browser, so a failure never reaches a server log
+ * by itself: on 2026-11-15 «الصورة ماتجهّزتش» was reported for some students
+ * and not others, every server read behind the card answered 200, and there
+ * was nothing to tell the cases apart. This carries the one thing the dialog
+ * knows — which step threw, and what — so the next report names a cause.
+ *
+ * Short strings only; it is logged, never stored.
+ */
+export const ShareCardRenderFailureSchema = z
+  .object({
+    card: z.enum(['result', 'unit-certificate', 'exam-certificate', 'recap', 'other']),
+    stage: z.enum(['draw', 'encode', 'unknown']),
+    errorName: z.string().max(80),
+    errorMessage: z.string().max(300),
+    /** Which try this was — a failure that clears on «محاولة تانية» is a different bug. */
+    attempt: z.number().int().min(0).max(50),
+  })
+  .strict();
+export type ShareCardRenderFailure = z.infer<typeof ShareCardRenderFailureSchema>;
+
 export type ResultCardPayload = z.infer<typeof ResultCardPayloadSchema>;
 export type UnitCertificate = z.infer<typeof UnitCertificateSchema>;
 export type ExamCertificate = z.infer<typeof ExamCertificateSchema>;

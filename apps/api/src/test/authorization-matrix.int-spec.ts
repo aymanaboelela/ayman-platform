@@ -1073,6 +1073,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'share cards certificates: student', method: 'get', path: () => '/api/me/share-cards/certificates', actor: 'student', status: 200 },
     { label: 'share cards result: anonymous', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'share cards result: student, an attempt that is not theirs', method: 'get', path: () => `/api/me/share-cards/attempts/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'share cards render failure: anonymous', method: 'post', path: () => '/api/me/share-cards/render-failures', actor: 'anonymous', status: 401, body: () => ({ card: 'result', stage: 'draw', errorName: 'Error', errorMessage: 'x', attempt: 0 }) },
+    { label: 'share cards render failure: student', method: 'post', path: () => '/api/me/share-cards/render-failures', actor: 'student', status: 204, body: () => ({ card: 'result', stage: 'draw', errorName: 'Error', errorMessage: 'x', attempt: 0 }) },
     // Student engagement (`modules/engagement`). Every route is the session's
     // own: no student id in any path, so the rows are 401 for anonymous and the
     // student's own answer — a note or a lesson that is not theirs is 404.
