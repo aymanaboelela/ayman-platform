@@ -1,4 +1,4 @@
-import { firstNameOf } from '@ayman/contracts/outreach/compose';
+import { firstNameOf, omitName } from '@ayman/contracts/outreach/compose';
 import { LINK_TOKEN, NAME_TOKEN } from '@ayman/contracts/marketing/campaign';
 import { COUPON_TOKEN, LAST_DAY_TOKEN } from '@ayman/contracts/marketing/daily-coupon';
 import { MISSING_MONTHS_TOKEN } from '@ayman/contracts/marketing/missing-months';
@@ -70,7 +70,9 @@ export function renderCampaignBody({ body, name, linkUrl, coupon, missingMonths 
     text = `${text}\n\n${linkUrl}`;
   }
 
-  text = text.split(NAME_TOKEN).join(first);
+  // No usable name → the «يا {{الاسم}}» goes with it, not just the token:
+  // «يا ،» is what a bare removal left behind.
+  text = first ? text.split(NAME_TOKEN).join(first) : omitName(text, NAME_TOKEN);
   return tidy(text);
 }
 

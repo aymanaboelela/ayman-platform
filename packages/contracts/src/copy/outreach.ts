@@ -268,10 +268,62 @@ export const FOCUS_ITEM = '• {topic} — سؤال {questions}';
  */
 export const FOCUS_SINGLE = [
   'غلطة واحدة بس، في {topic} — وهي من السهل خالص.',
-  'فيه غلطة واحدة، {topic}. مراجعة سريعة وتخلص.',
+  // «وتخلص» was here: «تخلص» to a reader is «تخلصي» to a girl.
+  'فيه غلطة واحدة، {topic}. مراجعة سريعة وخلاص.',
   'الغلطة الوحيدة كانت في {topic}، وهي بسيطة.',
   'ماعدا غلطة واحدة في {topic} — دقيقة مراجعة مش أكتر.',
   'غلطة واحدة في {topic}. ولو مش واضحة، أنا أشرحها.',
+] as const;
+
+/**
+ * TWO mistakes, still one line. Chosen by the number of wrong QUESTIONS, never
+ * the number of topics — see `composeOutreach`, and the «الغلطة الوحيدة كانت
+ * في سؤال 2 و 4 و 5 و 7» that a topic count produced.
+ */
+export const FOCUS_TWO = [
+  'غلطتين بس، في {topic} — والاتنين بسيطين.',
+  'فيه غلطتين، {topic}. مراجعة صغيرة وخلاص.',
+  'الغلطتين كانوا في {topic}، ومش صعبين.',
+  'غلطتين في {topic}. ولو مش واضحين، أنا أشرحهم.',
+] as const;
+
+/** Three to `MAX_LISTED_QUESTIONS` wrong answers in one topic. No number word to get wrong. */
+export const FOCUS_FEW = [
+  'فيه كام غلطة في {topic} — وكلها بسيطة.',
+  'الغلطات كانت في {topic}، ومراجعة صغيرة بتحلّها.',
+  'كام غلطة في {topic}. ولو فيه حاجة مش واضحة، أنا أشرحها.',
+  'الحتت اللي محتاجة رجعة: {topic}، وكلها مش صعبة.',
+] as const;
+
+/**
+ * Too many wrong answers to list, on a paper that still passed the weak band.
+ *
+ * ⚠️ NO question numbers and no count. «سؤال 1 و 2 و 3 … و 40» is what the
+ * one-line form printed for a paper with no categories, and a column of
+ * numbers in a chat bubble is a bill, not help. What a student can act on is
+ * «go back over the lesson», so that is what these say — still small, still
+ * with the offer to explain.
+ */
+export const FOCUS_MANY = [
+  'فيه أسئلة كتير شوية محتاجة رجعة، فبدل ما أعدّها واحد واحد: رجعة للدرس بالترتيب هي أسهل طريق.',
+  'الغلطات أكتر من إني أكتبها هنا رقم رقم — والأسهل رجعة للدرس بالترتيب، وأي حاجة مش واضحة أنا أشرحها.',
+  'فيه كذا سؤال محتاج وقفة، ومراجعة الدرس من أوله بتلمّهم كلهم مرة واحدة، وهي مش صعبة.',
+] as const;
+
+/**
+ * A paper in the WEAK band (under `BAND_FAIR`), whatever the mistakes were.
+ *
+ * ⚠️ Never the "one small slip" framing. «فيه غلطة واحدة … دقيقة مراجعة مش
+ * أكتر» went out on a 0% paper; telling a student who got nothing right that
+ * the fix is a minute is the message that proves nobody read the paper. The
+ * weak score line just above already carries the reassurance, so this line
+ * only has to say where to start — the lesson, from the top — and offer help.
+ */
+export const FOCUS_RESTART = [
+  'الورقة دي محتاجة نرجع للدرس من الأول مع بعض، مش نصلّح سؤال سؤال.',
+  'أحسن حاجة دلوقتي رجعة للدرس من أوله بهدوء — وبعدها الكويز هيبان أسهل بكتير.',
+  'مش هعدّ الغلطات هنا؛ المهم نرجع للدرس من الأول، والمرة دي أسهل.',
+  'الحل مش في سؤال بعينه — الحل رجعة للدرس من أوله، وأي حاجة مش واضحة أنا أشرحها.',
 ] as const;
 
 /** The topic, when its name says something the opener did not. */
@@ -296,9 +348,9 @@ export const FOCUS_ITEM_UNTITLED = '• سؤال {questions}';
 export const FOCUS_TAILS = [
   'دول سهلين والله. ربع ساعة مراجعة وخلاص.',
   'مفيش فيهم حاجة تخوّف، دول من أسهل الحاجات في الدرس.',
-  'والله مش صعبين — رجعة واحدة للدرس وتخلص الحكاية.',
+  'والله مش صعبين — رجعة واحدة للدرس والحكاية تخلص.',
   'شرحهم بسيط جداً، ولو فيه حاجة مش واضحة أنا هنا وأشرحها تاني.',
-  'الحاجات دي مالهاش لزوم حفظ — بسيطة، وبتتفهم مرة واحدة وتخلص.',
+  'الحاجات دي مالهاش لزوم حفظ — بسيطة، وبتتفهم مرة واحدة وخلاص.',
 ] as const;
 
 /** Only when there IS something to praise. `{topics}` is a joined list. */
@@ -385,7 +437,8 @@ export const PRAISE_OPENERS = [
 export const PRAISE_BODIES = [
   'اللي بيذاكر كل يوم شوية بيوصل قبل اللي بيذاكر ليلة الامتحان.',
   'مش كل الطلبة بتكمّل الدرس لآخره، وده حصل هنا.',
-  'أنا بتابع مين بيكمّل ومين بيقف، وإنت في الأولانيين.',
+  // Not «وإنت في الأولانيين» — «إنت» is «إنتي» to her. The noun carries it.
+  'أنا بتابع مين بيكمّل ومين بيقف، واسمك في الأولانيين.',
   'الانتظام ده أهم حاجة في السنة كلها.',
 ] as const;
 

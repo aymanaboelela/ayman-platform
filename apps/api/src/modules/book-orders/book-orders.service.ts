@@ -44,7 +44,7 @@ import { bookOrderTotals, bookShippingCentsFor } from '@ayman/contracts/books';
 import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatWithName } from '@ayman/contracts/outreach/compose';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -2939,8 +2939,9 @@ export class BookOrdersService {
         continue;
       }
 
-      const text = formatCopy(copy.bookShipNotice, {
-        name: order.fullName,
+      // The FIRST name, like every other message — the full three-part name
+      // on the order made this one read as a courier's label.
+      const text = formatWithName(copy.bookShipNotice, order.fullName, {
         days: String(deliveryDaysFor(order.governorateCode)),
       });
 
@@ -3159,11 +3160,9 @@ export class BookOrdersService {
 
     const studentId = await this.studentIdForOrder(order);
     if (studentId !== null) {
-      const name = (await this.prisma.bookOrder.findUnique({ where: { id: order.id }, select: { fullName: true } }))
-        ?.fullName.trim()
-        .split(/\s+/)[0];
-      const body = formatCopy(copy.bookCourierNotice.returned, {
-        name: name ?? '',
+      const fullName =
+        (await this.prisma.bookOrder.findUnique({ where: { id: order.id }, select: { fullName: true } }))?.fullName ?? '';
+      const body = formatWithName(copy.bookCourierNotice.returned, fullName, {
         note: note ? ` — «${note}»` : '',
       });
       await this.prisma.$transaction((tx) => this.outreach.sendManual(tx, { userId: studentId, body }));

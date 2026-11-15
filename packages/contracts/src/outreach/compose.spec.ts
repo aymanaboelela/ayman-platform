@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { MESSAGE_MAX } from '@ayman/contracts/assistant/conversation';
+import { copy } from '@ayman/contracts/copy';
 import {
+  FOCUS_FEW,
   FOCUS_INTROS,
+  FOCUS_MANY,
+  FOCUS_RESTART,
+  FOCUS_SINGLE,
   FOCUS_TAILS,
+  FOCUS_TWO,
   FOLLOW_UP_ASKS,
   FOLLOW_UP_CLOSERS,
   FOLLOW_UP_LESSON_MANY,
@@ -56,6 +62,8 @@ import {
   bandFor,
   composeOutreach,
   firstNameOf,
+  formatWithName,
+  omitName,
   parseVariantKey,
   type ComposeInput,
   type OutreachFacts,
@@ -123,6 +131,11 @@ const EVERY_LINE: readonly string[] = [
   ...QUIZ_RESULT_OPENERS,
   ...Object.values(QUIZ_SCORE_LINES).flat(),
   ...FOCUS_INTROS,
+  ...FOCUS_SINGLE,
+  ...FOCUS_TWO,
+  ...FOCUS_FEW,
+  ...FOCUS_MANY,
+  ...FOCUS_RESTART,
   ...FOCUS_TAILS,
   ...STRENGTH_LINES,
   ...Object.values(QUIZ_CLOSERS).flat(),
@@ -282,6 +295,65 @@ describe('composeOutreach — content', () => {
     expect(body).not.toContain('دي الحتت اللي محتاجة مراجعة:');
   });
 
+  it('says «one mistake» only when exactly one question was wrong', () => {
+    /*
+     * «الغلطة الوحيدة كانت في سؤال 2 و 4 و 5 و 7» — the wording was chosen by
+     * the number of TOPICS, and a paper whose questions carry no category is
+     * one nameless topic holding every wrong answer.
+     */
+    const ONE = /غلطة واحدة|الغلطة الوحيدة/u;
+    const facts = (questionNumbers: number[], scorePercent = 80): OutreachFacts => ({
+      ...RESULT,
+      scorePercent,
+      weakTopics: [{ name: null, questionNumbers }],
+    });
+    for (let index = 0; index < 30; index += 1) {
+      const seed = `m${index}`;
+      expect(composeOutreach(input({ facts: facts([2]), seed })).body).toMatch(ONE);
+      const two = composeOutreach(input({ facts: facts([2, 4]), seed })).body;
+      expect(two).not.toMatch(ONE);
+      expect(two).toContain('غلطتين');
+      expect(two).toContain('سؤال 2 و 4');
+      expect(composeOutreach(input({ facts: facts([2, 4, 5, 7]), seed })).body).not.toMatch(ONE);
+    }
+  });
+
+  it('never lists dozens of numbers, and never calls a failed paper a slip', () => {
+    // A 0% paper went out as «فيه غلطة واحدة … (سؤال 1 و 2 و 3 … و 40) —
+    // دقيقة مراجعة مش أكتر».
+    const all = Array.from({ length: 40 }, (_, n) => n + 1);
+    for (let index = 0; index < 30; index += 1) {
+      const zero = composeOutreach(
+        input({ facts: { ...RESULT, scorePercent: 0, weakTopics: [{ name: null, questionNumbers: all }] }, seed: `z${index}` }),
+      ).body;
+      expect(zero).not.toMatch(/غلطة واحدة|الوحيدة|دقيقة مراجعة|سؤال \d/u);
+      expect(FOCUS_RESTART.some((line) => zero.includes(line)), zero).toBe(true);
+
+      // A weak paper with only a couple of mistakes is still not "a slip".
+      const weak = composeOutreach(
+        input({ facts: { ...RESULT, scorePercent: 30, weakTopics: [{ name: null, questionNumbers: [2] }] }, seed: `w${index}` }),
+      ).body;
+      expect(weak).not.toMatch(/غلطة واحدة|الوحيدة|دقيقة مراجعة/u);
+
+      // A passing paper with many wrong answers: no column of numbers either.
+      const many = composeOutreach(
+        input({
+          facts: {
+            ...RESULT,
+            scorePercent: 70,
+            weakTopics: [
+              { name: 'الحلقات', questionNumbers: [1, 2, 3, 4, 5] },
+              { name: 'الشروط', questionNumbers: [6, 7, 8] },
+            ],
+          },
+          seed: `y${index}`,
+        }),
+      ).body;
+      expect(many).not.toMatch(/سؤال \d|•/u);
+      expect(FOCUS_MANY.some((line) => many.includes(line)), many).toBe(true);
+    }
+  });
+
   it('keeps the bulleted list when there is genuinely more than one', () => {
     const body = composeOutreach(
       input({
@@ -342,6 +414,47 @@ describe('composeOutreach — content', () => {
     expect(firstNameOf('محمد أحمد السيد')).toBe('محمد');
     expect(firstNameOf('  سارة  ')).toBe('سارة');
     expect(firstNameOf('')).toBe('');
+  });
+
+  it('keeps a compound first name whole', () => {
+    // «يا عبد» for «عبد الرحمن …» is what the first word alone produced.
+    expect(firstNameOf('عبد الرحمن محمد علي')).toBe('عبد الرحمن');
+    expect(firstNameOf('عبدالله محمد')).toBe('عبدالله');
+    expect(firstNameOf('أبو بكر سامي')).toBe('أبو بكر');
+    expect(firstNameOf('ابو بكر سامي')).toBe('ابو بكر');
+    expect(firstNameOf('نور الدين أحمد')).toBe('نور الدين');
+    expect(firstNameOf('سيف الإسلام خالد')).toBe('سيف الإسلام');
+    expect(firstNameOf('Abd El Rahman Ali')).toBe('Abd El Rahman');
+    expect(firstNameOf('ABDEL RAHMAN ALI')).toBe('Abdel Rahman');
+    expect(firstNameOf('Nour El Din Ali')).toBe('Nour El Din');
+    // A father's name that happens to start with «ال» is NOT part of it.
+    expect(firstNameOf('محمد السيد علي')).toBe('محمد');
+    // Half a compound on its own is the exact bug — no name instead.
+    expect(firstNameOf('عبد')).toBe('');
+  });
+
+  it('greets nobody by an initial, an abbreviation or a title', () => {
+    // «إزيك يا M.، أنا مهندس أيمن» shipped. After an initial or a title the
+    // next word is as likely a father's name, so nothing is promoted.
+    for (const name of ['M. Ahmed Anwar', 'M Ahmed', 'م. أحمد علي', 'م أحمد', 'أ/ محمد', 'Mr Badr', 'Dr. Badr', 'الطالب بدر', 'ولي أمر بدر', '01012345678', 'a@b.co']) {
+      expect(firstNameOf(name), name).toBe('');
+    }
+    expect(firstNameOf('Badr Ahmed')).toBe('Badr');
+  });
+
+  it('drops the «يا» with the name when there is none to give', () => {
+    for (let index = 0; index < 40; index += 1) {
+      const body = composeOutreach(input({ firstName: firstNameOf('M. Ahmed Anwar'), seed: `n${index}` })).body;
+      const greeting = body.split('\n')[0]!;
+      expect(greeting, greeting).not.toMatch(/يا\s*[،👋]|يا$|^[،\s]|M\./u);
+    }
+    expect(omitName('يا {name}، إزيك؟', '{name}')).toBe('إزيك؟');
+    expect(omitName('إزيك يا {name}، أنا X', '{name}')).toBe('إزيك، أنا X');
+    expect(omitName('{name}، أخبارك إيه؟', '{name}')).toBe('أخبارك إيه؟');
+    expect(omitName('أهلاً يا {name}', '{name}')).toBe('أهلاً');
+    // The book notices greet outside the composer, through the same rule.
+    expect(formatWithName(copy.bookShipNotice, 'M. Ahmed', { days: '3' })).toMatch(/^كتابك/u);
+    expect(formatWithName(copy.bookShipNotice, 'منى أحمد علي', { days: '3' })).toMatch(/^يا منى، كتابك/u);
   });
 
   it('stops a caps-lock name from shouting in the greeting', () => {
@@ -596,6 +709,12 @@ describe('the voice — one message, written for either reader', () => {
     'بيك',
     'ليك',
     'فيك',
+    // The pronoun itself — «إنتي» to her. «وإنت في الأولانيين» shipped.
+    'إنت',
+    'انت',
+    // «مراجعة سريعة وتخلص» — «تخلص» said to the reader is «تخلصي» to her.
+    // (Said of a thing — «والحكاية تخلص» — it is fine, so only this spelling.)
+    'وتخلص',
   ];
 
   const EVERY_LINE: readonly string[] = [
@@ -603,6 +722,13 @@ describe('the voice — one message, written for either reader', () => {
     ...QUIZ_RESULT_OPENERS,
     ...Object.values(QUIZ_SCORE_LINES).flat(),
     ...FOCUS_INTROS,
+    // The one-line focus pools were missing from this list, which is how
+    // «مراجعة سريعة وتخلص» shipped past it.
+    ...FOCUS_SINGLE,
+    ...FOCUS_TWO,
+    ...FOCUS_FEW,
+    ...FOCUS_MANY,
+    ...FOCUS_RESTART,
     ...FOCUS_TAILS,
     ...STRENGTH_LINES,
     ...Object.values(QUIZ_CLOSERS).flat(),
@@ -643,14 +769,27 @@ describe('the voice — one message, written for either reader', () => {
     ...GUARDIAN_RESULT_INTROS,
     ...Object.values(GUARDIAN_RESULT_SCORE_LINES).flat(),
     ...GUARDIAN_RESULT_CLOSERS,
+    // Not composed here, but sent to the same students in the same thread —
+    // «والمندوب هيتصل بيك» lived in these, outside every list above.
+    copy.bookShipNotice,
+    ...Object.values(copy.bookCourierNotice),
+    copy.notifications.bookOrderShippedDetail,
   ];
 
+  /**
+   * Whole tokens, AND the token with a leading conjunction «و» peeled off —
+   * «وإنت في الأولانيين» walked past a whole-word check that would have
+   * caught «إنت» on its own.
+   */
+  const masculineTokens = (text: string): string[] =>
+    text
+      .split(/[\s،.:؟!—«»…()٪]+/u)
+      .flatMap((token) => (token.startsWith('و') && token.length > 2 ? [token, token.slice(1)] : [token]))
+      .filter((token) => MASCULINE_ONLY.includes(token));
+
   it('never addresses the student as a boy', () => {
-    const banned = new Set(MASCULINE_ONLY);
     for (const line of EVERY_LINE) {
-      for (const token of line.split(/[\s،.:؟!—«»…()٪]+/u)) {
-        expect(banned.has(token), `«${token}» only works on a male reader: ${line}`).toBe(false);
-      }
+      expect(masculineTokens(line), `only works on a male reader: ${line}`).toEqual([]);
     }
   });
 
@@ -661,9 +800,18 @@ describe('the voice — one message, written for either reader', () => {
      * `EVERY_LINE` above. Every kind, many seeds, because which entry is drawn
      * depends on a hash of ids that differ every run.
      */
-    const banned = new Set(MASCULINE_ONLY);
     const kinds: OutreachFacts[] = [
       RESULT,
+      // Every focus shape: one, two, a few, too many to list, and a weak paper.
+      { ...RESULT, weakTopics: [{ name: null, questionNumbers: [2] }] },
+      { ...RESULT, weakTopics: [{ name: null, questionNumbers: [2, 4] }] },
+      { ...RESULT, weakTopics: [{ name: null, questionNumbers: [2, 4, 5] }] },
+      { ...RESULT, weakTopics: [{ name: null, questionNumbers: [1, 2, 3, 4, 5, 6, 7, 8] }] },
+      { ...RESULT, scorePercent: 0, weakTopics: [{ name: null, questionNumbers: [1, 2, 3] }] },
+      { kind: 'checkout_recovery', target: 'course', title: 'البرمجة', url: 'https://x.test/c' },
+      { kind: 'checkout_recovery', target: 'book_order', title: null, url: 'https://x.test/b' },
+      { kind: 'signup_nudge', step: 1, courseTitle: 'الصف الأول', url: 'https://x.test/y1' },
+      { kind: 'signup_nudge', step: 2, courseTitle: null, url: 'https://x.test/courses' },
       { kind: 'quiz_nudge', lessonTitle: 'الدوال' },
       { kind: 'lesson_praise', lessonTitle: 'الدوال' },
       { kind: 'whatsapp_invite' },
@@ -683,9 +831,7 @@ describe('the voice — one message, written for either reader', () => {
             whatsappUrl: 'https://chat.whatsapp.com/x',
           }),
         ).body;
-        for (const token of body.split(/[\s،.:؟!—«»…()٪]+/u)) {
-          expect(banned.has(token), `«${token}» only works on a male reader: ${body}`).toBe(false);
-        }
+        expect(masculineTokens(body), `only works on a male reader: ${body}`).toEqual([]);
       }
     }
   });
