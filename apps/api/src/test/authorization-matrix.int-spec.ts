@@ -1474,6 +1474,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // exactly the split that lets a reply-but-never-close role exist later.
     { label: 'inbox reply: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'anonymous', status: 401, body: () => ({ message: 'أهلاً' }) },
     { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
+    { label: 'inbox pin: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/pin`, actor: 'anonymous', status: 401, body: () => ({ pinned: true }) },
+    { label: 'inbox pin: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/pin`, actor: 'student', status: 403, body: () => ({ pinned: true }) },
+    { label: 'inbox pin: admin (unknown id is a silent no-op)', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/pin`, actor: 'admin', status: 204, body: () => ({ pinned: true }) },
+    { label: 'inbox note: anonymous', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/note`, actor: 'anonymous', status: 401, body: () => ({ body: 'ملاحظة' }) },
+    { label: 'inbox note: student', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/note`, actor: 'student', status: 403, body: () => ({ body: 'ملاحظة' }) },
+    { label: 'inbox note: admin, unknown thread', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/note`, actor: 'admin', status: 404, body: () => ({ body: 'ملاحظة' }) },
     { label: 'inbox typing: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/typing`, actor: 'anonymous', status: 401 },
     { label: 'inbox typing: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/typing`, actor: 'student', status: 403 },
     { label: 'inbox typing: admin (unknown id is a silent no-op)', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/typing`, actor: 'admin', status: 204 },

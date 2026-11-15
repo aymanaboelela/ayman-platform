@@ -532,7 +532,10 @@ export class AssistantService {
     take: number,
     skip: number,
     sort: InboxSort = 'newest',
+    /** «بحث» — name, phone, or any word in any message of the thread. */
+    query?: string | null,
   ): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
+    const q = query?.trim() ?? '';
     /*
      * `AND`, not spread.
      *
@@ -543,7 +546,7 @@ export class AssistantService {
      * `INBOX_WHERE` exists to prevent.
      */
     const where: Prisma.ConversationWhereInput = {
-      AND: [INBOX_WHERE, this.filterWhere(filter)],
+      AND: [INBOX_WHERE, this.filterWhere(filter), ...(q ? [searchWhere(q)] : [])],
     };
 
     const [rows, rowCount] = await Promise.all([
@@ -554,10 +557,13 @@ export class AssistantService {
            outreach sweep stamping several at once — and an unstable order
            under pagination shows one thread twice and hides another, in a list
            whose whole job is that nothing goes unanswered. */
-        orderBy:
-          sort === 'oldest'
-            ? [{ lastMessageAt: 'asc' }, { id: 'asc' }]
-            : [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+        // «تثبيت» first, newest pin on top; then the chosen order.
+        orderBy: [
+          { pinnedAt: { sort: 'desc', nulls: 'last' } },
+          ...(sort === 'oldest'
+            ? [{ lastMessageAt: 'asc' as const }, { id: 'asc' as const }]
+            : [{ lastMessageAt: 'desc' as const }, { id: 'desc' as const }]),
+        ],
         take,
         skip,
         select: {
@@ -570,7 +576,8 @@ export class AssistantService {
           entryPath: true,
           lastMessageAt: true,
           adminReadAt: true,
-          user: { select: { name: true } },
+          pinnedAt: true,
+          user: { select: { name: true, staffNote: { select: { userId: true } } } },
           // ONE message for the preview — not the whole thread. The inbox lists
           // twenty rows; pulling every message of every one of them to show one
           // line each is the classic N+1 in list form, and an outreach thread
@@ -590,7 +597,63 @@ export class AssistantService {
       this.prisma.conversation.count({ where }),
     ]);
 
-    return { rows: rows.map((row) => toAdminRow(row)), rowCount };
+    /*
+     * Why each row was found: the newest message that contains the words, one
+     * query for the whole page. `distinct` on the thread keeps it to one per
+     * row however chatty the thread is.
+     */
+    const matches = new Map<string, string>();
+    if (q && rows.length > 0) {
+      const hits = await this.prisma.conversationMessage.findMany({
+        where: {
+          conversationId: { in: rows.map((row) => row.id) },
+          body: { contains: q, mode: 'insensitive' },
+        },
+        orderBy: [{ conversationId: 'asc' }, { createdAt: 'desc' }],
+        distinct: ['conversationId'],
+        select: { conversationId: true, body: true },
+      });
+      for (const hit of hits) matches.set(hit.conversationId, snippetAround(hit.body, q));
+    }
+
+    return {
+      rows: rows.map((row) => ({ ...toAdminRow(row), match: matches.get(row.id) ?? null })),
+      rowCount,
+    };
+  }
+
+  // ── «تثبيت» and «ملاحظات خاصة» ────────────────────────────────────────
+
+  /** Pins or unpins a thread. `updateMany` so a vanished id is a no-op. */
+  async setPinned(id: string, pinned: boolean): Promise<void> {
+    await this.prisma.conversation.updateMany({
+      where: { id },
+      data: { pinnedAt: pinned ? new Date() : null },
+    });
+  }
+
+  /**
+   * The private note on the student behind a thread. Empty deletes it. A
+   * guest's thread has no account to hang it on — 400, so a UI that should
+   * never offer it learns loudly if it does.
+   */
+  async saveStaffNote(conversationId: string, body: string, actorId: string | null): Promise<void> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { userId: true },
+    });
+    if (!conversation) throw new NotFoundException();
+    if (!conversation.userId) throw new BadRequestException('guests have no account to note');
+    const text = body.trim();
+    if (!text) {
+      await this.prisma.studentStaffNote.deleteMany({ where: { userId: conversation.userId } });
+      return;
+    }
+    await this.prisma.studentStaffNote.upsert({
+      where: { userId: conversation.userId },
+      create: { userId: conversation.userId, body: text, updatedByUserId: actorId },
+      update: { body: text, updatedByUserId: actorId },
+    });
   }
 
   /**
@@ -697,6 +760,7 @@ export class AssistantService {
         entryPath: true,
         lastMessageAt: true,
         adminReadAt: true,
+        pinnedAt: true,
         // The student's side of the same stamp — what turns the tick on his
         // own messages into «اتشافت». See the contract's `visitorReadAt`.
         visitorReadAt: true,
@@ -710,7 +774,16 @@ export class AssistantService {
          * `AdminConversationDetailSchema.contactPhone` for why the thread gets
          * it and the list deliberately does not.
          */
-        user: { select: { name: true, phoneNumber: true } },
+        user: {
+          select: {
+            name: true,
+            phoneNumber: true,
+            // «ملاحظات خاصة» — read here, on the admin path only.
+            staffNote: {
+              select: { body: true, updatedAt: true, updatedBy: { select: { name: true } } },
+            },
+          },
+        },
         messages: {
           orderBy: { createdAt: 'asc' },
           select: {
@@ -817,6 +890,13 @@ export class AssistantService {
       unreadForAdmin: false,
       createdAt: row.createdAt.toISOString(),
       visitorReadAt: row.visitorReadAt?.toISOString() ?? null,
+      staffNote: row.user?.staffNote
+        ? {
+            body: row.user.staffNote.body,
+            updatedAt: row.user.staffNote.updatedAt.toISOString(),
+            updatedBy: row.user.staffNote.updatedBy?.name ?? null,
+          }
+        : null,
       // A guest typed theirs into المساعد's form; a student's is the one they
       // sign in with. Never both — a row has a `userId` or a `guestPhone`.
       contactPhone: row.user?.phoneNumber ?? row.guestPhone,
@@ -1332,7 +1412,8 @@ interface AdminRowSource {
   entryPath: string[];
   lastMessageAt: Date;
   adminReadAt: Date | null;
-  user: { name: string } | null;
+  pinnedAt: Date | null;
+  user: { name: string; staffNote?: unknown } | null;
   messages: { body: string; author: MessageAuthor; attachmentName: string | null }[];
   _count: { messages: number };
 }
@@ -1393,6 +1474,9 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
       (!row.adminReadAt || row.lastMessageAt > row.adminReadAt),
     // Filled by `AdminInboxController` from Redis — see `StudentPresenceSchema`.
     presence: null,
+    pinnedAt: row.pinnedAt?.toISOString() ?? null,
+    match: null,
+    hasStaffNote: Boolean(row.user?.staffNote),
   };
 }
 
@@ -1421,6 +1505,34 @@ function latestUnreadAdminMessage(row: {
   if (!latest) return null;
   if (!row.visitorReadAt) return latest;
   return latest > row.visitorReadAt ? latest : null;
+}
+
+/**
+ * «بحث» — a thread is found by the student's name, their phone (account or
+ * guest), or any word in any message. `contains` + `insensitive` is ILIKE; the
+ * INBOX_WHERE and filter clauses narrow first, which is enough at inbox scale.
+ */
+function searchWhere(q: string): Prisma.ConversationWhereInput {
+  const like = { contains: q, mode: 'insensitive' as const };
+  return {
+    OR: [
+      { user: { name: like } },
+      { user: { phoneNumber: { contains: q } } },
+      { guestName: like },
+      { guestPhone: { contains: q } },
+      { messages: { some: { body: like } } },
+    ],
+  };
+}
+
+/** ~120 characters around the first match, with «…» where it was cut. */
+function snippetAround(body: string, q: string): string {
+  const flat = body.replace(/\s+/g, ' ').trim();
+  const at = flat.toLowerCase().indexOf(q.toLowerCase());
+  if (at < 0 || flat.length <= 120) return flat.slice(0, 120);
+  const start = Math.max(0, at - 50);
+  const end = Math.min(flat.length, start + 120);
+  return `${start > 0 ? '…' : ''}${flat.slice(start, end)}${end < flat.length ? '…' : ''}`;
 }
 
 function preview(message?: { body: string; attachmentName: string | null }): string {
