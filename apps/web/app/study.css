@@ -6662,3 +6662,171 @@ label.runner-option {
     scroll-snap-align: start;
   }
 }
+
+/* ===========================================================================
+   «Cinema» — `.shell[data-cinema]`, set by `student-shell.tsx` on HIS stack
+   only (`IS_AYMAN`).
+
+   The owner's brand is ORANGE + BLUE: «الألوان بتاعتنا هي الأورنج والأزرق».
+   The product shipped amber for action and ember (a red-orange at 35°) for
+   structure, so his students saw two oranges and no blue. Inside the student
+   shell the structure ramp (`--e-*`, every «where am I» colour: the open unit,
+   the active nav, the current row, chips, section marks) is re-cut on blue,
+   and the action ramp (`--a-*`, the one button to press, progress) on a true
+   orange. Same lightness ladder as the shipped ramps step for step, so every
+   contrast that held still holds; only the hue and chroma move.
+
+   Keyed on the shell's PRESENCE (`:root:has(...)`), not set on the shell
+   element itself: the phone menu, the outline sheet and every dialog are
+   portalled to <body>, outside the shell, and would otherwise keep the old
+   colours. Pages without the student shell — the marketing site, the admin —
+   and every other teacher (who never get the attribute; their ramps come
+   from their branding row) keep exactly what they had.
+   ======================================================================== */
+:root:has(.shell[data-cinema]) {
+  --e-50: oklch(0.975 0.012 258);
+  --e-100: oklch(0.944 0.030 258);
+  --e-200: oklch(0.898 0.055 258);
+  --e-300: oklch(0.822 0.090 258);
+  --e-400: oklch(0.720 0.140 258);
+  --e-500: oklch(0.620 0.180 259);
+  --e-600: oklch(0.530 0.190 261);
+  --e-700: oklch(0.455 0.170 262);
+  --e-800: oklch(0.385 0.140 263);
+  --e-900: oklch(0.315 0.110 264);
+  --e-950: oklch(0.220 0.070 265);
+  --a-9: oklch(0.715 0.185 52);
+  --a-10: oklch(0.665 0.185 48);
+  --a-11: oklch(0.505 0.150 45);
+  --a-12: oklch(0.300 0.070 45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):has(.shell[data-cinema]) {
+    --a-9: oklch(0.740 0.170 55);
+    --a-10: oklch(0.790 0.160 58);
+    --a-11: oklch(0.820 0.130 62);
+    --a-12: oklch(0.920 0.070 65);
+  }
+}
+
+:root[data-theme='dark']:has(.shell[data-cinema]) {
+  --a-9: oklch(0.740 0.170 55);
+  --a-10: oklch(0.790 0.160 58);
+  --a-11: oklch(0.820 0.130 62);
+  --a-12: oklch(0.920 0.070 65);
+}
+
+/* The dashboard band with his poster art behind it — `dashboard-hero.tsx`,
+   gated by `getBrandAsset`. The art sits under a blue-black scrim that is
+   solid where the greeting is (the inline start) and opens toward the far
+   edge, so the picture shows without a word ever sitting on a bright patch.
+   The drawn rings and the rocket scene step aside: the poster IS the art. */
+.dash-hero[data-poster] {
+  background: var(--e-950);
+}
+
+.dash-hero__poster {
+  z-index: -2;
+  object-fit: cover;
+  object-position: left center;
+}
+
+.dash-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(to left, rgb(10 16 32 / 0.94) 0%, rgb(10 16 32 / 0.78) 38%, rgb(10 16 32 / 0.25) 100%),
+    linear-gradient(to top, rgb(10 16 32 / 0.6) 0%, transparent 55%);
+}
+
+.dash-hero[data-poster]::before,
+.dash-hero[data-poster] .dash-hero__art,
+.dash-hero[data-poster] .dash-hero__scene {
+  display: none;
+}
+
+/* «Cinema»: WHERE YOU ARE is blue, what to PRESS is orange. The shipped rule
+   put the current position on amber too («Amber is ACTION … plus THE CURRENT
+   POSITION»), which with a true orange made the rail's current item look like
+   a button. Inside his shell the position markers move to the blue ramp — the
+   rail's current item, the phone tab bar's, and the lesson rows' «إنت هنا». */
+:root:has(.shell[data-cinema]) .nav-pill[aria-current='page'] {
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+:root:has(.shell[data-cinema]) .nav-pill[aria-current='page'] .nav-pill__well {
+  border-color: var(--e-tint-line);
+  background: var(--e-600);
+  color: var(--n-1);
+}
+
+:root:has(.shell[data-cinema]) .nav-pill[aria-current='page']::before {
+  background: var(--e-600);
+}
+
+:root:has(.shell[data-cinema]) .tabbar__tab[data-active] {
+  color: var(--e-ink);
+}
+
+:root:has(.shell[data-cinema]) .tabbar__tab[data-active]::before {
+  background: var(--e-600);
+}
+
+:root:has(.shell[data-cinema]) .orow--current,
+:root:has(.shell[data-cinema]) .ptl__row--now {
+  background: var(--e-tint);
+}
+
+:root:has(.shell[data-cinema]) .orow--current .orow__mark,
+:root:has(.shell[data-cinema]) .ptl__mark--now {
+  background: var(--e-600);
+  color: var(--n-1);
+}
+
+/* The phone menu is portalled outside the shell — same rule, keyed on the
+   shell's presence. */
+:root:has(.shell[data-cinema]) .drawer .nav-pill[aria-current='page'] {
+  background: var(--e-tint);
+}
+
+:root:has(.shell[data-cinema]) .drawer .nav-pill[aria-current='page'] .nav-pill__well {
+  background: var(--e-600);
+  color: var(--n-1);
+}
+
+/* «Cinema» posters — `course-art.tsx`'s fallback for a cover-less course on
+   his stack. The image fills the slot the generated scene would have; a
+   blue-black scrim from the bottom edge keeps the subject label (and, on the
+   course cards, the % badge) legible on any part of the artwork. */
+.course-art--poster {
+  background: var(--e-950);
+}
+
+.course-art--poster::before {
+  content: none;
+}
+
+.course-art__poster {
+  object-fit: cover;
+}
+
+.course-art--poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgb(10 16 32 / 0.82) 0%, rgb(10 16 32 / 0.15) 55%, transparent 100%);
+  pointer-events: none;
+}
+
+.course-art--poster .course-art__subject {
+  position: absolute;
+  inset-block-end: var(--s-12);
+  inset-inline-start: var(--s-16);
+  z-index: 1;
+  font-family: inherit;
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}

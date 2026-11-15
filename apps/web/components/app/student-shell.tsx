@@ -7,6 +7,7 @@ import { isAttemptRoute, isRailForcedCollapsed } from './student-nav-items';
 import { StudentRail } from './student-rail';
 import { StudentTabBar } from './student-tab-bar';
 import { StudentTopbar } from './student-topbar';
+import { IS_AYMAN } from '@/lib/tenant';
 
 /**
  * The frame every signed-in student page renders inside: rail at the inline
@@ -127,6 +128,10 @@ export function StudentShell({
     <div
       className="shell product-type"
       data-rail-forced={forcedCollapsed ? 'true' : undefined}
+      // «Cinema» — his brand's orange + blue over the student area, his stack
+      // only. Every other teacher's colours come from their own branding row
+      // (`renderBrandingStyle`), which this attribute never sets. See study.css.
+      data-cinema={IS_AYMAN ? '' : undefined}
     >
       {/*
         The signed-in surface's one decorative layer: a static warm bloom at
