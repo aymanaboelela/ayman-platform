@@ -6,6 +6,8 @@ import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
 import { lalezar, ruqaa } from '@/lib/fonts';
+import type { ShareCardRenderFailure } from '@ayman/contracts/share-cards';
+import { apiPostVoid } from '@/lib/api';
 import { canvasToBlob, loadFonts, loadImage, resolveFonts, type CardFonts } from '@/lib/share-card/canvas-kit';
 import { jpegToPdf } from '@/lib/share-card/pdf';
 
@@ -28,6 +30,43 @@ export interface ShareCardDialogProps {
     hero: HTMLImageElement | undefined,
     signature: HTMLImageElement | undefined,
   ) => void;
+}
+
+/** Which card failed, for the report — read off the file name every caller already passes. */
+function cardKindOf(fileName: string): ShareCardRenderFailure['card'] {
+  if (fileName === 'result' || fileName === 'unit-certificate' || fileName === 'exam-certificate') return fileName;
+  return fileName.startsWith('recap') ? 'recap' : 'other';
+}
+
+/**
+ * Tells the API the card did not draw, and why — fire and forget.
+ *
+ * The drawing happens on the phone, so without this a failure leaves no trace
+ * anywhere we can read: «ناس شغالة وناس لا» on 2026-11-15 came with every
+ * server request answering 200. A report that itself fails is dropped
+ * silently; it must never become a second error on the screen.
+ */
+function reportFailure(report: ShareCardRenderFailure): void {
+  apiPostVoid('/api/me/share-cards/render-failures', report).catch(() => undefined);
+}
+
+/** Tags a thrown error with the step it came from, so the report can say which. */
+class StageError extends Error {
+  constructor(
+    readonly stage: ShareCardRenderFailure['stage'],
+    original: unknown,
+  ) {
+    super(original instanceof Error ? original.message : String(original));
+    this.name = original instanceof Error ? original.name : 'Error';
+  }
+}
+
+async function stage<T>(name: ShareCardRenderFailure['stage'], run: () => T | Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (cause) {
+    throw new StageError(name, cause);
+  }
 }
 
 /** `null` while drawing; set once, asynchronously, when the image is ready or failed. */
@@ -75,8 +114,8 @@ export function ShareCardDialog({
         signatureSrc ? loadImage(signatureSrc).catch(() => undefined) : undefined,
       ]);
       const canvas = document.createElement('canvas');
-      draw(canvas, fonts, hero, signature);
-      const blob = await canvasToBlob(canvas, 'image/png');
+      await stage('draw', () => draw(canvas, fonts, hero, signature));
+      const blob = await stage('encode', () => canvasToBlob(canvas, 'image/png'));
       if (cancelled) return;
       canvasRef.current = canvas;
       url = URL.createObjectURL(blob);
@@ -84,13 +123,22 @@ export function ShareCardDialog({
     })().catch((cause: unknown) => {
       // The one trace of WHY — the dialog itself can only say «ماتجهّزتش».
       console.error('[share-card] could not draw the card', cause);
-      if (!cancelled) setOutcome({ kind: 'failed' });
+      if (cancelled) return;
+      const staged = cause instanceof StageError ? cause : null;
+      reportFailure({
+        card: cardKindOf(fileName),
+        stage: staged?.stage ?? 'unknown',
+        errorName: (staged?.name ?? (cause instanceof Error ? cause.name : 'Error')).slice(0, 80),
+        errorMessage: (staged?.message ?? (cause instanceof Error ? cause.message : String(cause))).slice(0, 300),
+        attempt,
+      });
+      setOutcome({ kind: 'failed' });
     });
     return () => {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [open, heroSrc, signatureSrc, draw, attempt]);
+  }, [open, heroSrc, signatureSrc, draw, attempt, fileName]);
 
   const retry = useCallback(() => {
     setOutcome(null);
