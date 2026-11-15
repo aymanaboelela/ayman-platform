@@ -1,7 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '@ayman/contracts/copy';
 import type { ConversationThread } from '@ayman/contracts/assistant/conversation';
+import type { HomeworkFeedbackCard } from '@ayman/contracts/assistant/homework-card';
 
 /* The panel posts through `@/lib/api`; stubbed at the module boundary so these
    tests are about the RENDER and nothing reaches a network. */
@@ -41,7 +42,17 @@ function message(
   createdAt: string,
   body: string,
 ): ConversationThread['messages'][number] {
-  return { id, author, body, createdAt, adminReaction: null, attachment: null, editedAt: null, replyTo: null };
+  return {
+    id,
+    author,
+    body,
+    createdAt,
+    adminReaction: null,
+    attachment: null,
+    editedAt: null,
+    replyTo: null,
+    homeworkCard: null,
+  };
 }
 
 const THREAD: ConversationThread = {
@@ -143,6 +154,79 @@ describe('AssistantThread — the student’s end of the chat', () => {
     await act(async () => resolve(stored));
     expect(onUpdated).toHaveBeenCalledWith(stored);
     expect(document.querySelector('.chat-row--pending')).toBeNull();
+  });
+
+  describe('«تصحيح الواجب» — a homework review as a card', () => {
+    const card: HomeworkFeedbackCard = {
+      submissionId: '0193c6f0-0000-7000-8000-0000000000aa',
+      lessonId: '0193c6f0-0000-7000-8000-0000000000bb',
+      lessonTitle: 'المحاضرة التالتة',
+      courseSlug: 'prog-2',
+      verdict: 'needs_work',
+      grade: null,
+      attempt: 1,
+    };
+    const h = c.homeworkCard;
+
+    function withCard(body: string, overrides: Partial<HomeworkFeedbackCard> = {}): ConversationThread {
+      return {
+        ...THREAD,
+        messages: [
+          ...THREAD.messages,
+          {
+            ...message('0193c6f0-0000-7000-8000-00000000000e', 'admin', '2026-09-29T09:00:00Z', body),
+            homeworkCard: { ...card, ...overrides },
+          },
+        ],
+      };
+    }
+
+    it('splits the note into strengths and fixes, under the lecture and the verdict', () => {
+      render(
+        <AssistantThread
+          thread={withCard('شغل حلو\n✅ الخطوات مترتبة\n✏️ الوحدات ناقصة')}
+          onUpdated={() => {}}
+        />,
+      );
+      const link = screen.getByRole('link', { name: new RegExp(card.lessonTitle) });
+      expect(link).toHaveAttribute('href', '/courses/prog-2/lessons/0193c6f0-0000-7000-8000-0000000000bb#homework');
+      expect(link).toHaveClass('chat-hw--needs-work');
+      expect(link).toHaveTextContent(h.needsWork);
+      expect(link).toHaveTextContent(h.action);
+
+      const [good, improve] = within(link).getAllByRole('list');
+      expect(good).toHaveTextContent(/^الخطوات مترتبة$/);
+      expect(improve).toHaveTextContent(/^الوحدات ناقصة$/);
+      expect(screen.getByText(h.good)).toBeInTheDocument();
+      expect(screen.getByText(h.improve)).toBeInTheDocument();
+      // The marks are the format, not the content — they are not drawn twice.
+      expect(link).not.toHaveTextContent('✅');
+      // The card IS the bubble's content; the note is not printed a second time.
+      expect(screen.getAllByText('شغل حلو')).toHaveLength(1);
+    });
+
+    it('shows the mark on an accepted answer, and an unmarked note as written', () => {
+      render(<AssistantThread thread={withCard('تمام كده.', { verdict: 'accepted', grade: 85 })} onUpdated={() => {}} />);
+      const link = screen.getByRole('link', { name: new RegExp(card.lessonTitle) });
+      expect(link).toHaveClass('chat-hw--accepted');
+      expect(link).toHaveTextContent(h.accepted);
+      expect(link).toHaveTextContent('85 من 100');
+      expect(link).toHaveTextContent(h.note);
+      expect(link).toHaveTextContent('تمام كده.');
+      expect(within(link).queryByRole('list')).toBeNull();
+    });
+
+    it('never draws a card on the student’s own message', () => {
+      const forged: ConversationThread = {
+        ...THREAD,
+        messages: [
+          { ...message('0193c6f0-0000-7000-8000-00000000000f', 'visitor', '2026-09-29T09:00:00Z', 'رسالتي'), homeworkCard: card },
+        ],
+      };
+      render(<AssistantThread thread={forged} onUpdated={() => {}} />);
+      expect(screen.queryByRole('link', { name: new RegExp(card.lessonTitle) })).toBeNull();
+      expect(screen.getByText('رسالتي')).toBeInTheDocument();
+    });
   });
 
   it('gives the words back when the send fails', async () => {

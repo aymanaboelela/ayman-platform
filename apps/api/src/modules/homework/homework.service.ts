@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   HOMEWORK_IMAGE_RETENTION_DAYS,
   type AdminHomeworkDetail,
@@ -13,6 +13,12 @@ import {
 import { HOMEWORK_KEY_PATTERN } from '@ayman/contracts/admin/media';
 import { pickHomeworkSuggestions } from '@ayman/contracts/copy/homework';
 import type { ListResponse } from '@ayman/contracts/admin/list';
+import {
+  HOMEWORK_REVIEW_CARD,
+  HomeworkReviewCardPayloadSchema,
+  type HomeworkReviewCardPayload,
+} from '@ayman/contracts/assistant/homework-card';
+import { isFeatureEnabled } from '../../common/entitlements';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -22,6 +28,15 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { Inject } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
+
+/** What `review` writes for the card — see `HomeworkService.prepareCard`. */
+interface ReviewCard {
+  payload: HomeworkReviewCardPayload;
+  /** The earlier card on the same attempt, to rewrite in place, or `null`. */
+  rewrite: string | null;
+  /** Set inside the transaction once the rewrite actually matched a row. */
+  rewritten: boolean;
+}
 
 /** Three segments, so the public `GET /media/:prefix/:name` cannot address it. */
 const HOMEWORK_PREFIX = 'hw';
@@ -65,6 +80,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 @Injectable()
 export class HomeworkService {
+  private readonly logger = new Logger(HomeworkService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
@@ -459,6 +476,30 @@ export class HomeworkService {
    * messaging system, exactly as «رسايل م. أيمن» is: a student who replies is
    * replying into the inbox he already reads, and there is nothing to keep in
    * sync with anything.
+   *
+   * ## «تصحيح الواجب» — the card (`homeworkChatCard`)
+   *
+   * With the feature open, the same row also carries a typed `card` — the
+   * lecture, the verdict, the mark — which the student's thread draws as a
+   * feedback card with a button into the homework panel. `body` is still the
+   * whole note, so the card frames the words and never replaces them.
+   *
+   * A SECOND verdict on the same hand-in (a corrected mark, a change of mind)
+   * rewrites that card in place and marks it «معدّلة», rather than stacking a
+   * second card under the first: two cards for one answer, saying different
+   * things, is the spam the brief ruled out, and the notification already
+   * tells the student to look. A verdict on a NEW attempt is a new card — that
+   * is a new answer. A card in a thread he has since closed is left alone and
+   * a new one goes into the open thread, for the reason `threadFor` gives.
+   *
+   * The card can never cost the review. Everything it needs that could throw
+   * (the feature read, the payload, the lookup of an earlier card) happens
+   * BEFORE the transaction, inside a `try`, and any failure there degrades to
+   * the plain message. Inside the transaction the card is one more column on
+   * an insert that was happening anyway, and the rewrite is an `updateMany`
+   * that matches zero rows rather than throwing if the earlier card went in
+   * the meantime — a throw there would abort the transaction and lose the
+   * verdict along with the card.
    */
   async review(adminId: string, id: string, input: HomeworkReviewInput): Promise<void> {
     const submission = await this.prisma.homeworkSubmission.findUnique({
@@ -469,6 +510,7 @@ export class HomeworkService {
         lessonId: true,
         courseId: true,
         status: true,
+        attempt: true,
         images: { select: { storageKey: true } },
       },
     });
@@ -477,6 +519,7 @@ export class HomeworkService {
     const accepted = input.decision === 'accepted';
     const keys = accepted ? submission.images.map((image) => image.storageKey) : [];
     const now = new Date();
+    const card = await this.prepareCard(submission, input);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.homeworkSubmission.update({
@@ -494,24 +537,47 @@ export class HomeworkService {
         },
       });
 
-      const conversationId = await threadFor(tx, submission.userId);
+      /*
+       * A second verdict on the same attempt rewrites its card where it is —
+       * see «the card» above. `updateMany` so a card deleted since matches
+       * nothing instead of throwing, and then this falls through to a new
+       * message exactly as if there had never been one. The thread is not
+       * moved for a rewrite: nothing new was said in it, the notification
+       * below is what brings the student back.
+       */
+      if (card?.rewrite) {
+        const { count } = await tx.conversationMessage.updateMany({
+          where: { id: card.rewrite },
+          data: { body: input.message, card: card.payload, editedAt: now },
+        });
+        if (count === 1) card.rewritten = true;
+      }
 
-      await tx.conversationMessage.create({
-        data: { conversationId, author: 'admin', body: input.message },
-        select: { id: true },
-      });
+      if (!card?.rewritten) {
+        const conversationId = await threadFor(tx, submission.userId);
 
-      await tx.conversation.update({
-        where: { id: conversationId },
-        data: {
-          // `answered` and `lastMessageAuthor: 'admin'` move together — see the
-          // note on `Conversation.lastMessageAuthor`. Writing one without the
-          // other is what put his own outbox back on his unread tab.
-          status: 'answered',
-          lastMessageAt: now,
-          lastMessageAuthor: 'admin',
-        },
-      });
+        await tx.conversationMessage.create({
+          data: {
+            conversationId,
+            author: 'admin',
+            body: input.message,
+            ...(card ? { card: card.payload } : {}),
+          },
+          select: { id: true },
+        });
+
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: {
+            // `answered` and `lastMessageAuthor: 'admin'` move together — see the
+            // note on `Conversation.lastMessageAuthor`. Writing one without the
+            // other is what put his own outbox back on his unread tab.
+            status: 'answered',
+            lastMessageAt: now,
+            lastMessageAuthor: 'admin',
+          },
+        });
+      }
 
       await this.notifications.emit(tx, {
         userId: submission.userId,
@@ -542,6 +608,56 @@ export class HomeworkService {
     });
 
     await this.notifications.announce(submission.userId);
+  }
+
+  /**
+   * The card for this verdict, and the earlier card it should rewrite — or
+   * `null` for the plain message (feature closed, or anything here failed).
+   *
+   * Runs OUTSIDE the review's transaction on purpose: a failed query inside an
+   * interactive transaction aborts it, and then the verdict is lost along with
+   * the card. Out here a failure is a log line and a plain bubble.
+   *
+   * The earlier card is looked up across the student's NON-closed threads by
+   * the JSON path of its payload. `conversation.userId` narrows that to a
+   * handful of rows before the JSON is read, so it needs no index of its own.
+   */
+  private async prepareCard(
+    submission: { id: string; userId: string; lessonId: string; attempt: number },
+    input: HomeworkReviewInput,
+  ): Promise<ReviewCard | null> {
+    if (!isFeatureEnabled('homeworkChatCard')) return null;
+    try {
+      const payload = HomeworkReviewCardPayloadSchema.parse({
+        kind: HOMEWORK_REVIEW_CARD,
+        submissionId: submission.id,
+        attempt: submission.attempt,
+        lessonId: submission.lessonId,
+        verdict: input.decision,
+        grade: input.grade,
+      } satisfies HomeworkReviewCardPayload);
+
+      const earlier = await this.prisma.conversationMessage.findFirst({
+        where: {
+          author: 'admin',
+          conversation: { userId: submission.userId, status: { not: 'closed' } },
+          AND: [
+            { card: { path: ['kind'], equals: HOMEWORK_REVIEW_CARD } },
+            { card: { path: ['submissionId'], equals: submission.id } },
+            { card: { path: ['attempt'], equals: submission.attempt } },
+          ],
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+
+      return { payload, rewrite: earlier?.id ?? null, rewritten: false };
+    } catch (error) {
+      this.logger.warn(
+        `homework card skipped for submission ${submission.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
   }
 
   /* ── deleting the bytes ────────────────────────────────────────────── */

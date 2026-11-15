@@ -6003,6 +6003,31 @@ export const copy = {
         lead: 'المحاضرات مرتبة من أول واحدة',
         action: 'ادخل اشترك من هنا',
       },
+      /**
+       * «تصحيح الواجب» — the card a homework review draws in the thread.
+       *
+       * Every string is a noun phrase or a masdar, never an imperative or a
+       * participle about the reader: the brief said «شوف التصحيح», and «شوف»
+       * is on the masculine-only list (`outreach/compose.spec.ts`) — the
+       * feminine is «شوفي», and this platform never asks which reader it has.
+       * «فتح التصحيح كامل» is the same button in a form that fits both.
+       *
+       * The section headings name the POINTS, not the student: «نقط القوة»
+       * rather than «اللي عملته صح», whose verb is a second-person form.
+       */
+      homeworkCard: {
+        eyebrow: 'تصحيح الواجب',
+        accepted: 'مقبول',
+        needsWork: 'فيه ملاحظات',
+        /** The mark, on a chip beside the verdict. Grades are out of 100. */
+        grade: '{grade} من 100',
+        /** The second verdict on the same hand-in. */
+        attempt: 'المحاولة {n}',
+        good: 'نقط القوة',
+        improve: 'نقط للتحسين',
+        note: 'ملاحظات التصحيح',
+        action: 'فتح التصحيح كامل',
+      },
       /** Under his name on the first message of a thread he started. */
       aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',

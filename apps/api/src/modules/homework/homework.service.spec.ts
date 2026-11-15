@@ -12,6 +12,14 @@ import type { MediaStorage } from '../media/storage/media-storage';
 import type { LessonAccessService } from '../progress/lesson-access.service';
 import { HomeworkService } from './homework.service';
 
+/* `homeworkChatCard` is on for this suite (it runs as his stack) except in the
+   one test that closes it — a variable rather than `jest.fn`, so a test that
+   forgets to restore it fails loudly in the next one instead of silently. */
+let cardFeatureOn = true;
+jest.mock('../../common/entitlements', () => ({
+  isFeatureEnabled: (key: string) => (key === 'homeworkChatCard' ? cardFeatureOn : true),
+}));
+
 /**
  * الواجب, end to end against a real database.
  *
@@ -400,6 +408,102 @@ describe('HomeworkService', () => {
         where: { userId: studentId, kind: 'homework_reviewed' },
       });
       expect(notice.payload).toMatchObject({ homeworkStatus: 'needs_work' });
+    });
+  });
+
+  /*
+   * «تصحيح الواجب» in the chat — the card on the review's message. The words
+   * stay on `body`; what is asserted here is the typed frame next to them and
+   * that a second verdict on one hand-in does not stack a second card.
+   */
+  describe('the feedback card in the chat', () => {
+    async function handIn() {
+      await service.submit(studentId, lessonId, {
+        images: [{ storageKey: storedKey(), sizeBytes: 10 }],
+      });
+      return prisma.homeworkSubmission.findFirstOrThrow({ where: { userId: studentId, lessonId } });
+    }
+
+    const cardsFor = (submissionId: string) =>
+      prisma.conversationMessage.findMany({
+        where: {
+          conversation: { userId: studentId },
+          card: { path: ['submissionId'], equals: submissionId },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+    afterEach(() => {
+      cardFeatureOn = true;
+    });
+
+    it('frames the note with the lecture, the verdict and the mark', async () => {
+      const row = await handIn();
+      await service.review(adminId, row.id, {
+        decision: 'accepted',
+        grade: 85,
+        message: '✅ الخطوات مترتبة\n✏️ الوحدات ناقصة',
+      });
+
+      const [message, ...rest] = await cardsFor(row.id);
+      expect(rest).toHaveLength(0);
+      expect(message?.author).toBe('admin');
+      expect(message?.body).toBe('✅ الخطوات مترتبة\n✏️ الوحدات ناقصة');
+      expect(message?.card).toEqual({
+        kind: 'homework_review',
+        submissionId: row.id,
+        attempt: 1,
+        lessonId,
+        verdict: 'accepted',
+        grade: 85,
+      });
+    });
+
+    it('rewrites the card on a second verdict for the same hand-in, instead of posting another', async () => {
+      const row = await handIn();
+      await service.review(adminId, row.id, { decision: 'accepted', grade: 60, message: 'كويس.' });
+      const before = await prisma.conversationMessage.count({ where: { conversation: { userId: studentId } } });
+
+      await service.review(adminId, row.id, { decision: 'accepted', grade: 95, message: 'راجعتها تاني، ممتازة.' });
+
+      const cards = await cardsFor(row.id);
+      expect(cards).toHaveLength(1);
+      expect(cards[0]!.body).toBe('راجعتها تاني، ممتازة.');
+      expect(cards[0]!.card).toMatchObject({ grade: 95, verdict: 'accepted' });
+      // «معدّلة» on the bubble — the student is told it changed.
+      expect(cards[0]!.editedAt).not.toBeNull();
+      expect(await prisma.conversationMessage.count({ where: { conversation: { userId: studentId } } })).toBe(
+        before,
+      );
+      // And the student is still told, even though no new bubble was posted.
+      expect(await prisma.notification.count({ where: { userId: studentId, kind: 'homework_reviewed' } })).toBe(2);
+    });
+
+    it('gives a resubmission its own card — a new answer, a new verdict', async () => {
+      const first = await handIn();
+      await service.review(adminId, first.id, { decision: 'needs_work', grade: null, message: 'الخطوة الأخيرة محتاجة مراجعة.' });
+      await service.submit(studentId, lessonId, { images: [{ storageKey: storedKey(), sizeBytes: 10 }] });
+      await service.review(adminId, first.id, { decision: 'accepted', grade: 100, message: 'تمام.' });
+
+      const cards = await cardsFor(first.id);
+      expect(cards.map((message) => message.card)).toMatchObject([
+        { attempt: 1, verdict: 'needs_work', grade: null },
+        { attempt: 2, verdict: 'accepted', grade: 100 },
+      ]);
+    });
+
+    it('posts the plain message, with no card, where the feature is closed', async () => {
+      cardFeatureOn = false;
+      const row = await handIn();
+      await service.review(adminId, row.id, { decision: 'accepted', grade: null, message: 'من غير كارت.' });
+
+      expect(await cardsFor(row.id)).toHaveLength(0);
+      const last = await prisma.conversationMessage.findFirstOrThrow({
+        where: { conversation: { userId: studentId } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+      expect(last.body).toBe('من غير كارت.');
+      expect(last.card).toBeNull();
     });
   });
 

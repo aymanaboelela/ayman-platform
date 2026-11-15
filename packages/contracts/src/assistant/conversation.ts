@@ -2,6 +2,7 @@ import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
 import { MAX_DOCUMENT_BYTES, MAX_VOICE_SECONDS, isValidStorageKey } from '@ayman/contracts/admin/media';
+import { HomeworkFeedbackCardSchema } from '@ayman/contracts/assistant/homework-card';
 
 /**
  * The conversation المساعد escalates into, on the wire.
@@ -550,6 +551,13 @@ export const ConversationMessageSchema = z.object({
   editedAt: z.iso.datetime().nullable(),
   /** The message this one answers, or `null` — see `MessageReplyRefSchema`. */
   replyTo: MessageReplyRefSchema.nullable(),
+  /**
+   * «تصحيح الواجب» — the card a homework review draws around `body`, or
+   * `null` for every other message. `body` is still the whole note, so a
+   * renderer that ignores this field loses the frame and nothing else; see
+   * `assistant/homework-card.ts`.
+   */
+  homeworkCard: HomeworkFeedbackCardSchema.nullable(),
 });
 
 /**
