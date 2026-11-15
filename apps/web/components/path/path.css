@@ -495,7 +495,7 @@
 .ptl__marker--finish {
   border: var(--hairline) solid var(--n-6);
   background: var(--n-1);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 
 .ptl__card {
@@ -696,7 +696,7 @@ button.ptl__row:hover {
 .ptl__rowtag {
   flex-shrink: 0;
   font-size: var(--fs-text-xs);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 
 .ptl__more {
@@ -706,7 +706,7 @@ button.ptl__row:hover {
   min-block-size: 2.5rem;
   padding-inline: var(--s-8);
   font-size: var(--fs-text-xs);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 
 .ptl__more a {
@@ -726,7 +726,7 @@ button.ptl__row:hover {
   align-items: center;
   gap: var(--s-12);
   font-size: var(--fs-text-xs);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 
 .ptl__finish .ptl__marker {

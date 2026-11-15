@@ -6348,7 +6348,7 @@ label.runner-option {
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: var(--fs-text-xs);
-  color: var(--n-10);
+  color: var(--n-11);
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -6501,7 +6501,7 @@ label.runner-option {
 
 .next-bar__label {
   font-size: var(--fs-text-xs);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 
 .next-bar__title {
