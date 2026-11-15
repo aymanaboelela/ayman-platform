@@ -1,7 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Req, UsePipes } from '@nestjs/common';
 import { Throttle, seconds } from '@nestjs/throttler';
 import type { Request } from 'express';
-import { createZodDto } from 'nestjs-zod';
+import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   ShareCardRenderFailureSchema,
@@ -50,6 +50,7 @@ export class ShareCardsController {
    */
   @Post('render-failures')
   @HttpCode(204)
+  @UsePipes(ZodValidationPipe)
   @Throttle({ short: { limit: 3, ttl: seconds(10) }, medium: { limit: 20, ttl: seconds(600) } })
   renderFailure(
     @CurrentUser() user: AuthenticatedUser,
