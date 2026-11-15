@@ -663,59 +663,6 @@
   );
 }
 
-/* ---------------------------------------------------------------------------
-   The learning path's trail (`components/path/path-map.tsx`).
-
-   The component has always written a `--wave` multiplier onto every stop and
-   every connector dot, and nothing has ever read it — these rules did not
-   exist. So the map that was designed as a winding trail rendered as a single
-   centred column, which is both the wrong picture and a worse one than the
-   list it replaced: a column of identical discs says less than a column of
-   rows, because the rows at least carried their titles inline.
-
-   `--path-amp` is the amplitude. It is the ONLY thing that changes between
-   breakpoints — the `WAVE` pattern in the component stays as it is, so the
-   trail narrows to almost-straight on a phone and opens up on a desktop with
-   no second set of numbers to keep in step.
-
-   `translateX` on the inline axis is deliberately NOT mirrored for RTL. The
-   trail is a decorative meander, not a directional cue: flipping it would
-   change nothing a reader can name, and `--wave` is signed already, so a
-   mirrored copy would just be the same shape shifted by half a period.
-   --------------------------------------------------------------------------- */
-.path-run {
-  --path-amp: 3.25rem;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-@media (max-width: 40rem) {
-  .path-run {
-    --path-amp: 1.5rem;
-  }
-}
-
-@media (min-width: 64rem) {
-  .path-run {
-    --path-amp: 5rem;
-  }
-}
-
-/* Every stop and every connector dot sits at its own point on the wave.
-   `calc()` on a unitless multiplier, so one custom property drives the whole
-   figure. */
-.path-run__at {
-  transform: translateX(calc(var(--wave, 0) * var(--path-amp)));
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .path-run__at {
-    transition: transform var(--d-modal) var(--ease-out);
-  }
-}
-
 /* The signed-in shell's page transition (`components/app/student-shell.tsx`).
 
    Moving between حسابي / مساري / نتائجي used to be an instant swap: the old
@@ -2533,6 +2480,79 @@ html[data-player-fullscreen] .route-fade {
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
   color: var(--n-11);
+}
+
+/* A folding group in the STUDENT rail and phone sheet — `student-nav-list.tsx`.
+   The head is a real button; the body is hidden while folded, EXCEPT in the
+   icon-only rail, where the head (a `.rail__label`) is gone and a folded body
+   would leave its icons unreachable — see the rule after `.rail__label`'s. */
+.nav-fold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.nav-fold__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+  text-align: start;
+  transition: background var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out);
+}
+
+.nav-fold__head:hover {
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+.nav-fold[data-open='true'] > .nav-fold__head {
+  color: var(--e-ink);
+}
+
+.nav-fold__count {
+  margin-inline-start: auto;
+  min-inline-size: 1.25rem;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-full);
+  background: var(--n-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+  text-align: center;
+}
+
+.nav-fold__chevron {
+  flex-shrink: 0;
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+.nav-fold[data-open='true'] .nav-fold__chevron {
+  transform: rotate(180deg);
+}
+
+.nav-fold[data-open='false'] > .nav-fold__body {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  html[data-rail='collapsed'] .nav-fold > .nav-fold__body,
+  .shell[data-rail-forced='true'] .nav-fold > .nav-fold__body {
+    display: flex;
+  }
+}
+
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  html:not([data-rail='expanded']) .nav-fold > .nav-fold__body {
+    display: flex;
+  }
 }
 
 /* Collapsing is NOT re-implemented here. Every rail link keeps `.rail__item`

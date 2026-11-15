@@ -41,7 +41,7 @@ test.describe('learning path', () => {
     // The heading and the summary card — the two things the screen exists for.
     await expect(page.getByRole('heading', { level: 1, name: copy.path.title })).toBeVisible();
 
-    // The enrolled course appears in BOTH columns: the rail and the map.
+    // Each enrolled course is a card on the timeline, titled by an <h2>.
     await expect(page.getByRole('heading', { level: 2, name: 'كورس اختبارات E2E' })).toBeVisible();
 
     // The demo course's single lesson is first in the run, so it is available
@@ -57,10 +57,10 @@ test.describe('learning path', () => {
 
     // Available nodes are real links; locked ones render a non-navigating
     // span. The demo lesson is available, so it must be reachable.
-    // جوّه الخريطة بس: زرار «نكمّل: …» في الهيرو بيحمل نفس العنوان عن قصد،
+    // جوّه صفوف الكورس المفتوح بس: زرار «نكمّل: …» في الهيرو بيحمل نفس العنوان عن قصد،
     // فالمطابقة الجزئية بتاعة `name` كانت هتعدّ لينكين.
     await expect(
-      page.locator('ol.path-run').getByRole('link', { name: 'اختبار تجريبي' }).filter({ visible: true }),
+      page.locator('ol.ptl__rows').getByRole('link', { name: 'اختبار تجريبي' }).filter({ visible: true }),
     ).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })

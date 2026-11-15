@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { isPlainPress } from '@/lib/welcome-motion';
 import { useStudentFeatureGate } from './student-features';
 import { STUDENT_NAV, STUDENT_NAV_GROUPS, activeStudentNav, type StudentNavItem } from './student-nav-items';
@@ -70,6 +71,8 @@ export function StudentNavList({
   const pathname = usePathname();
   const active = activeStudentNav(pathname);
   const allowed = useStudentFeatureGate();
+  // Which groups the student opened or shut by hand — see the fold note below.
+  const [pressed, setPressed] = useState<Record<string, boolean>>({});
 
   const items = STUDENT_NAV.filter((item) => {
     if (item.footer || !allowed(item.feature)) return false;
@@ -118,15 +121,54 @@ export function StudentNavList({
    * behind an entitlement the stack has off) renders nothing — not an orphan
    * heading.
    */
+  /*
+   * The labelled groups FOLD — «المذاكرة» · «درجاتي» · «التحديات» · «المحفظة
+   * والكتب» — and only the one holding the current page opens on its own.
+   *
+   * Twenty-six rows one under the other was the rail a student scrolled to
+   * find «شهاداتي» in; the four destinations of a normal evening (the `main`
+   * group, no label) stay out in the open and everything else is one press
+   * away under a name. A press is remembered for this mount, not stored: the
+   * next page's rail opens on that page's group again, which is what makes
+   * it read as «where am I».
+   *
+   * The collapsed rail (icons only) shows every group's icons regardless —
+   * the toggle is a `.rail__label` and disappears with the labels, so a
+   * folded body there would be icons nobody can reach. `globals.css` keys
+   * that on the same three selectors the label rule uses.
+   */
+
   return (
-    <div className={['flex flex-col gap-4', className].filter(Boolean).join(' ')}>
+    <div className={['flex flex-col gap-3', className].filter(Boolean).join(' ')}>
       {STUDENT_NAV_GROUPS.map((group) => {
         const rows = items.filter((item) => item.group === group.id);
         if (rows.length === 0) return null;
+        if (!group.labelAr) {
+          return (
+            <ul key={group.id} className="flex flex-col gap-1">
+              {rows.map(renderItem)}
+            </ul>
+          );
+        }
+        const holdsActive = rows.some((item) => item.href === active?.href);
+        const open = pressed[group.id] ?? holdsActive;
+        const bodyId = `nav-fold-${group.id}`;
         return (
-          <div key={group.id} className="flex flex-col gap-1">
-            {group.labelAr ? <p className="nav-section__head rail__label">{group.labelAr}</p> : null}
-            <ul className="flex flex-col gap-1">{rows.map(renderItem)}</ul>
+          <div key={group.id} className="nav-fold" data-open={open ? 'true' : 'false'}>
+            <button
+              type="button"
+              className="nav-fold__head rail__label"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              onClick={() => setPressed((current) => ({ ...current, [group.id]: !open }))}
+            >
+              <span>{group.labelAr}</span>
+              <span className="nav-fold__count">{rows.length}</span>
+              <ChevronDown className="nav-fold__chevron size-4" aria-hidden="true" />
+            </button>
+            <ul id={bodyId} className="nav-fold__body flex flex-col gap-1">
+              {rows.map(renderItem)}
+            </ul>
           </div>
         );
       })}
@@ -134,12 +176,6 @@ export function StudentNavList({
   );
 }
 
-/**
- * The rail's footer links — `أجهزتي` today. Split from the list above rather
- * than filtered inline at the call site so the two consumers cannot disagree
- * about which group an item belongs to; `footer` on the table is the single
- * answer.
- */
 export function StudentNavFooterList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = activeStudentNav(pathname);

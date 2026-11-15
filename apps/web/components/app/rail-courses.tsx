@@ -55,9 +55,17 @@ export async function RailCourses() {
     );
   }
 
+  /*
+   * Three, then «كل الكورسات». A student in six courses had six two-line rows
+   * here pushing the footer down; the rail is for getting back to what they
+   * study most, and `/library` is one press away for the rest.
+   */
+  const shown = dashboard.enrolledCourses.slice(0, RAIL_COURSES);
+  const more = dashboard.enrolledCourses.length - shown.length;
+
   return (
     <ul className="rail__label flex flex-col gap-0.5">
-      {dashboard.enrolledCourses.map((course) => {
+      {shown.map((course) => {
         // `enrolledCourseHref`, not a local expression. The local expression
         // this replaced sent an enrolled-but-not-yet-started student to the
         // PUBLIC course page — out of the shell, onto a lock badge. See
@@ -127,9 +135,22 @@ export async function RailCourses() {
           </li>
         );
       })}
+      {more > 0 ? (
+        <li>
+          <Link
+            href="/library"
+            className="flex items-center justify-between rounded-md px-3 py-2 text-[length:var(--fs-text-sm)] font-medium text-accent-text hover:bg-surface-3"
+          >
+            {copy.dashboard.recommendedSeeAll}
+            <span className="mono tabular text-fg-muted">+{more}</span>
+          </Link>
+        </li>
+      ) : null}
     </ul>
   );
 }
+
+const RAIL_COURSES = 3;
 
 /**
  * Three rows at the same height the real ones settle at, so the rail's footer
