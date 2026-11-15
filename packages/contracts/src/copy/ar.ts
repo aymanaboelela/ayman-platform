@@ -3952,9 +3952,11 @@ export const copy = {
     heroAllDone: 'كل اللي نزل خلص — برافو',
     /** آخر محطة في كل كورس. */
     finish: 'خط النهاية',
-    /** The fold under a course's header on «مساري» — only the current course opens. */
-    showLessons: 'المحاضرات',
-    hideLessons: 'إخفاء المحاضرات',
+    /** «مساري» as a timeline — `path-timeline.tsx`. */
+    timelineResume: 'نكمّل',
+    timelineStart: 'نبدأ',
+    moreLessons: '+{n} محاضرة كمان',
+    allLessons: 'كل المحاضرات',
 
     // ── a course the instructor has taken down ───────────────────────────
     /**

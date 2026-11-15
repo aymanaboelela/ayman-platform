@@ -5,8 +5,7 @@ import { ArrowLeft, BookOpenCheck, Flag, Route } from 'lucide-react';
 import { LearningPathSchema, copy, type LearningPath } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
-import { CourseRail } from '@/components/path/course-rail';
-import { PathMap } from '@/components/path/path-map';
+import { PathTimeline } from '@/components/path/path-timeline';
 import { PathArt } from '@/components/path/path-art';
 import { CountUp } from '@/components/rank/count-up';
 import '@/components/path/path.css';
@@ -72,56 +71,9 @@ export default async function PathPage() {
       */}
       <PathHero path={path} />
 
-      {/* Two columns, mirroring the reference's shape. The rail is a plain
-          list rather than a second nav landmark — the global header already
-          owns navigation.
-
-          No `.group-head` over this region, deliberately. The only «الكورسات»
-          label on the screen is the rail's own eyebrow, inside
-          `components/path/course-rail.tsx`; a section heading here would print
-          the same word twice, a hand's width apart, at two different sizes.
-          When the rail's label moves out of that component, this is where the
-          heading belongs. */}
-      {/*
-        ⚠️ `grid-cols-[minmax(0,1fr)]` ON THE PHONE TOO, and it is not a tidy-up
-        of the `lg:` rule below — without it this screen hangs off the side.
-
-        A single-column grid with no `grid-template-columns` gets one IMPLICIT
-        column, which is sized `auto` — that is `minmax(min-content, max-content)`,
-        so the column is never allowed to be narrower than its widest item's
-        min-content. `<PathMap>`'s header measures 399px there (a 40px subject
-        mark, a 52px ring, gaps, the «{cleared}/{total}» counter, and a `truncate`
-        title, which is `white-space: nowrap` and therefore contributes its FULL
-        width to min-content). At 412px, less this page's `px-6`, the column had
-        364px to play with and took 451 — and because the document is RTL the
-        overflow goes LEFT, so the rail and every course header sat half off the
-        inline start with nothing to scroll to. Reported as «في الموبايل بتبقى
-        لازقة على الشمال».
-
-        `minmax(0, 1fr)` floors the track at zero, so the column is the container
-        and the flex rows inside it are finally allowed to shrink — which is what
-        makes the `truncate` on the course title actually ellipsise instead of
-        simply refusing to wrap. Nothing changes above `lg`, where the explicit
-        template already said the same thing about the map column.
-      */}
-      <div className="grid gap-8 grid-cols-[minmax(0,1fr)] lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <CourseRail courses={path.courses} currentCourseId={path.currentCourseId} />
-
-        <div className="space-y-10">
-          {path.courses.map((course, i) => (
-            <div key={course.id} id={`course-${course.id}`} className="scroll-mt-6">
-              {/* `index` is what numbers the course in its own header ring.
-                  Without it `index + 1` was `NaN`, and every course on this
-                  screen introduced itself as "الكورس NaN". */}
-              <PathMap
-                course={course}
-                index={i}
-                open={course.id === (path.currentCourseId ?? path.courses[0]?.id)}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* The courses as one timeline — a card each, only the current one
+          open to the few lectures around what is next. See `PathTimeline`. */}
+      <PathTimeline path={path} />
     </main>
   );
 }
