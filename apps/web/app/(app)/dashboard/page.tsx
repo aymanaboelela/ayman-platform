@@ -522,7 +522,7 @@ export default async function DashboardPage() {
 
         {/* «كورسات في مسارك» — the same object in its other state, directly
             under. Absent when there is nothing in their cell left to join. */}
-        {recommended.length > 0 ? (
+        {recommended.length > 0 && !cinema ? (
           <section>
             <div className="group-head">
               <span className="group-head__mark" aria-hidden="true" />
@@ -545,6 +545,21 @@ export default async function DashboardPage() {
           day's habits, the study tiles and the exams still waiting. Every
           exam row ends in its own chip, so that side gets the wider track.
         */}
+        {cinema ? (
+          /*
+           * «الحاجات دي مش مترتبة». On his stack this row is two things side by
+           * side, the board's pair: the latest results and the study tools.
+           * The rest of what sat here repeated something else on the page or
+           * in the menu — the exams still waiting are in «ناقصك النهارده», the
+           * month's closed papers and every result are on /results, the
+           * day's habits («النهارده») are the study tools themselves, and the
+           * courses to join are in «الكورسات».
+           */
+          <div className="home-duo">
+            <ExamsSection quizzes={quizzes.quizzes} />
+            <StudyTiles features={features} title={copy.dashboard.studyTilesTitle} />
+          </div>
+        ) : (
         <div className="dash-pair">
           <div className="dash-pair__main space-y-8">
             <MonthlyExamsSection exams={studentExams.exams} />
@@ -558,6 +573,7 @@ export default async function DashboardPage() {
             <StudyTiles features={features} title={copy.dashboard.studyTilesTitle} />
           </div>
         </div>
+        )}
 
         {cinema ? (
           /* «Cinema»: «معانا على طول» beside the books — first in the DOM, so

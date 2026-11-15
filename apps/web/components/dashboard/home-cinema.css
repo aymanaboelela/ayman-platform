@@ -980,3 +980,17 @@
 .home-reach__btn--wa:hover {
   background: color-mix(in oklch, var(--wa), black 8%);
 }
+
+/* The latest results beside the study tools — two equal columns once the
+   main column has room, stacked on a phone. */
+.home-duo {
+  display: grid;
+  gap: var(--s-32);
+}
+
+@container home (min-width: 52rem) {
+  .home-duo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
