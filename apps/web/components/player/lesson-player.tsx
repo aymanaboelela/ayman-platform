@@ -1,16 +1,41 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { AlignLeft, CircleCheck, Layers, Paperclip, PenLine, StickyNote } from 'lucide-react';
 import { isCompletionUndoable } from '@ayman/contracts/completion-undo';
 import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, LessonPlayer } from '@ayman/contracts/progress';
+import { formatDuration } from '@/lib/format';
 import { postOpen } from '@/lib/progress-client';
 import { AttachmentLesson } from './attachment-lesson';
-import { LessonMaterials } from './lesson-materials';
 import { LessonNav } from './lesson-nav';
+import { LessonTabs, type LessonTab } from './lesson-tabs';
 import { QuizLesson } from './quiz-lesson';
+import { ResourceList } from './resource-list';
 import { TextLesson } from './text-lesson';
 import { VideoLesson } from './video-lesson';
+
+/** Where this lesson sits in its course — the chip row under the title. */
+export interface LessonPlace {
+  /** 1-based. */
+  unitIndex: number;
+  unitTitle: string;
+  /** 1-based among the unit's LECTURES; `null` for a quiz hanging off one. */
+  lectureIndex: number | null;
+  lectureCount: number;
+}
+
+/**
+ * The server-rendered panels that join the tabs. `null` = the lecture has no
+ * such thing and the tab is not drawn — most lectures have one or two.
+ */
+export interface LessonPanels {
+  homework: ReactNode | null;
+  summary: ReactNode | null;
+  notes: ReactNode | null;
+  /** Drawn as the count on «ملاحظاتي». */
+  notesCount: number;
+}
 
 export interface LessonPlayerProps {
   payload: LessonPlayer;
@@ -22,9 +47,37 @@ export interface LessonPlayerProps {
    * asking for that moment, not for a rewatch from the top.
    */
   jumpTo?: number | null;
+  place: LessonPlace;
+  panels: LessonPanels;
+  /** The phone's door to the outline (`OutlineSheet`) — drawn under the title bar. */
+  door?: ReactNode;
 }
 
-export function LessonPlayerView({ payload, watermark = null, jumpTo = null }: LessonPlayerProps) {
+/**
+ * The lesson's main column: the lecture, one bar under it, one row of tabs.
+ *
+ * ## The order, and why it is fixed here
+ *
+ * The lecture is the first pixel. Under it, in ONE bar: the title, where it
+ * sits («الوحدة ٢ · المحاضرة ٥ من ٨ · 48:10») and the finish button — the
+ * three things a student reads or presses on every lesson. Everything else the
+ * lecture carries (homework, materials, summary, notes, a quiz) is a tab, with
+ * the most urgent one open.
+ *
+ * It used to be: video, a quiz card, the materials open with a PDF viewer in
+ * them, a sentence about how completion works, the prev/next row, THEN the
+ * title, the summary, a notes form, the homework. «لما بيدخل على المحاضرة
+ * بيلاقي حاجات كتير». The title arriving after the controls was the clearest
+ * sign the page had grown by accretion.
+ */
+export function LessonPlayerView({
+  payload,
+  watermark = null,
+  jumpTo = null,
+  place,
+  panels,
+  door,
+}: LessonPlayerProps) {
   const [progress, setProgress] = useState(payload.progress);
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -69,8 +122,77 @@ export function LessonPlayerView({ payload, watermark = null, jumpTo = null }: L
     maxPositionSeconds: progress.maxPositionSeconds,
   });
 
+  const h = copy.player.header;
+  const t = copy.player.tabs;
+  const duration = payload.video?.durationSeconds ?? payload.lesson.estimatedSeconds;
+  const homeworkPending =
+    payload.homework !== null &&
+    (payload.homework.submission === null || payload.homework.submission.status === 'needs_work');
+
+  /*
+   * The tabs, most urgent first — the first one is the one open on arrival.
+   * The homework is a thing to DO; the materials were uploaded to be read; the
+   * summary is for after the video; notes are the student's own; the quiz
+   * hangs off the lecture and has its row in the outline too.
+   */
+  const tabs: LessonTab[] = [];
+  if (payload.homework && panels.homework) {
+    tabs.push({
+      id: 'homework',
+      label: t.homework,
+      icon: <PenLine className="size-4" />,
+      count: homeworkPending ? 1 : undefined,
+      alert: homeworkPending,
+      content: panels.homework,
+    });
+  }
+  /*
+   * Every lesson kind but `attachment` can carry materials — the deck it was
+   * taught from, a tutorial video, extra reading. An attachment lesson draws
+   * them as its MAIN object (`<AttachmentLesson>`, which also runs the dwell
+   * timer that completes it), so it does not list them twice.
+   */
+  if (payload.lesson.kind !== 'attachment' && payload.resources.length > 0) {
+    tabs.push({
+      id: 'materials',
+      label: t.materials,
+      icon: <Paperclip className="size-4" />,
+      count: payload.resources.length,
+      content: <ResourceList resources={payload.resources} watermark={watermark} />,
+    });
+  }
+  if (panels.summary) {
+    tabs.push({ id: 'summary', label: t.summary, icon: <AlignLeft className="size-4" />, content: panels.summary });
+  }
+  if (panels.notes) {
+    tabs.push({
+      id: 'notes',
+      label: t.notes,
+      icon: <StickyNote className="size-4" />,
+      count: panels.notesCount > 0 ? panels.notesCount : undefined,
+      content: panels.notes,
+    });
+  }
+  /*
+   * A quiz can hang off ANY lesson kind, not only `kind: 'quiz'` — see
+   * `LessonPanel`'s admin-side comment. Attached to a video (or text /
+   * attachment) lesson it is a bonus alongside that lesson's own completion
+   * rule, not the rule itself — hence `variant="attached"`, which swaps the
+   * copy rather than the mechanics.
+   */
+  if (!isQuiz && payload.quiz) {
+    tabs.push({
+      id: 'quiz',
+      label: t.quiz,
+      icon: <CircleCheck className="size-4" />,
+      content: (
+        <QuizLesson lessonId={payload.lesson.id} progress={progress} variant="attached" facts={payload.quiz} />
+      ),
+    });
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="lp-main">
       {payload.lesson.kind === 'video' && payload.video ? (
         <VideoLesson
           lessonId={payload.lesson.id}
@@ -102,14 +224,10 @@ export function LessonPlayerView({ payload, watermark = null, jumpTo = null }: L
 
       {/*
         A video lesson with NO `lesson_videos` row rendered nothing at all — a
-        blank 16/9 space where the player belongs, no message, no logged error.
-        It is a reachable state: `setVideo` 422s when YouTube will not state a
-        duration, and an instructor who moved on after that has a published
-        video lecture carrying no video.
-
-        Saying so beats a hole in the page. The student cannot act on it, so it
-        does not pretend they can — it names the situation and leaves the rest
-        of the lesson (materials, the completion control) working.
+        blank 16/9 space where the player belongs. It is a reachable state:
+        `setVideo` 422s when YouTube will not state a duration, and an
+        instructor who moved on after that has a published video lecture
+        carrying no video. Saying so beats a hole in the page.
       */}
       {payload.lesson.kind === 'video' && !payload.video ? (
         <p
@@ -139,58 +257,56 @@ export function LessonPlayerView({ payload, watermark = null, jumpTo = null }: L
         />
       ) : null}
 
-      {payload.lesson.kind === 'quiz' ? (
-        <QuizLesson lessonId={payload.lesson.id} progress={progress} facts={payload.quiz} />
-      ) : null}
+      {isQuiz ? <QuizLesson lessonId={payload.lesson.id} progress={progress} facts={payload.quiz} /> : null}
 
-      {/*
-        A quiz can hang off ANY lesson kind, not only `kind: 'quiz'` — see
-        `LessonPanel`'s admin-side comment. When one is attached to a video (or
-        text/attachment) lesson, it is a bonus alongside that lesson's own
-        completion rule, not the lesson's completion rule itself — hence
-        `variant="attached"`, which swaps the copy rather than the mechanics.
-      */}
-      {payload.lesson.kind !== 'quiz' && payload.quiz ? (
-        <QuizLesson
+      {/* The one bar: title and place at the inline start, the controls at the end. */}
+      <div className="lp-head">
+        <div className="lp-head__text">
+          <h1 className="lp-head__title">{payload.lesson.title}</h1>
+          <div className="lp-head__meta">
+            <span className="lp-unit">
+              <Layers className="size-3.5" aria-hidden="true" />
+              {h.unit.replace('{n}', String(place.unitIndex))}
+              {place.unitTitle ? ` · ${place.unitTitle}` : ''}
+            </span>
+            {place.lectureIndex !== null && place.lectureCount > 0 ? (
+              <span>
+                {h.lessonOf
+                  .replace('{n}', String(place.lectureIndex))
+                  .replace('{m}', String(place.lectureCount))}
+              </span>
+            ) : null}
+            {duration ? (
+              <span className="mono tabular lp-head__time">{formatDuration(duration)}</span>
+            ) : null}
+          </div>
+        </div>
+
+        <LessonNav
           lessonId={payload.lesson.id}
-          progress={progress}
-          variant="attached"
-          facts={payload.quiz}
+          courseSlug={payload.lesson.courseSlug}
+          previous={payload.previous}
+          next={payload.next}
+          isComplete={isComplete}
+          // A quiz lesson is completed by passing its quiz, so it gets the
+          // neighbour links without the finish button. `completeManually`
+          // refuses one server-side too — this only stops us from drawing a
+          // control whose press is now a 400.
+          manualComplete={!isQuiz}
+          undoable={undoable}
+          // Three hints, not two. The quiz has its own rule and says it; the
+          // other two are sentences about VIDEO.
+          hint={
+            isQuiz
+              ? copy.player.quizAutoCompleteHint
+              : payload.autoCompleteAvailable
+                ? copy.player.autoCompleteHint
+                : copy.player.manualOnlyHint
+          }
+          onProgress={onProgress}
+          className="lp-head__actions"
         />
-      ) : null}
-
-      {/*
-        Every OTHER lesson kind can also carry materials — the deck it was
-        taught from, tutorial videos, extra reading. That is the whole point of
-        Plan 8: the predecessor could only hang files off `kind === 'attachment'`
-        lessons, so the video lessons that most needed a presentation could not
-        have one.
-
-        `<LessonMaterials>` rather than `<AttachmentLesson>`: the latter starts
-        a dwell timer that completes the lesson, which would be wrong here — a
-        video lesson completes by earning its watch thresholds, not by having
-        slides underneath it.
-      */}
-      {payload.lesson.kind !== 'attachment' && payload.resources.length > 0 ? (
-        // مفتوح افتراضيًا — شوف `<LessonMaterials>` للسبب: المرفق بيتحط لما
-        // يكون فيه حاجة تستاهل، والمحاضرة اللي مالهاش مرفقات مابترسمش القسم
-        // أصلًا، فالقفل كان بيخبّي ملف المدرّس رفعه عشان يتقرا.
-        <LessonMaterials resources={payload.resources} watermark={watermark} />
-      ) : null}
-
-      {/*
-        Three hints, not two. `autoCompleteHint` describes watch thresholds and
-        `manualOnlyHint` describes a missing video duration — both are sentences
-        about VIDEO, and a quiz lesson was being shown the second one purely
-        because it is the `false` branch. It has its own rule and now says it.
-      */}
-      <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-        {isQuiz
-          ? copy.player.quizAutoCompleteHint
-          : payload.autoCompleteAvailable
-            ? copy.player.autoCompleteHint
-            : copy.player.manualOnlyHint}
-      </p>
+      </div>
 
       {saveFailed ? (
         <p role="status" className="text-[length:var(--fs-text-sm)] text-[color:var(--warn)]">
@@ -198,20 +314,9 @@ export function LessonPlayerView({ payload, watermark = null, jumpTo = null }: L
         </p>
       ) : null}
 
-      <LessonNav
-        lessonId={payload.lesson.id}
-        courseSlug={payload.lesson.courseSlug}
-        previous={payload.previous}
-        next={payload.next}
-        isComplete={isComplete}
-        // A quiz lesson is completed by passing its quiz, so it gets the
-        // neighbour links without the finish button. `completeManually` refuses
-        // one server-side too — this only stops us from drawing a control whose
-        // press is now a 400.
-        manualComplete={!isQuiz}
-        undoable={undoable}
-        onProgress={onProgress}
-      />
+      {door}
+
+      <LessonTabs tabs={tabs} label={t.label} />
     </div>
   );
 }

@@ -36,18 +36,23 @@ export function courseExamDoors(exams: readonly StudentExam[], courseId: string)
 }
 
 /**
- * «امتحانات الشهر» in the lesson sidebar. Monthly exams are kept out of the
- * outline on purpose (one failed sitting must never shut a lecture), so this
- * is a card beside it rather than rows inside it. Renders nothing when there
- * is no door — most lesson views.
+ * «امتحانات الشهر» in the lesson rail — ONE line per exam: the name, when it
+ * closes, the button. Monthly exams are kept out of the outline on purpose
+ * (one failed sitting must never shut a lecture), so this sits beside it
+ * rather than as rows inside it. Renders nothing when there is no door — most
+ * lesson views.
+ *
+ * It was a card with a heading, a sub-card per exam and a full-width button
+ * each: about 160px of rail for one sentence's worth of fact. The heading is
+ * for screen readers now; sighted students get the clipboard glyph and the
+ * amber button, which say «امتحان» faster than a title does.
  */
 export function CourseExamsCard({ exams }: { exams: readonly StudentExam[] }) {
   if (exams.length === 0) return null;
 
   return (
     <section className="ce-card" aria-labelledby="course-exams-title">
-      <h2 id="course-exams-title" className="ce-card__title">
-        <ClipboardList className="size-4" aria-hidden="true" />
+      <h2 id="course-exams-title" className="sr-only">
         {c.title}
       </h2>
 
@@ -56,23 +61,26 @@ export function CourseExamsCard({ exams }: { exams: readonly StudentExam[] }) {
           const late = exam.phase === 'closed';
           return (
             <li key={exam.lessonId} className="ce-exam" data-late={late ? '' : undefined}>
-              <div className="ce-exam__head">
-                <span className="ce-exam__name">{exam.title}</span>
-                <span className="ce-exam__tag">{late ? c.late : c.open}</span>
-              </div>
+              <ClipboardList className="ce-exam__icon size-[18px]" aria-hidden="true" />
 
-              {late ? (
-                <p className="ce-exam__meta">{c.lateNote}</p>
-              ) : exam.openUntil ? (
-                <p className="ce-exam__meta">
-                  {formatCopy(c.closesLine, { date: stamp.format(new Date(exam.openUntil)) })}
-                </p>
-              ) : null}
+              <div className="ce-exam__text">
+                <span className="ce-exam__name">
+                  {exam.title}
+                  <span className="ce-exam__tag">{late ? c.late : c.open}</span>
+                </span>
+                {late ? (
+                  <span className="ce-exam__meta">{c.lateNote}</span>
+                ) : exam.openUntil ? (
+                  <span className="ce-exam__meta">
+                    {formatCopy(c.closesLine, { date: stamp.format(new Date(exam.openUntil)) })}
+                  </span>
+                ) : null}
+              </div>
 
               {exam.hasSat ? (
                 <Link href={quizHref(exam.lessonId)} className="ce-exam__done">
                   <CheckCircle2 className="size-4" aria-hidden="true" />
-                  {c.sat} · {c.review}
+                  {c.review}
                 </Link>
               ) : (
                 <Link href={quizHref(exam.lessonId)} className="ce-exam__cta">

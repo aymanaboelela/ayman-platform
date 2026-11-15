@@ -35,18 +35,29 @@ export interface LessonNavProps {
    * did not finish with the button.
    */
   undoable?: boolean;
+  /**
+   * The one sentence about how this lesson completes — the finish button's
+   * tooltip. It used to be a paragraph drawn under every video; a student who
+   * has read it once does not need it on lesson 31.
+   */
+  hint?: string;
   onProgress: (response: HeartbeatResponse) => void;
+  className?: string;
 }
 
-// `@ayman/ui`'s `Button` has no `asChild` prop, so the ghost-button look is
-// applied directly to these `Link`s rather than nesting a `<button>` inside
-// an `<a>`.
-const GHOST_LINK = cn(
-  'inline-flex h-10 items-center gap-2 rounded-sm px-4',
-  'text-[length:var(--fs-text-base)] font-medium text-fg-muted',
-  'transition-colors duration-[var(--d-hover)] ease-[var(--ease)] hover:bg-surface-3 hover:text-fg',
-);
-
+/**
+ * The lesson's controls, in the bar beside its title: «الدرس السابق», the one
+ * finish button, and «الدرس التالي» once there is nothing left to finish.
+ *
+ * ## Why there is no «التالي» link while the lesson is open
+ *
+ * «خلاص · التالي» IS the next link — one gesture finishes the lesson and
+ * advances. A second, plain «التالي» beside it offered the same destination
+ * twice and was the control students pressed by mistake instead of finishing;
+ * then the course refused to open the lesson after, because this one was not
+ * marked done. The plain link comes back once the lesson is complete (or has
+ * no button: a quiz), where it is the only way forward.
+ */
 export function LessonNav({
   lessonId,
   courseSlug,
@@ -55,7 +66,9 @@ export function LessonNav({
   isComplete,
   manualComplete = true,
   undoable = false,
+  hint,
   onProgress,
+  className,
 }: LessonNavProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -141,90 +154,67 @@ export function LessonNav({
       ? copy.player.markComplete
       : copy.player.markCompleteFinal;
 
+  const showNextLink = next !== null && (isComplete || !manualComplete);
+
   return (
-    /*
-      Two rows on a phone, one from `sm` up.
-
-      The single `flex-wrap` row this replaces only LOOKED right because the
-      finish button was «تم» — six characters. On a lesson that is not finished
-      the label is «خلّصت الدرس», and «الدرس السابق» + «الدرس التالي» + that
-      button is 420px of content in a 328px column: the row wrapped and left the
-      button hanging alone at the inline end, or — before the grid track above
-      was pinned with `min-w-0` — did not wrap at all and pushed the button
-      clean off the screen. That is the state the phone screenshot caught.
-
-      So the split is explicit rather than emergent: the neighbours take a row
-      of their own and go to the two ends of it (two far-apart 40px targets
-      instead of two adjacent ones under the same thumb), and the finish
-      button — the primary action of the whole page — gets the full width
-      underneath. Nothing changes at `sm` and above.
-    */
-    <div className="flex flex-col gap-3 border-t border-line-subtle pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-      <div className="flex items-center justify-between gap-2 sm:justify-start">
+    <div className={cn('lp-actions', className)}>
+      <div className="lp-actions__row">
         {previous ? (
-          <Link href={`/courses/${courseSlug}/lessons/${previous.id}`} className={GHOST_LINK}>
+          <Link
+            href={`/courses/${courseSlug}/lessons/${previous.id}`}
+            className="lp-ghost"
+            aria-label={copy.player.previous}
+            title={previous.title}
+          >
             <ChevronBack />
-            {copy.player.previous}
+            <span className="lp-ghost__label">{copy.player.previous}</span>
           </Link>
         ) : null}
-        {next ? (
-          <Link href={`/courses/${courseSlug}/lessons/${next.id}`} className={GHOST_LINK}>
-            {copy.player.next}
+
+        {showNextLink ? (
+          <Link
+            href={`/courses/${courseSlug}/lessons/${next.id}`}
+            className="lp-ghost"
+            aria-label={copy.player.next}
+            title={next.title}
+          >
+            <span className="lp-ghost__label">{copy.player.next}</span>
             <ChevronForward />
           </Link>
         ) : null}
-      </div>
 
-      {/* Present on every lesson kind whose completion is the student's to
-          declare — which is all of them except a quiz, where the mark is the
-          completion and a button would be a way around sitting the exam. The
-          finish path still never depends on WATCH progress, which is what the
-          rule this replaces was actually protecting. */}
-      {/* The whole block, not just the button. `failed` is only ever set by
-          `finish()`, which nothing can call once the button is gone, so keeping
-          the wrapper would leave an empty flex child on every quiz lesson —
-          and `justify-between` on the row above would still be spacing against
-          it. */}
-      {manualComplete ? (
-        <div className="flex flex-col gap-2 sm:items-end">
-          {isComplete && undoable ? (
-            <>
-              <UndoCompleteButton lessonId={lessonId} onProgress={onProgress} />
-              {/* Says «تم» can be pressed at all. It is the one control on the
-                  page that USED to be dead once pressed, and a student who
-                  learnt that has no reason to try it again. */}
-              <p className="text-[length:var(--fs-text-xs)] text-center text-fg-muted sm:text-end">
-                {copy.player.undoHint}
-              </p>
-            </>
+        {/* Present on every lesson kind whose completion is the student's to
+            declare — which is all of them except a quiz, where the mark is the
+            completion and a button would be a way around sitting the exam. The
+            finish path still never depends on WATCH progress, which is what the
+            rule this replaces was actually protecting. */}
+        {manualComplete ? (
+          isComplete && undoable ? (
+            <UndoCompleteButton lessonId={lessonId} onProgress={onProgress} />
           ) : (
             <Button
               onClick={() => void finish()}
               disabled={saving || isComplete}
-              className="w-full sm:w-auto"
+              title={isComplete ? undefined : hint}
+              className="lp-finish"
             >
               <span className="flex items-center gap-2">
                 {isComplete ? <CheckIcon /> : null}
                 {isComplete ? copy.player.completed : label}
               </span>
             </Button>
-          )}
+          )
+        ) : null}
+      </div>
 
-          {/* Directly under the button that failed, not a toast: the student is
-              looking at the button, and the answer to "did that work?" has to be
-              in the same place as the question. `role="alert"` announces it
-              without stealing focus from the player. */}
-          {failed ? (
-            <p
-              role="alert"
-              aria-live="polite"
-              className="text-[length:var(--fs-text-xs)] text-center sm:text-end"
-              style={{ color: 'var(--err)' }}
-            >
-              {copy.player.markFailed}
-            </p>
-          ) : null}
-        </div>
+      {/* Directly under the button that failed, not a toast: the student is
+          looking at the button, and the answer to "did that work?" has to be
+          in the same place as the question. `role="alert"` announces it
+          without stealing focus from the player. */}
+      {failed ? (
+        <p role="alert" aria-live="polite" className="lp-actions__error">
+          {copy.player.markFailed}
+        </p>
       ) : null}
     </div>
   );

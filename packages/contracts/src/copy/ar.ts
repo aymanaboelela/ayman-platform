@@ -3768,6 +3768,53 @@ export const copy = {
     },
 
     /**
+     * The lesson page after the 2026-11 clean-up — «المنصة للطالب زحمة أوي».
+     *
+     * One bar under the video (title, unit, the finish button), one row of
+     * TABS under that for everything the lecture carries, and the outline as
+     * unit CARDS with the current unit open. Every string a student reads on
+     * that screen that is not the lecture's own content lives in this block.
+     */
+    header: {
+      /** The chip under the title — «الوحدة ٢ · أساسيات البرمجة». */
+      unit: 'الوحدة {n}',
+      /** Lectures only; a quiz hanging off a lecture is not counted. */
+      lessonOf: 'المحاضرة {n} من {m}',
+    },
+    tabs: {
+      label: 'أقسام المحاضرة',
+      homework: 'الواجب',
+      materials: 'المرفقات',
+      summary: 'الملخص',
+      notes: 'ملاحظاتي',
+      quiz: 'امتحان المحاضرة',
+    },
+    units: {
+      /** The eyebrow on the open unit's card. */
+      youAreHere: 'إنت هنا',
+      /** On the row of the lesson the student is sitting in — a label, not a
+       *  control: there is nothing to press on the lesson you are already on. */
+      watching: 'بتتفرج دلوقتي',
+      /** The one quiet chip in the list — the lecture right after this one. */
+      nextChip: 'التالي',
+      /** A whole unit the subscription does not cover yet. */
+      openMonth: 'افتح الشهر',
+      done: 'خلصت',
+    },
+    sheet: {
+      /** The phone's door to the outline, under the video. */
+      open: 'محتوى الكورس',
+      close: 'إغلاق',
+    },
+    nextBar: {
+      label: 'المحاضرة التالية',
+      open: 'افتح المحاضرة التالية',
+    },
+    sideLinks: {
+      help: 'مساعدة',
+    },
+
+    /**
      * «شهور جديدة اتفتحت» — the card that sells the months a student does not
      * hold yet, from inside the course. See `CourseOutline.monthOffer` for why
      * it is the only door there is.

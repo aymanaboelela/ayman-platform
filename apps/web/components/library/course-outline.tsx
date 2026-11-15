@@ -6,6 +6,7 @@ import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { LockIcon } from '@/components/player/icons';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
+import { UnitArt } from '@/components/library/unit-art';
 import { LtrRatio } from '@/components/ltr-ratio';
 import { formatDuration } from '@/components/site/course-card';
 import {
@@ -402,6 +403,11 @@ function Unit({
   return (
     <details className="unit" open={open}>
       <summary className="unit__head">
+        {/* «صورة الوحدة» — the same tile the lesson rail draws for this unit,
+            so a unit looks like itself on both screens. Decorative; the
+            heading beside it carries the name. */}
+        <UnitArt coverKey={section.coverKey} seed={section.id} className="unit__art" />
+
         {/* A heading inside <summary> is legal (the content model allows one)
             and it is what keeps the outline navigable by heading for a screen
             reader — a page of forty lessons under a single h2 is a wall. */}

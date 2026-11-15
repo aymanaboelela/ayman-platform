@@ -1,58 +1,38 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export interface OutlineScrollToCurrentProps {
-  /**
-   * Not read — the effect finds the row through `[aria-current]`, which is
-   * markup the sidebar already emits. It is here as the effect's DEPENDENCY:
-   * navigating between two lessons of the same course keeps this component
-   * mounted and only swaps which row carries `aria-current`, so without it the
-   * panel would stay parked on the lesson the student just left.
-   */
   activeLessonId: string;
 }
 
 /**
- * Centres the lesson you are on inside the course outline, once per lesson.
+ * Centres the current row inside the outline's own scroller on mount.
  *
- * `<CourseOutlineSidebar>` is a Server Component and stays one — it renders
- * 40+ rows for a full course, and making it a Client Component would put that
- * whole list into the flight payload as raw props AND re-render it on the
- * device, which is the opposite of what bounding it was for. So the behaviour
- * lives here, in ~20 lines that render nothing.
+ * Finds ITS OWN panel (`closest`), not the first `[data-course-outline]` on the
+ * page: the outline is rendered twice on the lesson page — once in the desktop
+ * rail, once inside the phone's bottom sheet — and a document-wide query from
+ * the sheet's copy landed on the rail's, which is `display: none` on a phone
+ * and has nothing to scroll.
  *
- * ## Why not `scrollIntoView`
- *
- * `Element.scrollIntoView()` scrolls EVERY scrollable ancestor, the document
- * included. The outline sits at the bottom of the lesson page on a phone and is
- * a sticky rail on a desktop, so asking the row to bring itself into view also
- * drags the document down — away from the video the student came for, and, on
- * `lg`, to the position where the sticky panel tucks under itself. (The runner
- * hit the same wall from the other side; `quiz-runner.tsx`'s `goTo` says so.)
- * Writing `scrollTop` moves the panel and nothing else, which is the entire
- * intent.
- *
- * ## Why the visible settle is acceptable
- *
- * This runs after hydration, so on a slow phone the panel paints at the top of
- * the list and then jumps. That is not CLS — the Layout Instability spec
- * excludes movement caused by scrolling — and the alternative (a scroll
- * position baked into the HTML) is not something a server can compute without
- * knowing row heights on the device.
+ * The scroller is `[data-outline-scroller]` when the panel has one (the unit
+ * list, inside the sticky rail), else the panel itself.
  */
 export function OutlineScrollToCurrent({ activeLessonId }: OutlineScrollToCurrentProps) {
+  const anchor = useRef<HTMLSpanElement>(null);
+
   useEffect(() => {
-    const panel = document.querySelector<HTMLElement>('[data-course-outline]');
-    // ANY value of `aria-current`, not `="page"`: `LessonRow` has written
-    // `aria-current="true"` since #223, and a query for "page" found nothing,
-    // so the panel opened at lesson 1 on every lesson of every course.
+    const panel = anchor.current?.closest<HTMLElement>('[data-course-outline]') ?? null;
+    const scroller = panel?.querySelector<HTMLElement>('[data-outline-scroller]') ?? panel;
+    // ANY value of `aria-current`, not `="page"`: the row writes
+    // `aria-current="true"`, and a query for "page" found nothing, so the
+    // panel opened at lesson 1 on every lesson of every course.
     const current = panel?.querySelector<HTMLElement>('[aria-current]');
-    if (!panel || !current) return;
+    if (!scroller || !current) return;
 
     // A short course fits inside the bound and never became a scroller. There
     // is nothing to centre, and writing `scrollTop` would be a no-op anyway.
-    if (panel.scrollHeight <= panel.clientHeight) return;
+    if (scroller.scrollHeight <= scroller.clientHeight) return;
 
     // Only from rest. A student who started scrolling the panel during the
     // hydration gap has already said where they want it, and yanking that back
@@ -62,19 +42,19 @@ export function OutlineScrollToCurrent({ activeLessonId }: OutlineScrollToCurren
     // remounts at 0 and is re-centred, because the App Router restores the
     // DOCUMENT's offset and never an inner scroller's — so "leave it alone"
     // would mean returning to an outline parked on lesson 1 of 40.
-    if (panel.scrollTop !== 0) return;
+    if (scroller.scrollTop !== 0) return;
 
     // Valid *because* of the guard above: with `scrollTop` at 0 the row's
-    // viewport-relative offset from the panel is also its offset inside the
-    // panel's scrolled content. Block axis only — the inline axis is the one
-    // that flips under RTL, and this never touches it.
+    // viewport-relative offset from the scroller is also its offset inside the
+    // scrolled content. Block axis only — the inline axis is the one that
+    // flips under RTL, and this never touches it.
     const target =
       current.getBoundingClientRect().top -
-      panel.getBoundingClientRect().top -
-      (panel.clientHeight - current.offsetHeight) / 2;
+      scroller.getBoundingClientRect().top -
+      (scroller.clientHeight - current.offsetHeight) / 2;
 
-    panel.scrollTop = Math.max(0, target);
+    scroller.scrollTop = Math.max(0, target);
   }, [activeLessonId]);
 
-  return null;
+  return <span ref={anchor} hidden />;
 }

@@ -1,12 +1,12 @@
 'use client';
 
+import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import type { BookShippingRates } from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
 import { BookOrderPanel } from './book-order-panel';
-
 
 /**
  * «اطلب الكتاب» — the entry point into the book-order flow from the public
@@ -32,6 +32,7 @@ export function BookOrderButton({
   shippingRates,
   instapay,
   vodafoneCash,
+  compact = false,
 }: {
   courseId: string;
   bookTitle: string;
@@ -50,11 +51,19 @@ export function BookOrderButton({
   instapay: string | null;
   /** The wallet number, threaded beside `instapay` — see `ContactSchema`. */
   vodafoneCash: string | null;
+  /**
+   * The lesson rail's footer strip: a small icon-and-word link row beside
+   * «جروب الدفعة» and «مساعدة» (`CourseSideLinks`), instead of the wide
+   * secondary button the course cards use. Same dialog behind it.
+   */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="course-start">
+    // `contents` in the compact case: the strip lays its rows out as flex
+    // children, and a wrapper with a margin would be a fourth, empty one.
+    <div className={compact ? 'contents' : 'course-start'}>
       <Dialog open={open} onOpenChange={setOpen}>
         {/* `bco-dialog` — the checkout's own layout; see `book-checkout.css`. */}
         <DialogContent closeLabel={copy.bookOrder.back} className="bco-dialog">
@@ -92,9 +101,16 @@ export function BookOrderButton({
         price, the delivery fee for the governorate picked, and the total —
         live, and one tap away. The button's job was never to be the invoice.
       */}
-      <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
-        {copy.bookOrder.cta}
-      </Button>
+      {compact ? (
+        <button type="button" onClick={() => setOpen(true)} className="side-link">
+          <BookOpen className="size-4" aria-hidden="true" />
+          {copy.bookOrder.cta}
+        </button>
+      ) : (
+        <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
+          {copy.bookOrder.cta}
+        </Button>
+      )}
     </div>
   );
 }

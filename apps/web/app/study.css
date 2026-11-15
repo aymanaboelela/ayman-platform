@@ -5705,3 +5705,836 @@ label.runner-option {
   background: linear-gradient(115deg, var(--print-gold-wash), var(--print-gold) 55%, var(--print-gold-wash));
   color: var(--on-light-ink);
 }
+
+/* ===========================================================================
+   THE LESSON PAGE, 2026-11 — `(app)/courses/[slug]/lessons/[lessonId]`.
+
+   «المنصة للطالب زحمة أوي». The page had ten things under and beside the
+   video; it now has one bar, one tab row and the outline as unit cards. The
+   vocabulary below is that page's and the phone sheet's:
+
+     .lp-*        the main column — the bar (`.lp-head`), the controls
+                  (`.lp-actions`), the tabs (`.lp-tabs`), the summary panel
+     .outline     the rail panel; `.outline__units` is the scroller
+     .ocard       one unit as a card (`<details>`); `.unit-art` its tile
+     .orow        one lesson row inside an open unit
+     .side-link   «جروب الدفعة» · «مساعدة» · «اطلب الكتاب» at the rail's foot
+     .odoor       the phone's door to the outline, `.osheet` the sheet
+     .next-bar    «المحاضرة التالية» pinned under the thumb on a phone
+
+   Same colour rule as the rest of this file: ember is structure and position
+   (the open unit, the chip under the title, the done ticks), amber is the one
+   thing to press (the finish button, the current row's mark, «امتحن»).
+   ======================================================================== */
+
+/* ── the main column ─────────────────────────────────────────────────────── */
+.lp-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-16);
+}
+
+.lp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12) var(--s-16);
+}
+
+.lp-head__text {
+  display: grid;
+  flex: 1 1 16rem;
+  gap: var(--s-8);
+  min-inline-size: 0;
+}
+
+.lp-head__title {
+  margin: 0;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  color: var(--n-12);
+}
+
+.lp-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* Latin digits and a colon inside an Arabic line — isolated or they flip. */
+.lp-head__time {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: var(--fs-text-xs);
+}
+
+/* «الوحدة ٢ · أساسيات البرمجة» — ember, because it says WHERE, not what to do. */
+.lp-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-block-size: 1.625rem;
+  padding-inline: var(--s-8);
+  border: var(--hairline) solid var(--e-tint-line);
+  border-radius: var(--r-sm);
+  background: var(--e-tint);
+  color: var(--e-ink);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+}
+
+.lp-head__actions {
+  flex-shrink: 0;
+}
+
+.lp-actions {
+  display: grid;
+  gap: var(--s-8);
+}
+
+.lp-actions__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.lp-actions__error {
+  margin: 0;
+  font-size: var(--fs-text-xs);
+  color: var(--err);
+  text-align: end;
+}
+
+/* «الدرس السابق» / «الدرس التالي» — a bordered ghost beside the solid button. */
+.lp-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-block-size: 2.75rem;
+  padding-inline: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.lp-ghost:hover {
+  background: var(--n-3);
+  border-color: var(--n-6);
+}
+
+/* The one solid control on the page keeps the button's own height but sits
+   at the 44px floor the ghosts use, so the row is one straight line. */
+.lp-finish {
+  min-block-size: 2.75rem;
+}
+
+/* On a phone the controls take a row of their own under the title, and the
+   ghosts shrink to their glyph so the finish button gets the width. */
+@media (max-width: 39.999rem) {
+  .lp-head__actions {
+    inline-size: 100%;
+  }
+
+  .lp-actions__row > .lp-finish {
+    flex: 1;
+  }
+
+  .lp-ghost {
+    inline-size: 2.75rem;
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .lp-ghost__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .lp-actions__error {
+    text-align: start;
+  }
+}
+
+/* ── the tab row ─────────────────────────────────────────────────────────── */
+.lp-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+  border-block-end: var(--hairline) solid var(--border);
+  /* Five tabs do not fit a phone; the row scrolls, and hides the bar it
+     would otherwise draw under itself. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.lp-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.lp-tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-8);
+  min-block-size: 2.75rem;
+  padding-inline: var(--s-12);
+  margin-block-end: -1px;
+  border-block-end: 2px solid transparent;
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  transition:
+    color var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.lp-tab:hover {
+  color: var(--n-12);
+}
+
+.lp-tab[aria-selected='true'] {
+  border-color: var(--e-ink);
+  color: var(--e-ink);
+  font-weight: var(--fw-semibold);
+}
+
+.lp-tab__icon {
+  display: inline-flex;
+}
+
+/* «٣» beside «المرفقات» — mono and tabular, a disc the height of the x. */
+.lp-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 1.125rem;
+  block-size: 1.125rem;
+  padding-inline: 0.3rem;
+  border-radius: var(--r-full);
+  background: var(--n-4);
+  color: var(--n-11);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  direction: ltr;
+}
+
+/* A homework not handed in yet — the one count that is a demand, in red. */
+.lp-tab__count--alert {
+  background: var(--err);
+  color: var(--n-1);
+}
+
+.lp-panel {
+  padding-block-start: var(--s-16);
+}
+
+/* ── «ملخص الدرس» as a panel ─────────────────────────────────────────────── */
+.lp-summary {
+  display: grid;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.lp-summary__note {
+  margin: 0;
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.lp-summary__body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-text-sm);
+  line-height: 1.8;
+  color: var(--n-12);
+}
+
+/* ── the unit tile ───────────────────────────────────────────────────────── */
+/* A square in a hue hashed from the section id (`--unit-h`, set inline by
+   `UnitArt`), or the uploaded cover. White glyph on both stops of the
+   gradient: 0.66 lightness at 0.12 chroma is the lighter corner and still
+   clears 3:1 for a 20px icon. */
+.unit-art {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 3rem;
+  block-size: 3rem;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, oklch(0.66 0.12 var(--unit-h)), oklch(0.44 0.1 var(--unit-h)));
+  color: var(--n-1);
+}
+
+.unit-art--photo {
+  background: var(--n-3);
+}
+
+.unit-art__photo {
+  object-fit: cover;
+}
+
+/* A month the student has not bought: the tile goes grey, the glyph is a lock. */
+.unit-art--locked {
+  background: linear-gradient(135deg, var(--n-9), var(--n-11));
+}
+
+.unit-art--locked .unit-art__photo {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+/* The course page's unit header (`/library/[slug]`) takes the same tile a
+   step smaller — its row already carries a heading and a count. */
+.unit__art {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+}
+
+/* ── the outline panel ───────────────────────────────────────────────────── */
+/* A flex column so the unit list can be the scroller inside the sticky rail:
+   the page caps the rail at the viewport, `.outline` is allowed to shrink
+   (`min-block-size: 0`), and `.outline__units` takes the overflow. Inside the
+   phone sheet nothing caps it and the sheet scrolls instead. */
+.outline {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.outline__head {
+  display: grid;
+  gap: var(--s-8);
+  padding: var(--s-12) var(--s-16);
+  border-block-end: var(--hairline) solid var(--border-subtle);
+}
+
+.outline__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-8);
+}
+
+.outline__title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+/* «12 / 40 · 30%» — one LTR run, mono. */
+.outline__ratio {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.outline__units {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-8);
+  min-block-size: 0;
+  margin: 0;
+  padding: var(--s-8);
+  list-style: none;
+  overflow-y: auto;
+}
+
+.outline__foot {
+  display: flex;
+  border-block-start: var(--hairline) solid var(--border-subtle);
+}
+
+/* One of the three rows at the foot: an icon and a word, 44px tall, equal
+   thirds. A `<button>` for the book and `<a>`s for the chats — same look. */
+.side-link {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  padding-inline: var(--s-8);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  transition:
+    background var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.side-link + .side-link {
+  border-inline-start: var(--hairline) solid var(--border-subtle);
+}
+
+.side-link:hover {
+  background: var(--n-2);
+  color: var(--n-12);
+}
+
+.side-link:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width) - 1px);
+}
+
+/* ── a unit card ─────────────────────────────────────────────────────────── */
+.ocard {
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background var(--d-hover) var(--ease-out);
+}
+
+/* The one you are in — the whole of what the ember buys here. */
+.ocard[open] {
+  border-color: var(--e-tint-line);
+  background: var(--n-1);
+}
+
+.ocard--locked {
+  border-style: dashed;
+}
+
+.ocard__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  min-block-size: 3.5rem;
+  padding: var(--s-8) var(--s-12) var(--s-8) var(--s-8);
+  cursor: pointer;
+  list-style: none;
+  text-align: start;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.ocard__head::-webkit-details-marker {
+  display: none;
+}
+
+.ocard__head::marker {
+  content: '';
+}
+
+.ocard__head--static {
+  cursor: default;
+}
+
+.ocard[open] > .ocard__head {
+  background: var(--e-tint);
+}
+
+.ocard__head:not(.ocard__head--static):hover {
+  background: var(--n-3);
+}
+
+.ocard[open] > .ocard__head:hover {
+  background: color-mix(in oklch, var(--e-tint), var(--e-stage) 8%);
+}
+
+/* Same negative offset `.unit__head` carries, for the same reason: the card
+   clips its corners, and a ring drawn outside the box would be cut away. */
+.ocard__head:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width) - 1px);
+}
+
+.ocard__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.ocard__eyebrow {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.ocard[open] .ocard__eyebrow {
+  color: var(--e-ink);
+}
+
+.ocard__title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.ocard--locked .ocard__title {
+  color: var(--n-11);
+}
+
+.ocard__ratio {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+.ocard__done {
+  flex-shrink: 0;
+  block-size: 1.75rem;
+  padding-inline: var(--s-8);
+  font-size: var(--fs-text-xs);
+}
+
+.ocard__chevron {
+  flex-shrink: 0;
+  color: var(--n-11);
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+.ocard[open] .ocard__chevron {
+  transform: rotate(180deg);
+}
+
+.ocard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: var(--s-4);
+  list-style: none;
+}
+
+/* ── a lesson row ────────────────────────────────────────────────────────── */
+.orow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-block-size: 2.5rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-md);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.orow:hover {
+  background: var(--n-2);
+}
+
+/* The row you are ON. Amber, per this file's rule: «Amber is ACTION: anything
+   the student presses, plus THE CURRENT POSITION». */
+.orow--current {
+  min-block-size: 2.75rem;
+  background: color-mix(in oklab, var(--a-9) 14%, var(--n-2));
+  box-shadow: inset 0 0 0 var(--hairline) var(--e-tint-line);
+}
+
+.orow--current:hover {
+  background: color-mix(in oklab, var(--a-9) 18%, var(--n-2));
+}
+
+/* A lecture's quiz, tucked under it. */
+.orow--quiz {
+  margin-inline-start: var(--s-20);
+}
+
+/* The whole row IS the link on a plain row — one control, title and all. */
+.orow__link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--s-8);
+  min-inline-size: 0;
+  min-block-size: inherit;
+  color: inherit;
+}
+
+.orow__link:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
+/* The state, as a mark: a tick for done, the play glyph on the current row,
+   an empty ring for everything ahead, a lock for a locked row. A finished
+   lesson is NOT green — `--ok` means a quiz marked something right. */
+.orow__mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  border: var(--hairline) solid var(--n-6);
+  border-radius: var(--r-full);
+  color: var(--e-ink);
+}
+
+.orow--done .orow__mark {
+  border-color: transparent;
+  background: var(--e-tint);
+}
+
+.orow--current .orow__mark {
+  border-color: transparent;
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.orow--quiz .orow__mark {
+  border-radius: var(--r-sm);
+}
+
+.orow--locked .orow__mark {
+  border-color: transparent;
+  background: var(--n-3);
+  color: var(--n-9);
+}
+
+/* Two lines at most, then an ellipsis — a rail row cannot afford the three a
+   long title wraps to, and one line hid too much («الكورس التأسي…»). */
+.orow__title {
+  display: -webkit-box;
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--fs-text-sm);
+  line-height: 1.4;
+  color: var(--n-12);
+}
+
+.orow--done .orow__title {
+  color: var(--n-11);
+}
+
+.orow--current .orow__title {
+  font-weight: var(--fw-semibold);
+}
+
+.orow--locked .orow__title {
+  color: var(--n-11);
+}
+
+.orow__time {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  color: var(--n-10);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* «بتتفرج دلوقتي» — a label on the current row, not a control. */
+.orow__state {
+  flex-shrink: 0;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--e-ink);
+}
+
+/* The one chip a row may carry, stretched over the row with a pseudo-element
+   — same mechanism as `.lesson-row__link`: hit area, no second tab stop. */
+.orow__chip {
+  block-size: 1.75rem;
+  padding-inline: var(--s-8);
+  font-size: var(--fs-text-xs);
+}
+
+.orow__chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.orow:has(.orow__chip) {
+  cursor: pointer;
+}
+
+/* ── the phone's door and sheet ──────────────────────────────────────────── */
+/*
+ * ⚠️ `display` is set HERE, so the `lg:hidden` utility on the element cannot
+ * hide it: Tailwind's utilities live in a cascade layer and this file does
+ * not, so an unlayered `.odoor { display: flex }` beats `lg:hidden` whatever
+ * the order. The breakpoint is repeated below for that reason — the door and
+ * the pinned bar are phone-only, and the page's `lg` is Tailwind's 64rem.
+ */
+.odoor {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  inline-size: 100%;
+  padding: var(--s-8);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  text-align: start;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.odoor:hover {
+  background: var(--n-2);
+}
+
+.odoor__text {
+  display: grid;
+  flex: 1;
+  gap: var(--s-4);
+  min-inline-size: 0;
+}
+
+.odoor__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-8);
+}
+
+.odoor__title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.odoor__ratio {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.odoor__sub {
+  overflow: hidden;
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.odoor__bar {
+  display: block;
+  block-size: 4px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--n-4);
+}
+
+.odoor__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--a-9);
+}
+
+/* The sheet's handle, drawn on the panel Radix positions. */
+.osheet::before {
+  content: '';
+  display: block;
+  inline-size: 2.5rem;
+  block-size: 4px;
+  margin: 0 auto var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--n-4);
+}
+
+/* ── «المحاضرة التالية», pinned ──────────────────────────────────────────── */
+.next-bar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  min-block-size: 4.25rem;
+  padding: var(--s-8) var(--s-16);
+  border-block-start: var(--hairline) solid var(--border-subtle);
+  background: var(--n-1);
+  color: inherit;
+  box-shadow: 0 -8px 24px color-mix(in oklab, var(--n-12) 6%, transparent);
+}
+
+/* Same licence as `.tabbar`: the blur only where there is a mouse, because
+   `backdrop-filter` on a mid-range phone costs frames in the scroll. */
+@media (pointer: fine) {
+  .next-bar {
+    background: color-mix(in oklch, var(--n-1), transparent 20%);
+    backdrop-filter: blur(var(--header-blur));
+  }
+}
+
+.next-bar__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.next-bar__label {
+  font-size: var(--fs-text-xs);
+  color: var(--n-10);
+}
+
+.next-bar__title {
+  overflow: hidden;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.next-bar__go {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: #1a1206;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.next-bar:hover .next-bar__go {
+  background: var(--a-10);
+}
+
+@media (min-width: 64rem) {
+  .odoor,
+  .next-bar {
+    display: none;
+  }
+}
+
+/* The bar covers the last 4.25rem of the page; `.shell main` already keeps
+   5.5rem clear below `md` for the tab bar, so this only matters between the
+   two breakpoints — a tablet in portrait. */
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  .lp-page--bar {
+    padding-block-end: 6rem;
+  }
+}
