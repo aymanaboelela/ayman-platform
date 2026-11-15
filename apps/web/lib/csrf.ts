@@ -16,7 +16,19 @@
 export const CSRF_COOKIE = '__Host-csrf';
 export const CSRF_HEADER = 'x-csrf-token';
 
-/** Browser-only: reads the CSRF cookie set by `proxy.ts`. Empty string on the server or if absent. */
+/**
+ * Browser-only: reads the CSRF cookie `proxy.ts` mints, minting it here when it
+ * is absent. Empty string on the server.
+ *
+ * ⚠️ Absent is a normal state now, not a broken one. A public page served from
+ * Cloudflare's cache carries no `Set-Cookie` — the proxy deliberately skips the
+ * mint on edge-cacheable responses (`isEdgeCacheable` in `proxy.ts`), because a
+ * cookie on a cached page would be stripped or would stop it being cached at
+ * all. So a first-time visitor who lands on `/books` and orders straight away
+ * reaches this with no cookie, and an empty header is exactly what `CsrfGuard`
+ * rejects. The value itself is not the control (see above), so a fresh random
+ * one written to the same cookie is equivalent to the proxy's.
+ */
 export function readCsrfToken(): string {
   if (typeof document === 'undefined') return '';
   for (const part of document.cookie.split(';')) {
@@ -25,5 +37,10 @@ export function readCsrfToken(): string {
     if (part.slice(0, separator).trim() !== CSRF_COOKIE) continue;
     return decodeURIComponent(part.slice(separator + 1).trim());
   }
-  return '';
+  const minted = crypto.randomUUID();
+  // Same attributes as the proxy's mint. If the browser refuses the write
+  // (Safari on http://localhost refuses `Secure`), the header still carries
+  // the value, and the header is what the guard checks.
+  document.cookie = `${CSRF_COOKIE}=${minted}; Path=/; Secure; SameSite=Strict`;
+  return minted;
 }

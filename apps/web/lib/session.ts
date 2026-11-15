@@ -54,9 +54,39 @@ export type SessionUser = z.infer<typeof SessionSchema>;
  * `fetch` itself stays `no-store`, which is what keeps a revoked session from
  * being served from a shared cache across requests.
  */
+/**
+ * Both spellings of the Better Auth session cookie — the same pair `proxy.ts`
+ * gates on (`SESSION_COOKIE_NAMES` there).
+ */
+const SESSION_COOKIE_NAMES = ['__Host-session_token', 'session_token'];
+
+/**
+ * Whether a raw `Cookie` header carries a session cookie at all. Presence is
+ * not authentication — the API still decides — it only answers "is there
+ * anything to ask about?". Exported for its test.
+ */
+export function cookieHeaderHasSession(cookie: string | null): boolean {
+  if (!cookie) return false;
+  return cookie.split(';').some((part) => {
+    const eq = part.indexOf('=');
+    return SESSION_COOKIE_NAMES.includes((eq === -1 ? part : part.slice(0, eq)).trim());
+  });
+}
+
 export const getSession = cache(async function getSession(): Promise<SessionUser | null> {
   const incoming = await headers();
   const cookie = incoming.get('cookie');
+
+  /*
+   * No session cookie, no question to ask. Every public page renders
+   * `<SiteAccountSlot>`, so before this every anonymous page view — most of
+   * the traffic, crawlers included — cost a round trip to `/api/session`, a
+   * pass through the API's throttler (four Redis calls) and a Better Auth
+   * lookup, only to be told 401. Under a surge of new visitors that is the
+   * API doing work proportional to the crowd for an answer known in advance.
+   * The answer is the same `null` the 401 below produces.
+   */
+  if (!cookieHeaderHasSession(cookie)) return null;
 
   /*
    * ⚠️ `bound(...)` — without it this had no timeout at all, and this is the
