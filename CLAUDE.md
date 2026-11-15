@@ -133,6 +133,11 @@ fix a bug  →  PR to main  →  CI  →  merge
 - **A fix arrives when the stack deploys, not when you merge.** Each Dokploy app
   builds its own copy. If autoDeploy is off on one of them, it stays on the old
   code without anyone noticing.
+- **Since 2026-11-15 a merge deploys nothing.** Production rebuilds once a night
+  (CI's 02:00 UTC `schedule` run, after every check passes) because each build
+  eats the shared VPS for ~12 minutes per stack. Urgent fix: Actions → CI →
+  "Run workflow" on `main`. In Dokploy every compose keeps `autoDeploy: true`
+  with `triggerType: tag`; see the comment on the `deploy` job in `ci.yml`.
 - **`TENANT_DISPLAY_NAME` and `TENANT_KEY` are set at build time**
   (`next.config.ts` → `env`), so changing them needs a **rebuild**, not a
   restart.
