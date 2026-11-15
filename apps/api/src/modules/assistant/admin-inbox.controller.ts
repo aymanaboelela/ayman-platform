@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -36,6 +37,8 @@ import { sendAttachment } from './serve-attachment';
 import { EditMessageDto, ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
 import type { UploadFile } from '../media/media.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
+import { PresenceService } from '../notifications/presence.service';
+import { SettingsService } from '../admin/settings/settings.service';
 
 /**
  * `/api/admin/conversations` — the instructor's side.
@@ -56,7 +59,27 @@ export class AdminInboxController {
   constructor(
     private readonly assistant: AssistantService,
     private readonly attachments: ConversationAttachmentService,
+    /** `@Optional()` for the cut-down authz fixtures; absent, no dots. */
+    @Optional() private readonly presence?: PresenceService,
+    /** `@Optional()` for the same fixtures; absent, no saved replies. */
+    @Optional() private readonly settings?: SettingsService,
   ) {}
+
+  /**
+   * «متصل دلوقتي» onto rows that belong to an account. Here and not in the
+   * service: it is a Redis read about the next minute, and the service's
+   * queries — and its specs — have no business knowing it exists.
+   */
+  private async withPresence<T extends { userId: string | null; presence?: unknown }>(
+    rows: T[],
+  ): Promise<T[]> {
+    if (!this.presence) return rows;
+    const ids = rows.flatMap((row) => (row.userId ? [row.userId] : []));
+    const map = await this.presence.read(ids);
+    return rows.map((row) =>
+      row.userId ? { ...row, presence: map.get(row.userId) ?? { online: false, lastSeenAt: null } } : row,
+    );
+  }
 
   @RequirePermission('conversation:read')
   @Get()
@@ -84,12 +107,13 @@ export class AdminInboxController {
     const parsedSort = parseRequest(InboxSortSchema, sort, 'sort');
     const list = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
 
-    return this.assistant.list(
+    const result = await this.assistant.list(
       parsedFilter,
       list.perPage,
       (list.page - 1) * list.perPage,
       parsedSort,
     );
+    return { ...result, rows: await this.withPresence(result.rows) };
   }
 
   /**
@@ -138,6 +162,29 @@ export class AdminInboxController {
     return { unread: await this.assistant.unreadCount() };
   }
 
+  /**
+   * «ردود جاهزة» — the saved answers the composer offers. `null` when never
+   * set up, so the client can offer its starter set. Declared above `:id`
+   * for the reason `unread-count` is.
+   */
+  @RequirePermission('conversation:read')
+  @Get('quick-replies')
+  async quickReplies(): Promise<{ quickReplies: string[] | null }> {
+    return { quickReplies: (await this.settings?.readQuickReplies()) ?? null };
+  }
+
+  /**
+   * Replaces the list. `conversation:reply`, not `settings:write`: these are
+   * words for answering students, and whoever may answer may keep their own
+   * shortcuts — an assistant without the settings screen included.
+   */
+  @RequirePermission('conversation:reply')
+  @Put('quick-replies')
+  async saveQuickReplies(@Body() body: { quickReplies?: unknown }): Promise<{ quickReplies: string[] }> {
+    if (!this.settings) return { quickReplies: [] };
+    return { quickReplies: await this.settings.updateQuickReplies(body?.quickReplies) };
+  }
+
   /*
    * ⚠️ Declared AFTER `unread-count`.
    *
@@ -147,8 +194,9 @@ export class AdminInboxController {
    */
   @RequirePermission('conversation:read')
   @Get(':id')
-  detail(@Param('id', ParseUUIDPipe) id: string): Promise<AdminConversationDetail> {
-    return this.assistant.detail(id);
+  async detail(@Param('id', ParseUUIDPipe) id: string): Promise<AdminConversationDetail> {
+    const [thread] = await this.withPresence([await this.assistant.detail(id)]);
+    return thread!;
   }
 
   /**

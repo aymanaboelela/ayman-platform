@@ -796,8 +796,12 @@ export class NotificationsService {
    * arrives before the row does makes the screen re-read the old thread),
    * never throws, and a no-op without `realtime`.
    */
-  async announceChat(conversationId: string, ownerUserId: string | null): Promise<void> {
-    await this.realtime?.publishChat(conversationId, ownerUserId);
+  async announceChat(
+    conversationId: string,
+    ownerUserId: string | null,
+    author?: 'visitor' | 'admin',
+  ): Promise<void> {
+    await this.realtime?.publishChat(conversationId, ownerUserId, author);
   }
 
   /** «جارٍ الكتابة…» — see the `typing` frame. Never throws. */

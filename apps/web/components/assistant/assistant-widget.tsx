@@ -93,6 +93,8 @@ import {
   setChatOnScreen,
   subscribeChat,
 } from '@/components/notifications/live-bus';
+import { playChatSound } from '@/lib/chat-sound';
+import { useTitleBadge } from '@/lib/use-title-badge';
 
 /**
  * The two strings on this widget that name the instructor, gated.
@@ -612,7 +614,12 @@ export function AssistantWidget({
       timer = setTimeout(reread, 250);
     };
 
-    const offChat = subscribeChat(schedule);
+    const offChat = subscribeChat((_id, author) => {
+      // «صوت رسالة جديدة» — he wrote. `playChatSound` itself stays quiet in a
+      // hidden tab and when the student turned it off.
+      if (author === 'admin') playChatSound();
+      schedule();
+    });
     // A reconnect may have swallowed frames — see `live-bus.ts`.
     const offOpen = onStreamOpen(schedule);
     const poll = threadOnScreen
@@ -639,6 +646,10 @@ export function AssistantWidget({
     setChatOnScreen(threadOnScreen);
     return () => setChatOnScreen(null);
   }, [threadOnScreen]);
+
+  // «(١)» in the tab title while a reply waits — only where the widget is
+  // actually on screen, so it never contends with the inbox's own badge.
+  useTitleBadge(hydrated && mounted ? unread : null);
 
   if (!hydrated || !mounted) return null;
 

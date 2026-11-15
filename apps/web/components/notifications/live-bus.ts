@@ -24,12 +24,14 @@ import type { LiveQueue } from '@ayman/contracts/notifications';
 type QueueListener = (waiting: number) => void;
 /** `null` when the frame did not name a thread (a notification about one the
  *  screen should re-read anyway — see `emitChatFrame`). */
-type ChatListener = (conversationId: string | null) => void;
+type ChatListener = (conversationId: string | null, author?: 'visitor' | 'admin') => void;
 
 const queueListeners = new Map<LiveQueue, Set<QueueListener>>();
 const chatListeners = new Set<ChatListener>();
 type TypingListener = (conversationId: string, from: 'visitor' | 'admin') => void;
 const typingListeners = new Set<TypingListener>();
+type PresenceListener = (userId: string, online: boolean, lastSeenAt: string | null) => void;
+const presenceListeners = new Set<PresenceListener>();
 const openListeners = new Set<() => void>();
 const connectionListeners = new Set<() => void>();
 let connected = false;
@@ -51,8 +53,8 @@ export function emitQueueFrame(queue: LiveQueue, waiting: number): void {
  * verdict written into the chat). Both mean the same thing to a screen
  * showing that thread: re-read it.
  */
-export function emitChatFrame(conversationId: string | null): void {
-  for (const listener of [...chatListeners]) listener(conversationId);
+export function emitChatFrame(conversationId: string | null, author?: 'visitor' | 'admin'): void {
+  for (const listener of [...chatListeners]) listener(conversationId, author);
 }
 
 /** Stream side: «جارٍ الكتابة…» — the other side of a thread is typing. */
@@ -65,6 +67,19 @@ export function subscribeTyping(listener: TypingListener): () => void {
   typingListeners.add(listener);
   return () => {
     typingListeners.delete(listener);
+  };
+}
+
+/** Stream side: «متصل دلوقتي» flipped for a student. */
+export function emitPresence(userId: string, online: boolean, lastSeenAt: string | null): void {
+  for (const listener of [...presenceListeners]) listener(userId, online, lastSeenAt);
+}
+
+/** Screen side, for the presence dot. Return the unsubscribe from cleanup. */
+export function subscribePresence(listener: PresenceListener): () => void {
+  presenceListeners.add(listener);
+  return () => {
+    presenceListeners.delete(listener);
   };
 }
 

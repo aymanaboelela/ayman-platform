@@ -15,6 +15,7 @@ import { assistantPathLabels } from '@/lib/assistant-path';
 import { buildChatTimeline } from '@/components/assistant/chat-timeline';
 import { groupChatTimelineByDay } from '@/components/assistant/chat-day-groups';
 import { LiveChatRefresh } from '@/components/admin/live-chat-refresh';
+import { PresenceBadge } from '@/components/admin/student-presence';
 import { AdminChat } from './admin-chat';
 import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
@@ -160,6 +161,10 @@ export default async function AdminInboxThreadPage({
               {thread.who}
             </span>
           )}
+          {/* «متصل دلوقتي» / «آخر ظهور» — live from the stream. */}
+          {thread.userId && thread.presence ? (
+            <PresenceBadge userId={thread.userId} initial={thread.presence} />
+          ) : null}
           <InboxStatusChip status={thread.status} unread={thread.unreadForAdmin} />
           <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
             {thread.isGuest ? c.guestBadge : c.studentBadge}

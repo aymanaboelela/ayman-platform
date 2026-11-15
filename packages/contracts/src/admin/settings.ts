@@ -757,6 +757,30 @@ export const AboutSettingsSchema = z
 
 export type AboutSettings = z.infer<typeof AboutSettingsSchema>;
 
+/**
+ * «ردود جاهزة» — the instructor's saved answers, one tap from the inbox
+ * composer. Shared by everyone who answers on this stack (an assistant
+ * answering for him should reach for the same words), so it lives here and
+ * not per account.
+ *
+ * `undefined` means «never set up» and the composer offers the starter set
+ * from `copy.assistant.quickReplies.defaults`; an EMPTY list means he cleared
+ * them on purpose and is respected as such.
+ *
+ * Not one of `SETTINGS_SECTIONS`: it is written from the inbox under
+ * `conversation:reply`, not from the settings screen under `settings:write`
+ * — see `AdminInboxController`.
+ */
+export const QUICK_REPLY_MAX = 1000;
+export const QUICK_REPLIES_MAX = 40;
+export const QuickRepliesSchema = z
+  .array(z.string().trim().min(1).max(QUICK_REPLY_MAX))
+  .max(QUICK_REPLIES_MAX);
+export const InboxSettingsSchema = z
+  .object({ quickReplies: QuickRepliesSchema.optional() })
+  .strict();
+export type InboxSettings = z.infer<typeof InboxSettingsSchema>;
+
 export const SiteSettingsSchema = z
   .object({
     branding: BrandingSchema.prefault({}),
@@ -771,6 +795,8 @@ export const SiteSettingsSchema = z
     /** «الصفوف» — see `GradesSettingsSchema`. Public through `/api/taxonomy`
      *  (as the resolved list), not through `PublicSettingsSchema`. */
     grades: GradesSettingsSchema.prefault({}),
+    /** «ردود جاهزة» — see `InboxSettingsSchema`. Admin-only, never public. */
+    inbox: InboxSettingsSchema.prefault({}),
   })
   .strict();
 

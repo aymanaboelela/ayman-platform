@@ -627,6 +627,17 @@ export const MyConversationSchema = z.object({
 
 // ── admin ────────────────────────────────────────────────────────────────
 
+/**
+ * «متصل دلوقتي» / «آخر ظهور» for the student behind a thread — whether they
+ * have the platform open right now (an open notification stream), and when
+ * they last closed it. See `PresenceService`.
+ */
+export const StudentPresenceSchema = z.object({
+  online: z.boolean(),
+  lastSeenAt: z.iso.datetime().nullable(),
+});
+export type StudentPresence = z.infer<typeof StudentPresenceSchema>;
+
 export const AdminConversationRowSchema = z.object({
   id: z.uuid(),
   status: ConversationStatusSchema,
@@ -679,6 +690,12 @@ export const AdminConversationRowSchema = z.object({
    * cannot disagree about what the number means.
    */
   unreadForAdmin: z.boolean(),
+  /**
+   * `null` for a guest (no account, no stream) — and `.default(null)` so a
+   * web build that lands seconds before its API does draws no dot rather
+   * than a 500. Filled by the CONTROLLER, from Redis, not by the query.
+   */
+  presence: StudentPresenceSchema.nullable().default(null),
 });
 
 export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
