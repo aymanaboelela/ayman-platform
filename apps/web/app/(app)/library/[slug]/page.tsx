@@ -7,7 +7,6 @@ import { RetiredCoursePage } from '@/components/app/retired-course';
 import { CourseCertificatesSlot } from '@/components/share-card/share-slots';
 import { ArrowRight, Clock, Layers, Play } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
 import { z } from '@ayman/contracts/zod';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCourse } from '@/lib/catalog';
@@ -21,13 +20,11 @@ import { CourseOutlineView } from '@/components/library/course-outline';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
-import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { formatDuration } from '@/components/site/course-card';
 import { RichText } from '@/components/content/rich-text';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { StudentExternalBookSummarySchema } from '@ayman/contracts/quiz/external-books';
 import { ExternalBooksSection } from '@/components/library/external-books-section';
-import { RedeemCard } from '@/components/unlock-codes/redeem-card';
 
 const c = copy.library;
 
@@ -200,6 +197,13 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         }
       : null;
 
+  // The next lecture's NAME for the hero's button — «نكمّل: الشروط if / else»
+  // says where the press lands; a bare «نكمّل» does not.
+  const nextTitle =
+    outline.sections
+      .flatMap((section) => section.entries.flatMap((entry) => [entry.lecture, ...entry.quizzes]))
+      .find((lesson) => lesson.id === outline.nextLessonId)?.title ?? null;
+
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
       <section className="stage mb-8">
@@ -235,6 +239,50 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
                   {formatDuration(course.totalSeconds)}
                 </span>
               </div>
+
+              {/* Where the student stands, and the ONE button, inside the hero
+                  — it used to be a separate panel under it, so the first
+                  screen was a banner, then a bar, then a code card, and the
+                  lectures started below the fold. */}
+              {outline.enrolled && outline.totalLessons > 0 ? (
+                <div className="stage__progress">
+                  <div className="stage__progress-head">
+                    <span className="stage__progress-label">
+                      {outline.progressPercent === 100
+                        ? course.contentComplete
+                          ? c.courseDone
+                          : c.courseUpToDate
+                        : isolateLtrRuns(
+                            c.percentDone.replace('{percent}', String(outline.progressPercent)),
+                          )}
+                    </span>
+                    <span className="stage__progress-ratio">
+                      <LtrRatio value={outline.clearedLessons} of={outline.totalLessons} />
+                    </span>
+                  </div>
+                  <span
+                    className="stage__progress-bar"
+                    role="progressbar"
+                    aria-label={course.title}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(outline.progressPercent)}
+                  >
+                    <span style={{ inlineSize: `${Math.min(100, Math.max(0, outline.progressPercent))}%` }} />
+                  </span>
+                  {outline.nextLessonId ? (
+                    <Link
+                      href={`/courses/${course.slug}/lessons/${outline.nextLessonId}`}
+                      className="stage__resume"
+                    >
+                      <Play size={15} aria-hidden="true" className="icon-inline" />
+                      <span className="min-w-0 truncate">
+                        {nextTitle ? c.resumeTo.replace('{title}', nextTitle) : c.resume}
+                      </span>
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <CourseCover
@@ -288,49 +336,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
             </Link>
           </div>
         </section>
-      ) : outline.enrolled ? (
-        <section className="panel mb-8 p-5">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
-              {/* «خلّصنا الكورس» only when the instructor says the syllabus is
-                  all up. Otherwise the same 100% reads «خلّصنا اللي نزل» — see
-                  `Course.contentComplete`. */}
-              {outline.progressPercent === 100
-                ? course.contentComplete
-                  ? c.courseDone
-                  : c.courseUpToDate
-                : isolateLtrRuns(
-                    c.percentDone.replace('{percent}', String(outline.progressPercent)),
-                  )}
-            </p>
-            <p className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
-              <LtrRatio value={outline.clearedLessons} of={outline.totalLessons} />
-            </p>
-          </div>
-          <LessonProgressBar percent={outline.progressPercent} label={course.title} />
-
-          {/* The certificates this student already holds in this course — a
-              unit's, once all its quizzes average 85%+, and an exam's at
-              85%+. Nothing renders until there is one. */}
-          <Suspense fallback={null}>
-            <CourseCertificatesSlot courseId={course.id} />
-          </Suspense>
-
-          {outline.nextLessonId ? (
-            <Link
-              href={`/courses/${course.slug}/lessons/${outline.nextLessonId}`}
-              className={cn(
-                'mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-sm bg-accent px-4',
-                'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
-                'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-              )}
-            >
-              <Play size={15} aria-hidden="true" className="icon-inline" />
-              {c.resume}
-            </Link>
-          ) : null}
-        </section>
-      ) : (
+      ) : outline.enrolled ? null : (
         // Not enrolled. For a FREE course the outline below still renders in
         // full — hiding it would leave a student deciding whether to start
         // with nothing to decide on, and nothing in it opens until this
@@ -366,76 +372,65 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       )}
 
       {/*
-        «جروب الدفعة» — read off `/api/me/path`, which is the ONLY course
-        payload on this page behind an enrolment. `course` here is the shared,
-        hours-cached catalog detail served to anybody, and putting a cohort's
-        invite on it would publish the link on the marketing page.
+        The course's content beside a narrow column of small things — from the
+        first-round design the owner chose: the units are the page, and the
+        month offer, the cohort group, the certificates and «عن الكورس» sit at
+        the side instead of stacking as big cards above the lectures.
 
-        Above the description and the outline: a student arriving at their own
-        course page is more often looking for «فين الجروب» than for the syllabus
-        they have already read. Renders nothing for a course with no group.
+        «عندك كود؟» is no longer here: the side menu's «كود الكورس» (/codes)
+        is the one place a code is typed, so the course page does not repeat it.
+
+        «جروب الدفعة» is read off `/api/me/path`, the ONLY course payload on this
+        page behind an enrolment — `course` is the shared catalog detail served
+        to anybody, and a cohort's invite on it would publish the link.
       */}
-      {/*
-        «عندك كود؟» — for every course with something in it, enrolled or not: the
-        student who owns «شهر ١» and bought one lecture from «شهر ٢» is exactly
-        as likely to be standing here with a code as somebody who owns nothing
-        yet. Above the group card, because a code in hand is the more urgent
-        of the two.
-      */}
-      {/*
-        Side by side when both are there and the column has room for two
-        (`auto-fit` measures the column, not the viewport — the rail takes a
-        third of a laptop screen), stacked on a phone. `data-count` is what
-        lets a lone card keep a card's width instead of stretching to 56rem.
-      */}
-      {monthOffer || outline.totalLessons > 0 ? (
-        <div className="course-offers mb-8" data-count={monthOffer && outline.totalLessons > 0 ? 2 : 1}>
-          {monthOffer ? <MonthOfferCard courseSlug={course.slug} offer={monthOffer} /> : null}
-          {outline.totalLessons > 0 ? (
-            <RedeemCard whatsapp={contact.whatsapp} courseTitle={course.title} />
+      <div className="course-layout">
+        <div className="course-layout__main">
+          {outline.enrolled && externalBooks.length > 0 ? (
+            <ExternalBooksSection books={externalBooks} courseSlug={course.slug} />
+          ) : null}
+
+          {/* Skipped outright when the course is empty, and for a PRICED
+              course this student has not subscribed to yet: every row there is
+              a `CourseEntry`, and a locked lesson pressed here fails the same
+              generic way the public page's outline did. Free courses are
+              unaffected: `enrolled` only gates the priced case. */}
+          {outline.totalLessons > 0 &&
+          (outline.enrolled ||
+            (course.monthlyPriceCents === null &&
+              course.quarterlyPriceCents === null &&
+              course.yearlyPriceCents === null &&
+              course.terms.length === 0)) ? (
+            <CourseOutlineView
+              outline={outline}
+              courseSlug={course.slug}
+              courseId={course.id}
+              pendingMonths={emptyOwnedMonths}
+            />
           ) : null}
         </div>
-      ) : null}
 
-      {pathCourse?.whatsappGroupUrl ? (
-        <div className="mb-8 max-w-[28rem]">
-          <CourseGroupCard url={pathCourse.whatsappGroupUrl} />
-        </div>
-      ) : null}
+        <aside className="course-layout__side">
+          {monthOffer ? <MonthOfferCard courseSlug={course.slug} offer={monthOffer} /> : null}
 
-      {course.description ? (
-        <div className="mb-8 max-w-[var(--w-prose)]">
-          <RichText html={course.description} />
-        </div>
-      ) : null}
+          {pathCourse?.whatsappGroupUrl ? <CourseGroupCard url={pathCourse.whatsappGroupUrl} /> : null}
 
-      {outline.enrolled && externalBooks.length > 0 ? (
-        <ExternalBooksSection books={externalBooks} courseSlug={course.slug} />
-      ) : null}
+          {/* The certificates this student already holds in this course.
+              Nothing renders until there is one. */}
+          {outline.enrolled ? (
+            <Suspense fallback={null}>
+              <CourseCertificatesSlot courseId={course.id} />
+            </Suspense>
+          ) : null}
 
-      {/* Skipped outright when the course is empty. `CourseOutlineView` maps
-          over `outline.sections` and renders a heading plus «0 محاضرة» over
-          nothing, which is the second half of what «الوقت محاضرات صفر» was
-          describing — the panel above already says it once, in words.
-
-          Also skipped for a PRICED course this student has not subscribed
-          to yet: every row is a `CourseEntry`, and a locked lesson pressed
-          here fails the same generic way the public page's outline did —
-          see the note on `notEnrolledTitle` above. Free courses are
-          unaffected: `enrolled` only gates the priced case. */}
-      {outline.totalLessons > 0 &&
-      (outline.enrolled ||
-        (course.monthlyPriceCents === null &&
-          course.quarterlyPriceCents === null &&
-          course.yearlyPriceCents === null &&
-          course.terms.length === 0)) ? (
-        <CourseOutlineView
-          outline={outline}
-          courseSlug={course.slug}
-          courseId={course.id}
-          pendingMonths={emptyOwnedMonths}
-        />
-      ) : null}
+          {course.description ? (
+            <section className="panel course-about">
+              <h2 className="course-about__title">{c.aboutTitle}</h2>
+              <RichText html={course.description} />
+            </section>
+          ) : null}
+        </aside>
+      </div>
     </main>
   );
 }

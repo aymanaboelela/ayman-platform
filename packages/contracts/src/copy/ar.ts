@@ -2251,6 +2251,10 @@ export const copy = {
      * (a girl «خلصتي»، «ماابتديتيش»).
      */
     percentDone: 'خلّصنا {percent}%',
+    /** The course page's side card heading (the description moved there). */
+    aboutTitle: 'عن الكورس',
+    /** The hero's one button: the next lecture by name. */
+    resumeTo: 'نكمّل: {title}',
     notStarted: 'لسه مابدأناش',
     courseDone: 'خلّصنا الكورس',
     /**

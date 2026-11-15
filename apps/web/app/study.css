@@ -6800,3 +6800,126 @@ label.runner-option {
   font-weight: var(--fw-semibold);
   color: var(--ink-fg);
 }
+
+/* ===========================================================================
+   The course page (/library/[slug]) — the first-round design the owner chose.
+   ======================================================================== */
+
+/* Progress and the one button, inside the hero band. White alphas on the
+   band, like `.stage__facts`; the bar's fill and the button are the action
+   colour, so the press is the brightest thing on the band. */
+.stage__progress {
+  display: grid;
+  gap: var(--s-8);
+  max-inline-size: 30rem;
+  margin-block-start: var(--s-20);
+}
+
+.stage__progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-12);
+}
+
+.stage__progress-label {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+.stage__progress-ratio {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--stage-fg-2);
+}
+
+.stage__progress-bar {
+  display: block;
+  block-size: 6px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.2);
+}
+
+.stage__progress-bar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--a-9);
+}
+
+.stage__resume {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--s-8);
+  max-inline-size: 100%;
+  block-size: 2.75rem;
+  margin-block-start: var(--s-8);
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 10px 22px -12px rgb(0 0 0 / 0.55);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.stage__resume:hover {
+  background: var(--a-10);
+}
+
+/* The units beside a narrow column. Two columns only once the main column
+   (not the viewport — the rail takes a third of a laptop) has room for both;
+   below that the side column follows the content. */
+.course-layout {
+  display: grid;
+  gap: var(--s-24);
+  container-type: inline-size;
+}
+
+@container (min-width: 60rem) {
+  .course-layout {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    align-items: start;
+  }
+}
+
+.course-layout__main {
+  display: grid;
+  gap: var(--s-24);
+  min-inline-size: 0;
+}
+
+.course-layout__side {
+  display: grid;
+  gap: var(--s-16);
+  min-inline-size: 0;
+}
+
+.course-about {
+  display: grid;
+  gap: var(--s-8);
+  padding: var(--s-16);
+  font-size: var(--fs-text-sm);
+}
+
+.course-about__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  margin: 0;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.course-about__title::before {
+  content: '';
+  inline-size: 4px;
+  block-size: 1rem;
+  border-radius: var(--r-full);
+  background: var(--e-600);
+}
