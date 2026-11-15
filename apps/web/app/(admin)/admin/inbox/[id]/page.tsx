@@ -16,6 +16,8 @@ import { buildChatTimeline } from '@/components/assistant/chat-timeline';
 import { groupChatTimelineByDay } from '@/components/assistant/chat-day-groups';
 import { LiveChatRefresh } from '@/components/admin/live-chat-refresh';
 import { PresenceBadge } from '@/components/admin/student-presence';
+import { PinButton } from '../pin-button';
+import { StaffNoteCard } from './staff-note';
 import { AdminChat } from './admin-chat';
 import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
@@ -166,6 +168,7 @@ export default async function AdminInboxThreadPage({
             <PresenceBadge userId={thread.userId} initial={thread.presence} />
           ) : null}
           <InboxStatusChip status={thread.status} unread={thread.unreadForAdmin} />
+          <PinButton id={thread.id} pinned={thread.pinnedAt !== null} withLabel />
           <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
             {thread.isGuest ? c.guestBadge : c.studentBadge}
           </span>
@@ -299,6 +302,9 @@ export default async function AdminInboxThreadPage({
             ) : null}
           </div>
         ) : null}
+        {/* «ملاحظات خاصة» — on the student, never shown to them. A guest has
+            no account to hang one on. */}
+        {thread.userId ? <StaffNoteCard conversationId={thread.id} note={thread.staffNote} /> : null}
       </header>
 
       {/*

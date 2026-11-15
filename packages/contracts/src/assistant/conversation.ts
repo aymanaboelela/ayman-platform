@@ -696,7 +696,35 @@ export const AdminConversationRowSchema = z.object({
    * than a 500. Filled by the CONTROLLER, from Redis, not by the query.
    */
   presence: StudentPresenceSchema.nullable().default(null),
+  /** «تثبيت» — when he pinned it to the top of the inbox; `null` = not pinned. */
+  pinnedAt: z.iso.datetime().nullable().default(null),
+  /**
+   * With a search (`?q=`): the newest message in the thread that matched,
+   * trimmed around the match — so the row shows WHY it was found, not the
+   * latest line. `null` without a search or when only the name matched.
+   */
+  match: z.string().nullable().default(null),
+  /** A private note exists for this student — the row shows a 📝. */
+  hasStaffNote: z.boolean().default(false),
 });
+
+/** «ملاحظات خاصة» — one per student, never shown to them. */
+export const STAFF_NOTE_MAX = 4000;
+export const StaffNoteSchema = z.object({
+  body: z.string(),
+  updatedAt: z.iso.datetime(),
+  /** Who last wrote it, by name — «آخر تعديل: …». */
+  updatedBy: z.string().nullable(),
+});
+export type StaffNote = z.infer<typeof StaffNoteSchema>;
+
+export const SaveStaffNoteSchema = z
+  .object({
+    /** Empty (after trimming) deletes the note. */
+    body: z.string().max(STAFF_NOTE_MAX),
+  })
+  .strict();
+export const SetPinnedSchema = z.object({ pinned: z.boolean() }).strict();
 
 export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
   messages: z.array(ConversationMessageSchema),
@@ -721,6 +749,8 @@ export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
    * tick that reads «اتبعتت» for a few seconds.
    */
   visitorReadAt: z.iso.datetime().nullable().default(null),
+  /** «ملاحظات خاصة» — `null` for a guest or when none was written. */
+  staffNote: StaffNoteSchema.nullable().default(null),
   /**
    * The number to reach this person on, in E.164 — a guest's typed number, or
    * a signed-in student's account phone.

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getEntitlements } from '@/lib/entitlements';
 import { MessageSquareText, Phone, Send, UserRound } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy, formatCopy } from '@ayman/contracts';
 import {
   AdminConversationRowSchema,
   INBOX_FILTERS,
@@ -17,6 +17,8 @@ import { assistantPathLabels } from '@/lib/assistant-path';
 import { InboxStatusChip, inboxTimeFormatter } from './status-chip';
 import { InboxTabs } from './inbox-tabs';
 import { RowTyping } from './row-typing';
+import { InboxSearch } from './inbox-search';
+import { PinButton } from './pin-button';
 import { PresenceDot } from '@/components/admin/student-presence';
 import { ChatSoundToggle } from '@/components/admin/chat-sound-toggle';
 import { ListControl } from '@/components/admin/list-controls';
@@ -80,9 +82,11 @@ export default async function AdminInboxPage({
   const filter = InboxFilterSchema.parse(raw ?? undefined);
   const rawSort = Array.isArray(params.sort) ? params.sort[0] : params.sort;
   const sort = InboxSortSchema.catch('newest').parse(rawSort ?? undefined);
+  const rawQ = Array.isArray(params.q) ? params.q[0] : params.q;
+  const q = (rawQ ?? '').trim().slice(0, 100);
 
   const { rows, rowCount } = await adminGet(
-    `/api/admin/conversations?filter=${filter}&sort=${sort}`,
+    `/api/admin/conversations?filter=${filter}&sort=${sort}${q ? `&q=${encodeURIComponent(q)}` : ''}`,
     RowsSchema,
   );
 
@@ -125,6 +129,7 @@ export default async function AdminInboxPage({
           من زمان» — the longest-waiting thread is the one a newest-first list
           buries at the bottom. */}
       <div className="mt-4 flex flex-wrap items-end gap-2">
+        <InboxSearch />
         <ListControl
           name="filter"
           label={c.filterLabel}
@@ -146,7 +151,11 @@ export default async function AdminInboxPage({
       </div>
 
       {rowCount === 0 ? (
-        <AdminEmpty spot="inbox" title={c.empty} hint={c.emptyHint} />
+        q ? (
+          <AdminEmpty spot="inbox" title={formatCopy(c.searchEmpty, { q })} hint={c.emptyHint} />
+        ) : (
+          <AdminEmpty spot="inbox" title={c.empty} hint={c.emptyHint} />
+        )
       ) : (
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => {
@@ -232,6 +241,19 @@ export default async function AdminInboxPage({
                         </span>
                       )}
                       <InboxStatusChip status={row.status} unread={row.unreadForAdmin} />
+                      {row.pinnedAt ? (
+                        <span className="rounded-full border border-accent/40 bg-accent/12 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-accent-text">
+                          📌 {c.pinnedBadge}
+                        </span>
+                      ) : null}
+                      {row.hasStaffNote ? (
+                        <span
+                          title={c.noteBadge}
+                          className="rounded-full bg-[color-mix(in_oklch,var(--e-tint),transparent_80%)] px-2 py-0.5 text-[length:var(--fs-text-xs)] text-[color:var(--e-ink)]"
+                        >
+                          📝 {c.noteTitle}
+                        </span>
+                      ) : null}
                       {row.origin === 'outreach' ? (
                         <span className="rounded-full border border-accent/40 bg-accent/12 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-accent-text">
                           {c.outreachBadge}
@@ -265,10 +287,20 @@ export default async function AdminInboxPage({
                           otherwise a row where he already replied reads as a
                           student saying something he has not answered. */}
                       <RowTyping conversationId={row.id}>
-                        {row.previewAuthor === 'admin' ? (
-                          <span className="text-fg-muted">{c.previewYou} </span>
-                        ) : null}
-                        {row.preview}
+                        {row.match ? (
+                          // «لقيناها في:» — with a search, the line that matched.
+                          <>
+                            <span className="text-fg-muted">{c.matchLabel} </span>
+                            <mark className="rounded bg-accent/15 px-0.5 text-fg">{row.match}</mark>
+                          </>
+                        ) : (
+                          <>
+                            {row.previewAuthor === 'admin' ? (
+                              <span className="text-fg-muted">{c.previewYou} </span>
+                            ) : null}
+                            {row.preview}
+                          </>
+                        )}
                       </RowTyping>
                     </span>
 
@@ -287,6 +319,7 @@ export default async function AdminInboxPage({
                     >
                       {inboxTimeFormatter.format(new Date(row.lastMessageAt))}
                     </time>
+                    <PinButton id={row.id} pinned={row.pinnedAt !== null} />
                     <Link
                       href={`/admin/inbox/${row.id}`}
                       className={cn(

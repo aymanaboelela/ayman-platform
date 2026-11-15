@@ -6101,6 +6101,27 @@ export const copy = {
          one of their tabs right now. Otherwise when they last closed it.
          `{when}` is a relative time («قبل ١٠ دقائق»). */
       presenceOnline: 'متصل دلوقتي',
+      /* «بحث» — across names, phones and every message. */
+      searchLabel: 'بحث',
+      searchPlaceholder: 'اسم، رقم، أو كلمة من الرسايل…',
+      searchEmpty: 'مفيش محادثات فيها «{q}»',
+      matchLabel: 'لقيناها في:',
+      /* «تثبيت» — keeps a thread on top of the inbox for everyone. */
+      pin: 'تثبيت فوق',
+      unpin: 'إلغاء التثبيت',
+      pinnedBadge: 'مثبّتة',
+      /* «ملاحظات خاصة» — about the student, never shown to them. */
+      noteTitle: 'ملاحظة خاصة',
+      noteHint: 'الطالب مش بيشوفها — ليك وللمساعدين بس.',
+      noteAdd: 'إضافة ملاحظة خاصة',
+      noteEdit: 'تعديل',
+      noteSave: 'حفظ',
+      noteCancel: 'إلغاء',
+      notePlaceholder: 'مثلاً: المستوى كويس، أو فيه مشكلة في الدفع…',
+      noteSaved: 'اتحفظت الملاحظة',
+      noteFailed: 'الملاحظة ماتحفظتش — جرّب تاني',
+      noteBy: 'آخر تعديل: {name}',
+      noteBadge: 'فيه ملاحظة خاصة',
       /* «صوت الرسايل» — the chime when a student writes, per browser. */
       soundOn: 'صوت الرسايل شغّال',
       soundOff: 'صوت الرسايل مقفول',

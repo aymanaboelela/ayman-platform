@@ -34,7 +34,15 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { AssistantService } from './assistant.service';
 import { ConversationAttachmentService } from './conversation-attachment.service';
 import { sendAttachment } from './serve-attachment';
-import { EditMessageDto, ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
+import {
+  EditMessageDto,
+  ReplyDto,
+  SaveStaffNoteDto,
+  SetPinnedDto,
+  SetReactionDto,
+  SetStatusDto,
+} from './assistant.dto';
+import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import type { UploadFile } from '../media/media.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { PresenceService } from '../notifications/presence.service';
@@ -88,6 +96,7 @@ export class AdminInboxController {
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
     @Query('sort') sort?: string,
+    @Query('q') q?: string,
   ): Promise<ListResponse<AdminConversationRow>> {
     /*
      * Parsed through the shared schemas rather than `Number(page)`.
@@ -112,6 +121,8 @@ export class AdminInboxController {
       list.perPage,
       (list.page - 1) * list.perPage,
       parsedSort,
+      // «بحث». Capped so a pasted essay is not an ILIKE over every message.
+      typeof q === 'string' ? q.slice(0, 100) : null,
     );
     return { ...result, rows: await this.withPresence(result.rows) };
   }
@@ -216,6 +227,35 @@ export class AdminInboxController {
     @Res() response: Response,
   ): Promise<void> {
     sendAttachment(await this.attachments.stream(id, messageId), download, response);
+  }
+
+  /**
+   * «تثبيت» — pins the thread to the top of the inbox, for everyone who reads
+   * it. `conversation:reply`: it reorders a shared list, which a read-only
+   * role should not.
+   */
+  @RequirePermission('conversation:reply')
+  @UsePipes(ZodValidationPipe)
+  @Patch(':id/pin')
+  @HttpCode(204)
+  async pin(@Param('id', ParseUUIDPipe) id: string, @Body() body: SetPinnedDto): Promise<void> {
+    await this.assistant.setPinned(id, body.pinned);
+  }
+
+  /**
+   * «ملاحظات خاصة» — the private note on the student behind this thread.
+   * Empty deletes it. Never reaches any student-facing route.
+   */
+  @RequirePermission('conversation:reply')
+  @UsePipes(ZodValidationPipe)
+  @Put(':id/note')
+  @HttpCode(204)
+  async note(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: SaveStaffNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    await this.assistant.saveStaffNote(id, body.body, user?.id ?? null);
   }
 
   /**

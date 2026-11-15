@@ -790,6 +790,70 @@ describe('AssistantService', () => {
     });
   });
 
+  describe('pins, search and private notes', () => {
+    it('puts a pinned thread above newer ones, and back in its place when unpinned', async () => {
+      const older = await openGuest('+201000000071', 'سؤال قديم');
+      const newer = await openGuest('+201000000072', 'سؤال جديد');
+
+      await service.setPinned(older.thread.id, true);
+      const pinned = await service.list('all', 200, 0);
+      const ids = pinned.rows.map((row) => row.id);
+      expect(ids.indexOf(older.thread.id)).toBeLessThan(ids.indexOf(newer.thread.id));
+      expect(pinned.rows.find((row) => row.id === older.thread.id)?.pinnedAt).not.toBeNull();
+
+      await service.setPinned(older.thread.id, false);
+      const unpinned = await service.list('all', 200, 0);
+      const after = unpinned.rows.map((row) => row.id);
+      expect(after.indexOf(newer.thread.id)).toBeLessThan(after.indexOf(older.thread.id));
+    });
+
+    it('finds a thread by a word inside a message, and says which line matched', async () => {
+      const word = `كلمة${Date.now()}`;
+      const { thread, guestToken } = await openGuest('+201000000073', 'أول رسالة عادية');
+      await service.postMessage(thread.id, null, guestToken!, `عندي مشكلة في ${word} في الدرس`);
+      await service.postMessage(thread.id, null, guestToken!, 'وآخر رسالة ملهاش علاقة');
+
+      const found = await service.list('all', 50, 0, 'newest', word);
+      expect(found.rows.map((row) => row.id)).toEqual([thread.id]);
+      expect(found.rows[0]?.match).toContain(word);
+
+      const none = await service.list('all', 50, 0, 'newest', `${word}-مش-موجودة`);
+      expect(none.rowCount).toBe(0);
+    });
+
+    it('keeps one private note per student, shows it on the thread, and deletes it when emptied', async () => {
+      // Written directly, not through `open`: earlier tests may already hold
+      // this student at the open-thread cap.
+      const thread = await prisma.conversation.create({
+        data: {
+          userId: studentId,
+          entryPath: ['root'],
+          status: 'answered',
+          lastMessageAt: new Date(),
+          messages: { create: { author: 'visitor', body: 'سؤال' } },
+        },
+        select: { id: true },
+      });
+      createdConversations.push(thread.id);
+
+      await service.saveStaffNote(thread.id, '  المستوى كويس  ', studentId);
+      const detail = await service.detail(thread.id);
+      expect(detail.staffNote?.body).toBe('المستوى كويس');
+      const row = (await service.list('all', 200, 0)).rows.find((r) => r.id === thread.id);
+      expect(row?.hasStaffNote).toBe(true);
+      // Never on the student's own view of the thread.
+      expect(JSON.stringify(await service.myThread(studentId, null))).not.toContain('المستوى كويس');
+
+      await service.saveStaffNote(thread.id, '   ', studentId);
+      expect((await service.detail(thread.id)).staffNote).toBeNull();
+    });
+
+    it('refuses a note on a guest thread — there is no account to hang it on', async () => {
+      const { thread } = await openGuest('+201000000074');
+      await expect(service.saveStaffNote(thread.id, 'ملاحظة', null)).rejects.toThrow();
+    });
+  });
+
   describe('inbox', () => {
     it('counts what he has not looked at, and clears when he looks', async () => {
       /*

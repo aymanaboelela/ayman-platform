@@ -5,6 +5,8 @@ import {
   ReplySchema,
   SetReactionSchema,
   SetStatusSchema,
+  SaveStaffNoteSchema,
+  SetPinnedSchema,
 } from '@ayman/contracts/assistant/conversation';
 import { createZodDto } from 'nestjs-zod';
 
@@ -25,3 +27,9 @@ export class SetStatusDto extends createZodDto(SetStatusSchema) {}
 export class SetReactionDto extends createZodDto(SetReactionSchema) {}
 
 export class EditMessageDto extends createZodDto(EditMessageSchema) {}
+
+/** «تثبيت» — `PATCH …/:id/pin`. */
+export class SetPinnedDto extends createZodDto(SetPinnedSchema) {}
+
+/** «ملاحظات خاصة» — `PUT …/:id/note`. Empty deletes. */
+export class SaveStaffNoteDto extends createZodDto(SaveStaffNoteSchema) {}
