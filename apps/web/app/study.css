@@ -6936,17 +6936,19 @@ label.runner-option {
   --font-display: var(--font-alexandria), var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
 }
 
-:root:has(.shell[data-cinema]) :is(.shell, .drawer, [role='dialog']) :is(h1, h2, h3),
-:root:has(.shell[data-cinema]) :is(.shell, .drawer, [role='dialog']) :is(
+/* Not the side menu or the tab bar: Alexandria is wider than Plex at the same
+   size, and the rail's labels overflowed it («الخط كبير أوي في السايد منيو»).
+   Navigation stays in Plex; so do headings inside the rail and the drawer. */
+:root:has(.shell[data-cinema]) .shell main :is(h1, h2, h3),
+:root:has(.shell[data-cinema]) [role='dialog']:not(.drawer) :is(h1, h2, h3),
+:root:has(.shell[data-cinema]) .shell main :is(
     .chip,
     .stage__resume,
     .exam-band__cta,
     .pth-hero__cta,
     .pth-hero__percent,
     .dash-hero__dial-value,
-    .tile__value,
-    .tabbar__label,
-    .nav-pill__label
+    .tile__value
   ) {
   font-family: var(--font-display);
 }
