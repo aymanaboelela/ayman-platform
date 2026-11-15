@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getMasteryOrNull } from '@/lib/mastery';
+import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { getBrandAsset } from '@/lib/brand-assets';
 import { latestDeltas } from '@/lib/results-view';
 import { ImproveCard } from '@/components/results/quiz-result-card';
@@ -39,7 +41,10 @@ const c = copy.results;
  * of it is one fetch and pure folds over it (`lib/results-view.ts`).
  */
 export default async function ResultsPage() {
-  const history = await apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema);
+  const [history, mastery] = await Promise.all([
+    apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
+    getMasteryOrNull(),
+  ]);
 
   if (history.quizzes.length === 0) {
     return (
@@ -83,6 +88,15 @@ export default async function ResultsPage() {
         </h2>
         <ResultsList rows={history.quizzes} deltas={deltas} showCourse={showCourse} />
       </section>
+
+      {/* «نقوّي النقط دي» moved here from the home page («شيل … وحطها في
+          مكانها»): the topics to strengthen belong with the results they are
+          read from. Renders nothing until there is enough to say. */}
+      {mastery ? (
+        <section className="rs-section">
+          <MasteryCard mastery={mastery} />
+        </section>
+      ) : null}
     </main>
   );
 }

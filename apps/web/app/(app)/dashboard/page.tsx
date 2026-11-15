@@ -472,7 +472,7 @@ export default async function DashboardPage() {
         {/* Addressed to THIS student, and gone once read / after two weeks —
             so above every standing block while they exist. Each is gated on
             its feature: a card whose door is switched off is a dead button. */}
-        {features.assistant ? <InstructorMessageCard /> : null}
+        {features.assistant && !cinema ? <InstructorMessageCard /> : null}
         {features.honorBoard && dashboard.honorBoard ? (
           <HonorBoardCard standing={dashboard.honorBoard} />
         ) : null}
@@ -563,14 +563,15 @@ export default async function DashboardPage() {
           /* «Cinema»: «معانا على طول» beside the books — first in the DOM, so
              on a phone the cohort group and the channel come before the shop
              («لازم يبقوا باينين»). */
-          <div className="home-pair">
-            <HomeReach
-              groups={groups}
-              channelHref={settings.contact.whatsappChannel}
-              facebookHref={settings.contact.facebookGroup}
-            />
-            <div className="home-pair__books space-y-8">{booksBlock}</div>
-          </div>
+          /* The books, «كتبي», the guardian code, «نقوّي النقط دي» and the
+             badges left the home page («شيل قسم الكتب … حطه في السايد منيو»):
+             they live in the side menu (المتجر · طلباتي · بروفايلي · نتائجي ·
+             أوسمتي). What stays is how to reach us. */
+          <HomeReach
+            groups={groups}
+            channelHref={settings.contact.whatsappChannel}
+            facebookHref={settings.contact.facebookGroup}
+          />
         ) : (
           <>
             {/* «كتبي» above the shop: what you already bought outranks what you
@@ -595,11 +596,13 @@ export default async function DashboardPage() {
         {/* What is ABOUT them rather than their work: the code they hand a
             parent, the topics to strengthen, the markers earned. Last, and
             kept — the guardian code lives nowhere else on the platform. */}
+        {cinema ? null : (
         <div className="dash-cards">
           {me.profile?.guardianCode ? <GuardianCodeCard code={me.profile.guardianCode} /> : null}
           {mastery ? <MasteryCard mastery={mastery} /> : null}
           <Achievements achievements={badges} earned={earnedCount(badges)} variant="aside" />
         </div>
+        )}
       </div>
     </main>
   );

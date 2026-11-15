@@ -7,6 +7,7 @@ import { MyCenterBookingSchema } from '@ayman/contracts/centers';
 import { cityNameAr } from '@ayman/contracts/cities';
 import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
+import { GuardianCodeCard } from '@/components/dashboard/guardian-code-card';
 import { getActivity } from '@/lib/activity';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { identityOf } from '@/lib/library';
@@ -226,6 +227,15 @@ async function Identity() {
       >
         {c.fieldsEdit}
       </Link>
+
+      {/* «كود ولي الأمر» moved here from the home page: it is a fact about the
+          account, read once and handed to a parent — not something to scroll
+          past every day. This is now the one place it lives. */}
+      {profile?.guardianCode ? (
+        <div className="mt-6 border-t border-line-subtle pt-5">
+          <GuardianCodeCard code={profile.guardianCode} />
+        </div>
+      ) : null}
     </section>
   );
 }
