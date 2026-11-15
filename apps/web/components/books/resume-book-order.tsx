@@ -13,7 +13,8 @@ import { BookOrderPanel } from '@/components/site/book-order-panel';
  *
  * مفيش `courseId` ولا `items`: دول بيتبعتوا وقت **إنشاء** طلب، والطلب ده موجود
  * خلاص. `resumeOrderId` بيخلّي البانل يجيبه بنفسه ويملا العنوان اللي متسجّل
- * ويقف على خطوة الدفع.
+ * ويقف على خطوة الدفع. ولو العنوان اتعدّل من هنا، البانل بيقرا السلة من
+ * الطلب نفسه (`basketPayload`) — كان بيبعت طلب من غير كتب والسيرفر بيرفضه.
  */
 export function ResumeBookOrder({
   orderId,

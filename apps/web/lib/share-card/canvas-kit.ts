@@ -45,14 +45,35 @@ export function resolveFonts(el: HTMLElement): CardFonts {
  * a declaration — and a canvas draw does not count as asking. Without this
  * the first card renders in the fallback and the second one is right.
  */
+/**
+ * ⚠️ `loadFonts` never rejects and never waits for ever.
+ *
+ * `FontFaceSet.load()` rejects with a NetworkError when a face's file cannot
+ * be fetched, and on 2026-11-15 that was every student whose phone had no
+ * free disk: the service worker's Cache Storage threw, every `/_next/static/`
+ * request died with `ERR_FAILED` (see `public/sw.js`), and because these
+ * faces are fetched only at this moment the whole card was «الصورة
+ * ماتجهّزتش» on a page that otherwise looked fine. A deploy between the page
+ * load and the button press does the same with a 404 on the old hash. A face
+ * that cannot be had costs the card its typeface, not its existence: the text
+ * is drawn in the fallback family instead. The timeout is for the other
+ * failure, a download that neither finishes nor fails on a bad connection.
+ */
+export const FONT_LOAD_TIMEOUT_MS = 10_000;
+
 export async function loadFonts(fonts: CardFonts): Promise<void> {
+  if (typeof document === 'undefined' || typeof document.fonts?.load !== 'function') return;
   const sample = 'أبجد هوز 0123';
-  await Promise.all([
-    document.fonts.load(`400 64px ${fonts.display}`, sample),
-    document.fonts.load(`400 64px ${fonts.body}`, sample),
-    document.fonts.load(`700 64px ${fonts.body}`, sample),
-    document.fonts.load(`700 64px ${fonts.script}`, sample),
-  ]);
+  const wanted = [
+    `400 64px ${fonts.display}`,
+    `400 64px ${fonts.body}`,
+    `700 64px ${fonts.body}`,
+    `700 64px ${fonts.script}`,
+  ];
+  // `Promise.resolve().then` so a synchronous throw from `load` (a font
+  // string the engine cannot parse) lands in the same settled bucket.
+  const loads = Promise.allSettled(wanted.map((font) => Promise.resolve().then(() => document.fonts.load(font, sample))));
+  await Promise.race([loads, new Promise<void>((resolve) => setTimeout(resolve, FONT_LOAD_TIMEOUT_MS))]);
 }
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
@@ -249,8 +270,36 @@ export function drawCover(
   ctx.drawImage(img, sx, sy, sw, sh, box.x, box.y, box.w, box.h);
 }
 
+/**
+ * `toBlob`, with `toDataURL` behind it. Some Android WebViews answer `null`
+ * from `toBlob` on a canvas this size while `toDataURL` on the same canvas
+ * works; a tainted canvas throws from both, and that one still rejects.
+ */
 export function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('toBlob returned null'))), type, quality);
+    const fromDataUrl = (): void => {
+      try {
+        resolve(dataUrlToBlob(canvas.toDataURL(type, quality)));
+      } catch (cause) {
+        reject(cause instanceof Error || cause instanceof DOMException ? cause : new Error('toBlob returned null'));
+      }
+    };
+    try {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : fromDataUrl()), type, quality);
+    } catch {
+      fromDataUrl();
+    }
   });
+}
+
+/** `data:` URL → Blob by hand — not `fetch`, which the service worker would see. */
+function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(',');
+  if (comma === -1) throw new Error('toDataURL returned no data');
+  const meta = dataUrl.slice(5, comma);
+  const type = meta.split(';')[0] || 'image/png';
+  const binary = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes.buffer as ArrayBuffer], { type });
 }

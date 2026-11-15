@@ -114,6 +114,27 @@ function localEgyptianDigits(e164: string): string {
   return e164.replace(/^\+20/, '0');
 }
 
+/**
+ * The server's own sentence, when it wrote one for the student.
+ *
+ * `BookOrdersService` throws a few 400s in Egyptian Arabic — «في كتاب في
+ * السلة مش متاح دلوقتي», «مفيش منه العدد ده» — that say exactly what to do,
+ * and this panel used to flatten every one of them into «حصل خطأ». Only an
+ * Arabic `message` is shown: the English ones (`AllExceptionsFilter`'s
+ * defaults, nestjs-zod's «Validation failed») are for logs, not students.
+ */
+function studentFacingMessage(cause: unknown): string | null {
+  if (!(cause instanceof ApiRequestError)) return null;
+  const message = (cause.payload as { message?: unknown } | undefined)?.message;
+  return typeof message === 'string' && /[\u0600-\u06FF]/.test(message) ? message : null;
+}
+
+/** What the footer says about a failed POST — see `tooManyAttempts`. */
+function failureMessage(cause: unknown): string {
+  if (cause instanceof ApiRequestError && cause.status === 429) return c.tooManyAttempts;
+  return studentFacingMessage(cause) ?? c.genericError;
+}
+
 type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alreadyOrdered';
 
 /**
@@ -634,7 +655,7 @@ export function BookOrderPanel({
       } else {
         // No `onUnauthorized` branch — this endpoint is `@Public()`, so a
         // signed-out visitor's submit never 401s.
-        setError(c.genericError);
+        setError(failureMessage(cause));
       }
     } finally {
       setSavingAddress(false);
@@ -647,12 +668,43 @@ export function BookOrderPanel({
    * than passing them in keeps the two calls provably identical — the whole
    * point is that the second request differs from the first in ONE field.
    */
+  /**
+   * What the POST names as the thing being bought.
+   *
+   * The props, when this panel was opened on a basket or a course page. On
+   * «كمّل الدفع» (`resumeOrderId`) there are neither — the order already
+   * exists — so the basket is read back off the ORDER: its course if it was a
+   * course-page order, else its own lines.
+   *
+   * ⚠️ Without this the body carried neither `courseId` nor `items`,
+   * `CreateBookOrderSchema`'s «one, never neither» refinement answered 400,
+   * and every «تعديل العنوان» → «التالي — الدفع» on that page ended in «حصل
+   * خطأ» — then 429 on the retries, inside the ten-second throttle. All six
+   * 400s on this route in the week to 2026-11-15 came from that page.
+   *
+   * `null` when it cannot be rebuilt: a line whose book was deleted since
+   * (`bookId: null`) names nothing the server can price.
+   */
+  function basketPayload():
+    | { items: readonly { bookId: string; quantity: number }[] }
+    | { courseId: string }
+    | null {
+    if (items) return { items };
+    if (courseId) return { courseId };
+    if (order?.courseId) return { courseId: order.courseId };
+    const lines = order?.items ?? [];
+    if (lines.length === 0 || lines.some((line) => line.bookId === null)) return null;
+    return { items: lines.map((line) => ({ bookId: line.bookId as string, quantity: line.quantity })) };
+  }
+
   async function postOrder(confirmDuplicate: boolean) {
+    const basket = basketPayload();
+    if (!basket) throw new Error('nothing to order');
     return apiPost('/api/book-orders', BookOrderSchema, {
         /* Exactly one of the two reaches the wire — `CreateBookOrderSchema` is
            `.strict()` AND refines on "one, never both", so spreading whichever
            this panel was given is the only spelling that satisfies it. */
-        ...(items ? { items } : { courseId }),
+        ...basket,
         fullName: fullName.trim(),
         phone: normalizeEgyptianPhone(phone),
         altPhone: normalizeEgyptianPhone(altPhone),
@@ -687,8 +739,8 @@ export function BookOrderPanel({
     setSavingAddress(true);
     try {
       finishAddress(await postOrder(true));
-    } catch {
-      setError(c.genericError);
+    } catch (cause) {
+      setError(failureMessage(cause));
     } finally {
       setSavingAddress(false);
     }
@@ -750,7 +802,7 @@ export function BookOrderPanel({
       setError(
         error instanceof ApiRequestError && error.status === 409
           ? c.receiptAlreadyUsed
-          : c.genericError,
+          : failureMessage(error),
       );
       setStep('payment');
     }
