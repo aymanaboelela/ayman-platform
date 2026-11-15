@@ -8,6 +8,8 @@ import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PathTimeline } from '@/components/path/path-timeline';
 import { PathArt } from '@/components/path/path-art';
+import { PathAside } from '@/components/path/path-aside';
+import { IS_AYMAN } from '@/lib/tenant';
 import { CountUp } from '@/components/rank/count-up';
 import { getBrandAsset } from '@/lib/brand-assets';
 import '@/components/path/path.css';
@@ -75,7 +77,16 @@ export default async function PathPage() {
 
       {/* The courses as one timeline — a card each, only the current one
           open to the few lectures around what is next. See `PathTimeline`. */}
-      <PathTimeline path={path} />
+      {IS_AYMAN ? (
+        // «Cinema»: the timeline beside a side column of what is next — his
+        // stack first (new features ship to him, other teachers opt in).
+        <div className="pth-layout">
+          <PathTimeline path={path} />
+          <PathAside path={path} />
+        </div>
+      ) : (
+        <PathTimeline path={path} />
+      )}
     </main>
   );
 }
