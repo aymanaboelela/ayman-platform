@@ -5542,6 +5542,12 @@ label.runner-option {
   font-size: var(--fs-text-sm);
 }
 
+.share-card-dialog__failed {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-12);
+}
+
 /* ============================================================================
    «شهاداتي» — `/certificates`. An earned certificate is drawn as a small
    black-and-gold certificate (the `--ink` surface, which does not flip with

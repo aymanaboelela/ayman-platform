@@ -164,7 +164,8 @@ describe('rendering the offer tokens', () => {
     // braces, no code and no link.
     expect(out.split('WELCOME0311-K7QM')).toHaveLength(2);
     expect(out).not.toContain('{{');
-    expect(out.startsWith('أهلاً الكوداللينك — الكود WELCOME0311-K7QM')).toBe(true);
+    // And a first word made of braces is not a name at all (`firstNameOf`).
+    expect(out.startsWith('أهلاً — الكود WELCOME0311-K7QM')).toBe(true);
   });
 
   it('never sends a literal token when there is no code or no months', () => {
