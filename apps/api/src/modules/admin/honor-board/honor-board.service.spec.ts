@@ -204,6 +204,35 @@ describe('AdminHonorBoardService.list', () => {
     expect(board.rounds[0].fromExams.map((row) => row.studentName)).toEqual(['زياد']);
   });
 
+  it('gives the papers the SAME places the public board does — ties share one', async () => {
+    // The screen must show what will be published: every 100 «الأول», the
+    // next mark «التاني», sorted down by place — not 1, 2, 3 by query order.
+    const { service, prisma } = makeService();
+    const paper = (id: string, name: string, score: number) => ({
+      id,
+      userId: `nano-${id}`,
+      startedAt: new Date('2026-10-22T08:00:00Z'),
+      scaledScore: score,
+      gradeOutOf: 100,
+      honorBoardAt: new Date('2026-10-22T09:00:00Z'),
+      user: { image: null, studentProfile: { fullName: name, honorPhotoKey: null } },
+      quiz: { lateAfter: null, lesson: { title: 'الامتحان الشامل', course: ARABIC } },
+    });
+    prisma.quizAttempt.findMany = jest.fn(async () => [
+      paper('a', 'تسعة وتسعين', 99),
+      paper('b', 'مية أولى', 100),
+      paper('c', 'مية تانية', 100),
+    ] as unknown[]);
+
+    const board = await service.list();
+
+    expect(board.rounds[0].fromExams.map((row) => [row.studentName, row.rank])).toEqual([
+      ['مية أولى', 1],
+      ['مية تانية', 1],
+      ['تسعة وتسعين', 2],
+    ]);
+  });
+
   it('labels a courseless pin from the student own year and stream', async () => {
     const { service, prisma } = makeService();
     prisma.honorBoardPin.findMany = jest.fn(async () => [pinRow()] as unknown[]);

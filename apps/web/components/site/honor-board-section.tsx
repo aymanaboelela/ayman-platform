@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
+import { honorPlaceWord } from '@/lib/honor-place';
 import { HonorFace } from './honor-face';
 
 const c = copy.landing.honorBoard;
@@ -124,18 +125,19 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
         {entries.length > 0 ? (
           <>
           <ul className="honor-board__slots">
-            {entries.map((entry) => (
-              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}>
+            {entries.map((entry, index) => (
+              // The index too: ties share a place (every 100 is الأول), so
+              // name + course + rank repeats for two students of one name.
+              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}-${index}`}>
                 <span className="honor-board__slot-mark" aria-hidden="true">
                   <Medal size={22} strokeWidth={1.5} />
                 </span>
                 {/* The rank is the place WITHIN this entry's course, so two
                     cards on one board are both «المركز الأول» when they are
-                    the firsts of عربي and لغات. `entry.rank` is 1-based; a
-                    course with more than four pinned places simply stops
-                    getting a word, which is what the fourth place promises. */}
+                    the firsts of عربي and لغات — or two 100s of one course,
+                    since ties share a place. `entry.rank` is 1-based. */}
                 <span className="honor-board__slot-rank">
-                  {c.placeRanks[entry.rank - 1] ?? ''}
+                  {honorPlaceWord(entry.rank)}
                 </span>
                 {/* Which race this was won in. Without it the two «المركز
                     الأول» cards read as a contradiction. */}

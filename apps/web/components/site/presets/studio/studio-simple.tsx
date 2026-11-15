@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 
 import { HonorFace } from '../../honor-face';
+import { honorPlaceWord } from '@/lib/honor-place';
 import { StudioHeading } from './studio-heading';
 import { studioCopy } from './studio-copy';
 
@@ -107,10 +108,12 @@ export function StudioHonors({
           زخرفية خالص في أي قسم تاني.
         */}
         <ul className="st-honor-cards">
-          {entries.map((entry) => (
+          {entries.map((entry, index) => (
             <li
               className="st-honor-card"
-              key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}
+              // The index too: ties share a place, so name + course + rank
+              // can repeat for two students of the same name.
+              key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}-${index}`}
             >
               {/* الصورة اللي المدرّس وافق عليها لللوحة دي، أو الحروف الأولى
                   لو مفيش — نفس الكومبوننت ونفس الحجة اللي preset الكلاسيك
@@ -120,7 +123,7 @@ export function StudioHonors({
               {/* الرانك المكتوب، مش ترتيب العنصر في القايمة: اللوحة ممكن
                   تحمل أول وتاني من مادتين مختلفين، والترقيم بالموضع بيسمّي
                   التاني «الأول» تاني. */}
-              <span className="st-honor-card__r">{copy.landing.honorBoard.placeRanks[entry.rank - 1] ?? ''}</span>
+              <span className="st-honor-card__r">{honorPlaceWord(entry.rank)}</span>
               <span className="st-honor-card__n">{entry.studentName}</span>
               <span className="st-honor-card__note">{entry.courseLabel}</span>
             </li>

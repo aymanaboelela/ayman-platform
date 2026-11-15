@@ -366,12 +366,14 @@ export class CatalogService {
   /**
    * لوحة الشرف — the named students on the landing page.
    *
-   * ## Ordered the way the instructor decides, not the way the score does
+   * ## The score decides the place; the order only seats the ties
    *
-   * `instructor_rating` first, then the percentage, then who was added first.
-   * That order is the feature: ten students reach full marks on a monthly exam
-   * and only one can be الأول, and the thing that separates them is his own
-   * read of the papers — not a tiebreak the database invents.
+   * A pinned paper's place is its dense rank by score in its course and round
+   * (`denseRanks` in `./honor-board`): every 100 is الأول, the next mark down
+   * is التاني. It used to be the position in this query's order, which made
+   * thirty-six 100s places 1…36 and the 99s the 37th. The `orderBy` below —
+   * `instructor_rating`, then the score, then who was pinned first — now only
+   * decides which card prints first among those sharing a place.
    *
    * ## Only what an instructor put here
    *
@@ -499,9 +501,8 @@ export class CatalogService {
       .map((row) => ({ ...row, honorBoardAt: row.honorBoardAt as Date }));
 
     /*
-     * `eligible` is already in board order — rating desc, then score desc,
-     * from the `orderBy` above — and `toHonorBoardRounds` ranks by walking
-     * it. That ordering is the contract between the two; see its header.
+     * `toHonorBoardRounds` ranks by score, not by position in `eligible`; the
+     * `orderBy` above only seats the cards that share a place. See its header.
      */
     const periods = toHonorBoardRounds(eligible, pins);
 

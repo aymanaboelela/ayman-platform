@@ -11,6 +11,7 @@ import { getBranding } from '@/lib/settings';
 import { ThemedImage } from '@/components/themed-image';
 import { tenantName } from '@/lib/tenant';
 import { getHonorBoardRounds } from '@/lib/home-blocks';
+import { honorPlaceWord } from '@/lib/honor-place';
 import { getEntitlements } from '@/lib/entitlements';
 
 const c = copy.landing.honorBoard;
@@ -162,19 +163,18 @@ export default async function HonorBoardArchivePage({
             the contract): a podium for each, never one podium across them. */}
         <div className="honor-races">
           {races.map((race) => {
-            const podium = race.entries.filter((entry) => entry.rank <= 3);
-            const rest = race.entries.filter((entry) => entry.rank > 3);
+            const { podium, rest } = splitPodium(race.entries);
             return (
               <section className="honor-race" key={race.label || 'all'}>
                 {race.label ? <h2 className="honor-race__label">{race.label}</h2> : null}
 
                 {podium.length > 0 ? (
                   <ol className="honor-podium" aria-label={c.podiumTitle}>
-                    {podium.map((entry) => (
+                    {podium.map((entry, index) => (
                       <li
                         className="honor-podium__place"
                         data-place={entry.rank}
-                        key={`${entry.studentName}-${entry.rank}`}
+                        key={`${entry.studentName}-${entry.rank}-${index}`}
                       >
                         <span className="honor-podium__badge" aria-hidden="true">
                           {entry.rank === 1 ? (
@@ -194,7 +194,7 @@ export default async function HonorBoardArchivePage({
                             {entry.rank}
                           </span>
                         </span>
-                        <span className="honor-podium__rank">{c.placeRanks[entry.rank - 1] ?? ''}</span>
+                        <span className="honor-podium__rank">{honorPlaceWord(entry.rank)}</span>
                         <span className="honor-podium__name">{entry.studentName}</span>
                         <Score entry={entry} className="honor-podium__score" />
                       </li>
@@ -204,10 +204,12 @@ export default async function HonorBoardArchivePage({
 
                 {rest.length > 0 ? (
                   <>
-                    <h3 className="honor-rest__title">{c.restTitle}</h3>
+                    {/* «باقي» only says something under a podium; a race
+                        drawn as one list is headed by its course alone. */}
+                    {podium.length > 0 ? <h3 className="honor-rest__title">{c.restTitle}</h3> : null}
                     <ol className="honor-rest">
-                      {rest.map((entry) => (
-                        <li className="honor-rest__row" key={`${entry.studentName}-${entry.rank}`}>
+                      {rest.map((entry, index) => (
+                        <li className="honor-rest__row" key={`${entry.studentName}-${entry.rank}-${index}`}>
                           <span className="honor-rest__num" aria-hidden="true">
                             {entry.rank}
                           </span>
@@ -219,7 +221,7 @@ export default async function HonorBoardArchivePage({
                           />
                           <span className="honor-rest__who">
                             <span className="honor-rest__name">{entry.studentName}</span>
-                            <span className="honor-rest__rank">{c.placeRanks[entry.rank - 1] ?? ''}</span>
+                            <span className="honor-rest__rank">{honorPlaceWord(entry.rank)}</span>
                           </span>
                           <Score entry={entry} className="honor-rest__score" />
                         </li>
@@ -256,6 +258,32 @@ function Score({ entry, className }: { entry: HonorBoardEntry; className: string
 /** 47.5 stays 47.5, 48 stays 48 — never «48.0000» off a Decimal(10,4). */
 function formatMark(value: number): string {
   return String(Math.round(value * 100) / 100);
+}
+
+/**
+ * The podium, or no podium.
+ *
+ * A podium is three steps with one person on each: the first raised in the
+ * middle, the second and third beside it (`data-place` → CSS `order`). That
+ * only exists while places 1–3 are each held by ONE card. Places come from the
+ * score now, so a round where thirty-five students scored 100 has thirty-five
+ * firsts — and picking one of them for the middle step would crown a student
+ * the board itself says is level with the rest, while the CSS `order` would
+ * sort every second above every first in a wrapped grid.
+ *
+ * So the moment any of the top three places is shared, the race is drawn as
+ * the plain list instead: every name one under another, in place order, each
+ * with its own number and word. That is also exactly what was asked for —
+ * «اللي جابوا ١٠٠ كلهم الأول، وتحتهم الباقي واحد تحت التاني».
+ */
+function splitPodium(entries: HonorBoardEntry[]): {
+  podium: HonorBoardEntry[];
+  rest: HonorBoardEntry[];
+} {
+  const top = entries.filter((entry) => entry.rank <= 3);
+  const shared = new Set(top.map((entry) => entry.rank)).size !== top.length;
+  if (shared) return { podium: [], rest: entries };
+  return { podium: top, rest: entries.filter((entry) => entry.rank > 3) };
 }
 
 /** Entries in the order they came (already sorted by place), split by course. */

@@ -72,12 +72,13 @@ export function NeonHonorBoard({
               <ol className="neon-board__list">
                 {entries.map((entry, index) => (
                   <li className="neon-board__row" key={`${entry.studentName}-${index}`}>
-                    {/* The rank. `<ol>` already numbers this list for a screen
-                        reader, so the printed index is ornament and is hidden
-                        from the tree — otherwise every row is announced with
-                        its position twice. */}
+                    {/* The rank. Hidden from the tree because the `<ol>`
+                        already numbers the rows for a screen reader.
+                        `entry.rank`, NOT the row index: ties share a place
+                        (every 100 is الأول) and each course runs its own
+                        race, so the fourth row can still be «01». */}
                     <Mono className="neon-board__rank" hidden>
-                      {String(index + 1).padStart(2, '0')}
+                      {String(entry.rank).padStart(2, '0')}
                     </Mono>
                     <span className="neon-board__initial" aria-hidden="true">
                       {entry.studentName.trim().charAt(0)}

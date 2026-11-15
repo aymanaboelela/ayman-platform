@@ -563,7 +563,12 @@ export const HonorBoardEntrySchema = z.object({
   courseLabel: z.string(),
   /** 1-based WITHIN `courseLabel`, never across the board. Two entries on the
    *  same board are both `rank: 1` when they are firsts of different courses,
-   *  and that is the intended reading. */
+   *  and that is the intended reading.
+   *
+   *  ⚠️ NOT unique inside a course either: a paper's place is its dense rank
+   *  by score, so every 100 is `1` and the next mark down is `2`. Never key a
+   *  list on it, and never assume `placeRanks[rank - 1]` exists — a board of
+   *  quarter marks reaches the eleventh place. */
   rank: z.number().int().min(1),
   /**
    * الدرجة — أو `null` على الصف اللي اتحط بالإيد.

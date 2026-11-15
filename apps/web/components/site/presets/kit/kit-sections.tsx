@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { ThemedImage } from '@/components/themed-image';
 import { keyPair } from '@/lib/brand-image';
+import { honorPlaceWord } from '@/lib/honor-place';
 import Link from 'next/link';
 import {
   BookOpenText,
@@ -520,15 +521,17 @@ export function KitHonors({
           </div>
         ) : (
           <ul className="pk-honors" role="list">
-            {entries.map((entry) => (
-              <li className="pk-honor" key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}>
+            {entries.map((entry, index) => (
+              // The index too: two students of the same name can share a
+              // place now that ties do (every 100 is الأول).
+              <li className="pk-honor" key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}-${index}`}>
                 <span className="pk-honor__medal" aria-hidden="true">
                   <Medal size={20} strokeWidth={2} />
                 </span>
                 {/* `entry.rank`, never the list index: one race per course, so
                     two cards can both be «المركز الأول». Initials only — the
                     board names a minor, see `board-honors.tsx`. */}
-                <span className="pk-honor__rank">{HONOR.placeRanks[entry.rank - 1] ?? ''}</span>
+                <span className="pk-honor__rank">{honorPlaceWord(entry.rank)}</span>
                 <span className="pk-honor__avatar" aria-hidden="true">
                   {initials(entry.studentName)}
                 </span>

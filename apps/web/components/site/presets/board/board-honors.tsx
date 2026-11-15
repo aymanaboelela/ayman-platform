@@ -92,8 +92,8 @@ interface CourseGroup {
 /**
  * Groups in the order the board lists them — entries arrive sorted by place
  * with ties in course order, so the first course seen is the first podium.
- * A course with no entry ranked 1–3 (every place hand-set lower) simply has
- * no podium and shows its roll.
+ * A course with no entry ranked 1–3 (every place hand-set lower), or with a
+ * top-three place shared by a tie, has no podium and shows its roll.
  */
 function groupByCourse(entries: readonly HonorBoardEntry[]): CourseGroup[] {
   const groups = new Map<string, CourseGroup>();
@@ -106,12 +106,20 @@ function groupByCourse(entries: readonly HonorBoardEntry[]): CourseGroup[] {
     };
     groups.set(entry.courseLabel, group);
     if (!group.titles.includes(entry.title)) group.titles.push(entry.title);
-    // Two hand-set entries can share a place; only the first takes the step.
-    const onPodium =
-      entry.rank <= 3 && !group.podium.some((placed) => placed.rank === entry.rank);
-    (onPodium ? group.podium : group.rest).push(entry);
+    (entry.rank <= 3 ? group.podium : group.rest).push(entry);
   }
-  for (const group of groups.values()) group.rest.sort((a, b) => a.rank - b.rank);
+  for (const group of groups.values()) {
+    /* A shared place among the top three — every 100 is الأول now, so a
+       round can have thirty-five firsts — means there is no podium: putting
+       one of them on the step would crown a student the board says is level
+       with the rest. The whole race goes down the roll, in place order. Same
+       rule as `/honor-board` (`splitPodium`). */
+    if (new Set(group.podium.map((entry) => entry.rank)).size !== group.podium.length) {
+      group.rest = [...group.podium, ...group.rest];
+      group.podium = [];
+    }
+    group.rest.sort((a, b) => a.rank - b.rank);
+  }
   return [...groups.values()];
 }
 
