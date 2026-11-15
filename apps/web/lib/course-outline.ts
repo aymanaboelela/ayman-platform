@@ -106,6 +106,8 @@ export interface OutlineSection {
   id: string;
   title: string;
   summary: string | null;
+  /** «صورة الوحدة» — a storage key, or `null` for the generated tile. */
+  coverKey: string | null;
   /** Lectures, each carrying its own quizzes. Quizzes are never top-level. */
   entries: OutlineEntry[];
 }
@@ -401,7 +403,13 @@ export function buildCourseOutline({
       entries.push({ lecture: toLesson(lesson), quizzes: [] });
     }
 
-    return { id: section.id, title: section.title, summary: section.summary, entries };
+    return {
+      id: section.id,
+      title: section.title,
+      summary: section.summary,
+      coverKey: section.coverKey ?? null,
+      entries,
+    };
   });
 
   return {

@@ -235,6 +235,7 @@ export class CatalogService {
             id: true,
             title: true,
             summary: true,
+            coverKey: true,
             lessons: {
               where: { isPublished: true },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -338,6 +339,7 @@ export class CatalogService {
         id: section.id,
         title: section.title,
         summary: section.summary,
+        coverKey: section.coverKey,
         lessons: section.lessons.map((lesson) => ({
           id: lesson.id,
           title: lesson.title,

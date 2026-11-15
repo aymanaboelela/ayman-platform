@@ -372,6 +372,9 @@ export type ExamScaffoldResult = z.infer<typeof ExamScaffoldResultSchema>;
 const sectionWritableShape = {
   title: z.string().min(2).max(160),
   summary: z.string().max(1000).nullable().default(null),
+  /** «صورة الوحدة» — a storage key, same rule as `Course.coverKey`; `null`
+   *  removes it and the unit goes back to its generated tile. */
+  coverKey: z.string().max(255).nullable().default(null),
   isPublished: z.boolean().default(false),
   /** Which term (الترم) this section belongs to — `null` = not assigned to
    *  either half of the course. See `CourseTerm`'s model doc. */

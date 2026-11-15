@@ -770,6 +770,10 @@ const admin = {
     new: 'قسم جديد',
     title: 'اسم القسم',
     summary: 'نبذة',
+    /** «صورة الوحدة» — the picture on the unit's card in the student's outline.
+     *  Optional: a unit without one gets a generated tile in the subject's hue. */
+    cover: 'صورة الوحدة',
+    coverHint: 'بتظهر للطالب على كارت الوحدة في محتوى الكورس وصفحة الكورس. لو مفيش صورة، بنرسم كارت بلون المادة.',
     empty: 'مفيش أقسام لسه',
     edit: 'تعديل',
     delete: 'حذف القسم',

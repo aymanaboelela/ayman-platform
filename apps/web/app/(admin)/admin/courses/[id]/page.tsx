@@ -78,6 +78,8 @@ const AdminCourseDetailSchema = z.object({
       id: z.uuid(),
       title: z.string(),
       summary: z.string().nullable(),
+      /** «صورة الوحدة» — `null` until one is uploaded from the section card. */
+      coverKey: z.string().nullable().default(null),
       position: z.number().int(),
       isPublished: z.boolean(),
       /** Which term this section belongs to — `null` = not assigned. */

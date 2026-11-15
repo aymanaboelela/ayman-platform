@@ -59,6 +59,7 @@ export class SectionService {
         courseId,
         title: input.title,
         summary: input.summary,
+        coverKey: input.coverKey,
         isPublished: input.isPublished,
         termId: input.termId,
         position: last === null ? 0 : last.position + 1,
@@ -116,6 +117,7 @@ export class SectionService {
       data: {
         ...(input.title !== undefined && { title: input.title }),
         ...(input.summary !== undefined && { summary: input.summary }),
+        ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
         ...(input.isPublished !== undefined && { isPublished: input.isPublished }),
         ...(input.termId !== undefined && { termId: input.termId }),
       },

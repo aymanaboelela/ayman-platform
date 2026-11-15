@@ -26,6 +26,7 @@ import { SortableLessonList } from './lesson-list';
 import { AddLessonForm } from './lesson-panel';
 import { InlineTitle } from './inline-title';
 import { ConfirmButton } from './confirm-button';
+import { MediaKeyField } from '../media-key-field';
 import { ActionError, IDLE } from './action-state';
 import { useFeature } from '../entitlements-context';
 
@@ -226,6 +227,17 @@ export function SectionCard({
 
   const publishedCount = section.lessons.filter((lesson) => lesson.isPublished).length;
 
+  /*
+   * «صورة الوحدة» saves on its own, like the title: the field uploads from the
+   * browser and hands back the storage key (or `null` for «شيل الصورة»), and
+   * one PATCH writes it. No submit anywhere in this card to read a form on.
+   */
+  async function saveCover(coverKey: string | null) {
+    const result = await updateSectionAction(courseId, section.id, { coverKey });
+    if (result.ok) router.refresh();
+    else toast.error(result.message);
+  }
+
   return (
     <div className="unit" data-open={open ? '' : undefined}>
       <div className="unit__head">
@@ -356,6 +368,22 @@ export function SectionCard({
       </div>
 
       <div className="unit__body" id={bodyId} hidden={!open}>
+        {/* The unit's picture — what the student sees on this unit's card in
+            the lesson rail and on the course page. Not on the exams shelf,
+            which never reaches a student outline. */}
+        {isShelf ? null : (
+          <div className="px-2 pb-3">
+            <MediaKeyField
+              name={`coverKey-${section.id}`}
+              id={`section-cover-${section.id}`}
+              label={c.cover}
+              hint={c.coverHint}
+              defaultValue={section.coverKey}
+              shape="cover"
+              onChange={(key) => void saveCover(key)}
+            />
+          </div>
+        )}
 
         {section.lessons.length === 0 ? (
           <p className="px-2 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">

@@ -1145,6 +1145,10 @@ model CourseSection {
   termId      String?  @map("term_id") @db.Uuid
   title       String
   summary     String?
+  /// «صورة الوحدة» — a storage key under `/media/`, like `Course.coverKey`;
+  /// `null` draws the generated tile instead. Shown wherever the unit is a
+  /// row: the lesson sidebar, the course page, the phone's outline sheet.
+  coverKey    String?  @map("cover_key")
   /// Ordering is position + an id tie-break. Never a CSV sequence column.
   position    Int
   isPublished Boolean  @default(false) @map("is_published")
