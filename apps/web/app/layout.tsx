@@ -2,7 +2,7 @@ import type { Viewport } from 'next';
 import { Suspense } from 'react';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
-import { plexArabic, plexMono } from '@/lib/fonts';
+import { alexandria, plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
 import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
 import { BrandMarkProvider } from '@/components/brand-mark-provider';
@@ -123,7 +123,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       dir="rtl"
       translate="no"
       data-theme="light"
-      className={`${plexArabic.variable} ${plexMono.variable}`}
+      className={`${plexArabic.variable} ${plexMono.variable} ${alexandria.variable}`}
       suppressHydrationWarning
     >
       <head>

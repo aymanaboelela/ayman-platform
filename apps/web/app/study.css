@@ -6923,3 +6923,64 @@ label.runner-option {
   border-radius: var(--r-full);
   background: var(--e-600);
 }
+
+/* ===========================================================================
+   «Cinema» type — his stack only. Alexandria (lib/fonts.ts) for what a
+   student scans: headings, big numbers, buttons and chips; Plex stays for
+   what they read. The phone scale the owner approved:
+     page title 24/800 · section 18/700 · card title 15/600 ·
+     body 14/1.7 · small 12.5/500 · buttons 14/700 (2–4px up on desktop).
+   Keyed on the shell's presence so the portalled menu and sheets follow.
+   ======================================================================== */
+:root:has(.shell[data-cinema]) {
+  --font-display: var(--font-alexandria), var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root:has(.shell[data-cinema]) :is(.shell, .drawer, [role='dialog']) :is(h1, h2, h3),
+:root:has(.shell[data-cinema]) :is(.shell, .drawer, [role='dialog']) :is(
+    .chip,
+    .stage__resume,
+    .exam-band__cta,
+    .pth-hero__cta,
+    .pth-hero__percent,
+    .dash-hero__dial-value,
+    .tile__value,
+    .tabbar__label,
+    .nav-pill__label
+  ) {
+  font-family: var(--font-display);
+}
+
+:root:has(.shell[data-cinema]) .shell :is(main h1) {
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+:root:has(.shell[data-cinema]) .shell :is(main h2) {
+  font-weight: 700;
+}
+
+@media (max-width: 47.99rem) {
+  :root:has(.shell[data-cinema]) .shell main h1 {
+    font-size: 1.5rem;
+    line-height: 1.3;
+  }
+
+  :root:has(.shell[data-cinema]) .shell main h2 {
+    font-size: 1.125rem;
+    line-height: 1.4;
+  }
+
+  :root:has(.shell[data-cinema]) .shell main {
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+
+  :root:has(.shell[data-cinema]) .shell main :is(button, a).chip--solid,
+  :root:has(.shell[data-cinema]) .shell main .stage__resume,
+  :root:has(.shell[data-cinema]) .shell main .pth-hero__cta {
+    min-block-size: 2.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+}

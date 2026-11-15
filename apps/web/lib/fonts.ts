@@ -372,3 +372,27 @@ export const lalezar = localFont({
   preload: false,
   adjustFontFallback: false,
 });
+
+/**
+ * Alexandria — the display face of the student area on his stack («Cinema»):
+ * headings, big numbers, buttons. A geometric Arabic with real weight at
+ * 600–800, which Plex does not have the presence for at title sizes. Body
+ * text stays Plex: it reads better at 14px on a phone.
+ *
+ * Arabic + Latin subsets, three weights. `preload: false` for the same reason
+ * as Plex above; it is only applied inside `.shell[data-cinema]` (study.css),
+ * so other teachers' pages never request a file.
+ */
+export const alexandria = localFont({
+  src: [
+    { path: '../node_modules/@fontsource/alexandria/files/alexandria-arabic-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: '../node_modules/@fontsource/alexandria/files/alexandria-arabic-700-normal.woff2', weight: '700', style: 'normal' },
+    { path: '../node_modules/@fontsource/alexandria/files/alexandria-arabic-800-normal.woff2', weight: '800', style: 'normal' },
+    { path: '../node_modules/@fontsource/alexandria/files/alexandria-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: '../node_modules/@fontsource/alexandria/files/alexandria-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    { path: '../node_modules/@fontsource/alexandria/files/alexandria-latin-800-normal.woff2', weight: '800', style: 'normal' },
+  ],
+  variable: '--font-alexandria',
+  display: 'swap',
+  preload: false,
+});
