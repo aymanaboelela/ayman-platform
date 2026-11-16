@@ -3,16 +3,20 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { z } from 'zod';
-import { QUESTION_TYPES, copy } from '@ayman/contracts';
+import { LearningPathSchema, QUESTION_TYPES, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getBrandAsset } from '@/lib/brand-assets';
 import { quizHref } from '@/lib/quiz-links';
+import { historyRowFor, mistakeRows, nextStepAfter, reviewTally } from '@/lib/review-view';
 import { sanitizeRichText } from '@/lib/sanitize-html';
-import { ResultHeader } from '@/components/quiz/result-header';
+import { ReviewActions, ReviewMistakes, ReviewStats, type ReviewPrimary } from '@/components/quiz/review-board';
+import { ReviewHero } from '@/components/quiz/review-hero';
 import { ReviewLocked } from '@/components/quiz/review-locked';
 import { ReviewList } from '@/components/quiz/review-list';
 import { ResultShareSlot } from '@/components/share-card/share-slots';
+import '@/components/quiz/review-cinema.css';
 
 const ReviewOptionSchema = z.object({ id: z.string(), bodyHtml: z.string() });
 
@@ -67,6 +71,17 @@ export const metadata = { title: copy.quiz.reviewTitle };
  * `laterWhileOpen`) between two loads of the same page, and a stale response
  * would show fields the student is no longer supposed to see (or hide ones
  * they now are).
+ *
+ * ## «نتيجة الامتحان» — the 2026-11 board, top to bottom
+ *
+ * The result (`ReviewHero`: a celebration on a pass, a calm way forward under
+ * the line, no verdict while an essay is being marked) → صح / غلط → the
+ * questions worth revisiting, each jumping to its card → the actions, with at
+ * most ONE orange button → the share card → the full paper (`#answers`).
+ *
+ * The board's «الوقت» tile and its per-topic card are NOT drawn: no endpoint
+ * carries time taken or a question's topic, and the owner's rule is real data
+ * or nothing.
  */
 export default async function QuizReviewPage({
   params,
@@ -112,57 +127,124 @@ export default async function QuizReviewPage({
     throw error;
   }
 
-  // One request. There used to be a second, for per-question appeal state;
-  // appeals are gone and the review payload is once again exactly what the
-  // 4×7 matrix produces, with nothing bolted onto the side of it.
+  // The review itself is still ONE request, and still the only one that can
+  // fail this page. Appeals used to add a second; they are gone, and the
+  // review payload is exactly what the 4×7 matrix produces.
+  if (review.locked) {
+    return (
+      <main className="rvc mx-auto w-full px-4 py-8 md:px-6 md:py-10">
+        <BackToQuiz lessonId={lessonId} />
+        <h1 className="rvc-h1">{copy.quiz.reviewTitle}</h1>
+        <ReviewLocked reason={review.reason} />
+      </main>
+    );
+  }
+
+  /*
+   * Two reads for the board's dressing, both from endpoints the student's own
+   * screens already use, and both allowed to fail: a missing title or a
+   * missing «المحاضرة الجاية» is a smaller screen, never an error page.
+   *
+   *   · `/api/me/quizzes` — the quiz's title (the review payload carries
+   *     none) and whether an improvement sitting is still open, the same two
+   *     flags `/results` reads for its «دخول امتحان التحسين».
+   *   · `/api/me/path` — the course's `nextLessonId`, the same pointer «مسارك»
+   *     and the course page follow, so the orange button cannot disagree
+   *     with them.
+   */
+  const [history, path] = await Promise.all([
+    apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema).catch(() => null),
+    apiGetAuthed('/api/me/path', LearningPathSchema).catch(() => null),
+  ]);
+
+  const row = historyRowFor(history?.quizzes ?? null, lessonId);
+  const questions = review.questions.map(sanitizeReviewQuestion);
+  const needsGrading = questions.some((question) => question.correctness === 'needsGrading');
+  const outstanding = review.pendingOutOf > 0 || needsGrading;
+  const tally = reviewTally(questions);
+  const mistakes = mistakeRows(questions);
+  const next = nextStepAfter(path, lessonId, row?.courseSlug ?? null);
+  const hasAnswers = questions.length > 0;
+
+  /*
+   * The ONE orange button. A failed paper with its improvement sitting still
+   * unused gets that sitting — both flags, as on `/results`, because neither
+   * implies the other. Otherwise the next stop on the path; and when there is
+   * none, reviewing the answers IS the next thing to do.
+   */
+  const canImprove = row !== null && row.allowsImprovement && !row.improvementUsed;
+  const primary: ReviewPrimary =
+    !outstanding && review.passed === false && canImprove
+      ? { kind: 'improve', href: quizHref(lessonId) }
+      : next && review.passed !== false
+        ? { kind: 'next', step: next }
+        : hasAnswers
+          ? { kind: 'review' }
+          : next
+            ? { kind: 'next', step: next }
+            : null;
 
   return (
-    // The study surface's own gutter — `px-4` on a phone, as the intro and the
-    // runner use. This page alone had `px-6`, 8px narrower per side than the
-    // screen the student had just left.
-    <main className="mx-auto w-full max-w-[var(--w-prose)] px-4 py-8 md:px-6 md:py-10">
-      {/* The way back to the exam's own page — where «مراجعة الإجابات» and the
-          attempt history live. There was none except the browser's. */}
-      <Link href={quizHref(lessonId)} className="quiz-back mb-2">
-        <ArrowRight className="size-4" aria-hidden="true" />
-        {quizExperience.review.backToQuiz}
-      </Link>
-      <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold">{copy.quiz.reviewTitle}</h1>
+    <main className="rvc mx-auto w-full px-4 py-8 md:px-6 md:py-10">
+      <BackToQuiz lessonId={lessonId} />
+      <h1 className="rvc-h1">{copy.quiz.reviewTitle}</h1>
 
-      {/* `gradedOutOf || gradeOutOf`: a payload from an API container that
-          predates the split carries 0, and falling back to the quiz's own
-          total renders exactly the screen this page always did rather than
-          «٤٨٫٥ / ٠». */}
-      {review.locked ? (
-        <ReviewLocked reason={review.reason} />
-      ) : (
-        <div className="flex flex-col gap-6">
-          <ResultHeader
-            scaledScore={review.scaledScore}
-            gradeOutOf={review.gradeOutOf}
-            passPercent={review.passPercent}
-            passed={review.passed}
-            needsGrading={review.questions.some((question) => question.correctness === 'needsGrading')}
-            pendingOutOf={review.pendingOutOf}
-            gradedOutOf={review.gradedOutOf || review.gradeOutOf}
-          />
+      <div className="rvc-stack">
+        {/* `gradedOutOf || gradeOutOf`: a payload from an API container that
+            predates the split carries 0, and falling back to the quiz's own
+            total renders exactly the screen this page always did rather than
+            «٤٨٫٥ / ٠». */}
+        <ReviewHero
+          scaledScore={review.scaledScore}
+          gradeOutOf={review.gradeOutOf}
+          passPercent={review.passPercent}
+          passed={review.passed}
+          needsGrading={needsGrading}
+          pendingOutOf={review.pendingOutOf}
+          gradedOutOf={review.gradedOutOf || review.gradeOutOf}
+          title={row?.quizTitle ?? null}
+          poster={getBrandAsset('practiceGuide')}
+        />
 
-          {/* «كارت النتيجة» — only on a FINAL mark: a card printed while an
-              essay is still waiting for the teacher would show a score that
-              is about to change. The API says the same (404), this just skips
-              the round trip. Streams in after the score; see the slot. */}
-          {review.pendingOutOf > 0 ? null : (
-            <Suspense fallback={null}>
-              <ResultShareSlot attemptId={attemptId} />
-            </Suspense>
-          )}
+        {tally ? <ReviewStats tally={tally} /> : null}
 
-          {/* Sanitized HERE, once, rather than inside `<ReviewQuestion>` on
-              every render — see `sanitizeReview` below. */}
-          <ReviewList questions={review.questions.map(sanitizeReviewQuestion)} />
-        </div>
-      )}
+        <ReviewMistakes rows={mistakes} />
+
+        <ReviewActions primary={primary} next={next} hasAnswers={hasAnswers} />
+
+        {/* «كارت النتيجة» — only on a FINAL mark: a card printed while an
+            essay is still waiting for the teacher would show a score that
+            is about to change. The API says the same (404), this just skips
+            the round trip. Streams in after the score; see the slot. */}
+        {review.pendingOutOf > 0 ? null : (
+          <Suspense fallback={null}>
+            <ResultShareSlot attemptId={attemptId} />
+          </Suspense>
+        )}
+
+        {hasAnswers ? (
+          <section id="answers" className="rvc-answers" aria-labelledby="rvc-answers-title">
+            <h2 id="rvc-answers-title" className="rvc-h2">
+              {copy.quiz.reviewBoard.answersTitle}
+            </h2>
+            {/* Sanitized HERE, once, rather than inside `<ReviewQuestion>` on
+                every render — see `sanitizeReviewQuestion` below. */}
+            <ReviewList questions={questions} anchorPrefix="q-" />
+          </section>
+        ) : null}
+      </div>
     </main>
+  );
+}
+
+/** The way back to the exam's own page — where the attempt history lives.
+ *  There was none except the browser's. */
+function BackToQuiz({ lessonId }: { lessonId: string }) {
+  return (
+    <Link href={quizHref(lessonId)} className="quiz-back mb-2">
+      <ArrowRight className="size-4" aria-hidden="true" />
+      {quizExperience.review.backToQuiz}
+    </Link>
   );
 }
 

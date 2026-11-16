@@ -1,0 +1,996 @@
+/* ===========================================================================
+   «Cinema» home — `(app)/dashboard/page.tsx` on HIS stack only (`IS_AYMAN`
+   puts `.home-cinema` on the page's flow; every other stack never gets the
+   class, so nothing below can reach it). From the approved Home2 / Home2M
+   boards.
+
+   The owner's two asks, and how this file answers them:
+
+   - «مش بحب الزحمة للطالب» — fewer shapes, one orange button per area. The
+     hero's «نكمّل» and the exam band's «نبدأ الامتحان» are the only orange
+     fills; every row button below them is quiet (surface + hairline), and the
+     section heads lose their rule so the page reads as a few blocks, not a
+     ledger.
+   - His face in the poster. The earlier band cropped through it and washed the
+     whole picture dark. Here the crop is pinned to the top of the frame (his
+     face is in its top fifth, left of centre) and the scrim sits only behind
+     the words: a side gradient that is clear before it reaches him on a wide
+     band, and on a phone the picture gets its own strip above the words.
+
+   Colours: the shell's «Cinema» ramps (study.css) — `--e-*` is blue (where you
+   are), `--a-*` is orange (what to press). The night ground is `--e-950`. The
+   only literals are the scrims' blue-black alphas (the same `rgb(10 16 32)`
+   `.course-art--poster` uses) and white alphas on the night ground, which do
+   not invert between themes because that ground does not.
+
+   Layout is by the flow's own width (a size container), not the viewport —
+   the rail takes a different share of the window at every breakpoint.
+   ======================================================================== */
+.home-cinema {
+  container: home / inline-size;
+}
+
+/* Section heads: the blue mark, bold title, no rule under it. */
+.home-cinema .group-head {
+  padding-block-end: 0;
+  margin-block-end: var(--s-12);
+  border-block-end: 0;
+}
+
+.home-cinema .group-head__mark {
+  background: var(--e-600);
+}
+
+.home-cinema .group-head__title {
+  font-weight: var(--fw-bold);
+}
+
+/* ---------------------------------------------------------------------------
+   The hero band — `home-hero.tsx`. Keeps `.dash-hero` (the e2e contrast test
+   and the loading skeleton key on it), so every rule here is `.dash-hero
+   .home-hero` to outrank `study.css`'s band layout, including its `48rem`
+   three-column grid.
+   --------------------------------------------------------------------------- */
+.dash-hero.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  align-content: space-between;
+  gap: var(--s-20);
+  padding: var(--s-16);
+  border-radius: var(--r-lg);
+  background: var(--e-950);
+  box-shadow: 0 24px 48px -28px var(--e-950);
+}
+
+/* `.dash-hero`'s dot field — the poster is the texture now. */
+.dash-hero.home-hero::before {
+  content: none;
+}
+
+/* Phone: the picture is its own strip across the top, the words start where
+   it fades out, so nothing is printed over his face. */
+.dash-hero.home-hero {
+  --home-strip: clamp(13rem, 38cqi, 20rem);
+}
+
+.dash-hero.home-hero[data-poster] {
+  padding-block-start: calc(var(--home-strip) - 2.5rem);
+}
+
+.home-hero__art {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  z-index: -2;
+  block-size: var(--home-strip);
+  overflow: hidden;
+}
+
+.home-hero__poster {
+  object-fit: cover;
+  object-position: 25% 0%;
+}
+
+.home-hero__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--e-950) 0%, transparent 42%);
+  pointer-events: none;
+}
+
+.home-hero__scrim {
+  display: none;
+}
+
+.home-hero__copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: start;
+  gap: var(--s-16);
+  min-inline-size: 0;
+}
+
+.home-hero__id {
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+  min-inline-size: 0;
+}
+
+.home-hero__portrait {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.home-hero__avatar {
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--a-9);
+}
+
+.home-hero__title {
+  margin-block-start: var(--s-2);
+  font-size: var(--fs-title-2);
+  line-height: var(--lh-title-2);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+  text-wrap: balance;
+}
+
+.home-hero .home-hero__facts {
+  margin-block-start: var(--s-8);
+}
+
+/* The three figures and the ring, divided by hairlines like the board. On a
+   phone they are four equal columns, number over label. */
+.home-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: center;
+}
+
+.home-stat {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  padding-inline: var(--s-12);
+  border-inline-start: var(--hairline) solid rgb(255 255 255 / 0.2);
+  color: var(--ink-fg);
+}
+
+.home-stat:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.home-stat:is(a):hover .home-stat__label {
+  color: var(--ink-fg);
+}
+
+.home-stat:is(a):focus-visible {
+  outline: var(--focus-ring-width) solid var(--ink-fg);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.home-stat__value {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  font-size: var(--fs-text-lg);
+  line-height: 1.2;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The orange glyphs are a wide-band flourish; on a phone the four columns
+   need every pixel for «4 س 31 د». */
+.home-stat__icon {
+  display: none;
+  color: var(--a-9);
+}
+
+.home-stat__suffix {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--stage-fg-2);
+}
+
+.home-stat__label {
+  overflow: hidden;
+  font-size: var(--fs-text-xs);
+  line-height: var(--lh-text-xs);
+  color: var(--stage-fg-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--d-hover) var(--ease-out);
+}
+
+.home-stat--ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.home-stat--ring .dash-hero__aside-label {
+  font-size: var(--fs-text-xs);
+  white-space: nowrap;
+}
+
+.home-stat__dial {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-fg);
+}
+
+/* «نكمّل من مكانك» — the white card inside the band. */
+.home-resume {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  color: var(--n-12);
+  box-shadow: 0 16px 32px -20px rgb(0 0 0 / 0.6);
+}
+
+.home-resume__thumb {
+  position: relative;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  inline-size: 3.5rem;
+  block-size: 4.25rem;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--e-950);
+}
+
+.home-resume__thumb > .course-art,
+.home-resume__thumb > img {
+  position: absolute;
+  inset: 0;
+}
+
+.home-resume__play {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-full);
+  background: rgb(10 16 32 / 0.6);
+  color: var(--ink-fg);
+}
+
+.home-resume__text {
+  flex: 1;
+  display: grid;
+  gap: var(--s-4);
+  min-inline-size: 0;
+}
+
+.home-resume__eyebrow,
+.home-resume__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-resume__eyebrow {
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--e-ink);
+}
+
+.home-resume__title {
+  font-size: var(--fs-text-lg);
+  line-height: var(--lh-text-lg);
+  font-weight: var(--fw-bold);
+}
+
+.home-resume__meter {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+}
+
+.home-resume__bar {
+  flex: 1;
+  max-inline-size: 20rem;
+}
+
+.home-resume__left {
+  flex-shrink: 0;
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.home-resume__time {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-resume__cta {
+  display: inline-flex;
+  flex-basis: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  block-size: 2.75rem;
+  padding-inline: var(--s-24);
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+/* The whole card is the link's hit area; `isolation` on the card keeps the
+   overlay inside it. */
+.home-resume__cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.home-resume:hover .home-resume__cta {
+  background: var(--a-10);
+}
+
+.home-resume:has(.home-resume__cta:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: 2px;
+}
+
+@container home (min-width: 52rem) {
+  .dash-hero.home-hero {
+    min-block-size: 23rem;
+    padding: var(--s-32);
+  }
+
+  /* Wide: the poster fills the band, pinned to the top so his face is in it;
+     the scrim is solid behind the words at the inline start (the right) and
+     clear by the time it reaches him on the left. */
+  .dash-hero.home-hero[data-poster] {
+    padding-block-start: var(--s-32);
+  }
+
+  .home-hero__art {
+    inset: 0;
+    block-size: auto;
+  }
+
+  .home-hero__art::after {
+    content: none;
+  }
+
+  .home-hero__poster {
+    object-position: 0% 22%;
+  }
+
+  .home-hero__scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(
+        to left,
+        rgb(10 16 32 / 0.94) 0%,
+        rgb(10 16 32 / 0.88) 46%,
+        rgb(10 16 32 / 0.55) 58%,
+        rgb(10 16 32 / 0.15) 65%,
+        transparent 71%
+      ),
+      linear-gradient(to top, rgb(10 16 32 / 0.4) 0%, transparent 35%);
+  }
+
+  .home-hero__copy,
+  .home-resume {
+    justify-self: start;
+    /* His face sits ~70% of the way across from the inline start; the words
+       stop at 60% so the scrim can be clear before it gets there. */
+    inline-size: min(38rem, 60%);
+  }
+
+  .home-hero__title {
+    font-size: var(--fs-title-1);
+    line-height: var(--lh-title-1);
+  }
+
+  .home-hero__stats {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--s-12);
+  }
+
+  .home-stat {
+    padding-inline: var(--s-20);
+  }
+
+  .home-stat__value {
+    gap: var(--s-8);
+    font-size: var(--fs-title-2);
+  }
+
+  .home-stat__icon {
+    display: inline-flex;
+  }
+
+  .home-stat__label {
+    font-size: var(--fs-text-sm);
+  }
+
+  .home-stat--ring {
+    flex-direction: row;
+    gap: var(--s-12);
+  }
+
+  .home-stat--ring .dash-hero__aside-label {
+    font-size: var(--fs-text-sm);
+  }
+
+  .home-resume {
+    flex-wrap: nowrap;
+    gap: var(--s-16);
+    padding-inline-end: var(--s-20);
+  }
+
+  .home-resume__thumb {
+    inline-size: 4rem;
+    block-size: 5rem;
+  }
+
+  .home-resume__cta {
+    flex-basis: auto;
+    flex-shrink: 0;
+  }
+}
+
+/* A band without the poster (the asset missing) is the plain night ground —
+   no top strip to clear. */
+.dash-hero.home-hero:not([data-poster]) .home-hero__copy,
+.dash-hero.home-hero:not([data-poster]) .home-resume {
+  inline-size: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   «امتحان الشهر» — `ExamCountdownBand variant="cinema"`: the night band with
+   a blue date tile at the inline start, an event rather than a notice.
+   --------------------------------------------------------------------------- */
+.exam-band.exam-band--cinema {
+  gap: var(--s-16);
+  padding: var(--s-16);
+  background: var(--e-950);
+  box-shadow: 0 24px 48px -28px var(--e-950);
+}
+
+.exam-band--cinema::before {
+  content: none;
+}
+
+.exam-band--cinema:has(> .exam-band__date) {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.exam-band--cinema:has(> .exam-band__date) > .exam-band__aside {
+  grid-column: 1 / -1;
+}
+
+.exam-band__date {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  inline-size: 4.25rem;
+  block-size: 4.75rem;
+  border-radius: var(--r-md);
+  background: var(--e-600);
+  color: var(--ink-fg);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.exam-band__date-day,
+.exam-band__date-month {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.exam-band__date-month {
+  font-weight: var(--fw-medium);
+  color: var(--stage-fg-2);
+}
+
+.exam-band__date-num {
+  font-size: var(--fs-title-2);
+  line-height: 1.1;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-band--cinema .exam-band__main {
+  gap: var(--s-8);
+}
+
+.exam-band--cinema .exam-band__title {
+  font-size: var(--fs-title-3);
+  line-height: var(--lh-title-3);
+}
+
+.exam-band--cinema .exam-band__course {
+  margin-block-start: 0;
+}
+
+/* The one-sitting warning stays (it has to be read before pressing), as a
+   line with its icon rather than a third panel on the band. */
+.exam-band--cinema .exam-band__warning {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--stage-fg-2);
+}
+
+.exam-band--cinema .exam-band__warning svg {
+  color: var(--a-9);
+}
+
+/* While the exam is open the aside is just the button — no box around it. */
+.exam-band--cinema[data-phase='open'] .exam-band__aside {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.exam-band--cinema .exam-band__cta {
+  inline-size: 100%;
+  border-radius: var(--r-md);
+}
+
+@container home (min-width: 44rem) {
+  .exam-band.exam-band--cinema {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-20);
+    padding: var(--s-20) var(--s-24);
+  }
+
+  .exam-band--cinema:has(> .exam-band__date) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .exam-band--cinema:has(> .exam-band__date) > .exam-band__aside {
+    grid-column: auto;
+  }
+
+  .exam-band__date {
+    inline-size: 4.75rem;
+    block-size: 5rem;
+  }
+
+  .exam-band__date-num {
+    font-size: var(--fs-title-1);
+  }
+
+  .exam-band--cinema .exam-band__title {
+    font-size: var(--fs-title-2);
+    line-height: var(--lh-title-2);
+  }
+
+  .exam-band--cinema .exam-band__cta {
+    inline-size: auto;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   «ناقصك كده وخلاص» — `NextUpBlock`, re-dressed: a section head instead of a
+   boxed panel, rows as cards three across, and each row's button QUIET. The
+   orange pills it wears elsewhere would make three more orange buttons right
+   under the hero's one.
+   --------------------------------------------------------------------------- */
+.home-cinema .next-up:not(.next-up--won) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.home-cinema .next-up:not(.next-up--won) .next-up__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  font-weight: var(--fw-bold);
+}
+
+.home-cinema .next-up:not(.next-up--won) .next-up__title::before {
+  content: '';
+  flex-shrink: 0;
+  inline-size: 0.25rem;
+  block-size: 1.25rem;
+  border-radius: var(--r-full);
+  background: var(--e-600);
+}
+
+.home-cinema .next-up__lead {
+  display: none;
+}
+
+.home-cinema .next-up__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: var(--s-12);
+  margin-block-start: var(--s-12);
+}
+
+.home-cinema .next-up__item {
+  min-block-size: 4.75rem;
+  padding: var(--s-12) var(--s-16);
+  border-color: var(--border);
+  background: var(--n-1);
+}
+
+.home-cinema .next-up__item:hover {
+  border-color: var(--e-tint-line);
+  background: var(--n-1);
+}
+
+.home-cinema .next-up__well {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  background: var(--e-tint);
+  color: var(--e-ink);
+  font-size: var(--fs-text-base);
+}
+
+.home-cinema .next-up__label {
+  font-weight: var(--fw-semibold);
+}
+
+.home-cinema .next-up__cta {
+  block-size: 2.5rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+}
+
+.home-cinema .next-up__item:hover .next-up__cta {
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+/* ---------------------------------------------------------------------------
+   «كورساتي» as posters — `EnrolledCourseCard variant="poster"`.
+   --------------------------------------------------------------------------- */
+.home-course {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  min-inline-size: 0;
+}
+
+.home-poster {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  block-size: 14rem;
+  padding: var(--s-12);
+  padding-block-end: var(--s-16);
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--e-950);
+  color: var(--ink-fg);
+  box-shadow: 0 24px 48px -28px var(--e-950);
+}
+
+.home-poster__art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.home-poster__art > img {
+  object-fit: cover;
+}
+
+.home-poster__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, rgb(10 16 32 / 0.92) 0%, rgb(10 16 32 / 0.5) 38%, transparent 62%);
+}
+
+.home-poster__tag {
+  position: absolute;
+  inset-block-start: var(--s-12);
+  inset-inline-start: var(--s-12);
+  display: inline-flex;
+  align-items: center;
+  block-size: 1.75rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-full);
+  background: rgb(10 16 32 / 0.78);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+.home-course[data-state='done'] .home-poster__tag {
+  background: var(--e-600);
+}
+
+.home-poster__cap {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+
+.home-poster__title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--fs-text-base);
+  line-height: 1.35;
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+}
+
+.home-poster__meta {
+  font-size: var(--fs-text-xs);
+  color: rgb(255 255 255 / 0.86);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-poster__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+  margin-block-start: var(--s-4);
+}
+
+.home-poster__pct {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A rendered affordance inside the title's one link, not a second control —
+   so it is hidden on the phone strip, where the poster itself is the tap. */
+.home-poster__btn {
+  display: none;
+  align-items: center;
+  block-size: 2.25rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.95);
+  color: var(--e-950);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.home-poster:hover .home-poster__btn {
+  background: var(--ink-fg);
+}
+
+.home-poster:has(a:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: 2px;
+}
+
+.home-poster__line {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 4px;
+  background: rgb(255 255 255 / 0.18);
+}
+
+.home-poster__line > span {
+  display: block;
+  block-size: 100%;
+  background: var(--a-9);
+}
+
+.home-course[data-state='closed'] .home-poster__art {
+  filter: grayscale(0.7);
+}
+
+.home-course__note {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+/* The phone strip: posters a fixed, poster-ish width instead of the shelf's
+   82% cards. */
+@media (max-width: 39.999rem) {
+  .home-cinema .dash-shelf:has(> .home-course) {
+    grid-auto-columns: 12.5rem;
+  }
+}
+
+@container home (min-width: 40rem) {
+  .home-poster {
+    block-size: 16.75rem;
+    padding: var(--s-16);
+    padding-block-end: var(--s-20);
+  }
+
+  .home-poster__title {
+    font-size: var(--fs-text-lg);
+  }
+
+  .home-poster__meta {
+    font-size: var(--fs-text-sm);
+  }
+
+  .home-poster__btn {
+    display: inline-flex;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-poster {
+    transition: transform var(--d-hover) var(--ease-out);
+  }
+
+  .home-poster:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   «معانا على طول» beside the books — `home-reach.tsx`.
+   --------------------------------------------------------------------------- */
+.home-pair {
+  display: grid;
+  gap: var(--s-32);
+}
+
+/* Nothing to reach and no books: no empty slot in the flow. */
+.home-pair:not(:has(> .home-reach)):has(> .home-pair__books:empty) {
+  display: none;
+}
+
+@container home (min-width: 60rem) {
+  .home-pair:has(> .home-reach) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    align-items: start;
+  }
+}
+
+.home-reach__list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.home-reach__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  min-block-size: 4.25rem;
+  padding: var(--s-12) var(--s-16);
+}
+
+.home-reach__row + .home-reach__row {
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+.home-reach__disc {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-md);
+  color: var(--ink-fg);
+}
+
+.home-reach__disc--wa {
+  background: var(--wa);
+}
+
+.home-reach__disc--fb {
+  background: var(--fb);
+}
+
+.home-reach__text {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+  line-height: 1.35;
+}
+
+.home-reach__title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.home-reach__lead {
+  overflow: hidden;
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-reach__btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  block-size: 2.5rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.home-reach__btn:hover {
+  background: var(--e-tint);
+}
+
+/* WhatsApp's green with dark ink — white on it is under 2:1. */
+.home-reach__btn--wa {
+  background: var(--wa);
+  box-shadow: none;
+  color: var(--wa-ink);
+}
+
+.home-reach__btn--wa:hover {
+  background: color-mix(in oklch, var(--wa), black 8%);
+}
+
+/* The latest results beside the study tools — two equal columns once the
+   main column has room, stacked on a phone. */
+.home-duo {
+  display: grid;
+  gap: var(--s-32);
+}
+
+@container home (min-width: 52rem) {
+  .home-duo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}

@@ -1,0 +1,451 @@
+/* ---------------------------------------------------------------------------
+   .dmenu — the student's phone menu, three layers deep (see `drawer-menu.tsx`).
+
+   «مش بحب الزحمة للطالب»: a dark band with the brand and the account, the four
+   evening destinations as big tiles, everything else folded, the set-once
+   things at the foot.
+
+   Every selector is `.drawer.dmenu …`. The old `.drawer …` rules still live in
+   globals.css and are unlayered too, and this file is imported from a client
+   component, so the order the two land in the bundle is not something to lean
+   on — one more class of specificity is.
+
+   Colour follows the product's one rule, and nothing here is keyed on a stack:
+   STRUCTURE (where you are, what is open) reads `--e-*`, ACTION and progress
+   read `--a-*`. Inside his shell «Cinema» re-cuts those two ramps to blue and
+   orange (`:root:has(.shell[data-cinema])`, which reaches this portalled sheet
+   because it is keyed on the root); a teacher's branding row re-cuts them to
+   their hue. So the same lines are right on every stack.
+
+   The dark band reads `--e-950` — the deepest structure step, a blue-black on
+   his stack — with `--ink-fg` text, which is light in BOTH themes.
+   --------------------------------------------------------------------------- */
+
+.drawer.dmenu {
+  background: var(--n-1);
+  border-start-end-radius: 1.25rem;
+  border-end-end-radius: 1.25rem;
+}
+
+/* ── the band ───────────────────────────────────────────────────────────── */
+
+.drawer.dmenu .dmenu__head {
+  flex-shrink: 0;
+  padding: var(--s-12) var(--s-16) var(--s-16);
+  background: var(--e-950);
+  color: var(--ink-fg);
+}
+
+/* Clear of the close button, which `SheetContent` positions absolutely at the
+   band's inline-end corner (restyled below). */
+.drawer.dmenu .dmenu__brand {
+  display: flex;
+  align-items: center;
+  min-block-size: 2.5rem;
+  padding-inline-end: var(--s-48);
+}
+
+/* The sheet's own close control — the only button that is a direct child of
+   the panel. Same position and 44px-class hit area, drawn for a dark band. */
+.drawer.dmenu > button {
+  inset-block-start: var(--s-12);
+  inset-inline-end: var(--s-12);
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 0.75rem;
+  border: var(--hairline) solid color-mix(in oklch, var(--ink-fg), transparent 75%);
+  background: color-mix(in oklch, var(--ink-fg), transparent 88%);
+  color: var(--ink-fg);
+}
+
+.drawer.dmenu > button:hover {
+  background: color-mix(in oklch, var(--ink-fg), transparent 80%);
+  color: var(--ink-fg);
+}
+
+.drawer.dmenu > button:focus-visible {
+  outline: 2px solid var(--ink-fg);
+  outline-offset: 2px;
+}
+
+.drawer.dmenu .dmenu__account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  margin-block-start: var(--s-16);
+}
+
+/* The one warm thing on the band: progress is action-coloured. */
+.drawer.dmenu .dmenu__avatar {
+  border: 3px solid var(--a-9);
+}
+
+.drawer.dmenu .dmenu__who {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+
+.drawer.dmenu .dmenu__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+}
+
+.drawer.dmenu .dmenu__id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  unicode-bidi: isolate;
+  font-size: var(--fs-mono-label);
+  color: var(--ink-fg-2);
+}
+
+.drawer.dmenu .dmenu__chips {
+  display: flex;
+  gap: var(--s-8);
+  margin-block-start: var(--s-4);
+}
+
+.drawer.dmenu .dmenu__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  block-size: 1.5rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid color-mix(in oklch, var(--ink-fg), transparent 75%);
+  background: color-mix(in oklch, var(--ink-fg), transparent 88%);
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+/* Latin digits and a % inside an Arabic run — isolated, or the sign flips to
+   the wrong side of the number. */
+.drawer.dmenu .dmenu__chip-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-bold);
+  color: var(--a-9);
+}
+
+/* ── the body: scrolls under a fixed band, foot pinned when there is room ── */
+
+.drawer.dmenu .dmenu__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-12);
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-12) var(--s-12) 0;
+}
+
+.drawer.dmenu .dmenu__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+}
+
+/* ── the four tiles ─────────────────────────────────────────────────────── */
+
+.drawer.dmenu .dmenu__tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-8);
+}
+
+.drawer.dmenu .dmenu__tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  block-size: 4.5rem;
+  padding: var(--s-12);
+  border-radius: 0.875rem;
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.drawer.dmenu .dmenu__tile svg {
+  flex-shrink: 0;
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  color: var(--e-ink);
+}
+
+.drawer.dmenu .dmenu__tile:hover {
+  background: var(--e-tint);
+}
+
+/* Where you are: the tile goes solid, on the structure ramp. */
+.drawer.dmenu .dmenu__tile[aria-current='page'] {
+  border-color: var(--e-600);
+  background: var(--e-600);
+  color: var(--ink-fg);
+}
+
+.drawer.dmenu .dmenu__tile[aria-current='page'] svg {
+  color: var(--ink-fg);
+}
+
+/* ── the folds ──────────────────────────────────────────────────────────── */
+
+.drawer.dmenu .dmenu__folds {
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: var(--hairline) solid var(--border);
+}
+
+.drawer.dmenu .dmenu__fold + .dmenu__fold {
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+.drawer.dmenu .dmenu__fold-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  inline-size: 100%;
+  min-block-size: 3rem;
+  padding-inline: var(--s-12);
+  background: transparent;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.drawer.dmenu .dmenu__fold-head:hover {
+  background: var(--n-3);
+}
+
+.drawer.dmenu .dmenu__fold-lead {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 0.5625rem;
+  background: var(--n-3);
+  color: var(--n-11);
+}
+
+.drawer.dmenu .dmenu__fold-lead svg {
+  inline-size: 1.0625rem;
+  block-size: 1.0625rem;
+}
+
+.drawer.dmenu .dmenu__fold-label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.drawer.dmenu .dmenu__fold-count {
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--n-11);
+}
+
+.drawer.dmenu .dmenu__fold-chevron {
+  flex-shrink: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  transition: transform var(--d-hover) var(--ease);
+}
+
+.drawer.dmenu .dmenu__fold[data-open] .dmenu__fold-head {
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.drawer.dmenu .dmenu__fold[data-open] .dmenu__fold-lead {
+  background: var(--e-600);
+  color: var(--ink-fg);
+}
+
+.drawer.dmenu .dmenu__fold[data-open] .dmenu__fold-count {
+  color: var(--e-ink);
+}
+
+.drawer.dmenu .dmenu__fold[data-open] .dmenu__fold-chevron {
+  transform: rotate(180deg);
+}
+
+/* The open group's rows, two to a line. */
+.drawer.dmenu .dmenu__rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-4) var(--s-8) var(--s-8);
+}
+
+.drawer.dmenu .dmenu__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-block-size: var(--min-tap-size);
+  padding-inline: var(--s-8);
+  border-radius: 0.625rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.drawer.dmenu .dmenu__row svg {
+  flex-shrink: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  color: var(--e-ink);
+}
+
+.drawer.dmenu .dmenu__row span {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer.dmenu .dmenu__row:hover {
+  background: var(--n-3);
+}
+
+.drawer.dmenu .dmenu__row[aria-current='page'] {
+  background: var(--e-tint);
+  font-weight: var(--fw-bold);
+  color: var(--e-ink);
+}
+
+/* `RailCourses` — the rail's node, whose titles are sized for a desktop
+   column. One step down here so a two-line title does not outweigh the
+   tiles above it. */
+.drawer.dmenu .dmenu__courses {
+  padding: var(--s-4) var(--s-4) var(--s-8);
+}
+
+.drawer.dmenu .dmenu__courses .line-clamp-2 {
+  font-size: var(--fs-text-sm);
+}
+
+/* ── the foot ───────────────────────────────────────────────────────────── */
+
+.drawer.dmenu .dmenu__foot {
+  margin-block-start: auto;
+  padding-block: var(--s-12) max(var(--s-16), env(safe-area-inset-bottom));
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+.drawer.dmenu .dmenu__foot-tiles {
+  display: flex;
+  gap: var(--s-8);
+}
+
+.drawer.dmenu .dmenu__foot-tiles > li {
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+
+.drawer.dmenu .dmenu__foot-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  block-size: 3.25rem;
+  border-radius: 0.75rem;
+  background: var(--n-3);
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.drawer.dmenu .dmenu__foot-tile svg {
+  flex-shrink: 0;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  color: var(--n-11);
+}
+
+.drawer.dmenu .dmenu__foot-tile span {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer.dmenu .dmenu__foot-tile:hover {
+  background: var(--n-4);
+}
+
+.drawer.dmenu .dmenu__foot-tile[aria-current='page'] {
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.drawer.dmenu .dmenu__foot-tile[aria-current='page'] svg {
+  color: var(--e-ink);
+}
+
+/* The quiet line — devices, theme, sign-out — in text weight, not tiles. */
+.drawer.dmenu .dmenu__quiet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4) var(--s-8);
+  margin-block-start: var(--s-8);
+}
+
+.drawer.dmenu .dmenu__quiet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-block-size: var(--min-tap-size);
+  padding-inline: var(--s-4);
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+.drawer.dmenu .dmenu__quiet-link svg {
+  flex-shrink: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.drawer.dmenu .dmenu__quiet-link:hover,
+.drawer.dmenu .dmenu__quiet-link[aria-current='page'] {
+  color: var(--e-ink);
+}
+
+/* `SignOutButton` brings a full-width row of Tailwind utilities for its other
+   home in the account menu; here it is one word at the end of a line. */
+.drawer.dmenu .dmenu__signout {
+  display: inline-flex;
+  inline-size: auto;
+  min-block-size: var(--min-tap-size);
+  padding-inline: var(--s-8);
+  border-radius: var(--r-md);
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  color: var(--err);
+}
+
+.drawer.dmenu .dmenu__signout:hover {
+  background: color-mix(in oklch, var(--err), transparent 90%);
+  color: var(--err);
+}

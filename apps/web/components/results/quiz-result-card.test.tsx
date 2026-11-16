@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { copy, type QuizHistoryRow } from '@ayman/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
-import { QuizResultCard } from './quiz-result-card';
+import { ImproveCard, QuizResultCard } from './quiz-result-card';
 
 // Explicit, as every component test in this repo does it — `vitest.setup.ts`
 // registers no automatic cleanup.
@@ -35,58 +35,48 @@ const improved: QuizHistoryRow = {
   passed: true,
 };
 
-const figure = (label: string) => {
-  const term = screen.queryAllByText(label).find((el) => el.tagName === 'DT');
-  return (term?.nextElementSibling as HTMLElement | null | undefined) ?? null;
-};
+const tile = (container: HTMLElement) => container.querySelector('.rs-score') as HTMLElement;
 
 /**
  * The regression these pin down is a SCORE THAT LOOKS PASSED.
  *
- * `Figure` used to colour the «أحسن» percentage on `percent >= 50`, and 50 is
- * not a pass mark anywhere on this platform — each quiz carries its own
- * `passPercent`, and production's foundation exam uses 70. So every score from
- * 50 to 69 printed green here while `passed` was false and every other screen
- * said otherwise. 55 is the fixture above for exactly that reason: under the
- * old rule it is green, under the correct one it is red.
- *
- * Asserted on the resolved colour rather than on a class name, so the test
- * fails if the token is swapped as well as if the condition is.
+ * The card used to colour its score on `percent >= 50`, and 50 is not a pass
+ * mark anywhere on this platform — each quiz carries its own `passPercent`,
+ * and production's foundation exam uses 70. So every score from 50 to 69
+ * printed green here while `passed` was false and every other screen said
+ * otherwise. 55 is the fixture above for exactly that reason: under the old
+ * rule it is green, under the correct one it is red.
  */
 describe('QuizResultCard — the verdict colour', () => {
-  it('colours a 55% best as FAILED when the quiz says so', () => {
-    render(<QuizResultCard row={base} />);
+  it('tiles a 55% best as BAD when the quiz says it failed', () => {
+    const { container } = render(<QuizResultCard row={base} />);
 
-    expect(figure(copy.results.best)!.className).toContain('var(--err)');
-    expect(figure(copy.results.best)!.className).not.toContain('var(--ok)');
+    expect(tile(container).getAttribute('data-tone')).toBe('bad');
+    expect(tile(container).textContent).toBe('55%');
   });
 
-  it('colours the same 55% as passed when the quiz’s own mark is lower', () => {
-    render(<QuizResultCard row={{ ...base, passed: true }} />);
+  it('tiles the same 55% as good when the quiz’s own mark is lower', () => {
+    const { container } = render(<QuizResultCard row={{ ...base, passed: true }} />);
 
-    expect(figure(copy.results.best)!.className).toContain('var(--ok)');
+    expect(tile(container).getAttribute('data-tone')).toBe('good');
   });
 
-  it('leaves an ungraded attempt neutral rather than failed', () => {
+  it('leaves an ungraded attempt amber rather than failed', () => {
     // `passed` is null while an essay awaits grading. Red would be a verdict
     // nobody has reached yet.
     const { container } = render(<QuizResultCard row={{ ...base, passed: null }} />);
 
-    expect(figure(copy.results.best)!.className).not.toContain('var(--err)');
-    expect(figure(copy.results.best)!.className).not.toContain('var(--ok)');
+    expect(tile(container).getAttribute('data-tone')).toBe('warn');
     expect(container.querySelector('.rs-exam')?.getAttribute('data-verdict')).toBe('pending');
+    expect(container.querySelector('.rs-exam')?.getAttribute('data-filter')).toBe('pending');
     expect(screen.getByText(copy.quiz.pendingNotFinal)).toBeTruthy();
   });
 
-  it('never colours the LATEST figure, even on a failed quiz', () => {
-    // A lower recent score in red beside a green best would say "you failed"
-    // about a quiz already passed — so `latest` carries no verdict at all.
-    render(<QuizResultCard row={improved} />);
+  it('tiles the BEST sitting, never the latest', () => {
+    const { container } = render(<QuizResultCard row={improved} />);
 
-    const latest = figure(copy.results.latest)!;
-    expect(latest.textContent).toContain('55%');
-    expect(latest.className).not.toContain('var(--err)');
-    expect(latest.className).not.toContain('var(--ok)');
+    expect(tile(container).textContent).toBe('90%');
+    expect(tile(container).getAttribute('data-tone')).toBe('good');
   });
 });
 
@@ -94,18 +84,19 @@ describe('QuizResultCard — what it shows', () => {
   it('prints «latest» only when there was a second sitting', () => {
     // One sitting: best and latest are the same attempt, and two identical
     // figures side by side read as two results.
-    render(<QuizResultCard row={base} />);
-    expect(figure(copy.results.latest)).toBeNull();
+    const { container } = render(<QuizResultCard row={base} />);
+    expect(container.querySelector('.rs-exam__latest')).toBeNull();
     cleanup();
 
-    render(<QuizResultCard row={improved} />);
-    expect(figure(copy.results.latest)).not.toBeNull();
+    const second = render(<QuizResultCard row={improved} />);
+    expect(second.container.querySelector('.rs-exam__latest')?.textContent).toContain('55%');
   });
 
   it('marks a pass at the «امتياز» line with its own badge, and a plain pass without', () => {
     const { container } = render(<QuizResultCard row={{ ...base, bestPercent: 92, passed: true }} />);
     expect(screen.getByText(copy.results.verdictExcellent)).toBeTruthy();
     expect(container.querySelector('.rs-exam')?.getAttribute('data-verdict')).toBe('excellent');
+    expect(container.querySelector('.rs-exam')?.getAttribute('data-filter')).toBe('passed');
     cleanup();
 
     render(<QuizResultCard row={{ ...base, bestPercent: 75, passed: true }} />);
@@ -131,50 +122,35 @@ describe('QuizResultCard — what it shows', () => {
     expect(within(delta).getByText(/أعلى بـ35%/)).toBeTruthy();
   });
 
-  it('always links to the review of the latest attempt', () => {
+  it('always links to the review of the latest attempt, named for the exam', () => {
     render(<QuizResultCard row={base} />);
 
-    const review = screen.getByRole('link', { name: copy.quiz.reviewAnswers });
+    // The e2e finds it by «مراجعة الإجابات»; the visible word is the short «مراجعة».
+    const review = screen.getByRole('link', { name: new RegExp(copy.quiz.reviewAnswers) });
     expect(review.getAttribute('href')).toBe(
       `/quizzes/${base.lessonId}/attempt/${base.latestAttemptId}/review`,
     );
+    expect(review.getAttribute('aria-label')).toContain(base.quizTitle);
+    expect(review.textContent).toBe(copy.results.reviewShort);
+    expect(review.className).toContain('rs-btn--quiet');
   });
 
-  it('makes review the loud button only when it is the one thing left to do', () => {
-    // A failed paper with no second sitting: review IS the way forward.
-    render(<QuizResultCard row={base} />);
-    expect(screen.getByRole('link', { name: copy.quiz.reviewAnswers }).className).toContain('chip--solid');
-    cleanup();
-
-    // A passed one: review is optional, so it steps back.
-    render(<QuizResultCard row={{ ...base, passed: true }} />);
-    expect(screen.getByRole('link', { name: copy.quiz.reviewAnswers }).className).toContain('chip--accent');
-    cleanup();
-
-    // A failed one with the improvement sitting open: that sitting is the loud one.
-    render(<QuizResultCard row={{ ...base, allowsImprovement: true }} />);
-    expect(screen.getByRole('link', { name: copy.quiz.reviewAnswers }).className).toContain('chip--accent');
-    expect(screen.getByRole('link', { name: copy.quiz.improveExam }).className).toContain('chip--solid');
-  });
-
-  it('offers the improvement sitting only while it is unused', () => {
+  it('says the improvement sitting is open, but leaves the button to the card above', () => {
     render(<QuizResultCard row={{ ...base, allowsImprovement: true, improvementUsed: false }} />);
-    expect(screen.getByRole('link', { name: copy.quiz.improveExam }).getAttribute('href')).toBe(
-      `/quizzes/${base.lessonId}`,
-    );
     expect(screen.getByText(copy.results.improveOpen)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: copy.quiz.improveExam })).toBeNull();
     cleanup();
 
     render(<QuizResultCard row={improved} />);
-    expect(screen.queryByRole('link', { name: copy.quiz.improveExam })).toBeNull();
+    expect(screen.queryByText(copy.results.improveOpen)).toBeNull();
   });
 
-  it('dates a spent exam in Cairo time, not the server’s', () => {
+  it('dates an exam in Cairo time, not the server’s', () => {
     // 23:30 UTC on the 13th is 02:30 on the 14th in Cairo — the day the
     // student actually sat it.
     render(<QuizResultCard row={{ ...base, lastSubmittedAt: '2026-08-13T23:30:00.000Z' }} />);
 
-    expect(screen.getByText(/اتقدّم 14 أغسطس/)).toBeTruthy();
+    expect(screen.getByText('14 أغسطس')).toBeTruthy();
   });
 
   it('names the course only when asked to', () => {
@@ -184,5 +160,17 @@ describe('QuizResultCard — what it shows', () => {
 
     render(<QuizResultCard row={base} />);
     expect(screen.queryByText(base.courseTitle)).toBeNull();
+  });
+});
+
+describe('ImproveCard', () => {
+  it('carries the one orange button, to the quiz’s intro page — never straight into a sitting', () => {
+    render(<ImproveCard row={{ ...base, allowsImprovement: true }} />);
+
+    const cta = screen.getByRole('link', { name: copy.quiz.improveExam });
+    expect(cta.getAttribute('href')).toBe(`/quizzes/${base.lessonId}`);
+    expect(cta.className).toContain('rs-btn--primary');
+    expect(screen.getByText(copy.results.improveBadge)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: base.quizTitle })).toBeTruthy();
   });
 });

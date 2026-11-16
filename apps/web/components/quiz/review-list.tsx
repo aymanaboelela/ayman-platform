@@ -37,7 +37,18 @@ const WRONG = new Set(['incorrect', 'partial', 'unanswered']);
  * In a window that withholds correctness there is nothing to filter BY, and a
  * control that silently does nothing is worse than no control.
  */
-export function ReviewList({ questions }: { questions: readonly ReviewQuestionData[] }) {
+export function ReviewList({
+  questions,
+  anchorPrefix,
+}: {
+  questions: readonly ReviewQuestionData[];
+  /**
+   * When set, each question sits in a wrapper with `id="<prefix><slot>"`, so a
+   * row elsewhere on the page («عرض الحل» on the review screen) can jump to
+   * it. Off for the book-practice result, which has no such rows.
+   */
+  anchorPrefix?: string;
+}) {
   const [wrongOnly, setWrongOnly] = useState(false);
 
   const gradeable = useMemo(
@@ -106,9 +117,15 @@ export function ReviewList({ questions }: { questions: readonly ReviewQuestionDa
         </div>
       ) : null}
 
-      {shown.map((question) => (
-        <ReviewQuestion key={question.slotPosition} question={question} />
-      ))}
+      {shown.map((question) =>
+        anchorPrefix ? (
+          <div key={question.slotPosition} id={`${anchorPrefix}${question.slotPosition}`} className="review-anchor">
+            <ReviewQuestion question={question} />
+          </div>
+        ) : (
+          <ReviewQuestion key={question.slotPosition} question={question} />
+        ),
+      )}
     </>
   );
 }

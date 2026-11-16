@@ -142,6 +142,7 @@ const RUNTIME_DEFINED = new Set<string>([
   '--font-display',
   '--font-plex-arabic',
   '--font-plex-mono',
+  '--font-alexandria',
   // Written by `next/font` too, but NOT from `layout.tsx` and not onto <html>:
   // `cairo.variable` is applied to the root element of `/admin/books/labels`
   // alone, because the shipping cards are the only thing in the product set in

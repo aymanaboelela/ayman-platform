@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
@@ -118,6 +118,7 @@ function LessonAction({
   clearedLessons,
   totalLessons,
   left,
+  isNext,
 }: {
   lesson: OutlineLesson;
   courseSlug: string;
@@ -127,6 +128,8 @@ function LessonAction({
   totalLessons: number;
   /** The same waiting-on, by name. Only the locked exam row reads it. */
   left: readonly RemainingLecture[];
+  /** The row the hero's «نكمّل» opens — the only one that wears the solid. */
+  isNext: boolean;
 }) {
   /*
    * `locked` has TWO causes now, and they need opposite dialogs.
@@ -187,7 +190,9 @@ function LessonAction({
         slug={courseSlug}
         lessonId={lesson.id}
         ariaLabel={`${label} — ${lesson.title}`}
-        className="chip chip--solid lesson-row__link"
+        // The outlined weight: before enrolling, the orange press on this
+        // page is the «نبدأ الكورس» panel above the outline, not forty rows.
+        className="chip chip--open lesson-row__link"
       >
         {label}
       </CourseEntry>
@@ -209,15 +214,19 @@ function LessonAction({
       // pulling up the links list would get forty identical entries. The title
       // is appended, never substituted, so the label still reads first.
       aria-label={`${label} — ${lesson.title}`}
-      // The amber solid goes on the ONE class of thing that moves a student
-      // forward. A cleared lesson is a revisit, so it wears the completion
-      // green instead — otherwise a finished course is a wall of accent
-      // buttons and none of them mean anything.
+      // The amber solid goes on the ONE row that moves a student forward —
+      // the lecture the hero's «نكمّل» opens. Every other open row is the
+      // outlined weight, and a cleared one the completion chip: «مش بحب
+      // الزحمة للطالب», and a column of orange buttons says nothing about
+      // which one is next.
       //
       // `.lesson-row__link` stretches this link's hit area over the whole row
       // without adding a second tab stop — see study.css. The row washed on
       // hover and did nothing when pressed, and a student aims at the TITLE.
-      className={cn('chip lesson-row__link', finished ? 'chip--done' : 'chip--solid')}
+      className={cn(
+        'chip lesson-row__link',
+        finished ? 'chip--done' : isNext ? 'chip--solid' : 'chip--open',
+      )}
     >
       {label}
     </Link>
@@ -232,6 +241,7 @@ function LessonRow({
   totalLessons,
   left,
   isQuiz = false,
+  isNext = false,
 }: {
   lesson: OutlineLesson;
   courseSlug: string;
@@ -241,6 +251,7 @@ function LessonRow({
   left: readonly RemainingLecture[];
   /** A quiz hanging off the lecture above it — indented, and not numbered. */
   isQuiz?: boolean;
+  isNext?: boolean;
 }) {
   const finished = isLessonFinished(lesson);
   const locked = lesson.gate === 'locked';
@@ -294,6 +305,7 @@ function LessonRow({
         mark === 'new' && !locked && 'lesson-row--new',
         mark === 'started' && 'lesson-row--started',
         isQuiz && 'lesson-row--quiz',
+        isNext && 'lesson-row--next',
       )}
     >
       {/* WHAT the row is — video, quiz, reading. Structural, so ember; the
@@ -322,6 +334,7 @@ function LessonRow({
         clearedLessons={clearedLessons}
         totalLessons={totalLessons}
         left={left}
+        isNext={isNext}
       />
     </li>
   );
@@ -344,6 +357,7 @@ function LectureEntry({
   clearedLessons,
   totalLessons,
   left,
+  nextLessonId,
 }: {
   entry: OutlineEntry;
   courseSlug: string;
@@ -351,6 +365,7 @@ function LectureEntry({
   clearedLessons: number;
   totalLessons: number;
   left: readonly RemainingLecture[];
+  nextLessonId: string | null;
 }) {
   const counts = { clearedLessons, totalLessons, left };
   return (
@@ -360,6 +375,7 @@ function LectureEntry({
         courseSlug={courseSlug}
         courseId={courseId}
         {...counts}
+        isNext={entry.lecture.id === nextLessonId}
       />
       {entry.quizzes.map((quiz) => (
         <LessonRow
@@ -368,6 +384,7 @@ function LectureEntry({
           courseId={courseId}
           {...counts}
           isQuiz
+          isNext={quiz.id === nextLessonId}
           key={quiz.id}
         />
       ))}
@@ -384,6 +401,7 @@ function Unit({
   clearedLessons,
   totalLessons,
   left,
+  nextLessonId,
 }: {
   section: OutlineSection;
   courseSlug: string;
@@ -394,19 +412,38 @@ function Unit({
   clearedLessons: number;
   totalLessons: number;
   left: readonly RemainingLecture[];
+  nextLessonId: string | null;
 }) {
   // Counted over LECTURES — the quizzes hanging off them are not steps, and the
   // API's `clearedLessons`/`totalLessons` count the same way. «٢ / ٣» beside a
   // «66.67%» that was computed out of five is the bug this closes.
   const cleared = section.entries.filter((entry) => entry.lecture.gate === 'cleared').length;
+  const size = section.entries.length;
+  const done = enrolled && size > 0 && cleared === size;
+  // «بنذاكرها دلوقتي» — the unit holding the hero's next lecture. Marked in
+  // blue (where you are), whichever units the student has opened since.
+  const current =
+    nextLessonId !== null &&
+    section.entries.some(
+      (entry) => entry.lecture.id === nextLessonId || entry.quizzes.some((quiz) => quiz.id === nextLessonId),
+    );
 
   return (
-    <details className="unit" open={open}>
+    <details className={cn('unit', current && 'unit--current', done && 'unit--done')} open={open}>
       <summary className="unit__head">
         {/* «صورة الوحدة» — the same tile the lesson rail draws for this unit,
             so a unit looks like itself on both screens. Decorative; the
-            heading beside it carries the name. */}
-        <UnitArt coverKey={section.coverKey} seed={section.id} className="unit__art" />
+            heading beside it carries the name. The thin track along its
+            bottom edge is the unit's share of cleared lectures — the same
+            count the ratio beside the title prints. */}
+        <span className="unit__thumb" aria-hidden="true">
+          <UnitArt coverKey={section.coverKey} seed={section.id} className="unit__art" />
+          {enrolled && size > 0 ? (
+            <span className="unit__track">
+              <span style={{ inlineSize: `${Math.round((cleared / size) * 100)}%` }} />
+            </span>
+          ) : null}
+        </span>
 
         {/* A heading inside <summary> is legal (the content model allows one)
             and it is what keeps the outline navigable by heading for a screen
@@ -422,10 +459,11 @@ function Unit({
             The ratio is isolated left-to-right (`LtrRatio`); the size is an
             Arabic phrase and keeps the page's direction. */}
         <span className="unit__count">
+          {done ? <Check size={14} strokeWidth={2.5} aria-hidden="true" /> : null}
           {enrolled ? (
-            <LtrRatio value={cleared} of={section.entries.length} />
+            <LtrRatio value={cleared} of={size} />
           ) : (
-            c.lessonCount.replace('{n}', String(section.entries.length))
+            c.lessonCount.replace('{n}', String(size))
           )}
         </span>
 
@@ -441,6 +479,7 @@ function Unit({
             left={left}
             courseSlug={courseSlug}
             courseId={courseId}
+            nextLessonId={nextLessonId}
             key={entry.lecture.id}
           />
         ))}
@@ -532,6 +571,7 @@ export function CourseOutlineView({
           clearedLessons={outline.clearedLessons}
           totalLessons={outline.totalLessons}
           left={left}
+          nextLessonId={nextLessonId}
           open={section.id === openSectionId}
           key={section.id}
         />

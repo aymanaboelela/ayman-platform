@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { AlignLeft, CircleCheck, Layers, Paperclip, PenLine, StickyNote } from 'lucide-react';
+import { AlignLeft, CircleCheck, Clock, Layers, Paperclip, PenLine, StickyNote } from 'lucide-react';
 import { isCompletionUndoable } from '@ayman/contracts/completion-undo';
 import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, LessonPlayer } from '@ayman/contracts/progress';
@@ -14,6 +14,7 @@ import { QuizLesson } from './quiz-lesson';
 import { ResourceList } from './resource-list';
 import { TextLesson } from './text-lesson';
 import { VideoLesson } from './video-lesson';
+import './lesson-cinema.css';
 
 /** Where this lesson sits in its course — the chip row under the title. */
 export interface LessonPlace {
@@ -49,8 +50,16 @@ export interface LessonPlayerProps {
   jumpTo?: number | null;
   place: LessonPlace;
   panels: LessonPanels;
-  /** The phone's door to the outline (`OutlineSheet`) — drawn under the title bar. */
+  /** The phone's slot under the title bar: the exam strip, the door to the
+   *  outline (`OutlineSheet`) and the links strip — each phone-only. */
   door?: ReactNode;
+  /**
+   * The teacher's face beside the title — rendered by the page from
+   * `brandImage(branding, 'mark')`, so it is his photo on his stack, a
+   * teacher's own upload on theirs, and nothing at all where neither exists.
+   * Never a path written here (CLAUDE.md §2).
+   */
+  face?: ReactNode;
 }
 
 /**
@@ -77,6 +86,7 @@ export function LessonPlayerView({
   place,
   panels,
   door,
+  face,
 }: LessonPlayerProps) {
   const [progress, setProgress] = useState(payload.progress);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -261,6 +271,11 @@ export function LessonPlayerView({
 
       {/* The one bar: title and place at the inline start, the controls at the end. */}
       <div className="lp-head">
+        {face ? (
+          <span className="lp-head__face" aria-hidden="true">
+            {face}
+          </span>
+        ) : null}
         <div className="lp-head__text">
           <h1 className="lp-head__title">{payload.lesson.title}</h1>
           <div className="lp-head__meta">
@@ -277,7 +292,11 @@ export function LessonPlayerView({
               </span>
             ) : null}
             {duration ? (
-              <span className="mono tabular lp-head__time">{formatDuration(duration)}</span>
+              <span className="lp-head__dur">
+                <span className="lp-head__dot" aria-hidden="true" />
+                <Clock className="size-3.5" aria-hidden="true" />
+                <span className="mono tabular lp-head__time">{formatDuration(duration)}</span>
+              </span>
             ) : null}
           </div>
         </div>

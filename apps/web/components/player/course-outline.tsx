@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Check, ChevronDown, Lock, Play } from 'lucide-react';
+import { Check, ChevronDown, ClipboardList, Lock, Play } from 'lucide-react';
 import { copy, type CourseOutline } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
@@ -12,10 +12,11 @@ import {
 } from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
 import { MonthLockedDialog } from '@/components/library/month-locked-dialog';
-import { UnitArt } from '@/components/library/unit-art';
 import { LtrRatio } from '@/components/ltr-ratio';
+import { ChevronForward } from './icons';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 import { LessonProgressBar } from './lesson-progress-bar';
+import { UnitPoster } from './unit-poster';
 
 const c = copy.library;
 const u = copy.player.units;
@@ -86,11 +87,14 @@ function quizLabel(lesson: Lesson): string {
 function Row({
   lesson,
   isQuiz = false,
+  n = null,
   ctx,
 }: {
   lesson: Lesson;
   /** A quiz hanging off the lecture above it — indented, not a lecture of its own. */
   isQuiz?: boolean;
+  /** The lecture's place in its unit — printed in the ring of a row still ahead. */
+  n?: number | null;
   ctx: RowContext;
 }) {
   const isActive = lesson.id === ctx.activeLessonId;
@@ -101,12 +105,18 @@ function Row({
 
   const mark = (
     <span className="orow__mark" aria-hidden="true">
-      {finished ? (
-        <Check className="size-3" strokeWidth={3} />
-      ) : isActive ? (
+      {/* The play glyph wins on the row you are on, finished or not — the
+          board's ▶ «where we are» — and the tick is for the rows behind. */}
+      {isActive ? (
         <Play className="size-3" fill="currentColor" />
+      ) : finished ? (
+        <Check className="size-3" strokeWidth={3} />
       ) : locked ? (
         <Lock className="size-3" />
+      ) : lesson.kind === 'quiz' ? (
+        <ClipboardList className="size-3.5" />
+      ) : n !== null ? (
+        <span className="orow__n">{n}</span>
       ) : null}
     </span>
   );
@@ -125,11 +135,23 @@ function Row({
   );
 
   if (isActive) {
+    /* Two lines, the board's: the title, then where we are and how long it
+       is — the label is a fact about the row, not a control beside it. */
     return (
       <li className={className} aria-current="true">
         {mark}
-        {text}
-        <span className="orow__state">{u.watching}</span>
+        <span className="orow__stack">
+          <span className="orow__title">{lesson.title}</span>
+          <span className="orow__state">
+            {u.watching}
+            {time ? (
+              <>
+                {' · '}
+                <span className="orow__time">{time}</span>
+              </>
+            ) : null}
+          </span>
+        </span>
       </li>
     );
   }
@@ -194,9 +216,10 @@ function Row({
         <Link
           href={href}
           aria-label={`${u.nextChip} — ${lesson.title}`}
-          className="chip chip--quiet orow__chip"
+          className="chip chip--quiet orow__chip orow__chip--next"
         >
           {u.nextChip}
+          <ChevronForward className="size-3.5" />
         </Link>
       </li>
     );
@@ -232,6 +255,7 @@ function UnitCard({ section, index, ctx }: { section: Section; index: number; ct
   const done = lectures.filter(isLessonFinished).length;
   const isCurrent = section.lessons.some((lesson) => lesson.id === ctx.activeLessonId);
   const allDone = lectures.length > 0 && done === lectures.length;
+  const percent = lectures.length > 0 ? Math.round((done / lectures.length) * 100) : 0;
   const unitLabel = copy.player.header.unit.replace('{n}', String(index + 1));
 
   /*
@@ -250,7 +274,7 @@ function UnitCard({ section, index, ctx }: { section: Section; index: number; ct
     return (
       <li className="ocard ocard--locked">
         <div className="ocard__head ocard__head--static">
-          <UnitArt coverKey={section.coverKey} seed={section.id} locked />
+          <UnitPoster coverKey={section.coverKey} seed={section.id} locked />
           <span className="ocard__text">
             <span className="ocard__eyebrow">
               {unitLabel}
@@ -274,9 +298,14 @@ function UnitCard({ section, index, ctx }: { section: Section; index: number; ct
 
   return (
     <li>
-      <details className="ocard" open={isCurrent}>
-        <summary className="ocard__head">
-          <UnitArt coverKey={section.coverKey} seed={section.id} />
+      <details className={cn('ocard', isCurrent && 'ocard--current')} open={isCurrent}>
+        {/* The unit you are in wears its picture as a BANNER — the board's
+            poster header, with a scrim for the white type over it and the
+            unit's progress as a hairline along its foot. Every other unit
+            keeps the square tile. */}
+        <summary className={cn('ocard__head', isCurrent && 'ocard__head--banner')}>
+          <UnitPoster coverKey={section.coverKey} seed={section.id} banner={isCurrent} />
+          {isCurrent ? <span className="ocard__scrim" aria-hidden="true" /> : null}
           <span className="ocard__text">
             <span className="ocard__eyebrow">
               {unitLabel}
@@ -295,12 +324,17 @@ function UnitCard({ section, index, ctx }: { section: Section; index: number; ct
             </span>
           )}
           <ChevronDown size={18} aria-hidden="true" className="ocard__chevron" />
+          {isCurrent ? (
+            <span className="ocard__track" aria-hidden="true">
+              <span className="ocard__fill" style={{ inlineSize: `${percent}%` }} />
+            </span>
+          ) : null}
         </summary>
 
         <ol className="ocard__body">
-          {entries.map((entry) => (
+          {entries.map((entry, at) => (
             <Fragment key={entry.lecture.id}>
-              <Row lesson={entry.lecture} ctx={ctx} />
+              <Row lesson={entry.lecture} n={at + 1} ctx={ctx} />
               {entry.quizzes.map((quiz) => (
                 <Row lesson={quiz} isQuiz ctx={ctx} key={quiz.id} />
               ))}

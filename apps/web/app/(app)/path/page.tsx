@@ -8,6 +8,9 @@ import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PathTimeline } from '@/components/path/path-timeline';
 import { PathArt } from '@/components/path/path-art';
+import { PathAside } from '@/components/path/path-aside';
+import { bandExam, getStudentExamsOrEmpty } from '@/lib/exams';
+import { IS_AYMAN } from '@/lib/tenant';
 import { CountUp } from '@/components/rank/count-up';
 import { getBrandAsset } from '@/lib/brand-assets';
 import '@/components/path/path.css';
@@ -25,7 +28,10 @@ export const metadata: Metadata = { title: c.title };
  * the gate on every request and 404s a locked lesson.
  */
 export default async function PathPage() {
-  const path = await apiGetAuthed('/api/me/path', LearningPathSchema);
+  const [path, exams] = await Promise.all([
+    apiGetAuthed('/api/me/path', LearningPathSchema),
+    getStudentExamsOrEmpty(),
+  ]);
 
   if (path.courses.length === 0) {
     return (
@@ -75,7 +81,16 @@ export default async function PathPage() {
 
       {/* The courses as one timeline — a card each, only the current one
           open to the few lectures around what is next. See `PathTimeline`. */}
-      <PathTimeline path={path} />
+      {IS_AYMAN ? (
+        // «Cinema»: the timeline beside a side column of what is next — his
+        // stack first (new features ship to him, other teachers opt in).
+        <div className="pth-layout">
+          <PathTimeline path={path} />
+          <PathAside path={path} exam={bandExam(exams.exams)} />
+        </div>
+      ) : (
+        <PathTimeline path={path} />
+      )}
     </main>
   );
 }
@@ -95,7 +110,7 @@ function PathHero({ path }: { path: LearningPath }) {
   // «Cinema» — his poster art behind the band, his stack only: `getBrandAsset`
   // is gated by `aymanOnly()`, so elsewhere this is undefined and the band is
   // the drawn gradient it always was (CLAUDE.md §2).
-  const poster = getBrandAsset('hero');
+  const poster = getBrandAsset('practiceGuide');
 
   return (
     <section className="pth-hero mb-8" data-poster={poster ? '' : undefined}>
@@ -134,6 +149,19 @@ function PathHero({ path }: { path: LearningPath }) {
         <div className="pth-hero__bar" aria-hidden="true">
           <span style={{ '--pth-fill': `${path.percent}%` } as CSSProperties} />
         </div>
+
+        {/* «Cinema»: one segment per course, filled to its progress — the
+            board's hero reads the path as courses, not as one bar. CSS shows
+            it only on the poster band. */}
+        {poster ? (
+          <div className="pth-hero__segs" aria-hidden="true">
+            {path.courses.map((entry) => (
+              <span key={entry.id}>
+                <span style={{ inlineSize: `${Math.min(100, Math.max(0, entry.progressPercent))}%` }} />
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="pth-hero__chips">
           <span className="pth-chip">

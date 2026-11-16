@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { ArrowUpLeft, Menu, SunMoon } from 'lucide-react';
+import { Menu } from 'lucide-react';
 // Subpaths, not the root barrels. This bar renders on every `(app)` route, so
 // a barrel import here is a client reference on every signed-in page: the
 // contracts barrel alone is 539 KB raw / 128 KB gzip of zod schemas, a
@@ -13,9 +13,8 @@ import { ArrowUpLeft, Menu, SunMoon } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui/components/sheet';
 import { BrandLockup } from '@/components/brand-lockup';
-import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { StudentNavFooterList, StudentNavList } from './student-nav-list';
+import { DrawerMenu } from './drawer-menu';
 import { activeStudentNav } from './student-nav-items';
 
 /**
@@ -63,9 +62,9 @@ export function StudentTopbar({
     Close the drawer when the route changes — watching the pathname, NOT by
     adding another `onClick` somewhere.
 
-    Every hand-written link inside the sheet already closes it: `StudentNavList`
-    and `StudentNavFooterList` both take an `onNavigate`, and «الموقع الرئيسي»
-    calls `setOpen(false)` itself. The one that cannot is `{courses}` — the same
+    Every hand-written link inside the sheet already closes it: `DrawerMenu`
+    hands its `onNavigate` to every tile, row and foot link it draws. The one
+    that cannot is `{courses}` — the same
     pre-rendered `RailCourses` Server Component node the rail draws, whose rows
     are plain `<Link>`s, because a Server Component cannot carry that closure.
     And that list is the most-tapped thing in the drawer: the student taps
@@ -167,98 +166,21 @@ export function StudentTopbar({
               </button>
             </SheetTrigger>
             {/*
-              The drawer is a column of OBJECTS now, not a list of links: every
-              row carries its icon in a tinted tile, the current page is a solid
-              tile on a tinted row, and the account it all belongs to is a card
-              at the head. «المينو في الموبايل بيبقى كده بشكل حلو» — sent
-              with a competitor's drawer, the same idea in this tenant's accent.
+              The menu is three layers now — who and where, the four big
+              tiles, the rest folded — instead of one long column of equal
+              rows: «مش بحب الزحمة للطالب». `DrawerMenu` carries the whole of
+              it and the reasoning; this sheet stays the container, so the
+              open/close, the focus trap, the scroll lock and back-to-close are
+              the same Radix `Dialog` and `BackStop` they always were.
 
-              `p-0 gap-0`: the panel's own 16px inset moved onto `.drawer__body`,
-              so the account card can span the full width and stay put while the
-              list below it scrolls. All of it is `.drawer`-scoped CSS in
-              globals.css — the rail and the admin sheet share `.nav-pill`, and
-              neither is meant to change with this.
+              `dmenu` beside `drawer`: the old `.drawer` rules in globals.css
+              still size the panel, and `drawer-cinema.css` overrides them from
+              a higher specificity rather than depending on stylesheet order.
             */}
-            <SheetContent closeLabel={copy.common.close} className="drawer gap-0 p-0 md:hidden">
-              {/* The ACCOUNT on top, not the brand — «حط الأكونت اللي فاتح بيه
-                  بدل اسم أيمن أبو العلا فوق». The brand is already the first
-                  thing on the bar behind this sheet; the drawer is where a
-                  family's shared phone answers «مين اللي فاتح دلوقتي». The
-                  title stays for screen readers, which announce it on open. */}
+            <SheetContent closeLabel={copy.common.close} className="drawer dmenu gap-0 p-0 md:hidden">
+              {/* The title stays for screen readers, which announce it on open. */}
               <SheetTitle className="sr-only">{copy.nav.menuLabel}</SheetTitle>
-              <div className="drawer__head">{drawerAccount ?? <BrandLockup showTagline={false} />}</div>
-
-              <div className="drawer__body">
-                {/*
-                  مجموعتين، مش ليستة واحدة — و`<StudentTabBar>` هو السبب.
-
-                  الشريط السفلي بقى شايل «حسابي» و«مساري» و«الكورسات»
-                  و«نتائجي» على لمسة واحدة، فالقائمة مبقتش المدخل الوحيد ليهم.
-                  اللي فضل مالوش مدخل غيرها — «التأسيس»، «كود الكورس»،
-                  «الكتب»، «تجربة الكود» — بقى أول اللي بيتقابل، والأربعة
-                  التانية نزلوا تحت بعنوان.
-
-                  نازلين، مش مشيلين. أربع صفوف أقل مايستاهلوش طالب يدوّر على
-                  «نتائجي» في القائمة ومايلاقيهاش — حتى وهي على بعد لمسة تحت
-                  إيده. و`only` بيقسّم من نفس الجدول، فمفيش صف يقدر يقع من
-                  الاتنين.
-                */}
-                <nav aria-label={copy.nav.mainNav}>
-                  <p className="drawer__eyebrow">{copy.nav.menuMore}</p>
-                  <StudentNavList only="rest" onNavigate={() => setOpen(false)} />
-
-                  <div className="drawer__section">
-                    <p className="drawer__eyebrow">{copy.nav.menuQuick}</p>
-                    <StudentNavList only="tabs" onNavigate={() => setOpen(false)} />
-                  </div>
-                </nav>
-
-                <div className="drawer__section">
-                  <p className="drawer__eyebrow">{copy.nav.railCourses}</p>
-                  {/*
-                    The same Server Component node the rail renders. React
-                    renders the element in both places; `getDashboard` is
-                    `cache()`-wrapped so the two cost one round-trip, not two.
-
-                    ⚠️ The `rail__label` class it carries is scoped to the rail's
-                    collapsed state via `html[data-rail]`, which also matches
-                    here. That is intentional and harmless: a collapsed rail on a
-                    desktop viewport and this sheet are never on screen together
-                    (`md:hidden`), so nothing can hide the sheet's own list.
-                  */}
-                  {courses}
-                </div>
-
-                <div className="drawer__section drawer__section--rule">
-                  <StudentNavFooterList onNavigate={() => setOpen(false)} />
-                  <Link href="/" onClick={() => setOpen(false)} className="nav-pill">
-                    <span className="nav-pill__well" aria-hidden="true">
-                      <ArrowUpLeft className="size-4" />
-                    </span>
-                    <span className="nav-pill__label">{copy.nav.backToSite}</span>
-                  </Link>
-
-                  {/* The theme switch, which the bar gave up so the menu button
-                      could carry its label — see the note beside it below. It is
-                      the only control in this drawer that does not navigate, and
-                      it deliberately does NOT close the sheet: changing the theme
-                      is something you do to look at, and shutting the panel to
-                      show you the result would hide the thing that just changed.
-
-                      Drawn as a row with a well like its neighbours, the switch
-                      at the far end; the row itself is not the control, so the
-                      label is a plain span and the pill keeps its own name. */}
-                  <div className="nav-pill drawer__theme">
-                    <span className="nav-pill__well" aria-hidden="true">
-                      <SunMoon className="size-4" />
-                    </span>
-                    <span className="nav-pill__label">{copy.theme.toggle}</span>
-                    <ThemeToggle className="drawer__theme-switch" />
-                  </div>
-
-                  <SignOutButton well className="nav-pill nav-pill--danger" />
-                </div>
-              </div>
+              <DrawerMenu account={drawerAccount} courses={courses} onNavigate={() => setOpen(false)} />
             </SheetContent>
           </Sheet>
 

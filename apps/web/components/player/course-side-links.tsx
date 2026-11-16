@@ -2,6 +2,7 @@ import { MessageCircleQuestion, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { BookShippingRates } from '@ayman/contracts/books';
 import { waMeHref } from '@ayman/contracts/whatsapp';
+import { cn } from '@ayman/ui/lib/cn';
 import { BookOrderButton } from '@/components/site/book-order-button';
 
 const c = copy.player;
@@ -20,11 +21,15 @@ export interface CourseSideLinksProps {
     instapay: string | null;
     vodafoneCash: string | null;
   } | null;
+  /** The page places the strip twice (rail, phone); each copy names its slot. */
+  className?: string;
 }
 
 /**
- * «جروب الدفعة» · «مساعدة» · «اطلب الكتاب» — one short strip at the foot of
- * the outline, each a link row of its own.
+ * «جروب الدفعة» · «مساعدة» · «اطلب الكتاب» — one short strip, each a link row
+ * of its own. The lesson page draws it as a card under the outline in the
+ * rail AND under the door on a phone, where the outline itself is behind a
+ * sheet: the cohort group has to be on screen without opening anything.
  *
  * These were two full cards under the outline (`CourseQuickLinks`, with a
  * fold-away switch) and a wide secondary button in the outline's HEAD. Three
@@ -36,16 +41,16 @@ export interface CourseSideLinksProps {
  * anything else is the bug `WhatsappChannelCard`'s note records — and the
  * whole strip when all three are.
  */
-export function CourseSideLinks({ groupUrl, whatsapp, book }: CourseSideLinksProps) {
+export function CourseSideLinks({ groupUrl, whatsapp, book, className }: CourseSideLinksProps) {
   const helpHref = waMeHref(whatsapp);
   if (!groupUrl && !helpHref && !book) return null;
 
   return (
-    <div className="outline__foot">
+    <nav aria-label={c.sideLinks.label} className={cn('outline__foot', className)}>
       {groupUrl ? (
         /* `target="_blank"`: a student mid-lecture must not lose the player to
            open a chat. */
-        <a href={groupUrl} target="_blank" rel="noopener noreferrer" className="side-link">
+        <a href={groupUrl} target="_blank" rel="noopener noreferrer" className="side-link side-link--group">
           <Users className="size-4" aria-hidden="true" />
           {c.group.title}
         </a>
@@ -57,6 +62,6 @@ export function CourseSideLinks({ groupUrl, whatsapp, book }: CourseSideLinksPro
         </a>
       ) : null}
       {book ? <BookOrderButton {...book} compact /> : null}
-    </div>
+    </nav>
   );
 }

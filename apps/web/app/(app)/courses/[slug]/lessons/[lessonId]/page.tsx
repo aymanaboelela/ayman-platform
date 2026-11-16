@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { notFound, redirect } from 'next/navigation';
 import { CourseOutlineSchema, LessonPlayerSchema, type CourseOutline } from '@ayman/contracts';
 import { LessonNotesSchema, type LessonNote } from '@ayman/contracts/engagement';
@@ -6,24 +7,25 @@ import { cn } from '@ayman/ui';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getSession } from '@/lib/session';
-import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBranding, getPublicSettingsOrDefaults } from '@/lib/settings';
+import { brandImage } from '@/lib/brand-image';
 import { getBookShippingRates } from '@/lib/books';
 import { courseBookCtaVisible } from '@/lib/course-book';
 import { groupIntoEntries, isLessonFinished } from '@/lib/course-outline';
 import { featureEnabled } from '@/lib/entitlements';
 import { getStudentExamsOrEmpty } from '@/lib/exams';
 import { sanitizeRichText } from '@/lib/sanitize-html';
-import { UnitArt } from '@/components/library/unit-art';
 import { LessonNotesPanel } from '@/components/engagement/lesson-notes';
-import { CourseExamsCard, courseExamDoors } from '@/components/player/course-exams-card';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { CourseSideLinks } from '@/components/player/course-side-links';
 import { LessonDescription } from '@/components/player/lesson-description';
+import { LessonExamStrip, lessonExams } from '@/components/player/lesson-exam-strip';
 import { LessonHomework } from '@/components/player/lesson-homework';
 import { LessonPlayerView, type LessonPlace } from '@/components/player/lesson-player';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { NextLessonBar } from '@/components/player/next-lesson-bar';
 import { OutlineSheet } from '@/components/player/outline-sheet';
+import { UnitPoster } from '@/components/player/unit-poster';
 
 /**
  * A 404 becomes `null`; everything else keeps throwing.
@@ -173,7 +175,7 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, result, settings, shippingRates, viewer, studentExams, notes] = await Promise.all([
+  const [outline, result, settings, shippingRates, viewer, studentExams, notes, branding] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(forbiddenOn403),
     // The payment numbers «اطلب الكتاب» needs — `…OrDefaults` so a settings
@@ -193,6 +195,9 @@ export default async function LessonPage({
     /* «ملاحظاتي» — `null` (no panel) when the feature is off or the read
        failed; see `lessonNotesOrNull`. */
     lessonNotesOrNull(lessonId),
+    /* The teacher's face beside the title — `'use cache'`d on the settings
+       tag, so not a request per view. */
+    getBranding(),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -286,21 +291,36 @@ export default async function LessonPage({
    * the same outline; React renders the element where each slot mounts it, and
    * `OutlineScrollToCurrent` inside it finds its own panel rather than the
    * first on the page.
+   *
+   * No footer any more: «جروب الدفعة» · «مساعدة» · «اطلب الكتاب» is its own
+   * strip ON the page (`sideLinks` below), because on a phone the outline is
+   * behind a door and the cohort group has to be visible without opening it.
    */
   const outlinePanel = (
     <CourseOutlineSidebar
       outline={outline}
       activeLessonId={payload.lesson.id}
       nextLessonId={payload.next?.id ?? null}
-      footer={
-        <CourseSideLinks
-          groupUrl={outline.course.whatsappGroupUrl}
-          whatsapp={settings.contact.whatsapp}
-          book={book}
-        />
-      }
     />
   );
+  const sideLinks = (slot: 'rail' | 'door') => (
+    <CourseSideLinks
+      groupUrl={outline.course.whatsappGroupUrl}
+      whatsapp={settings.contact.whatsapp}
+      book={book}
+      className={`lp-links lp-links--${slot}`}
+    />
+  );
+
+  /* «امتحان الشهر» — this course's doors, else the dashboard's exam. */
+  const exams = lessonExams(studentExams.exams, outline.course.id);
+
+  /* His face on his stack, a teacher's upload on theirs, nothing otherwise —
+     `brandImage` reads the upload first and the gated registry second. */
+  const mark = brandImage(branding, 'mark');
+  const face = mark ? (
+    <Image src={mark.light.src} alt="" width={56} height={56} className="lp-head__face-img" />
+  ) : null;
 
   return (
     /*
@@ -351,20 +371,27 @@ export default async function LessonPage({
                 ) : null,
               notesCount: notes?.length ?? 0,
             }}
+            face={face}
             door={
-              <OutlineSheet
-                art={
-                  <UnitArt coverKey={section?.coverKey ?? null} seed={section?.id ?? outline.course.id} />
-                }
-                unitLabel={unitLabel}
-                unitTitle={place.unitTitle}
-                unitDone={unitDone}
-                unitCount={place.lectureCount}
-                courseDone={outline.completedLessons}
-                courseTotal={outline.totalLessons}
-              >
-                {outlinePanel}
-              </OutlineSheet>
+              <>
+                {/* Phone only: the strip the rail carries on a desktop, here
+                    above the door where the board puts it. */}
+                <LessonExamStrip exams={exams} slot="door" />
+                <OutlineSheet
+                  art={
+                    <UnitPoster coverKey={section?.coverKey ?? null} seed={section?.id ?? outline.course.id} />
+                  }
+                  unitLabel={unitLabel}
+                  unitTitle={place.unitTitle}
+                  unitDone={unitDone}
+                  unitCount={place.lectureCount}
+                  courseDone={outline.completedLessons}
+                  courseTotal={outline.totalLessons}
+                >
+                  {outlinePanel}
+                </OutlineSheet>
+                {sideLinks('door')}
+              </>
             }
           />
         </div>
@@ -382,7 +409,6 @@ export default async function LessonPage({
               door at the bottom of a long outline is a door nobody finds.
               Renders nothing when there is nothing to offer. */}
           <MonthOfferCard courseSlug={outline.course.slug} offer={outline.monthOffer} />
-          <CourseExamsCard exams={courseExamDoors(studentExams.exams, outline.course.id)} />
           {/*
             The rail's copy of the outline — desktop only. Below `lg` the
             outline lives in the sheet behind the door under the title, so this
@@ -390,10 +416,14 @@ export default async function LessonPage({
 
             Sticky, capped at the viewport, and the unit list inside gives way:
             `.outline` is a flex column with `min-h-0`, so `.outline__units`
-            becomes the scroller instead of the page.
+            becomes the scroller instead of the page — which keeps the exam
+            strip above it and the links strip below it on screen at every
+            scroll position, the board's column.
           */}
-          <div className="hidden w-full min-w-0 lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100dvh-3rem)] lg:flex-col">
+          <div className="hidden w-full min-w-0 lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100dvh-3rem)] lg:flex-col lg:gap-3">
+            <LessonExamStrip exams={exams} slot="rail" />
             {outlinePanel}
+            {sideLinks('rail')}
           </div>
         </div>
       </div>

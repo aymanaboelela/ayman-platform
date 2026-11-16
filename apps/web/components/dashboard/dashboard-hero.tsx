@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { CalendarClock, Camera, GraduationCap, Route, School } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
@@ -7,7 +6,6 @@ import type { AchievementTier } from '@/lib/achievements';
 import { UserAvatar } from '@/components/app/user-avatar';
 import { ProgressRing } from '@/components/progress-ring';
 import { StatsRow } from './stats-row';
-import { getBrandAsset } from '@/lib/brand-assets';
 
 const c = copy.dashboard;
 
@@ -155,13 +153,6 @@ export function DashboardHero({
   courses: readonly EnrolledCourse[];
 }) {
   const schedule = scheduleLines(courses);
-  /*
-   * «Cinema» — the band carries the instructor's own poster art instead of
-   * drawn shapes. `getBrandAsset` is gated by `aymanOnly()`, so on any other
-   * stack this is `undefined` and the band is exactly what it was (CLAUDE.md
-   * §2): his face never reaches another teacher's students.
-   */
-  const poster = getBrandAsset('practiceGuide');
 
   return (
     /*
@@ -169,21 +160,7 @@ export function DashboardHero({
      * landmark at all, so this is pure document semantics and cannot collide
      * with the site banner the shell already owns.
      */
-    <header className="dash-hero mb-6" data-poster={poster ? '' : undefined}>
-      {poster ? (
-        <>
-          <Image
-            src={poster.src}
-            alt=""
-            aria-hidden="true"
-            fill
-            priority
-            sizes="(min-width: 1024px) 1100px, 100vw"
-            className="dash-hero__poster"
-          />
-          <span className="dash-hero__scrim" aria-hidden="true" />
-        </>
-      ) : null}
+    <header className="dash-hero mb-6">
       {/*
         The band's own shapes.
 

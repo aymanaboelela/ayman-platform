@@ -6717,36 +6717,6 @@ label.runner-option {
   --a-12: oklch(0.920 0.070 65);
 }
 
-/* The dashboard band with his poster art behind it — `dashboard-hero.tsx`,
-   gated by `getBrandAsset`. The art sits under a blue-black scrim that is
-   solid where the greeting is (the inline start) and opens toward the far
-   edge, so the picture shows without a word ever sitting on a bright patch.
-   The drawn rings and the rocket scene step aside: the poster IS the art. */
-.dash-hero[data-poster] {
-  background: var(--e-950);
-}
-
-.dash-hero__poster {
-  z-index: -2;
-  object-fit: cover;
-  object-position: left center;
-}
-
-.dash-hero__scrim {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(to left, rgb(10 16 32 / 0.94) 0%, rgb(10 16 32 / 0.78) 38%, rgb(10 16 32 / 0.25) 100%),
-    linear-gradient(to top, rgb(10 16 32 / 0.6) 0%, transparent 55%);
-}
-
-.dash-hero[data-poster]::before,
-.dash-hero[data-poster] .dash-hero__art,
-.dash-hero[data-poster] .dash-hero__scene {
-  display: none;
-}
-
 /* «Cinema»: WHERE YOU ARE is blue, what to PRESS is orange. The shipped rule
    put the current position on amber too («Amber is ACTION … plus THE CURRENT
    POSITION»), which with a true orange made the rail's current item look like
@@ -6829,4 +6799,190 @@ label.runner-option {
   font-family: inherit;
   font-weight: var(--fw-semibold);
   color: var(--ink-fg);
+}
+
+/* ===========================================================================
+   The course page (/library/[slug]) — the first-round design the owner chose.
+   ======================================================================== */
+
+/* Progress and the one button, inside the hero band. White alphas on the
+   band, like `.stage__facts`; the bar's fill and the button are the action
+   colour, so the press is the brightest thing on the band. */
+.stage__progress {
+  display: grid;
+  gap: var(--s-8);
+  max-inline-size: 30rem;
+  margin-block-start: var(--s-20);
+}
+
+.stage__progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-12);
+}
+
+.stage__progress-label {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+.stage__progress-ratio {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--stage-fg-2);
+}
+
+.stage__progress-bar {
+  display: block;
+  block-size: 6px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.2);
+}
+
+.stage__progress-bar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--a-9);
+}
+
+.stage__resume {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--s-8);
+  max-inline-size: 100%;
+  block-size: 2.75rem;
+  margin-block-start: var(--s-8);
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 10px 22px -12px rgb(0 0 0 / 0.55);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.stage__resume:hover {
+  background: var(--a-10);
+}
+
+/* The units beside a narrow column. Two columns only once the main column
+   (not the viewport — the rail takes a third of a laptop) has room for both;
+   below that the side column follows the content. */
+.course-layout {
+  display: grid;
+  gap: var(--s-24);
+  container-type: inline-size;
+}
+
+@container (min-width: 60rem) {
+  .course-layout {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    align-items: start;
+  }
+}
+
+.course-layout__main {
+  display: grid;
+  gap: var(--s-24);
+  min-inline-size: 0;
+}
+
+.course-layout__side {
+  display: grid;
+  gap: var(--s-16);
+  min-inline-size: 0;
+}
+
+.course-about {
+  display: grid;
+  gap: var(--s-8);
+  padding: var(--s-16);
+  font-size: var(--fs-text-sm);
+}
+
+.course-about__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  margin: 0;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.course-about__title::before {
+  content: '';
+  inline-size: 4px;
+  block-size: 1rem;
+  border-radius: var(--r-full);
+  background: var(--e-600);
+}
+
+/* ===========================================================================
+   «Cinema» type — his stack only. Alexandria (lib/fonts.ts) for what a
+   student scans: headings, big numbers, buttons and chips; Plex stays for
+   what they read. The phone scale the owner approved:
+     page title 24/800 · section 18/700 · card title 15/600 ·
+     body 14/1.7 · small 12.5/500 · buttons 14/700 (2–4px up on desktop).
+   Keyed on the shell's presence so the portalled menu and sheets follow.
+   ======================================================================== */
+:root:has(.shell[data-cinema]) {
+  --font-display: var(--font-alexandria), var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Not the side menu or the tab bar: Alexandria is wider than Plex at the same
+   size, and the rail's labels overflowed it («الخط كبير أوي في السايد منيو»).
+   Navigation stays in Plex; so do headings inside the rail and the drawer. */
+:root:has(.shell[data-cinema]) .shell main :is(h1, h2, h3),
+:root:has(.shell[data-cinema]) [role='dialog']:not(.drawer) :is(h1, h2, h3),
+:root:has(.shell[data-cinema]) .shell main :is(
+    .chip,
+    .stage__resume,
+    .exam-band__cta,
+    .pth-hero__cta,
+    .pth-hero__percent,
+    .dash-hero__dial-value,
+    .tile__value
+  ) {
+  font-family: var(--font-display);
+}
+
+:root:has(.shell[data-cinema]) .shell :is(main h1) {
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+:root:has(.shell[data-cinema]) .shell :is(main h2) {
+  font-weight: 700;
+}
+
+@media (max-width: 47.99rem) {
+  :root:has(.shell[data-cinema]) .shell main h1 {
+    font-size: 1.5rem;
+    line-height: 1.3;
+  }
+
+  :root:has(.shell[data-cinema]) .shell main h2 {
+    font-size: 1.125rem;
+    line-height: 1.4;
+  }
+
+  :root:has(.shell[data-cinema]) .shell main {
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+
+  :root:has(.shell[data-cinema]) .shell main :is(button, a).chip--solid,
+  :root:has(.shell[data-cinema]) .shell main .stage__resume,
+  :root:has(.shell[data-cinema]) .shell main .pth-hero__cta {
+    min-block-size: 2.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
 }

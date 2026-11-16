@@ -54,6 +54,10 @@ import { CourseGroupCard } from '@/components/player/course-group-card';
 import { TodayStrip } from '@/components/engagement/today-strip';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
 import { StudyTiles } from '@/components/dashboard/study-tiles';
+import { HomeHero } from '@/components/dashboard/home-hero';
+import { HomeReach } from '@/components/dashboard/home-reach';
+import { IS_AYMAN } from '@/lib/tenant';
+import '@/components/dashboard/home-cinema.css';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
 
@@ -344,6 +348,50 @@ export default async function DashboardPage() {
     ? dashboard.enrolledCourses.find((course) => course.id === resume.courseId)
     : undefined;
 
+  /*
+   * «Cinema» — the approved Home2 board, his stack only. New look ships to him
+   * first; every other stack renders this page exactly as before (the old
+   * band, the separate resume card, the stand-alone channel/group cards).
+   * Everything that differs is a branch on this one flag, and the styles are
+   * scoped under `.home-cinema` in `home-cinema.css`.
+   */
+  const cinema = IS_AYMAN;
+  const heroProps = {
+    // `session` is null only in the torn-session case `AccountMenu`
+    // documents — `proxy.ts` has already redirected the navigation by
+    // then. The profile's own name is the better fallback either way.
+    name: me.profile?.fullName ?? session?.name ?? '',
+    image: session?.image ?? null,
+    greetingName: name,
+    yearLabel: identity?.yearLabelAr ?? null,
+    trackLabel: identity?.trackLabelAr ?? null,
+    schoolName: me.profile?.schoolName ?? null,
+    overallPercent,
+    courseCount: dashboard.enrolledCourses.length,
+    completedLessons,
+    averageScore,
+    xp,
+    learningSeconds,
+    badgesEarned: earnedCount(badges),
+    badgeTier: highestTier(badges),
+    courses: dashboard.enrolledCourses,
+  };
+  const groups = dashboard.enrolledCourses.flatMap((course) =>
+    course.whatsappGroupUrl
+      ? [{ courseId: course.id, courseTitle: course.title, url: course.whatsappGroupUrl }]
+      : [],
+  );
+  const booksBlock = (
+    <>
+      <MyBookOrdersSection orders={myBookOrders} supportHref={waMeHref(settings.contact.whatsapp)} />
+      <BooksSection
+        books={bookCatalog.shelves
+          .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
+          .slice(0, 6)}
+      />
+    </>
+  );
+
   return (
     /*
       ## The 2026-11 order — «المنصة للطالب زحمة أوي»
@@ -367,27 +415,9 @@ export default async function DashboardPage() {
       component and its gate; only its place changed.
     */
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
-      <div className="dash-flow">
-        <DashboardHero
-          // `session` is null only in the torn-session case `AccountMenu`
-          // documents — `proxy.ts` has already redirected the navigation by
-          // then. The profile's own name is the better fallback either way.
-          name={me.profile?.fullName ?? session?.name ?? ''}
-          image={session?.image ?? null}
-          greetingName={name}
-          yearLabel={identity?.yearLabelAr ?? null}
-          trackLabel={identity?.trackLabelAr ?? null}
-          schoolName={me.profile?.schoolName ?? null}
-          overallPercent={overallPercent}
-          courseCount={dashboard.enrolledCourses.length}
-          completedLessons={completedLessons}
-          averageScore={averageScore}
-          xp={xp}
-          learningSeconds={learningSeconds}
-          badgesEarned={earnedCount(badges)}
-          badgeTier={highestTier(badges)}
-          courses={dashboard.enrolledCourses}
-        />
+      <div className={cinema ? 'dash-flow home-cinema' : 'dash-flow'}>
+        {/* «Cinema»: the poster band carries «نكمّل من مكانك» inside it. */}
+        {cinema ? <HomeHero {...heroProps} resume={resume} /> : <DashboardHero {...heroProps} />}
 
         {/* «الكورس ده خلص دوره في رحلتك» — under the greeting, until «تمام،
             فهمت». Nothing on the ordinary day. */}
@@ -400,7 +430,7 @@ export default async function DashboardPage() {
           sat yet) the steps card follows in its `plain` tone so the page keeps
           one accent-tinted surface.
         */}
-        {resume ? (
+        {resume && !cinema ? (
           <ContinueWatchingCard
             item={resume}
             coverKey={resumeCourse?.coverKey ?? null}
@@ -415,7 +445,11 @@ export default async function DashboardPage() {
           1, and a student who scrolls past it gets no second sitting. Absent
           outside the two phases where it is still ahead of them.
         */}
-        <ExamCountdownBand exam={monthlyExam} serverTime={studentExams.serverTime} />
+        <ExamCountdownBand
+          exam={monthlyExam}
+          serverTime={studentExams.serverTime}
+          variant={cinema ? 'cinema' : 'band'}
+        />
 
         {/* «شهر جديد اتفتح» — under the exam (which shuts today; a month stays
             open), above «ناقصك» (money before progress). `quiet` while an exam
@@ -438,7 +472,7 @@ export default async function DashboardPage() {
         {/* Addressed to THIS student, and gone once read / after two weeks —
             so above every standing block while they exist. Each is gated on
             its feature: a card whose door is switched off is a dead button. */}
-        {features.assistant ? <InstructorMessageCard /> : null}
+        {features.assistant && !cinema ? <InstructorMessageCard /> : null}
         {features.honorBoard && dashboard.honorBoard ? (
           <HonorBoardCard standing={dashboard.honorBoard} />
         ) : null}
@@ -472,6 +506,7 @@ export default async function DashboardPage() {
                   shippingRates={bookCatalog.shippingRates}
                   instapay={settings.contact.instapay}
                   vodafoneCash={settings.contact.vodafoneCash}
+                  variant={cinema ? 'poster' : 'card'}
                 />
               ))}
             </div>
@@ -487,7 +522,7 @@ export default async function DashboardPage() {
 
         {/* «كورسات في مسارك» — the same object in its other state, directly
             under. Absent when there is nothing in their cell left to join. */}
-        {recommended.length > 0 ? (
+        {recommended.length > 0 && !cinema ? (
           <section>
             <div className="group-head">
               <span className="group-head__mark" aria-hidden="true" />
@@ -510,6 +545,21 @@ export default async function DashboardPage() {
           day's habits, the study tiles and the exams still waiting. Every
           exam row ends in its own chip, so that side gets the wider track.
         */}
+        {cinema ? (
+          /*
+           * «الحاجات دي مش مترتبة». On his stack this row is two things side by
+           * side, the board's pair: the latest results and the study tools.
+           * The rest of what sat here repeated something else on the page or
+           * in the menu — the exams still waiting are in «ناقصك النهارده», the
+           * month's closed papers and every result are on /results, the
+           * day's habits («النهارده») are the study tools themselves, and the
+           * courses to join are in «الكورسات».
+           */
+          <div className="home-duo">
+            <ExamsSection quizzes={quizzes.quizzes} />
+            <StudyTiles features={features} title={copy.dashboard.studyTilesTitle} />
+          </div>
+        ) : (
         <div className="dash-pair">
           <div className="dash-pair__main space-y-8">
             <MonthlyExamsSection exams={studentExams.exams} />
@@ -523,37 +573,52 @@ export default async function DashboardPage() {
             <StudyTiles features={features} title={copy.dashboard.studyTilesTitle} />
           </div>
         </div>
+        )}
 
-        {/* «كتبي» above the shop: what you already bought outranks what you
-            might buy. Both absent when there is nothing to show. */}
-        <MyBookOrdersSection orders={myBookOrders} supportHref={waMeHref(settings.contact.whatsapp)} />
-        <BooksSection
-          books={bookCatalog.shelves
-            .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
-            .slice(0, 6)}
-        />
+        {cinema ? (
+          /* «Cinema»: «معانا على طول» beside the books — first in the DOM, so
+             on a phone the cohort group and the channel come before the shop
+             («لازم يبقوا باينين»). */
+          /* The books, «كتبي», the guardian code, «نقوّي النقط دي» and the
+             badges left the home page («شيل قسم الكتب … حطه في السايد منيو»):
+             they live in the side menu (المتجر · طلباتي · بروفايلي · نتائجي ·
+             أوسمتي). What stays is how to reach us. */
+          <HomeReach
+            groups={groups}
+            channelHref={settings.contact.whatsappChannel}
+            facebookHref={settings.contact.facebookGroup}
+          />
+        ) : (
+          <>
+            {/* «كتبي» above the shop: what you already bought outranks what you
+                might buy. Both absent when there is nothing to show. */}
+            {booksBlock}
 
-        {/* The ways to reach us and each other — the channel nobody can reply
-            into, the Facebook group, and one card per course cohort that HAS a
-            group (titled per course, or two identical buttons). */}
-        <div className="dash-cards">
-          <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
-          <FacebookGroupCard href={settings.contact.facebookGroup} />
-          {dashboard.enrolledCourses
-            .filter((course) => course.whatsappGroupUrl !== null)
-            .map((course) => (
-              <CourseGroupCard key={course.id} url={course.whatsappGroupUrl} courseTitle={course.title} />
-            ))}
-        </div>
+            {/* The ways to reach us and each other — the channel nobody can reply
+                into, the Facebook group, and one card per course cohort that HAS a
+                group (titled per course, or two identical buttons). */}
+            <div className="dash-cards">
+              <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
+              <FacebookGroupCard href={settings.contact.facebookGroup} />
+              {dashboard.enrolledCourses
+                .filter((course) => course.whatsappGroupUrl !== null)
+                .map((course) => (
+                  <CourseGroupCard key={course.id} url={course.whatsappGroupUrl} courseTitle={course.title} />
+                ))}
+            </div>
+          </>
+        )}
 
         {/* What is ABOUT them rather than their work: the code they hand a
             parent, the topics to strengthen, the markers earned. Last, and
             kept — the guardian code lives nowhere else on the platform. */}
+        {cinema ? null : (
         <div className="dash-cards">
           {me.profile?.guardianCode ? <GuardianCodeCard code={me.profile.guardianCode} /> : null}
           {mastery ? <MasteryCard mastery={mastery} /> : null}
           <Achievements achievements={badges} earned={earnedCount(badges)} variant="aside" />
         </div>
+        )}
       </div>
     </main>
   );

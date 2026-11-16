@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
-import { BookOpen, ListChecks } from 'lucide-react';
-import { StudentQuizHistorySchema, copy, formatCopy } from '@ayman/contracts';
+import { StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
-import { groupByCourse, latestDeltas } from '@/lib/results-view';
-import { QuizResultCard } from '@/components/results/quiz-result-card';
+import { getMasteryOrNull } from '@/lib/mastery';
+import { MasteryCard } from '@/components/dashboard/mastery-card';
+import { getBrandAsset } from '@/lib/brand-assets';
+import { latestDeltas } from '@/lib/results-view';
+import { ImproveCard } from '@/components/results/quiz-result-card';
 import { ResultsEmpty } from '@/components/results/results-empty';
 import { ResultsHero } from '@/components/results/results-hero';
-import { ScoreTrend } from '@/components/results/score-trend';
+import { ResultsList } from '@/components/results/results-list';
 import '@/components/results/results.css';
 
 export const metadata: Metadata = { title: copy.results.title };
@@ -24,26 +26,29 @@ const c = copy.results;
  * which is a different question with a different shape, and is why it is a
  * destination in the rail rather than more cards on the dashboard.
  *
- * ## Three regions, in the order a student asks
+ * ## The 2026-11 board, in the order a student asks
  *
- * 1. Where do I stand? — `ResultsHero`: the average as a gauge, its band, one
- *    sentence that adds the numbers up, and the four supporting figures.
- * 2. Which way am I going? — `ScoreTrend`, from ONE attempt up. It used to
- *    hide below two, which left a first-time student with no chart at all on
- *    the screen whose job is to show them one.
- * 3. What about each exam? — one card per exam, grouped by course once there
- *    is more than one course, so a student with three does not read one long
- *    list where the course is small print on every row.
+ * 1. Where do I stand, which way am I going? — `ResultsHero`: the average as
+ *    an orange ring, one sentence, three small facts, and the last sittings
+ *    as bars. (The big line chart, `ScoreTrend`, still draws «بروفايلي» and
+ *    the guardian page; here the bars carry the trend at a glance.)
+ * 2. Is there something I can still fix? — `ImproveCard`: the exam whose
+ *    improvement sitting is unused, with the page's ONE orange button.
+ * 3. What about each exam? — `ResultsList`: verdict chips, then every exam
+ *    as a row with a coloured score tile and a quiet «مراجعة».
  *
- * All of it is one fetch and pure folds over it (`lib/results-view.ts`); no
- * region asks the API for anything the payload does not already carry.
+ * «مش بحب الزحمة للطالب» — one primary per area, everything else quiet. All
+ * of it is one fetch and pure folds over it (`lib/results-view.ts`).
  */
 export default async function ResultsPage() {
-  const history = await apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema);
+  const [history, mastery] = await Promise.all([
+    apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
+    getMasteryOrNull(),
+  ]);
 
   if (history.quizzes.length === 0) {
     return (
-      <main className="rs mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
+      <main className="rs mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
         <Header />
         <ResultsEmpty />
       </main>
@@ -51,87 +56,56 @@ export default async function ResultsPage() {
   }
 
   const deltas = latestDeltas(history.series);
-  const groups = groupByCourse(history.quizzes);
-  const grouped = groups.length > 1;
+  const showCourse = new Set(history.quizzes.map((row) => row.courseSlug)).size > 1;
+  // A failed exam's second chance before a passed one's: that is the one the
+  // card exists for. Otherwise the most recently sat, the API's own order.
+  const open = history.quizzes.filter((row) => row.allowsImprovement && !row.improvementUsed);
+  const improve = open.find((row) => row.passed === false) ?? open[0] ?? null;
 
   return (
-    <main className="rs mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
+    <main className="rs mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <Header />
 
-      <ResultsHero summary={history.summary} series={history.series} rows={history.quizzes} />
+      <ResultsHero
+        summary={history.summary}
+        series={history.series}
+        rows={history.quizzes}
+        poster={getBrandAsset('practiceGuide')}
+      />
 
-      <div className="rs-section">
-        <ScoreTrend series={history.series} />
-      </div>
+      {improve ? (
+        <section className="rs-section" aria-labelledby="rs-improve-head">
+          <h2 id="rs-improve-head" className="rs-h2">
+            {c.improveTitle}
+          </h2>
+          <ImproveCard row={improve} />
+        </section>
+      ) : null}
 
       <section className="rs-section" aria-labelledby="rs-exams-title">
-        <div className="rs-section__head">
-          <span className="rs-card__icon" aria-hidden="true">
-            <ListChecks className="size-4" />
-          </span>
-          <h2 id="rs-exams-title" className="rs-section__title">
-            {c.quizzesTitle}
-          </h2>
-        </div>
-
-        {grouped ? (
-          <div className="rs-groups">
-            {groups.map((group) => (
-              <section
-                key={group.courseSlug}
-                className="rs-group"
-                aria-labelledby={`rs-group-${group.courseSlug}`}
-              >
-                <div className="rs-group__head">
-                  <BookOpen className="rs-group__icon size-4" aria-hidden="true" />
-                  <h3 id={`rs-group-${group.courseSlug}`} className="rs-group__title">
-                    {group.courseTitle}
-                  </h3>
-                  <span className="rs-group__meta">
-                    <span className="rs-pill">{formatCopy(c.groupCount, { count: group.rows.length })}</span>
-                    {group.passed > 0 ? (
-                      <span className="rs-pill" data-tone="ok">
-                        {formatCopy(c.groupPassed, { passed: group.passed })}
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-                <ul className="rs-exams">
-                  {group.rows.map((row) => (
-                    <QuizResultCard
-                      key={row.lessonId}
-                      row={row}
-                      delta={deltas.get(row.lessonId) ?? null}
-                      headingLevel={4}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        ) : (
-          <ul className="rs-exams">
-            {history.quizzes.map((row) => (
-              <QuizResultCard
-                key={row.lessonId}
-                row={row}
-                delta={deltas.get(row.lessonId) ?? null}
-                showCourse
-              />
-            ))}
-          </ul>
-        )}
+        <h2 id="rs-exams-title" className="rs-h2">
+          {c.allExamsTitle}
+        </h2>
+        <ResultsList rows={history.quizzes} deltas={deltas} showCourse={showCourse} />
       </section>
+
+      {/* «نقوّي النقط دي» moved here from the home page («شيل … وحطها في
+          مكانها»): the topics to strengthen belong with the results they are
+          read from. Renders nothing until there is enough to say. */}
+      {mastery ? (
+        <section className="rs-section">
+          <MasteryCard mastery={mastery} />
+        </section>
+      ) : null}
     </main>
   );
 }
 
 function Header() {
   return (
-    <header className="mb-6">
-      <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
+    <header className="mb-5">
       <h1 className="text-[length:var(--fs-title-1)] font-bold text-fg">{c.title}</h1>
-      <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{c.subtitle}</p>
+      <p className="mt-1 max-w-[var(--w-prose)] text-fg-muted">{c.subtitle}</p>
     </header>
   );
 }
