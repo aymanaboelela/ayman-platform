@@ -274,7 +274,7 @@ function UnitCard({ section, index, ctx }: { section: Section; index: number; ct
     return (
       <li className="ocard ocard--locked">
         <div className="ocard__head ocard__head--static">
-          <UnitPoster coverKey={section.coverKey} seed={section.id} locked />
+          <UnitPoster coverKey={section.coverKey} seed={section.id} number={index + 1} locked />
           <span className="ocard__text">
             <span className="ocard__eyebrow">
               {unitLabel}
@@ -304,7 +304,7 @@ function UnitCard({ section, index, ctx }: { section: Section; index: number; ct
             unit's progress as a hairline along its foot. Every other unit
             keeps the square tile. */}
         <summary className={cn('ocard__head', isCurrent && 'ocard__head--banner')}>
-          <UnitPoster coverKey={section.coverKey} seed={section.id} banner={isCurrent} />
+          <UnitPoster coverKey={section.coverKey} seed={section.id} number={index + 1} banner={isCurrent} />
           {isCurrent ? <span className="ocard__scrim" aria-hidden="true" /> : null}
           <span className="ocard__text">
             <span className="ocard__eyebrow">

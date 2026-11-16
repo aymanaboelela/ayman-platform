@@ -379,7 +379,11 @@ export default async function LessonPage({
                 <LessonExamStrip exams={exams} slot="door" />
                 <OutlineSheet
                   art={
-                    <UnitPoster coverKey={section?.coverKey ?? null} seed={section?.id ?? outline.course.id} />
+                    <UnitPoster
+                      coverKey={section?.coverKey ?? null}
+                      seed={section?.id ?? outline.course.id}
+                      number={place.unitIndex > 0 ? place.unitIndex : undefined}
+                    />
                   }
                   unitLabel={unitLabel}
                   unitTitle={place.unitTitle}

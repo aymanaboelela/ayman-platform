@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { Lock } from 'lucide-react';
+import { Layers, Lock } from 'lucide-react';
 import { cn } from '@ayman/ui/lib/cn';
 import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
 import { artVariant } from '@/lib/subject-art';
@@ -35,6 +35,7 @@ export function UnitPoster({
   seed,
   locked = false,
   banner = false,
+  number,
   className,
 }: {
   coverKey: string | null;
@@ -42,6 +43,8 @@ export function UnitPoster({
   seed: string;
   locked?: boolean;
   banner?: boolean;
+  /** The unit's 1-based position, drawn on the designed tile. */
+  number?: number;
   className?: string;
 }) {
   const pick = coverKey ? undefined : POSTERS[artVariant(seed)];
@@ -50,6 +53,32 @@ export function UnitPoster({
 
   if (!poster || !pick) {
     return <UnitArt coverKey={coverKey} seed={seed} locked={locked} className={classes} />;
+  }
+
+  /*
+   * Thumbnails on his stack: a designed tile with the unit's number on the
+   * dragon-orange ramp instead of a crop of one of three posters. Every unit
+   * of a course had the same three pictures repeating down the list
+   * («عاوز أحط صور نضيفة»). The banner of the open unit keeps the poster —
+   * it is one per screen, so it does not repeat. An uploaded «صورة الوحدة»
+   * (admin → course → unit card) still wins over both.
+   */
+  if (!banner) {
+    return (
+      <span
+        className={cn('unit-art unit-art--cinema', locked && 'unit-art--locked', classes)}
+        data-variant={artVariant(seed)}
+        aria-hidden="true"
+      >
+        {locked ? (
+          <Lock className="size-4" />
+        ) : number !== undefined ? (
+          <span className="unit-art__num">{number}</span>
+        ) : (
+          <Layers className="size-5" />
+        )}
+      </span>
+    );
   }
 
   return (
