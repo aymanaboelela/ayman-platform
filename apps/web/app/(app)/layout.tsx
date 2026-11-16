@@ -42,6 +42,7 @@ import { StudentShell } from '@/components/app/student-shell';
 import { StudentFeaturesSlot } from '@/components/app/student-features-slot';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
+import { GuideSlot } from '@/components/guide/guide-slot';
 
 /**
  * `noindex, nofollow` for the whole signed-in area — dashboard, path, player,
@@ -198,6 +199,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <Suspense fallback={null}>
         <StudentFeaturesSlot />
       </Suspense>
+      {/*
+        «مرشد الاشتراك» — the first-visit guide, for a signed-in student who
+        has not enrolled in or paid for anything yet. Renders nothing; a
+        launcher that only counts on `/dashboard` and `/library`, asks the API
+        once whether this student is new, and loads the guide as a separate
+        chunk if so. It is in `children` — inside `.route-fade` — on purpose
+        and safely: the launcher has no box of its own, and everything the
+        guide draws is portalled to `<body>` (the assistant's note above is
+        why that matters). See `components/guide/guide-slot.tsx`.
+      */}
+      <GuideSlot surface="app" />
     </StudentShell>
   );
 }

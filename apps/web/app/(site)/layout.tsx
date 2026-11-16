@@ -35,6 +35,7 @@ import './styles/pdfs.css';
 // live page.
 import './styles/presets.css';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
+import { GuideSlot } from '@/components/guide/guide-slot';
 
 /**
  * The public marketing shell: landing, catalog, year listings, essentials.
@@ -193,6 +194,16 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <Suspense fallback={null}>
         <AssistantSlot />
       </Suspense>
+      {/*
+        «مرشد الاشتراك» — the first-visit guide. Renders NOTHING here: what
+        this mounts is a launcher that counts thirty visible seconds for a
+        visitor who has never seen the guide, and loads the guide itself — a
+        separate chunk — only then. On a stack with `guide.firstVisit` off the
+        slot returns `null` before any client component. Per route group and
+        in its own `<Suspense>` for the reasons the assistant's note above
+        gives; see `components/guide/guide-slot.tsx`.
+      */}
+      <GuideSlot surface="site" />
     </div>
   );
 }

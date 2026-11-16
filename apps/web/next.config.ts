@@ -472,6 +472,31 @@ const nextConfig: NextConfig = {
       },
       {
         /**
+         * The first-visit guide's recorded lines — `public/guide-voice/`, one
+         * small mp3 per line of the script (`components/guide/guide-voice.ts`).
+         * Without a rule they are served with an ETag and no `Cache-Control`,
+         * so a student who hears the same line on a second step revalidates a
+         * clip that has not changed.
+         *
+         * Thirty days and NO `immutable`, for the reason spelled out on the two
+         * rules above: the file name is the line's key, with no content hash,
+         * and a line that is re-recorded is overwritten in place. Ordinary
+         * `max-age` still lets a browser revalidate; a wording change that
+         * must land at once gets a new key, which is a new URL.
+         *
+         * `noindex` as well. An audio file is not a page — the «never a page»
+         * condition the list below insists on holds for this whole prefix —
+         * and a recording of the instructor's voice has no business as a
+         * search result of its own.
+         */
+        source: '/guide-voice/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=2592000' },
+          { key: 'X-Robots-Tag', value: 'noindex' },
+        ],
+      },
+      {
+        /**
          * The three icon assets, ~99 KB of first-load bytes for an image that
          * renders at 16-32 CSS px. Every href Next emits for them is already
          * content-addressed — `/favicon.ico?favicon.44bbejt3wn00b.ico`,

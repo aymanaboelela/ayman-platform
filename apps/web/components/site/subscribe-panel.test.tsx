@@ -5,6 +5,7 @@ import type { CourseMonth } from '@ayman/contracts/months';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
+import { CHECKOUT_STEP_EVENT, currentCheckoutStep, type CheckoutStepDetail } from '@/lib/checkout-step';
 import { SubscribePanel } from './subscribe-panel';
 
 /**
@@ -643,6 +644,168 @@ describe('months named in the link', () => {
     render(<Panel />);
 
     expect(await screen.findByText(copy.subscribe.planMonthlyLabel)).toBeTruthy();
+  });
+});
+
+/**
+ * `?plan=yearly`, `?plan=term&term=<id>`, `?plan=monthly` — the sibling of
+ * `?month=` for the purchases that are not a named month. The first-visit
+ * guide collects «which package?» before the student has an account and hands
+ * over with the answer in the URL, so the grid whose question was already
+ * answered is skipped. Validated on the LIVE read like the months are: a plan
+ * that is not sold here opens the ordinary grid.
+ */
+describe('a plan named in the link', () => {
+  const OTHER_TERM: CatalogCourseTerm = {
+    id: '66666666-6666-4666-8666-666666666666',
+    title: 'الترم الثاني',
+    priceCents: 35000,
+  };
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('opens the payment step on a full year, at the live yearly price', async () => {
+    window.history.replaceState({}, '', '/?plan=yearly');
+    respondWith({ course: liveCourse({ yearlyPriceCents: 95000 }), settings: liveSettings() });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.railQuestion);
+    expect(screen.queryByText(copy.subscribe.choosePlan)).toBeNull();
+    expect(
+      screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: formatEGP(95000) })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('opens the payment step on the named term, even when the course sells two', async () => {
+    window.history.replaceState({}, '', `/?plan=term&term=${OTHER_TERM.id}`);
+    respondWith({ course: liveCourse({ terms: [TERM, OTHER_TERM] }), settings: liveSettings() });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.railQuestion);
+    expect(screen.queryByText(copy.subscribe.chooseTermTitle)).toBeNull();
+    // The term that was named, not the first one in the list.
+    expect(
+      screen.getAllByText(formatCopy(copy.subscribe.priceLine, { price: formatEGP(OTHER_TERM.priceCents) })).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(formatCopy(copy.subscribe.priceLine, { price: formatEGP(TERM.priceCents) })),
+    ).toBeNull();
+  });
+
+  it('opens the payment step on the plain one-month subscription', async () => {
+    window.history.replaceState({}, '', '/?plan=monthly');
+    respondWith({ course: liveCourse(), settings: liveSettings() });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.railQuestion);
+    expect(screen.queryByText(copy.subscribe.choosePlan)).toBeNull();
+  });
+
+  it('opens the month picker with nothing ticked when «شهر» means named months', async () => {
+    window.history.replaceState({}, '', '/?plan=monthly');
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+    });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.chooseMonthsTitle);
+    expect(screen.getByRole('button', { name: new RegExp(MONTH_ONE.title) })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it.each([
+    ['a year this course does not sell', '/?plan=yearly'],
+    ['a term id that is not on sale here', '/?plan=term&term=77777777-7777-4777-8777-777777777777'],
+    ['a term with no id', '/?plan=term'],
+    ['a plan that does not exist', '/?plan=lifetime'],
+    ['the retired three-month plan', '/?plan=quarterly'],
+  ])('ignores %s and shows the plan grid', async (_label, url) => {
+    window.history.replaceState({}, '', url);
+    respondWith({ course: liveCourse({ terms: [TERM] }), settings: liveSettings() });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.choosePlan)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.railQuestion)).toBeNull();
+  });
+
+  it('never skips past a claim that is already in review', async () => {
+    window.history.replaceState({}, '', '/?plan=yearly');
+    respondWith({
+      course: liveCourse({ yearlyPriceCents: 95000 }),
+      settings: liveSettings(),
+      submissions: [{ courseId: COURSE_ID, status: 'pending' }],
+    });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.pendingStatus)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.railQuestion)).toBeNull();
+  });
+
+  it('leaves a coupon link on its own path — the code is priced on the grid first', async () => {
+    window.history.replaceState({}, '', `/courses/${SLUG}/subscribe?plan=yearly&coupon=SAVE25`);
+    respondWith({
+      course: liveCourse({ yearlyPriceCents: 95000 }),
+      settings: liveSettings(),
+      couponsOn: true,
+    });
+    apiPost.mockRejectedValue(new Error('no quote in this case'));
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.choosePlan)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.railQuestion)).toBeNull();
+  });
+
+  it('lets the student step back to the grid from a plan the link chose', async () => {
+    window.history.replaceState({}, '', '/?plan=yearly');
+    respondWith({ course: liveCourse({ yearlyPriceCents: 95000 }), settings: liveSettings() });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.railQuestion);
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.back }));
+    expect(await screen.findByText(copy.subscribe.choosePlan)).toBeTruthy();
+  });
+});
+
+/**
+ * The panel says which step it is on (`lib/checkout-step.ts`) so the
+ * first-visit guide's helper can explain it from outside. Announcing must not
+ * change anything the panel does — these cases only read what was said.
+ */
+describe('announcing the step', () => {
+  it('says each step as it is reached, and whether a transfer method is picked', async () => {
+    respondWith({ course: liveCourse(), settings: liveSettings() });
+    const said: (CheckoutStepDetail | null)[] = [];
+    const listen = () => said.push(currentCheckoutStep());
+    window.addEventListener(CHECKOUT_STEP_EVENT, listen);
+
+    const view = render(<Panel />);
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(copy.subscribe.planMonthlyLabel) }));
+    await screen.findByText(copy.subscribe.railQuestion);
+    expect(currentCheckoutStep()).toEqual({ step: 'form', railChosen: false });
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railInstapay) }));
+    await waitFor(() => expect(currentCheckoutStep()).toEqual({ step: 'form', railChosen: true }));
+
+    expect(said.map((detail) => detail?.step)).toEqual(expect.arrayContaining(['checking', 'choose', 'form']));
+
+    // Gone with the panel, so nothing reads a step from a page that has none.
+    view.unmount();
+    expect(currentCheckoutStep()).toBeNull();
+    window.removeEventListener(CHECKOUT_STEP_EVENT, listen);
   });
 });
 

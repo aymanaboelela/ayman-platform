@@ -8,6 +8,13 @@ describe('FLAG_DECLARATIONS', () => {
   });
 });
 
+describe('guide.firstVisit', () => {
+  it('is on for the original stack and off for every other until its teacher opens it', () => {
+    const declaration = FLAG_DECLARATIONS.find((entry) => entry.key === 'guide.firstVisit');
+    expect(declaration).toMatchObject({ defaultValue: true, defaultForTenant: false });
+  });
+});
+
 describe('isEnabled', () => {
   it('returns the declared default when no row exists for the key', () => {
     expect(isEnabled([], 'quiz.practiceMode')).toBe(true);

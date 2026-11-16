@@ -157,12 +157,11 @@ function cacheTagArguments(source: string): string[] {
  * is just a list of things that used to be broken.
  */
 const PENDING: Record<string, string> = {
-  // `lib/settings.ts`'s header states it: `getNavigation` and `getFlags` land
-  // with the `admin/navigation` and `admin/flags` contracts. The admin actions
-  // that invalidate them (`admin/navigation/actions.ts:23`,
-  // `admin/flags/actions.ts:23`) already exist and are inert until then.
+  // `lib/settings.ts`'s header states it: `getNavigation` lands with the
+  // `admin/navigation` contract. The admin action that invalidates it
+  // (`admin/navigation/actions.ts:23`) already exists and is inert until then.
+  // (`getFlags` was listed here too until `lib/flags.ts` landed.)
   nav: 'getNavigation() not written yet — see lib/settings.ts',
-  flags: 'getFlags() not written yet — see lib/settings.ts',
   // `admin/media/actions.ts:33` says so at the call site: `tags.media(id)`
   // exists for the settings/home-block loaders that will reference an uploaded
   // asset by id. Nothing reads a single media record through a cache yet.
