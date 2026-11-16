@@ -22,6 +22,7 @@ import {
 import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
 import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
+import { bookCoverIndex, bookOrdersForHome } from '@/lib/book-order-track';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookCatalogForStudent } from '@/lib/books';
 import { getSession } from '@/lib/session';
@@ -381,9 +382,22 @@ export default async function DashboardPage() {
       ? [{ courseId: course.id, courseTitle: course.title, url: course.whatsappGroupUrl }]
       : [],
   );
+  /*
+   * «كتبي» on the home — only the orders still on their way (plus a just-
+   * arrived or just-refused one for a few days). The rule and its numbers are
+   * in `bookOrdersForHome`; the full history stays on `/store/orders`. `[]`
+   * renders nothing, so a student with no book coming sees the page exactly
+   * as before. "Now" is the exams read's `serverTime` — the API's clock when
+   * it answered, this machine's when it did not (see `getStudentExamsOrEmpty`)
+   * — rather than a `Date.now()` in render, which React's purity rule rejects
+   * and which would be a second clock on a page that already has one.
+   */
+  const homeBookOrders = bookOrdersForHome(myBookOrders, Date.parse(studentExams.serverTime));
+  const bookCovers = bookCoverIndex(bookCatalog);
+  const supportHref = waMeHref(settings.contact.whatsapp);
   const booksBlock = (
     <>
-      <MyBookOrdersSection orders={myBookOrders} supportHref={waMeHref(settings.contact.whatsapp)} />
+      <MyBookOrdersSection orders={homeBookOrders} supportHref={supportHref} covers={bookCovers} />
       <BooksSection
         books={bookCatalog.shelves
           .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
@@ -468,6 +482,24 @@ export default async function DashboardPage() {
             showRing={false}
           />
         )}
+
+        {/*
+          «Cinema»: the book box, right under «ناقصك النهارده». The shop and the
+          old «كتبي» left this home on purpose («شيل قسم الكتب»), but a book
+          that is PAID FOR and on its way is not the shop: «الطالب لما يكون
+          شاري كتاب، يبقى في … بوكس» — so it comes back for exactly the
+          students who have one coming, and is absent for everyone else. No
+          «اطلب كتاب تاني» under it: that link is selling, and selling is what
+          left.
+        */}
+        {cinema ? (
+          <MyBookOrdersSection
+            orders={homeBookOrders}
+            supportHref={supportHref}
+            covers={bookCovers}
+            showOrderAnother={false}
+          />
+        ) : null}
 
         {/* Addressed to THIS student, and gone once read / after two weeks —
             so above every standing block while they exist. Each is gated on
@@ -582,7 +614,8 @@ export default async function DashboardPage() {
           /* The books, «كتبي», the guardian code, «نقوّي النقط دي» and the
              badges left the home page («شيل قسم الكتب … حطه في السايد منيو»):
              they live in the side menu (المتجر · طلباتي · بروفايلي · نتائجي ·
-             أوسمتي). What stays is how to reach us. */
+             أوسمتي). What stays is how to reach us. The one exception is a
+             book still on its way, whose box sits under «ناقصك» above. */
           <HomeReach
             groups={groups}
             channelHref={settings.contact.whatsappChannel}

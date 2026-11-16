@@ -1,0 +1,473 @@
+/* ===========================================================================
+   .bo-card — «كتبي»: one printed-book order, as a box with the book in it and
+   a tracker that says exactly where it is.
+
+   ## Why its own file
+
+   Used by one component (`BookOrderCard`), on two screens (the home and
+   `/store/orders`). `study.css` is the shared vocabulary of the signed-in
+   surface and says out loud that a class used once belongs with its
+   component; imported from the component itself, the way `retired-course.css`
+   and `chat.css` are.
+
+   ## Colour
+
+   Ember (`--e-*`) is the STRUCTURE: the card's hairline, the covers' frame,
+   the done steps. Amber (`--a-*`) appears only on the one action a card may
+   carry. The status colours are reached through ONE custom property, `--tone`,
+   set inline from `describeBookOrderStatus` — the chip, the current step's
+   ring and the stop marker all read it, so the three can never disagree about
+   what state the order is in. Done steps are ember rather than green on
+   purpose: green is the delivered order's colour, and a paid order with two
+   green ticks reads as further along than it is.
+
+   ## Layout
+
+   Phone first. One column: books, tracker, then the note and the money. From
+   a ~34rem CARD width (a container query, not a viewport breakpoint — the same
+   card sits in the home column and in the narrower history page) the tracker
+   and the note/money sit side by side.
+
+   Logical properties only; nothing here has a left or a right.
+   =========================================================================== */
+
+.bo-card {
+  container-type: inline-size;
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  padding: var(--s-16);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   The head — the covers, then the titles, the chip and the order's date.
+   --------------------------------------------------------------------------- */
+.bo-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-16);
+}
+
+/* Up to three covers, fanned so a two-book order shows both without the
+   second one shrinking. The first cover is the one fully visible; the rest
+   tuck under it toward the inline end. */
+.bo-covers {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  padding-block: var(--s-2);
+}
+
+.bo-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 3.75rem;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: var(--e-tint);
+  border: var(--hairline) solid var(--e-tint-line);
+  box-shadow: var(--shadow-sm);
+  color: var(--e-ink);
+}
+
+.bo-cover + .bo-cover {
+  margin-inline-start: calc(-1 * var(--s-24));
+  transform: rotate(-4deg);
+  transform-origin: bottom center;
+}
+
+.bo-cover:first-child {
+  z-index: 2;
+}
+
+.bo-cover__img {
+  object-fit: cover;
+}
+
+/* The placeholder for a book with no uploaded cover: a jacket drawn in the
+   ember ramp — spine line, glyph — so it reads as a book, not as an image
+   that failed to load. */
+.bo-cover--blank::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--s-8);
+  inline-size: var(--hairline);
+  background: var(--e-tint-line);
+}
+
+.bo-cover__more {
+  position: absolute;
+  inset-block-end: calc(-1 * var(--s-4));
+  inset-inline-end: calc(-1 * var(--s-4));
+  z-index: 3;
+  min-inline-size: 1.5rem;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-full);
+  background: var(--e-stage);
+  color: var(--ink-fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  line-height: 1.5rem;
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.bo-card__titles {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+.bo-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+}
+
+.bo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  border-radius: var(--r-full);
+  padding: var(--s-2) var(--s-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--tone) 35%, transparent);
+}
+
+.bo-chip::before {
+  content: '';
+  inline-size: 0.4rem;
+  block-size: 0.4rem;
+  border-radius: var(--r-full);
+  background: var(--tone);
+}
+
+.bo-card__date {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-10);
+}
+
+.bo-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.bo-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-4) var(--s-8);
+}
+
+.bo-line__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.bo-line__qty {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ---------------------------------------------------------------------------
+   The body — tracker beside (or above) the note and the money.
+   --------------------------------------------------------------------------- */
+.bo-card__body {
+  display: grid;
+  gap: var(--s-16);
+  margin-block-start: var(--s-16);
+  padding-block-start: var(--s-16);
+  border-block-start: var(--hairline) solid var(--border-subtle);
+}
+
+@container (min-width: 34rem) {
+  .bo-card__body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s-24);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The tracker. A vertical timeline: a dot per stage, joined by a rail. Done
+   stages are filled ember with a tick, the current one is ringed in `--tone`
+   and its label is the boldest text in the card, future ones are hollow and
+   muted, and a stop (returned / rejected) is filled in `--tone`.
+   --------------------------------------------------------------------------- */
+.bo-track {
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-step {
+  position: relative;
+  display: flex;
+  gap: var(--s-12);
+  padding-block-end: var(--s-12);
+}
+
+.bo-step:last-child {
+  padding-block-end: 0;
+}
+
+/* The rail to the next dot. Ember when the stage is behind the order, a
+   faint line when it is still ahead. */
+.bo-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  inset-block: 1.5rem 0;
+  inset-inline-start: calc(0.75rem - 1px);
+  inline-size: 2px;
+  border-radius: var(--r-full);
+  background: var(--border);
+}
+
+.bo-step[data-state='done']:not(:last-child)::after {
+  background: var(--e-ink);
+}
+
+.bo-step__dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--r-full);
+  border: 2px solid var(--border-strong);
+  background: var(--n-1);
+  color: var(--ink-fg);
+}
+
+.bo-step[data-state='done'] .bo-step__dot {
+  border-color: var(--e-ink);
+  background: var(--e-ink);
+}
+
+.bo-step[data-state='current'] .bo-step__dot {
+  border-color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 14%, var(--n-1));
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--tone) 16%, transparent);
+}
+
+/* The pulse inside the current dot: a filled centre so «here» reads even in
+   a greyscale screenshot sent over WhatsApp. */
+.bo-step[data-state='current'] .bo-step__dot::before {
+  content: '';
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--tone);
+}
+
+.bo-step[data-state='stopped'] .bo-step__dot {
+  border-color: var(--tone);
+  background: var(--tone);
+}
+
+.bo-step__text {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-block-start: var(--s-2);
+}
+
+.bo-step__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-4) var(--s-8);
+}
+
+.bo-step__label {
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+.bo-step[data-state='upcoming'] .bo-step__label {
+  color: var(--n-10);
+}
+
+.bo-step[data-state='current'] .bo-step__label,
+.bo-step[data-state='stopped'] .bo-step__label {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--tone);
+}
+
+.bo-step__date {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+/* «في الطريق — …» and who is carrying it: the live line under the stage the
+   parcel is on. Washed in the tone so it reads as part of the current step,
+   not as a separate paragraph. */
+.bo-step__live {
+  margin-block-start: var(--s-4);
+  border-radius: var(--r-md);
+  padding: var(--s-8) var(--s-12);
+  background: color-mix(in oklab, var(--tone) 8%, var(--n-1));
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+.bo-step__live-note,
+.bo-step__agent {
+  color: var(--n-11);
+}
+
+.bo-step__agent {
+  display: block;
+  margin-block-start: var(--s-2);
+}
+
+.bo-phone {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   The side — what the state means, the admin's reason, the money.
+   --------------------------------------------------------------------------- */
+.bo-card__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+}
+
+.bo-card__note {
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-base);
+  color: var(--n-11);
+}
+
+.bo-card__reason {
+  border-radius: var(--r-md);
+  border-inline-start: 3px solid var(--tone);
+  padding: var(--s-8) var(--s-12);
+  background: color-mix(in oklab, var(--tone) 8%, var(--n-1));
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+.bo-card__reason-label {
+  color: var(--n-11);
+}
+
+.bo-money {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  border-radius: var(--r-md);
+  padding: var(--s-12);
+  background: var(--n-2);
+  font-size: var(--fs-text-sm);
+}
+
+.bo-money__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-8);
+}
+
+.bo-money__row dt {
+  color: var(--n-11);
+}
+
+.bo-money__row dd {
+  color: var(--n-12);
+}
+
+.bo-money__row--total {
+  margin-block-start: var(--s-4);
+  padding-block-start: var(--s-8);
+  border-block-start: var(--hairline) solid var(--border-subtle);
+}
+
+.bo-money__row--total dt {
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.bo-money__row--total dd {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--a-11);
+}
+
+/* ---------------------------------------------------------------------------
+   The one action. `#1a1206` is the ink amber carries, a literal for the same
+   reason `.chip--solid` writes it: the near-black that clears 4.5:1 on `--a-9`
+   in both themes, where every `--n-*` step moves.
+   --------------------------------------------------------------------------- */
+.bo-card__action {
+  margin-block-start: var(--s-16);
+}
+
+.bo-pay {
+  display: inline-flex;
+  min-block-size: var(--min-tap-size);
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  border-radius: var(--r-full);
+  padding: 0 var(--s-20);
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+
+.bo-pay:hover {
+  background: var(--a-10);
+}
+
+.bo-support {
+  display: inline-flex;
+  min-block-size: var(--min-tap-size);
+  align-items: center;
+  font-size: var(--fs-text-sm);
+  color: var(--a-11);
+}
+
+.bo-support:hover {
+  text-decoration: underline;
+}
+
+.bo-pay:focus-visible,
+.bo-support:focus-visible,
+.bo-phone:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bo-pay {
+    transition: none;
+  }
+}

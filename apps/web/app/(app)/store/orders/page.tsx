@@ -7,6 +7,8 @@ import { waMeHref } from '@ayman/contracts/whatsapp';
 import { BookOrderCard } from '@/components/dashboard/my-book-orders-section';
 import { getMyBookOrdersOrEmpty, newestFirst } from '@/lib/my-book-orders';
 import { getEntitlements } from '@/lib/entitlements';
+import { getBookCatalogForStudent } from '@/lib/books';
+import { bookCoverIndex } from '@/lib/book-order-track';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 
 export const metadata: Metadata = { title: copy.books.mine.pageTitle };
@@ -67,16 +69,22 @@ export default async function MyBookOrdersPage() {
    */
   if (!(await getEntitlements()).books) notFound();
 
-  const [orders, settings] = await Promise.all([
+  const [orders, settings, catalog] = await Promise.all([
     getMyBookOrdersOrEmpty(),
     /* `…OrDefaults`, never `getPublicSettings()`: a settings read that throws
        must not take down a page whose subject is somewhere else entirely. No
        number configured means no «كلّم الدعم» link, which is the same state a
        fresh install is in. */
     getPublicSettingsOrDefaults(),
+    /* The covers on each box. Order lines freeze title and price but carry no
+       picture, so the live catalogue supplies it — `'use cache'`, shared with
+       `/store` and the dashboard, and it fails soft to empty shelves, which
+       draws the placeholder jacket rather than breaking the page. */
+    getBookCatalogForStudent(),
   ]);
 
   const supportHref = waMeHref(settings.contact.whatsapp);
+  const covers = bookCoverIndex(catalog);
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-prose)] px-4 py-8 md:px-6 md:py-10">
@@ -109,7 +117,7 @@ export default async function MyBookOrdersPage() {
         <>
           <ul className="space-y-4">
             {newestFirst(orders).map((order) => (
-              <BookOrderCard key={order.id} order={order} supportHref={supportHref} />
+              <BookOrderCard key={order.id} order={order} supportHref={supportHref} covers={covers} />
             ))}
           </ul>
 
