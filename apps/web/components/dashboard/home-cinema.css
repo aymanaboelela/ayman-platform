@@ -17,7 +17,7 @@
      the words: a side gradient that is clear before it reaches him on a wide
      band, and on a phone the picture gets its own strip above the words.
 
-   Colours: the shell's «Cinema» ramps (study.css) — `--e-*` is blue (where you
+   Colours: the shell's «Cinema» ramps (study.css) — `--e-*` is the dragon orange (where you
    are), `--a-*` is orange (what to press). The night ground is `--e-950`. The
    only literals are the scrims' blue-black alphas (the same `rgb(10 16 32)`
    `.course-art--poster` uses) and white alphas on the night ground, which do
@@ -476,7 +476,7 @@
 
 /* ---------------------------------------------------------------------------
    «امتحان الشهر» — `ExamCountdownBand variant="cinema"`: the night band with
-   a blue date tile at the inline start, an event rather than a notice.
+   a date tile in the structure colour at the inline start, an event rather than a notice.
    --------------------------------------------------------------------------- */
 .exam-band.exam-band--cinema {
   gap: var(--s-16);
