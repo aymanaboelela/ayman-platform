@@ -7409,9 +7409,13 @@ export const copy = {
        * التاب، ومش كافي لطالب مسجّل بيبصّ على طلبه من جهاز تاني.
        *
        * «كمّل الدفع» مش «ادفع»: الطلب اتسجّل خلاص والعنوان محفوظ، والفعل هو
-       * إكمال حاجة مبدوءة. و«الدفع» اسم، فمفيش مذكر ولا مؤنث فيها.
+       * إكمال حاجة مبدوءة.
+       *
+       * ⚠️ مصدر، مش أمر: «كمّل» فعل أمر للولد («كمّلي» للبنت)، والمنصة ما
+       * بتسألش ولد ولا بنت (CLAUDE.md §7). نفس الحل اللي `unlockCodes.submit`
+       * عامله: «تفعيل الكود».
        */
-      resumeCta: 'كمّل الدفع',
+      resumeCta: 'إكمال الدفع',
       resumeBadge: 'طلب لسه مفتوح',
       resumeTitle: 'كمّل دفع طلب الكتاب',
       resumeLead: 'العنوان متسجّل خلاص — فاضل التحويل وصورته.',
@@ -7423,7 +7427,8 @@ export const copy = {
       orderAnother: 'اطلب كتاب تاني',
       /** The chip on the order card. One word each, because the sentence under
        *  it is where the explaining happens. */
-      statusAddressOnly: 'مكمّلتش',
+      /** «مكمّلتش» كانت كلام لولد. دي حالة الطلب، مش كلام عن الطالب. */
+      statusAddressOnly: 'مستني التحويل',
       statusPaid: 'بنجهّزه',
       /** «في المطبعة» داخليًا — بس الطالب بيشوف «بنطبعه»، لأن ده اللي بيحصل
        *  فعلًا وهو أوضح من اسم محطة إدارية مش بتاعته. */
@@ -7437,8 +7442,8 @@ export const copy = {
          somebody who is already slightly worried, so none of them promises a
          date the platform cannot keep, and none of them ends without saying
          what happens next. */
-      noteAddressOnly: 'الطلب اتسجّل بس لسه ماتدفعش. كمّل الدفع وهنجهّزه على طول.',
-      notePaid: 'استلمنا طلبك وبنجهّزه للشحن. ما تقلقش — أول ما يتشحن هتلاقي هنا إنه في الطريق.',
+      noteAddressOnly: 'الطلب اتسجّل والعنوان محفوظ، فاضل التحويل وصورته. أول ما يوصلنا بنجهّز الكتاب على طول.',
+      notePaid: 'الفلوس وصلت وبنجهّز الكتاب للطباعة والشحن. مفيش داعي للقلق — أول ما شركة الشحن تستلمه هيبان هنا.',
       /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
        *  زي باقي السطور هنا. */
       notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
@@ -7446,7 +7451,7 @@ export const copy = {
       courierStatus: 'شركة الشحن: {status}',
       /** `{name}` — the number is rendered beside it, isolated LTR. */
       courierAgent: 'المندوب: {name}',
-      noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
+      noteShipped: 'شركة الشحن استلمت الكتاب وهو في الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصل هيبان هنا إنه اتسلّم.',
       noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
       noteReturned: 'شحنة الكتاب رجعت لشركة الشحن ومتسلّمتش. هنتواصل على نفس الرقم عشان نبعتها تاني — ولو فيه رقم أو عنوان أدق، كلّم الدعم.',
       /* ── «استلمت الكتاب» ────────────────────────────────────────────────
@@ -7457,7 +7462,7 @@ export const copy = {
          الصيغة فعل ماضي عن الطالب نفسه — «استلمت» مش «تأكيد الاستلام» — عشان
          اللي بيضغط بيقول حاجة حصلت، مش بيوافق على إجراء. */
       confirmReceived: 'استلمت الكتاب',
-      confirmReceivedHint: 'دوس هنا أول ما يوصلك، عشان نعرف إنه وصل فعلاً.',
+      confirmReceivedHint: 'أول ما الكتاب يوصل، الزرار ده بيعرّفنا إنه وصل فعلاً.',
       confirmReceivedWorking: 'بنسجّل…',
       /** The question before it is recorded — «يطلعله بوب أب يأكد عليها». */
       confirmReceivedAsk: 'الكتاب وصلك فعلاً؟',
@@ -7483,6 +7488,37 @@ export const copy = {
       deliveredOn: 'وصل {date}',
       /** The «×٢» on a line inside the card. */
       lineQuantity: '×{quantity}',
+      /* ── The tracker — «الكتاب وصل لحد فين» ───────────────────────────────
+         The stages in the words the owner used for them: «هل بيتطبع،
+         استلمته شركة الشحن، وصل». Every label is about the BOOK or the order
+         («اتدفع»، «وصل»), never about the student, so none of them has a
+         gender to get wrong. See `lib/book-order-track.ts` for which one is
+         current when. */
+      /** The tracker's accessible name — read by a screen reader, not shown. */
+      trackerLabel: 'الكتاب وصل لحد فين',
+      stageOrdered: 'اتطلب',
+      stagePaid: 'اتدفع',
+      /** The payment stage while the order is `address_only`. */
+      stageAwaitingTransfer: 'مستني التحويل',
+      /** Current or ahead — the copy is (or will be) at the printer. */
+      stagePrinting: 'بيتطبع',
+      /** Behind it, with a print run on record (`printedAt`). */
+      stagePrinted: 'اتطبع',
+      /** Behind it with NO print run — a reprint handed over the counter.
+       *  «اتطبع» there would claim a print run that never happened. */
+      stagePrepared: 'اتجهز',
+      stageCourier: 'استلمته شركة الشحن',
+      stageDelivered: 'وصل',
+      /** The stop that replaces the rest of the journey on a return. */
+      stageReturned: 'رجع من شركة الشحن',
+      stageRejected: 'اترفض',
+      /** The live line under «استلمته شركة الشحن» while the parcel is out —
+       *  what makes «في الطريق» visible between pickup and arrival. The
+       *  `{status}` form is used when the courier has reported something. */
+      onTheWay: 'في الطريق',
+      onTheWayWith: 'في الطريق — {status}',
+      /** «كتب الطلب» — the covers' group label for a screen reader. */
+      coversLabel: 'كتب الطلب',
     },
   },
   /**

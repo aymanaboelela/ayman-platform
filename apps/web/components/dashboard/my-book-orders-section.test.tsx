@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '@ayman/contracts';
 import type { BookOrder, BookOrderStatus } from '@ayman/contracts/book-orders';
-import { MyBookOrdersSection } from './my-book-orders-section';
+import { BookOrderCard, MyBookOrdersSection } from './my-book-orders-section';
 
 /*
  * ⚠️ A «في الطريق» card now renders `<BookOrderReceivedButton>`, which is a
@@ -318,5 +318,87 @@ describe('MyBookOrdersSection — the courier line', () => {
     );
 
     expect(screen.queryByText(/تم التسليم/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The box itself — the book's picture and the tracker the owner asked for:
+ * «الكتاب ده إيه نظامه: هل بيتطبع، استلمته شركة الشحن، وصل».
+ */
+describe('BookOrderCard — the box', () => {
+  const courier = {
+    statusId: 3,
+    statusName: 'خرج للتوصيل',
+    note: null,
+    agentName: 'محمود',
+    agentPhone: '01111111111',
+    at: '2026-10-10T10:00:00.000Z',
+  };
+
+  it('a shipped order: «استلمت الكتاب», and «في الطريق» with the courier and agent under «استلمته شركة الشحن»', () => {
+    const { container } = render(
+      <BookOrderCard
+        order={order({
+          status: 'shipped',
+          paidAt: '2026-10-05T10:00:00.000Z',
+          shippedAt: '2026-10-09T10:00:00.000Z',
+          courier,
+        })}
+        supportHref={SUPPORT}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: c.confirmReceived })).toBeInTheDocument();
+
+    const current = container.querySelector('[aria-current="step"]');
+    expect(current?.getAttribute('data-stage')).toBe('courier');
+    expect(current?.textContent).toContain(c.stageCourier);
+    expect(current?.textContent).toContain('في الطريق — خرج للتوصيل');
+    expect(current?.textContent).toContain('محمود');
+    expect(screen.getByText('01111111111').closest('a')).toHaveAttribute('href', 'tel:01111111111');
+    // One action: no pay link, no support link alongside the button.
+    expect(screen.queryByRole('link', { name: c.resumeCta })).toBeNull();
+    expect(screen.queryByRole('link', { name: c.support })).toBeNull();
+  });
+
+  it('a shipped order with no courier update yet still says «في الطريق»', () => {
+    const { container } = render(
+      <BookOrderCard order={order({ status: 'shipped', paidAt: '2026-10-05T10:00:00.000Z' })} supportHref={SUPPORT} />,
+    );
+
+    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain(c.onTheWay);
+  });
+
+  it('draws the live cover for a book that has one, and the placeholder jacket for one that does not', () => {
+    const { container } = render(
+      <BookOrderCard
+        order={order({
+          items: [
+            { ...line('كتاب له غلاف'), bookId: 'with-cover' },
+            { ...line('كتاب من غير غلاف'), bookId: 'without-cover' },
+          ],
+        })}
+        supportHref={SUPPORT}
+        covers={new Map([['with-cover', 'books/cover.jpg']])}
+      />,
+    );
+
+    const slots = [...container.querySelectorAll('[data-cover]')].map((el) => el.getAttribute('data-cover'));
+    expect(slots).toEqual(['image', 'placeholder']);
+    expect(container.querySelector('[data-cover="image"] img')?.getAttribute('src')).toContain('cover.jpg');
+    expect(container.querySelector('[data-cover="placeholder"] img')).toBeNull();
+  });
+
+  it('a rejected order ends on «اترفض» and draws no stage after it', () => {
+    const { container } = render(
+      <BookOrderCard
+        order={order({ status: 'rejected', rejectedAt: '2026-10-06T10:00:00.000Z', rejectionReason: 'التحويل مش واضح' })}
+        supportHref={SUPPORT}
+      />,
+    );
+
+    const steps = [...container.querySelectorAll('.bo-step')].map((el) => el.getAttribute('data-stage'));
+    expect(steps).toEqual(['ordered', 'rejected']);
+    expect(container.querySelector('[data-state="stopped"]')?.textContent).toContain(c.stageRejected);
   });
 });
