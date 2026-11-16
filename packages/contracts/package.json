@@ -29,6 +29,7 @@
     "./copy/pdfs": "./src/copy/pdfs.ts",
     "./copy/designs": "./src/copy/designs.ts",
     "./copy/referrals": "./src/copy/referrals.ts",
+    "./copy/guide": "./src/copy/guide.ts",
     "./copy/admin-referrals": "./src/copy/admin-referrals.ts",
     "./copy/admin-coupons": "./src/copy/admin-coupons.ts",
     "./copy/admin-campaign-offer": "./src/copy/admin-campaign-offer.ts",

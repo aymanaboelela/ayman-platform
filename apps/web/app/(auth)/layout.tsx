@@ -8,6 +8,7 @@ import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { tenantName } from '@/lib/tenant';
 import './auth.css';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
+import { GuideSlot } from '@/components/guide/guide-slot';
 
 /**
  * `noindex` on /login and /register — and unlike `(app)`/`(admin)` these are
@@ -93,6 +94,14 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <Suspense fallback={null}>
         <AssistantSlot />
       </Suspense>
+      {/*
+        «مرشد الاشتراك». On the auth screens this never opens anything by
+        itself: it only resumes a guide somebody started on a public page, as
+        the helper circle beside the register and sign-in forms. With no guide
+        in progress it is two storage reads. See
+        `components/guide/guide-slot.tsx`.
+      */}
+      <GuideSlot surface="auth" />
     </div>
   );
 }

@@ -1,0 +1,1263 @@
+/* ============================================================================
+   «مرشد الاشتراك» — the first-visit guide: the dialog, its minimised pill and
+   the helper circle.
+
+   Loaded with the guide's own chunk (`guide-root.tsx` imports it), so none of
+   this is on a page the guide is not on. Everything here is portalled to
+   <body>: nothing may rely on `.site`, `.shell` or any other ancestor, and
+   every colour is a `:root` token.
+
+   ## The colours
+
+       structure / «where am I»  →  the `--e-*` ramp   (blue on HIS stack)
+       action / «press this»     →  `--a-*`, ink on it `--on-accent-ink`
+       surfaces and text         →  `--n-*`
+       the journey band          →  `--e-950` over `--ink`
+
+   The ramp is read through five local names (`--g-*`) declared on
+   `.guide-scope`, not through the role tokens (`--e-tint`, `--e-ink`). The
+   role tokens are computed on `:root`, where they resolve against the ramp
+   `:root` has — so on a page without the student shell they would hand the
+   guide the default ramp even after the block below re-cuts it. Declared on
+   the scope itself, they resolve against the scope's own ramp.
+
+   ## «Cinema» without the shell
+
+   On the original stack the student shell re-cuts `--e-*` to blue and `--a-*`
+   to a true orange (`app/study.css`, «Cinema»), keyed on the SHELL's presence.
+   The guide also opens on the marketing pages and beside the register form,
+   where there is no shell — so the same sixteen values are repeated below for
+   `.guide-scope[data-cinema]`, or the guide would be blue at home and ember on
+   the landing page. They are a copy, and `guide-css.test.ts` fails the build
+   when the copy and `study.css` differ.
+
+   No `!important`, no SASS. The dialog rules override Tailwind utilities on
+   `DialogContent` and win because this file is unlayered and utilities are
+   not — the same mechanism `book-checkout.css` uses for the checkout dialog.
+   ============================================================================ */
+
+.guide-scope {
+  --g-solid: var(--e-600);
+  --g-ink: var(--e-700);
+  --g-tint: var(--e-50);
+  --g-line: var(--e-200);
+  --g-night: var(--e-950);
+  /* Plex everywhere but HIS stack, where headings take the display face. The
+     variable is set on <html> by the root layout on every stack; it is only
+     USED where `data-cinema` says the look calls for it. */
+  --g-display: var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+
+  font-family: var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .guide-scope {
+    --g-solid: var(--e-500);
+    --g-ink: var(--e-300);
+    --g-tint: var(--e-950);
+    --g-line: var(--e-800);
+  }
+}
+
+:root[data-theme='dark'] .guide-scope {
+  --g-solid: var(--e-500);
+  --g-ink: var(--e-300);
+  --g-tint: var(--e-950);
+  --g-line: var(--e-800);
+}
+
+/* cinema-ramp:start — a copy of `app/study.css`; see the header. */
+.guide-scope[data-cinema] {
+  --e-50: oklch(0.975 0.012 258);
+  --e-100: oklch(0.944 0.030 258);
+  --e-200: oklch(0.898 0.055 258);
+  --e-300: oklch(0.822 0.090 258);
+  --e-400: oklch(0.720 0.140 258);
+  --e-500: oklch(0.620 0.180 259);
+  --e-600: oklch(0.530 0.190 261);
+  --e-700: oklch(0.455 0.170 262);
+  --e-800: oklch(0.385 0.140 263);
+  --e-900: oklch(0.315 0.110 264);
+  --e-950: oklch(0.220 0.070 265);
+  --a-9: oklch(0.715 0.185 52);
+  --a-10: oklch(0.665 0.185 48);
+  --a-11: oklch(0.505 0.150 45);
+  --a-12: oklch(0.300 0.070 45);
+  --g-display: var(--font-alexandria), var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .guide-scope[data-cinema] {
+    --a-9: oklch(0.740 0.170 55);
+    --a-10: oklch(0.790 0.160 58);
+    --a-11: oklch(0.820 0.130 62);
+    --a-12: oklch(0.920 0.070 65);
+  }
+}
+
+:root[data-theme='dark'] .guide-scope[data-cinema] {
+  --a-9: oklch(0.740 0.170 55);
+  --a-10: oklch(0.790 0.160 58);
+  --a-11: oklch(0.820 0.130 62);
+  --a-12: oklch(0.920 0.070 65);
+}
+/* cinema-ramp:end */
+
+/* `:where()` keeps this reset at the specificity of a bare `button`, so every
+   class below can set its own colour without doubling its selector. */
+:where(.guide-scope) button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.guide-scope :focus-visible {
+  outline: 3px solid var(--g-solid);
+  outline-offset: 2px;
+}
+
+/* ---------- the dialog shell ---------- */
+
+/* A centred card. Every declaration overrides a utility on `DialogContent`.
+
+   `z-index: 80`: the assistant's floating launcher is fixed at 70 in the same
+   bottom-left corner a phone's sheet reaches into. At the primitive's own 50
+   the launcher would be drawn over this dialog's footer buttons. */
+.guide-dialog {
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  width: min(35rem, calc(100% - 2rem));
+  max-width: none;
+  max-height: min(47.5rem, calc(100dvh - 2rem));
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 1.375rem;
+  background: var(--n-1);
+  color: var(--n-12);
+  box-shadow: 0 30px 70px -30px color-mix(in oklch, var(--ink), transparent 40%);
+  animation: guide-rise 0.3s var(--ease-out);
+}
+
+/* It takes focus itself when a step swaps out the button that had it; it is
+   not a control, so it draws no ring. */
+.guide-dialog:focus-visible {
+  outline: none;
+}
+
+/* The primitive's own ×. The band has a minimise and a close of its own; this
+   one stays in the DOM because the Android back gesture closes the dialog by
+   clicking it (`@ayman/ui` `BackStop`). */
+.guide-dialog > button {
+  display: none;
+}
+
+/* A bottom sheet on a phone. `translate` is what `-translate-x-1/2` sets. */
+@media (max-width: 40rem) {
+  .guide-dialog {
+    inset-inline: 0;
+    inset-block: auto 0;
+    translate: none;
+    width: 100%;
+    max-height: 92dvh;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@keyframes guide-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+}
+
+/* ---------- the journey band ---------- */
+
+.guide-band {
+  flex: none;
+  display: grid;
+  gap: 0.875rem;
+  padding: 1rem 1.125rem 0.875rem;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklch, var(--g-solid), transparent 55%), transparent 60%),
+    linear-gradient(160deg, var(--g-night), var(--ink));
+  color: var(--ink-fg);
+}
+
+.guide-band__who {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.guide-face {
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--g-tint);
+}
+
+.guide-face--mono {
+  display: grid;
+  place-items: center;
+  background: var(--g-solid);
+  color: var(--ink-fg);
+  font-family: var(--g-display);
+  font-weight: 700;
+}
+
+.guide-band__face {
+  width: 2.875rem;
+  height: 2.875rem;
+  font-size: 1.125rem;
+  box-shadow:
+    0 0 0 2px var(--g-night),
+    0 0 0 4px var(--a-9);
+}
+
+.guide-band__name {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.guide-band__name b {
+  overflow: hidden;
+  font-family: var(--g-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide-band__name small {
+  color: var(--ink-fg-2);
+  font-size: 0.78125rem;
+}
+
+.guide-band__btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--ink-line);
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--ink-fg), transparent 92%);
+  transition: background-color 0.16s var(--ease);
+}
+
+.guide-band__btn:hover {
+  background: color-mix(in oklch, var(--ink-fg), transparent 82%);
+}
+
+.guide-band :focus-visible {
+  outline-color: var(--a-9);
+}
+
+/* ---------- the road ---------- */
+
+/* One column per station; the walker and the two lines are placed against the
+   same columns, so the dragon always stands on a dot. Logical properties
+   throughout: in RTL the road starts on the right and runs left by itself. */
+.guide-road {
+  --guide-walker: 2.5rem;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--guide-n), minmax(0, 1fr));
+  margin: 0;
+  padding: var(--guide-walker) 0 0;
+  list-style: none;
+}
+
+/* The road ahead, dashed… */
+.guide-road::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(var(--guide-walker) + 0.3125rem);
+  inset-inline: calc(50% / var(--guide-n));
+  border-block-start: 2px dashed color-mix(in oklch, var(--ink-fg), transparent 70%);
+}
+
+/* …and the part already walked, solid. */
+.guide-road::after {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(var(--guide-walker) + 0.3125rem);
+  inset-inline-start: calc(50% / var(--guide-n));
+  width: calc(var(--guide-at) * 100% / var(--guide-n));
+  border-block-start: 2px solid var(--a-9);
+  transition: width 0.45s var(--ease-in-out);
+}
+
+.guide-road__stop {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.3125rem;
+  min-width: 0;
+  font-size: 0.6875rem;
+  color: var(--ink-fg-2);
+}
+
+.guide-road__stop i {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid color-mix(in oklch, var(--ink-fg), transparent 55%);
+  border-radius: 50%;
+  background: var(--g-night);
+}
+
+.guide-road__stop[data-state='done'] i {
+  border-color: var(--a-9);
+  background: var(--a-9);
+}
+
+.guide-road__stop[data-state='current'] i {
+  border-color: var(--a-9);
+  background: var(--ink-fg);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--a-9), transparent 70%);
+}
+
+.guide-road__stop[data-state='current'] {
+  color: var(--ink-fg);
+  font-weight: 600;
+}
+
+.guide-road__stop span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The tour guide. Stands over the current station's column and slides to the
+   next; the hop is a second, re-keyed element so the two do not fight over
+   one `transform`. */
+.guide-walker {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: calc((var(--guide-at) + 0.5) * 100% / var(--guide-n));
+  width: var(--guide-walker);
+  height: var(--guide-walker);
+  margin-inline-start: calc(var(--guide-walker) / -2);
+  transition: inset-inline-start 0.45s var(--ease-in-out);
+  pointer-events: none;
+}
+
+.guide-walker__hop {
+  display: grid;
+  place-items: end center;
+  width: 100%;
+  height: 100%;
+  animation: guide-hop 0.45s var(--ease-out);
+}
+
+.guide-walker__art {
+  width: auto;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 6px color-mix(in oklch, var(--ink), transparent 50%));
+}
+
+.guide-walker__pin {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-block-end: 0.25rem;
+  border-radius: 50% 50% 50% 0;
+  background: var(--a-9);
+  rotate: -45deg;
+}
+
+@keyframes guide-hop {
+  40% {
+    transform: translateY(-0.5rem);
+  }
+}
+
+/* Eight stations on a narrow phone: only the current one keeps its word. The
+   others stay in the accessibility tree (clipped, not removed). */
+@media (max-width: 26rem) {
+  .guide-road__stop:not([data-state='current']) span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .guide-road__stop[data-state='current'] span {
+    overflow: visible;
+  }
+}
+
+/* ---------- the body ---------- */
+
+.guide-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: 0.875rem;
+  align-content: start;
+  padding: 1rem 1.125rem 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* The spoken line. */
+.guide-say {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--g-line);
+  border-radius: 1rem;
+  background: var(--g-tint);
+}
+
+.guide-say__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--n-12);
+}
+
+.guide-say__play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--g-solid);
+  color: var(--ink-fg);
+}
+
+.guide-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 1rem;
+  margin-inline-start: 0.375rem;
+  vertical-align: middle;
+}
+
+.guide-wave i {
+  width: 3px;
+  height: 30%;
+  border-radius: 2px;
+  background: var(--g-solid);
+  animation: guide-bar 0.9s ease-in-out infinite;
+}
+
+.guide-wave i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.guide-wave i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.guide-wave i:nth-child(4) {
+  animation-delay: 0.45s;
+}
+
+@keyframes guide-bar {
+  50% {
+    height: 100%;
+  }
+}
+
+.guide-step {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  animation: guide-step-in 0.22s var(--ease-out);
+}
+
+@keyframes guide-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+}
+
+.guide-q {
+  margin: 0;
+  font-family: var(--g-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--n-12);
+  text-wrap: balance;
+}
+
+/* Focused by script on every step so a screen reader reads the question; a
+   ring around a heading would only tell a sighted reader something moved. */
+.guide-q:focus-visible {
+  outline: none;
+}
+
+.guide-hint {
+  margin: 0;
+  color: var(--n-11);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+
+.guide-link {
+  justify-self: start;
+  min-height: 2.75rem;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--g-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- options ---------- */
+
+.guide-opts {
+  display: grid;
+  gap: 0.625rem;
+}
+
+@media (min-width: 26rem) {
+  .guide-opts--two {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.guide-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.625rem;
+  padding: 0.75rem 0.875rem;
+  border: 1.5px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--n-1);
+  text-align: start;
+  transition:
+    border-color 0.16s var(--ease),
+    background-color 0.16s var(--ease);
+}
+
+.guide-opt:hover {
+  border-color: var(--g-solid);
+}
+
+.guide-opt[data-on] {
+  border-color: var(--g-solid);
+  background: var(--g-tint);
+}
+
+/* A term that is not on sale yet: in the list, and plainly not a button. */
+.guide-opt--closed {
+  border-style: dashed;
+  background: var(--n-2);
+  color: var(--n-10);
+  cursor: default;
+}
+
+.guide-opt--closed:hover {
+  border-color: var(--border);
+}
+
+.guide-opt--closed .guide-opt__dot {
+  border-style: dashed;
+}
+
+.guide-opt__dot {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+}
+
+.guide-opt[data-on] .guide-opt__dot {
+  border-color: var(--g-solid);
+  background: radial-gradient(var(--g-solid) 45%, transparent 50%);
+}
+
+/* A month row is a checkbox: square, and it stays ticked. */
+.guide-opt__box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--border-strong);
+  border-radius: 0.375rem;
+}
+
+.guide-opt[data-on] .guide-opt__box {
+  border-color: var(--g-solid);
+  background: var(--g-solid);
+}
+
+/* The tick, drawn rather than fetched: two borders of a rotated box. */
+.guide-opt[data-on] .guide-opt__box::after {
+  content: '';
+  width: 0.3125rem;
+  height: 0.5625rem;
+  margin-block-start: -0.125rem;
+  border: solid var(--ink-fg);
+  border-width: 0 2px 2px 0;
+  rotate: 45deg;
+}
+
+/* What the ticked months add up to — or what is still needed. */
+.guide-total {
+  margin: 0;
+  font-family: var(--g-display);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-12);
+}
+
+.guide-opt__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.guide-opt__text b {
+  font-family: var(--g-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.guide-opt__text small {
+  color: var(--n-11);
+  font-size: 0.78125rem;
+}
+
+.guide-opt__price {
+  flex: none;
+  display: grid;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.guide-opt__price strong {
+  font-family: var(--g-display);
+  font-size: 1.0625rem;
+  font-weight: 800;
+}
+
+.guide-opt__price s {
+  color: var(--n-10);
+  font-size: 0.75rem;
+}
+
+.guide-tag {
+  display: inline-block;
+  margin-inline-start: 0.375rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--ok), transparent 86%);
+  color: var(--ok);
+  font-family: var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.71875rem;
+  font-weight: 600;
+}
+
+/* ---------- the course, the summary ---------- */
+
+.guide-course {
+  display: grid;
+  gap: 0.375rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in oklch, var(--a-9), transparent 70%), transparent 55%),
+    linear-gradient(150deg, var(--g-night), var(--ink));
+  color: var(--ink-fg);
+}
+
+.guide-course b {
+  font-family: var(--g-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.guide-course small {
+  color: var(--ink-fg-2);
+  font-size: 0.8125rem;
+}
+
+.guide-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0.375rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide-facts li {
+  padding: 0.1875rem 0.625rem;
+  border: 1px solid var(--ink-line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--ink-fg), transparent 90%);
+  font-size: 0.78125rem;
+}
+
+.guide-sum {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  font-size: 0.875rem;
+}
+
+.guide-sum dl {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+}
+
+.guide-sum dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.guide-sum dt {
+  color: var(--n-11);
+}
+
+.guide-sum dd {
+  margin: 0;
+  text-align: end;
+}
+
+.guide-sum dl > .guide-sum__total {
+  padding-block-start: 0.5rem;
+  border-block-start: 1px dashed var(--border-strong);
+  font-family: var(--g-display);
+  font-size: 1.0625rem;
+  font-weight: 800;
+}
+
+.guide-sum__total dt {
+  color: var(--n-12);
+}
+
+.guide-sum__rails {
+  margin: 0;
+  color: var(--n-11);
+  font-size: 0.78125rem;
+}
+
+.guide-steps {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: guide-step;
+  font-size: 0.875rem;
+}
+
+.guide-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.guide-steps li::before {
+  counter-increment: guide-step;
+  content: counter(guide-step);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--g-solid);
+  color: var(--ink-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.guide-wait {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0;
+  padding-block: 0.75rem;
+  color: var(--n-11);
+  font-size: 0.875rem;
+}
+
+.guide-wait p {
+  margin: 0;
+}
+
+.guide-spin {
+  animation: guide-spin 0.9s linear infinite;
+}
+
+@keyframes guide-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- the footer ---------- */
+
+.guide-foot {
+  flex: none;
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.75rem 1.125rem 1rem;
+  border-block-start: 1px solid var(--border-subtle);
+  background: var(--n-1);
+}
+
+.guide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0 1.125rem;
+  border: 1.5px solid var(--border);
+  border-radius: 0.8125rem;
+  background: var(--n-1);
+  font-family: var(--g-display);
+  font-size: 0.90625rem;
+  font-weight: 700;
+}
+
+.guide-btn--primary {
+  flex: 1;
+  border-color: transparent;
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  transition: background-color 0.16s var(--ease);
+}
+
+.guide-btn--primary:hover {
+  background: var(--a-10);
+}
+
+.guide-btn--primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.guide-btn--primary:disabled:hover {
+  background: var(--a-9);
+}
+
+.guide-btn--ghost {
+  padding: 0 0.5rem;
+  border-color: transparent;
+  color: var(--n-11);
+}
+
+/* ---------- the dock: the pill and the helper circle ---------- */
+
+/*
+ * ⚠️ PHYSICAL `left`, here and on the helper below — the only two places in
+ * this file that are.
+ *
+ * The owner asked for both «على الشمال» — the left of the SCREEN — by name.
+ * In this RTL document «inline-end» happens to be the left too, but that is a
+ * property of the direction, not of the request: `[dir='ltr']` (which the root
+ * layout can set) would move an `inset-inline-end` dock to the right. The
+ * corner he pointed at does not move with the language.
+ */
+.guide-dock {
+  position: fixed;
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  /* Over page chrome and the phone tab bar (40); under dialogs' overlays
+     opened later, and under the assistant's launcher and panel (70). */
+  z-index: 60;
+  display: grid;
+  justify-items: start;
+  gap: 0.625rem;
+  max-width: min(21rem, calc(100vw - 2rem));
+  /* The dock is a box; only its children take clicks, so the page under the
+     gaps stays usable. */
+  pointer-events: none;
+  direction: rtl;
+}
+
+.guide-dock > * {
+  pointer-events: auto;
+}
+
+/*
+ * The PILL keeps the bottom-left corner. The assistant's floating launcher
+ * owns that same corner on the public and auth pages (`.assistant-dock`,
+ * `bottom-6` + `h-14`), so the pill stands ON it, with the launcher's own
+ * stack gap, instead of over it. Keyed on the launcher's presence, so a stack
+ * with the assistant off, and the student shell (where the launcher is in the
+ * topbar), keep the corner itself.
+ */
+:root:has(.assistant-launcher) .guide-dock:not(.guide-dock--helper) {
+  bottom: calc(1.5rem + 3.5rem + 0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* The student shell's tab bar is fixed to the floor below `md` and is 3.5rem
+   tall (`.tabbar__tab` in `globals.css`). */
+@media (max-width: 47.999rem) {
+  :root:has(.tabbar) .guide-dock:not(.guide-dock--helper) {
+    bottom: calc(3.5rem + 0.75rem);
+  }
+}
+
+.guide-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 3rem;
+  padding: 0.4375rem;
+  padding-inline-end: 0.875rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(150deg, var(--g-night), var(--ink));
+  box-shadow: 0 14px 30px -12px color-mix(in oklch, var(--ink), transparent 40%);
+  font-family: var(--g-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink-fg);
+  animation: guide-rise 0.3s var(--ease-out);
+}
+
+.guide-pill__face {
+  width: 2.125rem;
+  height: 2.125rem;
+  font-size: 0.875rem;
+}
+
+.guide-pill__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--a-9);
+}
+
+/* ---------- the helper: tucked into the TOP-left corner ---------- */
+
+/*
+ * A quiet companion in the corner, not a second dialog: a 40px face, and a
+ * slim caption of a line or two. «تبقى فوق على الشمال… عاوز متبقاش باينة كده».
+ *
+ * It began in the bottom corner as a card and sat on the form's last fields;
+ * it then sat mid-form at narrow widths, over the password rows, with the
+ * assistant's launcher on top of it. So the rules now are:
+ *
+ *   · ANCHORED TO THE VIEWPORT'S top-left corner, by a fixed offset under the
+ *     page's own header (`--guide-top`). Never positioned from the form, and
+ *     never in the bottom corner — that one is the assistant's.
+ *   · IT MAKES ITS OWN ROOM. Where the caption is a strip across the top, the
+ *     page's `<main>` is pushed down by exactly the strip's height (the
+ *     «room» rules below), so at the top of the page nothing is under it.
+ *   · THE FIELD BEING FILLED IS NEVER UNDER IT. `useKeepClear` in
+ *     `guide-helper.tsx` scrolls the page, or hides this, when a focused
+ *     field lands beneath it — which a fixed box cannot rule out with CSS.
+ *
+ * `--guide-vv-top` is the visual viewport's pan while a phone's keyboard is
+ * up (written by `useKeepClear`), so the helper stays in the visible part of
+ * the screen instead of scrolling off the top with the layout.
+ *
+ * ## Two shapes
+ *
+ * A STRIP by default: the face at the left edge, the caption beside it, as
+ * wide as the screen minus its gutters, and in the page's flow as far as the
+ * page is concerned (see «room»).
+ *
+ * A CARD where there is an empty gutter to put one in, 17.5rem at most:
+ *   · the auth screens from 62rem — the form is in the right-hand column and
+ *     the showcase fills the whole left half;
+ *   · the checkout from 90rem — its panel is 58rem wide at the right of a
+ *     1440px shell, which leaves a card's width beside it only up there.
+ * The onboarding wizard is centred in its column at every width, so it keeps
+ * the strip.
+ */
+.guide-dock--helper {
+  --guide-top: 0.5rem;
+
+  top: calc(var(--guide-top) + var(--guide-vv-top, 0px) + env(safe-area-inset-top, 0px));
+  bottom: auto;
+  left: max(0.5rem, env(safe-area-inset-left, 0px));
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  max-width: none;
+  /* Laid out left to right so the face is the thing IN the corner; the
+     caption sets its own direction back for the Arabic inside it. */
+  direction: ltr;
+}
+
+/* The public shell's nav is fixed and `--site-nav-h` (4.5rem) tall. That
+   variable lives on `.site`, which a portalled box cannot read, so the
+   number is restated. */
+.guide-dock--helper[data-surface='site'] {
+  --guide-top: calc(4.5rem + 0.25rem);
+}
+
+.guide-dock--helper[data-surface='app'] {
+  --guide-top: calc(var(--topbar-h) + 0.25rem);
+}
+
+/* Folded: the face alone, and only as wide as the face. */
+.guide-dock--helper:not([data-open]) {
+  right: auto;
+}
+
+/* The field being filled is under the helper and the page cannot move: step
+   out of sight (and out of the way of taps) until the focus moves on. */
+.guide-dock--helper[data-clash] {
+  visibility: hidden;
+}
+
+/*
+ * «Room»: the page gives the strip its own band instead of being covered.
+ *
+ * A transparent top border on the page's `<main>`, not padding and not a
+ * margin: a border adds to whatever padding the page already has without
+ * this file having to know it, and — unlike a margin — the element's own
+ * background still paints under it, so the checkout's dark hero stays one
+ * piece under the public nav instead of showing a stripe of page colour.
+ *
+ * 3.25rem while folded: the 0.5rem offset plus the 2.75rem face. 5.75rem
+ * while the caption is open: the offset, plus a caption that is at its
+ * tallest two 1.25rem lines, the 1.25rem live line and 1rem of padding
+ * (4.75rem), plus a little air. Measured from the top of `<main>`, which on
+ * every page the helper stands on starts at or above the helper's own top —
+ * so the page's first line is always below the strip's last pixel.
+ */
+:root:has(.guide-dock--helper) {
+  --guide-room: 3.25rem;
+}
+
+:root:has(.guide-dock--helper[data-open]) {
+  --guide-room: 5.75rem;
+}
+
+:root:has(.guide-dock--helper[data-place='onboarding']) main {
+  border-block-start: var(--guide-room) solid transparent;
+}
+
+@media (max-width: 61.999rem) {
+  :root:has(.guide-dock--helper:is([data-place='register'], [data-place='login'])) main {
+    border-block-start: var(--guide-room) solid transparent;
+  }
+}
+
+@media (max-width: 89.999rem) {
+  :root:has(.guide-dock--helper[data-place='checkout']) main {
+    border-block-start: var(--guide-room) solid transparent;
+  }
+}
+
+/* A 44px target around a 40px face. */
+.guide-circle {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+}
+
+.guide-circle__face {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+  box-shadow:
+    0 0 0 2px var(--n-1),
+    0 0 0 3px var(--g-solid);
+}
+
+/* «A new line is waiting» while the caption is folded. */
+.guide-circle__dot {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid var(--n-1);
+  border-radius: 50%;
+  background: var(--a-9);
+  animation: guide-pulse 1.6s ease-out infinite;
+}
+
+@keyframes guide-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--a-9), transparent 30%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0.5rem color-mix(in oklch, var(--a-9), transparent 100%);
+  }
+}
+
+/* The caption: a slim card, a hairline and the smallest shadow there is. */
+.guide-bubble {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  padding-inline-start: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--n-1);
+  color: var(--n-12);
+  box-shadow: var(--shadow-sm);
+  direction: rtl;
+  animation: guide-step-in 0.22s var(--ease-out);
+}
+
+.guide-bubble__lines {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 0.125rem;
+  padding-block: 0.25rem;
+}
+
+/* Inside the caption the spoken line is plain text, not a second card. */
+.guide-bubble .guide-say {
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* One or two lines. The voice says the whole of it, a screen reader reads
+   the whole of it, and a tap on the caption (`data-full`) shows the rest. */
+.guide-bubble .guide-say__text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.guide-bubble[data-full] .guide-say__text {
+  display: block;
+}
+
+/* The live line: what the field still needs. Empty takes no room. */
+.guide-status {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-11);
+}
+
+.guide-status:empty {
+  display: none;
+}
+
+.guide-status[data-tone='ok'] {
+  color: var(--ok);
+}
+
+.guide-status[data-tone='bad'] {
+  color: var(--err);
+}
+
+.guide-bubble__tools {
+  flex: none;
+  display: flex;
+}
+
+.guide-bubble__btn {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 0.625rem;
+  background: none;
+  color: var(--n-11);
+}
+
+.guide-bubble__btn:hover {
+  background: var(--n-3);
+}
+
+/* The card, where there is a gutter for it — see «Two shapes». */
+@media (min-width: 62rem) {
+  .guide-dock--helper:is([data-place='register'], [data-place='login']) {
+    left: max(0.75rem, env(safe-area-inset-left, 0px));
+    right: auto;
+  }
+
+  .guide-dock--helper:is([data-place='register'], [data-place='login']) .guide-bubble {
+    flex: 0 1 17.5rem;
+    max-width: 17.5rem;
+  }
+}
+
+@media (min-width: 90rem) {
+  .guide-dock--helper[data-place='checkout'] {
+    left: max(0.75rem, env(safe-area-inset-left, 0px));
+    right: auto;
+  }
+
+  .guide-dock--helper[data-place='checkout'] .guide-bubble {
+    flex: 0 1 17.5rem;
+    max-width: 17.5rem;
+  }
+}
+
+/* Nothing moves for somebody who asked for nothing to move. Positions still
+   change — the dragon is simply AT the next station instead of walking there. */
+@media (prefers-reduced-motion: reduce) {
+  .guide-dialog,
+  .guide-step,
+  .guide-pill,
+  .guide-bubble,
+  .guide-walker__hop,
+  .guide-wave i,
+  .guide-circle__dot,
+  .guide-spin {
+    animation: none;
+  }
+
+  .guide-walker,
+  .guide-road::after {
+    transition: none;
+  }
+}

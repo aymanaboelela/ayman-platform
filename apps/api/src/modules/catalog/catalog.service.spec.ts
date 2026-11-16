@@ -236,6 +236,47 @@ describe('CatalogService', () => {
       expect(detail.terms).toEqual([{ id: expect.any(String), title: 'الترم الأول', priceCents: 45000, salePriceCents: null }]);
     });
 
+    it('names a term that has not opened yet — and only one that comes AFTER a term on sale', async () => {
+      // «الترم الاول» on sale, «الترم التاني» created and not opened: the shape
+      // of the live year-2 course.
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم الاول', position: 0, priceCents: 45000, isOpen: true },
+      });
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم التاني', position: 1, priceCents: null, isOpen: false },
+      });
+
+      const detail = await service.findBySlug(publishedSlug);
+      expect(detail.terms.map((term) => term.title)).toEqual(['الترم الاول']);
+      // A name and an id — never a price, never anything a claim could carry.
+      expect(detail.upcomingTerms).toEqual([{ id: expect.any(String), title: 'الترم التاني' }]);
+      expect(CatalogCourseDetailSchema.safeParse(detail).success).toBe(true);
+    });
+
+    it('does not call a term that was sold and then closed «upcoming»', async () => {
+      // The first term has ended and been closed; the second is running.
+      // «لسه ما اتفتحش» about the first would be a promise that already ended.
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم الاول', position: 0, priceCents: 45000, isOpen: false },
+      });
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم التاني', position: 1, priceCents: 45000, isOpen: true },
+      });
+
+      const detail = await service.findBySlug(publishedSlug);
+      expect(detail.terms.map((term) => term.title)).toEqual(['الترم التاني']);
+      expect(detail.upcomingTerms).toEqual([]);
+    });
+
+    it('names no upcoming term on a course with none on sale, or with no terms at all', async () => {
+      expect((await service.findBySlug(publishedSlug)).upcomingTerms).toEqual([]);
+
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم الاول', position: 0, priceCents: null, isOpen: false },
+      });
+      expect((await service.findBySlug(publishedSlug)).upcomingTerms).toEqual([]);
+    });
+
     it('matches the shared contract with terms present', async () => {
       await prisma.courseTerm.create({
         data: { courseId: publishedCourseId, title: 'الترم الأول', position: 0, priceCents: 45000 },

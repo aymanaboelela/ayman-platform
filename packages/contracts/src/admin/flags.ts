@@ -82,6 +82,35 @@ export const FLAG_DECLARATIONS = [
     descriptionAr: 'الاشتراك الشهري بيفضل مع الطالب على طول (مابيخلصش بعد ٣٠ يوم)',
     defaultValue: false,
   },
+  /**
+   * «مرشد الاشتراك» — the first-visit guide (`apps/web/components/guide`): a
+   * dialog that walks a NEW visitor from «which year?» to the checkout, then a
+   * helper circle beside the register form and the real payment steps.
+   *
+   * A FLAG and not an entitlement, on purpose. It has no API surface — it
+   * reads the public catalogue and hands over to the checkout that already
+   * exists — so an entitlement key for it would lock nothing, which is exactly
+   * what `entitlements-coverage.spec.ts` refuses. It is a display switch, like
+   * `home.showTestimonials`, and the teacher can turn it off the day a dialog
+   * is not wanted.
+   *
+   * On for the original stack, off on every other until its teacher opens it
+   * — same shape as `arena.enabled`. Nothing in it is his: the face and the
+   * name are the stack's own mark and `TENANT_DISPLAY_NAME`, and the recorded
+   * voice and the dragon stay behind `IS_AYMAN` (an opened stack gets the same
+   * guide, text only).
+   *
+   * ⚠️ The web does NOT read this through `isEnabled()` below: a missing row
+   * there answers `defaultValue`, which would switch the guide ON for a
+   * tenant whose API has not booted the new declaration yet. See
+   * `apps/web/lib/flags.ts`.
+   */
+  {
+    key: 'guide.firstVisit',
+    descriptionAr: 'مرشد الاشتراك: نافذة للزائر الجديد بتمشّيه من الصف للدفع، ومساعد صغير جنب التسجيل والدفع',
+    defaultValue: true,
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FlagDeclaration[];
 
 export type FlagKey = (typeof FLAG_DECLARATIONS)[number]['key'];

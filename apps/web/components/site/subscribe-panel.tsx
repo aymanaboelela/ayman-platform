@@ -59,6 +59,7 @@ import {
 import { WalletPayCard } from '@/components/wallet/wallet-pay-card';
 import { newIdempotencyKey } from '@/lib/idempotency-key';
 import { useCheckoutIntent } from '@/lib/checkout-intent';
+import { announceCheckoutStep } from '@/lib/checkout-step';
 import { formatEGPExact } from '@/lib/price';
 import '@/components/wallet/wallet.css';
 /* The checkout frame's stylesheet — shared with the book checkout, `:root`
@@ -124,6 +125,40 @@ function requestedMonthIds(months: readonly { id: string }[], owned: readonly st
   return months
     .map((month) => month.id)
     .filter((id) => asked.has(id) && !owned.includes(id));
+}
+
+/**
+ * The PLAN the link asked for — `?plan=yearly`, `?plan=term&term=<id>` or
+ * `?plan=monthly` — kept only when that plan is on sale here, on the live
+ * read. The sibling of `requestedMonthIds` above for the three purchases that
+ * are not a named month: the first-visit guide (`components/guide`) collects
+ * «which package?» before the student has an account, and hands over to this
+ * panel with the answer in the URL instead of asking it a second time.
+ *
+ * Same rule as the months: the value sits in a URL anybody can type, so a
+ * plan that is not sold, or a term id that is closed or belongs to another
+ * course, resolves to `null` and the panel opens on its ordinary plan grid.
+ * No price travels in the link — the amount is always this panel's own.
+ */
+type RequestedPlan = { plan: 'monthly' | 'yearly' } | { plan: 'term'; termId: string };
+
+function requestedPlan(live: {
+  monthlyPriceCents: number | null;
+  monthlyOnSale?: boolean;
+  yearlyPriceCents: number | null;
+  terms: readonly { id: string }[];
+}): RequestedPlan | null {
+  const params = new URLSearchParams(window.location.search);
+  const plan = params.get('plan');
+  if (plan === 'yearly') return live.yearlyPriceCents !== null ? { plan } : null;
+  if (plan === 'monthly') {
+    return live.monthlyOnSale !== false && live.monthlyPriceCents !== null ? { plan } : null;
+  }
+  if (plan === 'term') {
+    const termId = params.get('term');
+    return termId !== null && live.terms.some((term) => term.id === termId) ? { plan, termId } : null;
+  }
+  return null;
 }
 
 /**
@@ -812,6 +847,35 @@ export function SubscribePanel({
           setStep('chooseMonths');
           return;
         }
+        /*
+         * The link named the PLAN (`requestedPlan`), so the grid whose
+         * question it answers is skipped — the same reasoning as the months
+         * just above, and the same states `choosePlan` would have set.
+         *
+         * Not with `?coupon=` on the same link: a carried code is priced
+         * against the plan grid's cards first (`stepOneSelections`), and
+         * jumping past the grid would land on the payment step with a code
+         * nobody has quoted. That link keeps its existing path untouched.
+         */
+        const asked = couponFromLocation() === null ? requestedPlan(live) : null;
+        if (asked?.plan === 'monthly' && live.months.length > 0) {
+          // «شهر» here means named months, and the link named none: the
+          // picker, with nothing ticked. Not for a student every month is
+          // already open to — that picker would be a grid of padlocks.
+          if (!owned?.coversAll) {
+            setPlan('monthly');
+            setTermId(null);
+            setSelectedMonthIds([]);
+            setStep('chooseMonths');
+            return;
+          }
+        } else if (asked) {
+          setPlan(asked.plan);
+          setTermId(asked.plan === 'term' ? asked.termId : null);
+          setSelectedMonthIds([]);
+          setStep('form');
+          return;
+        }
       }
       // A failed check must never block checkout — worst case, a student sees
       // the plan picker again and the submit call 409s (handled below) instead
@@ -824,6 +888,16 @@ export function SubscribePanel({
       cancelled = true;
     };
   }, [courseId, slug, attempt, router]);
+
+  /*
+   * Says which step is on screen, for the first-visit guide's helper circle
+   * (`lib/checkout-step.ts`). One assignment and an event nobody handles
+   * unless that helper is on the page; nothing here reads anything back.
+   */
+  useEffect(() => {
+    announceCheckoutStep({ step, railChosen: railConfirmed });
+  }, [step, railConfirmed]);
+  useEffect(() => () => announceCheckoutStep(null), []);
 
   /*
    * The live answer where there is one, the cached prop where there is not.

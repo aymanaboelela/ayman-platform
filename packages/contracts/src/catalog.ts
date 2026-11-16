@@ -227,9 +227,33 @@ export const CatalogCourseTermSchema = z.object({
 });
 export type CatalogCourseTerm = z.infer<typeof CatalogCourseTermSchema>;
 
+/**
+ * A term that EXISTS and is not on sale yet — «الترم التاني» while the first
+ * one is running. A name and nothing else: no price (it may not have one), and
+ * nothing a checkout could act on. It is published so a screen that lists the
+ * ways to subscribe can say «الترم التاني — لسه ما اتفتحش» instead of pretending
+ * the year has one term.
+ *
+ * ⚠️ Never a row to SELL. `terms` above stays the only list of things a claim
+ * may name, and `SubmitPaymentSchema` plus the server's own read are what
+ * refuse anything else; this list is display only.
+ */
+export const CatalogUpcomingTermSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+});
+export type CatalogUpcomingTerm = z.infer<typeof CatalogUpcomingTermSchema>;
+
 export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
   description: z.string().nullable(),
   terms: z.array(CatalogCourseTermSchema),
+  /**
+   * `.optional()`, not `.default([])`: an API one deploy behind the web does
+   * not send the key at all, and that must read as «none» rather than fail the
+   * parse of a payload every checkout depends on. See
+   * `CatalogService.findBySlug` for which terms count as upcoming.
+   */
+  upcomingTerms: z.array(CatalogUpcomingTermSchema).optional(),
   /**
    * «الأشهر اللي يقدر يشترك فيها» — the curriculum months this course sells,
    * OPEN ones only, in `monthIndex` order.

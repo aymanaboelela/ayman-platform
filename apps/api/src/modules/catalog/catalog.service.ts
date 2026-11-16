@@ -147,6 +147,44 @@ export class CatalogService {
     return { courses, total: courses.length };
   }
 
+  /**
+   * «الترم التاني — لسه ما اتفتحش»: the terms that exist and are not on sale
+   * yet, by NAME only.
+   *
+   * A second read rather than a wider `terms` select in `findBySlug`, on
+   * purpose: that select's `where` is what guarantees every row in the public
+   * `terms` list is open and priced — the list a checkout offers — and it is
+   * left exactly as it was. This answers a different question and returns
+   * nothing a claim could name a price for.
+   *
+   * ## Which closed terms count
+   *
+   * Only the ones AFTER the last term that is on sale, in the instructor's own
+   * order (`position`). «Not on sale» is two different states that the row
+   * cannot tell apart — a term that has not opened yet, and one that was sold
+   * and has since been closed — and a screen that says «لسه ما اتفتحش» about
+   * the second would be promising something that already ended. A term later
+   * than every open one can only be the first kind.
+   *
+   * So a course with no term on sale at all publishes none: at the start of
+   * the year that hides «الترم الأول» for the days before it opens, which is
+   * the cheap direction to be wrong in.
+   */
+  private async upcomingTerms(courseId: string): Promise<{ id: string; title: string }[]> {
+    const terms = await this.prisma.courseTerm.findMany({
+      where: { courseId },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      select: { id: true, title: true, position: true, isOpen: true, priceCents: true },
+    });
+    const onSale = (term: { isOpen: boolean; priceCents: number | null }) =>
+      term.isOpen && term.priceCents !== null;
+    const lastOnSale = terms.filter(onSale).at(-1);
+    if (!lastOnSale) return [];
+    return terms
+      .filter((term) => !onSale(term) && term.position > lastOnSale.position)
+      .map((term) => ({ id: term.id, title: term.title }));
+  }
+
   async findBySlug(slug: string): Promise<CatalogCourseDetail> {
     const row = await this.prisma.course.findFirst({
       // Compiled into the query, not checked after the fetch. A draft is
@@ -262,6 +300,8 @@ export class CatalogService {
 
     if (!row) throw new NotFoundException();
 
+    const upcomingTerms = await this.upcomingTerms(row.id);
+
     const lessons = row.sections.flatMap((section) => section.lessons);
     // Hoisted so the narrowing survives into the `months` map below — a
     // ternary on a property access does not narrow the property inside a
@@ -328,6 +368,7 @@ export class CatalogService {
         priceCents: term.priceCents as number,
         salePriceCents: publicTermSale(row, term),
       })),
+      upcomingTerms,
       lessonCount: lessons.filter(isLecture).length,
       totalSeconds: lessons.reduce(
         (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),
