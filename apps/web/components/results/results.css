@@ -841,7 +841,7 @@
 .rs-exam__status[data-tone='bad'] { --rs-tone: var(--err); }
 
 /* The extras after the verdict sit in the page's own voice, not the verdict's
-   colour: «امتياز» in the brand's blue, an open sitting in orange text, the
+   colour: «امتياز» in the structure colour, an open sitting in orange text, the
    latest score neutral. */
 .rs-exam__star,
 .rs-exam__open,

@@ -9,7 +9,7 @@
 
    ## The colours
 
-       structure / «where am I»  →  the `--e-*` ramp   (blue on HIS stack)
+       structure / «where am I»  →  the `--e-*` ramp   (the dragon's deep orange on HIS stack)
        action / «press this»     →  `--a-*`, ink on it `--on-accent-ink`
        surfaces and text         →  `--n-*`
        the journey band          →  `--e-950` over `--ink`
@@ -23,11 +23,11 @@
 
    ## «Cinema» without the shell
 
-   On the original stack the student shell re-cuts `--e-*` to blue and `--a-*`
+   On the original stack the student shell re-cuts `--e-*` to the dragon's deep orange and `--a-*`
    to a true orange (`app/study.css`, «Cinema»), keyed on the SHELL's presence.
    The guide also opens on the marketing pages and beside the register form,
    where there is no shell — so the same sixteen values are repeated below for
-   `.guide-scope[data-cinema]`, or the guide would be blue at home and ember on
+   `.guide-scope[data-cinema]`, or the guide would be one orange at home and ember on
    the landing page. They are a copy, and `guide-css.test.ts` fails the build
    when the copy and `study.css` differ.
 
@@ -68,17 +68,17 @@
 
 /* cinema-ramp:start — a copy of `app/study.css`; see the header. */
 .guide-scope[data-cinema] {
-  --e-50: oklch(0.975 0.012 258);
-  --e-100: oklch(0.944 0.030 258);
-  --e-200: oklch(0.898 0.055 258);
-  --e-300: oklch(0.822 0.090 258);
-  --e-400: oklch(0.720 0.140 258);
-  --e-500: oklch(0.620 0.180 259);
-  --e-600: oklch(0.530 0.190 261);
-  --e-700: oklch(0.455 0.170 262);
-  --e-800: oklch(0.385 0.140 263);
-  --e-900: oklch(0.315 0.110 264);
-  --e-950: oklch(0.220 0.070 265);
+  --e-50: oklch(0.977 0.010 38);
+  --e-100: oklch(0.946 0.030 38);
+  --e-200: oklch(0.902 0.055 38);
+  --e-300: oklch(0.828 0.085 38);
+  --e-400: oklch(0.745 0.140 38);
+  --e-500: oklch(0.660 0.190 38);
+  --e-600: oklch(0.552 0.195 38);
+  --e-700: oklch(0.470 0.165 38);
+  --e-800: oklch(0.392 0.132 38);
+  --e-900: oklch(0.325 0.102 38);
+  --e-950: oklch(0.222 0.062 38);
   --a-9: oklch(0.715 0.185 52);
   --a-10: oklch(0.665 0.185 48);
   --a-11: oklch(0.505 0.150 45);
