@@ -199,7 +199,19 @@
 .cp-layout__main {
   grid-area: main;
   display: grid;
+  /* An explicit `minmax(0, 1fr)` track. Without one the implicit column is
+     `auto`, which sizes to the widest child's min-content — on a phone the
+     outline's rows (title + a nowrap button) and the external-books block
+     made it 511px inside a 468px column, so the whole outline slid off the
+     screen's inline end and its buttons were cut («اضبط دي ريسبونسف»). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-24);
+  min-inline-size: 0;
+}
+
+/* Grid items default to `min-inline-size: auto`; zero lets each section
+   shrink to the track and wrap/ellipsize inside instead of widening it. */
+.cp-layout__main > * {
   min-inline-size: 0;
 }
 
