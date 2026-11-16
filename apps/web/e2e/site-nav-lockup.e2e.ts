@@ -97,8 +97,19 @@ test.describe('site nav lockup', () => {
       // hidden copy of the layout while React reveals the boundary (~170ms,
       // measured), and a strict locator on a slow runner can land inside it.
       const nav = page.locator('header.site-nav:visible');
-      await page.evaluate(() => window.scrollTo(0, 1400));
-      await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 15_000 });
+      // Scroll again until the nav reports pinned. A single scroll could land
+      // before hydration had attached the nav's scroll listener; the event was
+      // then gone, `data-pinned` stayed "false" for all 15 s, and this case
+      // failed intermittently on CI (and with it every deploy that ran it),
+      // with nothing wrong in the layout it exists to check.
+      await expect(async () => {
+        await page.evaluate(() => {
+          window.scrollTo(0, 0);
+          window.scrollTo(0, 1400);
+          window.dispatchEvent(new Event('scroll'));
+        });
+        await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 1_000 });
+      }).toPass({ timeout: 15_000 });
 
       const mediaMatches = await page.evaluate(() => {
         const inner = document.querySelector('.site-nav__inner')!;
@@ -134,7 +145,11 @@ test.describe('site nav lockup', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('/');
 
-    await expect(page.locator('.site-nav .wordmark')).toBeHidden();
-    await expect(page.locator('.site-nav__logo')).toHaveAttribute('aria-label', /\S/);
+    // Scoped to the VISIBLE header: during hydration the page can briefly hold
+    // a second (hidden) copy of the nav, and an unscoped locator then trips
+    // Playwright's strict mode with «resolved to 2 elements».
+    const nav = page.locator('header.site-nav:visible');
+    await expect(nav.locator('.wordmark')).toBeHidden();
+    await expect(nav.locator('.site-nav__logo')).toHaveAttribute('aria-label', /\S/);
   });
 });
