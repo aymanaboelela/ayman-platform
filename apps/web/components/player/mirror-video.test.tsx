@@ -95,6 +95,10 @@ describe('MirrorVideo playback tuning', () => {
     // A realistic first guess for Egyptian mobile data, not hls.js's 500 kbps.
     expect(HLS_CONFIG.abrEwmaDefaultEstimate).toBeGreaterThanOrEqual(1_500_000);
     expect(HLS_CONFIG.abrEwmaDefaultEstimate).toBeLessThanOrEqual(2_000_000);
+    // Headroom for a line that swings segment to segment (Egypt → Marseille):
+    // the stock 0.95 kept 720p on an estimate one dip away from a freeze.
+    expect(HLS_CONFIG.abrBandWidthFactor).toBeLessThanOrEqual(0.75);
+    expect(HLS_CONFIG.abrBandWidthUpFactor).toBeLessThan(HLS_CONFIG.abrBandWidthFactor!);
   });
 
   it('re-renders the bar once a second, not on every timeupdate', async () => {
