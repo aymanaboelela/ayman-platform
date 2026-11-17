@@ -439,6 +439,209 @@
   padding: 0.75rem;
 }
 
+/* ── «تصحيح الواجب» — a homework review as a card ───────────────────────────
+
+   His bubble, so the card is drawn on PAPER and from tokens: it follows the
+   theme exactly as the bubble under it does (`homework-feedback-card.tsx`).
+   `--hw` is the verdict's colour — `--ok` for «مقبول», `--warn` for «فيه
+   ملاحظات» — and the band, the disc and the chips all read it, so the one
+   modifier class recolours the whole object. The button is always the amber
+   action colour: it is the one thing to press, whatever the verdict. */
+
+.chat-bubble--card {
+  padding: 0.25rem;
+}
+
+.chat-bubble--card .chat-meta--line {
+  padding: 0.125rem 0.5rem 0.1875rem;
+}
+
+.chat-hw {
+  --hw: var(--ok);
+  display: flex;
+  flex-direction: column;
+  width: min(19rem, 100%);
+  overflow: hidden;
+  border-radius: 0.875rem;
+  background: var(--chat-other);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hw) 28%, transparent);
+  color: var(--n-12);
+  text-align: start;
+  text-decoration: none;
+  transition: transform 140ms var(--ease-out);
+}
+
+.chat-hw--needs-work {
+  --hw: var(--warn);
+}
+
+.chat-hw:active {
+  transform: translateY(1px);
+}
+
+.chat-hw:focus-visible {
+  outline: 2px solid var(--hw);
+  outline-offset: 2px;
+}
+
+.chat-hw__band {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--hw) 22%, var(--chat-other)),
+    color-mix(in oklab, var(--hw) 9%, var(--chat-other))
+  );
+}
+
+.chat-hw__disc {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-full);
+  background: var(--hw);
+  /* `--n-1` is paper in light and ink in dark, the inverse of where `--ok` and
+     `--warn` sit in each theme — so the glyph keeps its contrast in both. */
+  color: var(--n-1);
+  box-shadow: 0 4px 10px -4px color-mix(in oklab, var(--hw) 70%, transparent);
+}
+
+.chat-hw__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.chat-hw__eyebrow {
+  color: color-mix(in oklab, var(--hw) 80%, var(--n-12));
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+}
+
+.chat-hw__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.chat-hw__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-block-start: 0.375rem;
+}
+
+.chat-hw__chip {
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--hw) 14%, var(--chat-other));
+  color: var(--n-12);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+}
+
+.chat-hw__chip--verdict,
+.chat-hw__chip--grade {
+  background: var(--hw);
+  color: var(--n-1);
+}
+
+.chat-hw__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+}
+
+.chat-hw__line,
+.chat-hw__note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-hw__section {
+  --hw-section: var(--ok);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  background: color-mix(in oklab, var(--hw-section) 9%, var(--chat-other));
+  border-inline-start: 3px solid var(--hw-section);
+}
+
+.chat-hw__section--improve {
+  --hw-section: var(--warn);
+}
+
+.chat-hw__heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: color-mix(in oklab, var(--hw-section, var(--n-11)) 85%, var(--n-12));
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+}
+
+.chat-hw__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.chat-hw__item {
+  position: relative;
+  padding-inline-start: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.chat-hw__item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.6em;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--r-full);
+  background: var(--hw-section);
+}
+
+.chat-hw__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  margin: 0 0.75rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  background: var(--accent-cta);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  transition: background-color 140ms var(--ease-out);
+}
+
+.chat-hw:hover .chat-hw__action {
+  background: var(--accent-cta-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-hw,
+  .chat-hw__action {
+    transition: none;
+  }
+}
+
 /* ── time, «معدّلة», ticks ──────────────────────────────────────────────── */
 
 .chat-meta {

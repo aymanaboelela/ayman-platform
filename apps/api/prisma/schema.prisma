@@ -5747,6 +5747,13 @@ model ConversationMessage {
   replyTo   ConversationMessage?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
   replies   ConversationMessage[] @relation("MessageReply")
 
+  /// «تصحيح الواجب» — a typed frame around `body`, or NULL for an ordinary
+  /// message. Ids plus the verdict and mark as they were when he pressed the
+  /// button; the words stay on `body`, and titles are resolved at read time.
+  /// Shape: `MessageCardPayloadSchema` in `assistant/homework-card.ts`, parsed
+  /// on every read. CHECKed to be a JSON object in the migration.
+  card Json? @db.JsonB
+
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   outreach     OutreachMessage?
 

@@ -20,6 +20,7 @@ import { buildChatTimeline } from './chat-timeline';
 import { groupChatTimelineByDay } from './chat-day-groups';
 import { ChatViewport } from './chat-viewport';
 import { MessageBody } from './message-body';
+import { HomeworkFeedbackCard } from './homework-feedback-card';
 import { MessageAttachmentView } from './message-attachment';
 import { ReplyQuote, chatMessageDomId } from './reply-quote';
 import { SwipeToReply } from './swipe-to-reply';
@@ -211,8 +212,12 @@ export function AssistantThread({
             {day.entries.map((entry) => {
               const { message, startsGroup, endsGroup } = entry;
               const fromVisitor = message.author === 'visitor';
-              const hasText = message.body.trim().length > 0;
-              const imageOnly = !hasText && message.attachment?.kind === 'image';
+              /* «تصحيح الواجب» — his words framed as a card. Only on HIS side:
+                 the server never sets it on a student's own message, and this
+                 keeps a forged payload on one from ever drawing a link. */
+              const homeworkCard = fromVisitor ? null : message.homeworkCard;
+              const hasText = message.body.trim().length > 0 && !homeworkCard;
+              const imageOnly = !hasText && !homeworkCard && message.attachment?.kind === 'image';
               return (
                 <li
                   key={message.id}
@@ -263,6 +268,7 @@ export function AssistantThread({
                           className={cn(
                             'chat-bubble',
                             message.attachment ? 'chat-bubble--has-attachment' : '',
+                            homeworkCard ? 'chat-bubble--card' : '',
                             imageOnly ? 'chat-bubble--media-only' : '',
                           )}
                         >
@@ -298,6 +304,9 @@ export function AssistantThread({
                             and then the time gets a line of its own (or a pill on
                             the photo) instead of the corner of a text line.
                           */}
+                          {homeworkCard ? (
+                            <HomeworkFeedbackCard card={homeworkCard} note={message.body} />
+                          ) : null}
                           {hasText ? (
                             <div className="chat-text">
                               <MessageBody body={message.body} trusted={!fromVisitor} />

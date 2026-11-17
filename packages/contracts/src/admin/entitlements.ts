@@ -422,6 +422,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'قايمة بالحسابات اللي فتحت محاضرات كتير في يوم واحد، وأنهي محاضرات، وكام مرة اتكررت — عشان تعرف مين بيحاول ينزّل الكورس.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". The review still reaches the student's thread with the
+     * feature off — as the plain message it always was — so closing it costs
+     * a teacher the frame, never the words. Nothing in the card is his: the
+     * byline above it is already gated, and the title and mark are that
+     * stack's own lecture and that stack's own marking.
+     */
+    key: 'homeworkChatCard',
+    nameAr: 'تصحيح الواجب في الشات',
+    descriptionAr: 'رد الواجب بيوصل للطالب في الشات ككارت: المحاضرة والدرجة، نقط القوة ونقط التحسين، وزرار يفتح التصحيح كامل.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

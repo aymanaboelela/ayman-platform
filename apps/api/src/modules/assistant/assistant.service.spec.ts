@@ -633,6 +633,55 @@ describe('AssistantService', () => {
     });
   });
 
+  /*
+   * «تصحيح الواجب» — the card is stored as ids and resolved on read, so a
+   * renamed lecture is never linked under its old name, and a payload that no
+   * longer parses is a plain bubble rather than a thread that will not load.
+   */
+  describe('the homework feedback card', () => {
+    it('resolves the lecture and the course on read, for both ends of the thread', async () => {
+      const section = await prisma.courseSection.create({
+        data: { courseId, title: 'الوحدة', position: 0, isPublished: true },
+      });
+      const lesson = await prisma.lesson.create({
+        data: { courseId, sectionId: section.id, title: 'المحاضرة', kind: 'video', position: 0, isPublished: true },
+      });
+      const submissionId = '0193c6f0-0000-7000-8000-0000000000aa';
+      const thread = await outreachThread();
+      await prisma.conversationMessage.createMany({
+        data: [
+          {
+            conversationId: thread.id,
+            author: 'admin',
+            body: '✅ حلو\n✏️ ناقص',
+            card: { kind: 'homework_review', submissionId, attempt: 1, lessonId: lesson.id, verdict: 'accepted', grade: 90 },
+          },
+          // A payload from some future shape: ignored, never a 500.
+          { conversationId: thread.id, author: 'admin', body: 'كارت قديم', card: { kind: 'exam_review' } },
+        ],
+      });
+
+      await prisma.lesson.update({ where: { id: lesson.id }, data: { title: 'المحاضرة بعد التعديل' } });
+
+      const mine = ConversationThreadSchema.parse(await service.myThread(studentId, null));
+      const withCard = mine.messages.find((m) => m.body === '✅ حلو\n✏️ ناقص');
+      expect(withCard?.homeworkCard).toEqual({
+        submissionId,
+        lessonId: lesson.id,
+        lessonTitle: 'المحاضرة بعد التعديل',
+        courseSlug: expect.stringMatching(/^asst-course-/),
+        verdict: 'accepted',
+        grade: 90,
+        attempt: 1,
+      });
+      expect(mine.messages.find((m) => m.body === 'كارت قديم')?.homeworkCard).toBeNull();
+      expect(mine.messages.find((m) => m.body === 'نتيجتك في الكويز')?.homeworkCard).toBeNull();
+
+      const detail = await service.detail(thread.id);
+      expect(detail.messages.find((m) => m.body === '✅ حلو\n✏️ ناقص')?.homeworkCard?.lessonId).toBe(lesson.id);
+    });
+  });
+
   describe('reply', () => {
     it('answers, and notifies a signed-in student', async () => {
       const { thread } = await service.open({

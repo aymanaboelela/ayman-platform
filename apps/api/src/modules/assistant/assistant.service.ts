@@ -30,6 +30,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { hashGuestToken, mintGuestToken } from './guest-token';
 import { groupGrantsByCourse } from './thread-courses';
+import { resolveMessageCards } from './message-cards';
 import type {
   ConversationOrigin,
   ConversationStatus,
@@ -798,6 +799,7 @@ export class AssistantService {
             attachmentDurationSeconds: true,
             editedAt: true,
             replyTo: { select: REPLY_REF_SELECT },
+            card: true,
           },
         },
       },
@@ -874,6 +876,7 @@ export class AssistantService {
 
     // Derived, never a second query — the two cannot disagree this way.
     const hasActiveSubscription = courses === null ? null : courses.length > 0;
+    const cards = await resolveMessageCards(this.prisma, row.messages);
 
     return {
       // `slice(-1)`, not `slice(0, 1)`: the list's preview is the NEWEST
@@ -911,6 +914,8 @@ export class AssistantService {
         editedAt: message.editedAt?.toISOString() ?? null,
         replyTo: toReplyRef(message.replyTo),
         attachment: toAttachment(message, `/api/admin/conversations/${row.id}`),
+        // He sees the card the student sees — see `resolveMessageCards`.
+        homeworkCard: cards.get(message.id) ?? null,
       })),
     };
   }
@@ -1249,6 +1254,7 @@ export class AssistantService {
             attachmentDurationSeconds: true,
             editedAt: true,
             replyTo: { select: REPLY_REF_SELECT },
+            card: true,
           },
         },
       },
@@ -1271,6 +1277,7 @@ export class AssistantService {
      * and `AssistantThread` scrolls to `messages[length - 1]`.
      */
     const messages = [...row.messages].reverse();
+    const cards = await resolveMessageCards(this.prisma, messages);
     return {
       id: row.id,
       status: row.status,
@@ -1286,6 +1293,7 @@ export class AssistantService {
         // The VISITOR's route, not the admin's. Same bytes, a different door
         // — and the student would get a 403 at the other one.
         attachment: toAttachment(message, `/api/assistant/conversations/${row.id}`),
+        homeworkCard: cards.get(message.id) ?? null,
       })),
       unreadForVisitor: messages.filter(
         (message) =>
