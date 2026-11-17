@@ -3235,6 +3235,22 @@ export const copy = {
     'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
 
   /**
+   * «في الطباعة» — the chat message when an order goes to the printer
+   * (`BookOrdersService.markPrinting`, behind `bookPrintNotice`).
+   *
+   * Orders sat «في المطبعة» for days after the payment was confirmed with
+   * nothing said, and students asked in chat. So this says the three things
+   * they were asking: the money arrived, the book is being printed, and the
+   * next word comes when the courier has it. No date, no promise — a print
+   * run comes back when it comes back. Not gendered (CLAUDE.md §7): ـك only
+   * on nouns («كتابك»، «طلبك»), and «هتوصل رسالة» has the message as its
+   * subject. `{name}` is the FIRST name and «يا {name}، » drops when there is
+   * none, like `bookShipNotice`.
+   */
+  bookPrintNotice:
+    'يا {name}، طلبك للكتاب اتأكد ✅ والكتاب دلوقتي في الطباعة 🖨️\n\nأول ما يتسلّم لشركة الشحن هتوصل رسالة هنا. وحالة الطلب ظاهرة دايمًا في «طلبات الكتب».',
+
+  /**
    * «شركة الشحن» — what the student is told when the COURIER reports a status,
    * through the platform thread (never WhatsApp: «مش هبعت حاجة بالواتساب
    * بتاعي»). One message per status change; `{note}` is the courier's own
@@ -5221,6 +5237,10 @@ export const copy = {
      *  glance and the date is there for the reader who stops on it. */
     // No «بيك»: it is «بيكي» to a girl, and the call needs no object.
     bookOrderShippedDetail: 'هيوصلك خلال {days} أيام عمل، والمندوب هيتصل قبل ما يوصل.',
+    /** «في الطباعة». No date and no estimate — the run comes back when it
+     *  comes back. The detail line says what happens next instead. */
+    bookOrderPrinting: 'كتابك في الطباعة — {book}',
+    bookOrderPrintingDetail: 'الدفع اتأكد، وأول ما يتسلّم لشركة الشحن هتوصل رسالة.',
     bookOrderDelivered: 'الكتاب وصلك — {book}',
     /** The reason follows on the card, verbatim, exactly as with a rejected
      *  payment. This line is only the lead-in. */

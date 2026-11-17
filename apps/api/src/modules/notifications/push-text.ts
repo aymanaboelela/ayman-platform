@@ -149,6 +149,14 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: `ayman-book-order-${entry.orderId}`,
       };
 
+    case 'book_order_printing':
+      return {
+        title: formatCopy(c.bookOrderPrinting, { book: entry.bookTitle }),
+        body: c.bookOrderPrintingDetail,
+        url: BOOK_ORDERS_URL,
+        tag: `ayman-book-order-${entry.orderId}`,
+      };
+
     case 'book_order_delivered':
       return {
         title: formatCopy(c.bookOrderDelivered, { book: entry.bookTitle }),

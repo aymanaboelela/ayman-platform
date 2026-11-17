@@ -2775,6 +2775,7 @@ Discriminated on `kind`; every entry carries `id: string`, `createdAt: ISO`,
 | `subscription_cancelled` | `courseId, courseTitle, courseSlug, reason` | student |
 | `course_completed` | `courseId, courseTitle, courseSlug` | student |
 | `book_order_shipped` | `orderId, bookTitle, deliveryDays: int 1..14` | student |
+| `book_order_printing` | `orderId, bookTitle` | student (entitlement `bookPrintNotice`) |
 | `book_order_delivered` | `orderId, bookTitle` | student |
 | `book_order_rejected` | `orderId, bookTitle, reason` | student |
 | `homework_reviewed` | `submissionId, lessonId, lessonTitle, courseSlug, homeworkStatus: 'accepted'\|'needs_work', grade: 0..100\|null` | student |
@@ -2802,6 +2803,7 @@ The API sends **no prose**; this mapping is the whole of it
 | `subscription_cancelled` | «اشتراكك في {course} اتلغى» | `reason`, verbatim | `courseTitle` | `/courses/{slug}` | `CircleAlert` |
 | `course_completed` | «مبروك! خلصت {course}» | «قفلته من أوله لآخره، ودي مش حاجة بسيطة. أنا فخور بالمجهود ده.» | `courseTitle` | `/courses/{slug}` | `Trophy` |
 | `book_order_shipped` | «كتابك اتشحن — {book}» | «هيوصلك خلال {days} أيام عمل، والمندوب هيتصل بيك قبل ما يوصل.» | «كتبي» | `/store/orders` | `Truck` |
+| `book_order_printing` | «كتابك في الطباعة — {book}» | «الدفع اتأكد، وأول ما يتسلّم لشركة الشحن هتوصل رسالة.» | «كتبي» | `/store/orders` | `Printer` |
 | `book_order_delivered` | «الكتاب وصلك — {book}» | — | «كتبي» | `/store/orders` | `PackageCheck` |
 | `book_order_rejected` | «طلب الكتاب اترفض — {book}» | `reason`, verbatim | «كتبي» | `/store/orders` | `PackageX` |
 | `homework_reviewed` | accepted → «واجب {lesson} اتقبل ✅»; else «واجب {lesson} فيه ملاحظات» | accepted+grade → «الدرجة {grade} من 100»; accepted → «مهندس أيمن راجع الحل وكتب لك رد.»; needs_work → «مهندس أيمن كتب لك رد، والواجب مفتوح تاني.» | `lessonTitle` | `/courses/{courseSlug}/lessons/{lessonId}` | `NotebookPen` |

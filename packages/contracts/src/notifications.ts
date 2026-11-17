@@ -69,6 +69,9 @@ export const NOTIFICATION_KINDS = [
    * admin's `reason`, exactly as `payment_rejected` does.
    */
   'book_order_shipped',
+  /** «الكتاب في الطباعة» — the stretch between «الدفع اتأكد» and «اتشحن»,
+   *  which was days of silence. Behind the `bookPrintNotice` entitlement. */
+  'book_order_printing',
   'book_order_delivered',
   'book_order_rejected',
   /**
@@ -374,6 +377,13 @@ export const BookOrderShippedNotificationSchema = z.object({
   deliveryDays: z.number().int().min(1).max(14),
 });
 
+/** «الكتاب في الطباعة». No estimate on purpose: a print run comes back when it
+ *  comes back, and a date here would be a promise the platform cannot keep. */
+export const BookOrderPrintingNotificationSchema = z.object({
+  ...bookOrderBase,
+  kind: z.literal('book_order_printing'),
+});
+
 export const BookOrderDeliveredNotificationSchema = z.object({
   ...bookOrderBase,
   kind: z.literal('book_order_delivered'),
@@ -572,6 +582,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   BookOrderPlacedNotificationSchema,
   AssistantQuestionReceivedNotificationSchema,
   BookOrderShippedNotificationSchema,
+  BookOrderPrintingNotificationSchema,
   BookOrderDeliveredNotificationSchema,
   BookOrderRejectedNotificationSchema,
   CourseCompletedNotificationSchema,

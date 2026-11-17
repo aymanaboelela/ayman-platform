@@ -94,6 +94,8 @@ export type EmitInput =
    * (Global Constraint 4) on top of that.
    */
   | { userId: string; kind: 'book_order_shipped'; orderId: string }
+  /** «في الطباعة» — `markPrinting`, behind `bookPrintNotice`. */
+  | { userId: string; kind: 'book_order_printing'; orderId: string }
   | { userId: string; kind: 'book_order_delivered'; orderId: string }
   /** The one that carries text. `reason` is the admin's own words, stored on
    *  the order and shown verbatim — the same slot `payment_rejected` fills. */
@@ -203,6 +205,7 @@ const COURSE_KINDS = new Set([
  */
 const BOOK_ORDER_KINDS = new Set([
   'book_order_shipped',
+  'book_order_printing',
   'book_order_delivered',
   'book_order_rejected',
 ]);
@@ -1064,6 +1067,17 @@ function toEntry(
          quoted to Cairo is a parcel that arrives early; three quoted to أسوان
          is a complaint on day four. Same rule as `deliveryDays` itself. */
       deliveryDays: bookOrderDays.get(orderId) ?? 4,
+    };
+  }
+
+  if (row.kind === 'book_order_printing') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return {
+      ...base,
+      kind: 'book_order_printing',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
     };
   }
 

@@ -435,6 +435,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'رد الواجب بيوصل للطالب في الشات ككارت: المحاضرة والدرجة، نقط القوة ونقط التحسين، وزرار يفتح التصحيح كامل.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". «راح للمطبعة» tells the student — a chat message in their
+     * thread plus a bell notification — once per order. With it off the button
+     * does exactly what it did before: moves the order and tells nobody. Off
+     * by default because a teacher who presses «راح للمطبعة» for bookkeeping
+     * may not want every student told, and that is his to decide.
+     */
+    key: 'bookPrintNotice',
+    nameAr: 'رسالة «الكتاب في الطباعة»',
+    descriptionAr: 'لما الطلب يروح للمطبعة، الطالب بتوصله رسالة في الشات وإشعار إن الدفع اتأكد والكتاب في الطباعة — مرة واحدة لكل طلب.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

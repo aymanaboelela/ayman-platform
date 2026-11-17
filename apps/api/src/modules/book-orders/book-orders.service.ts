@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import ExcelJS from 'exceljs';
@@ -45,6 +46,7 @@ import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
 import { formatWithName } from '@ayman/contracts/outreach/compose';
+import { isFeatureEnabled } from '../../common/entitlements';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -624,6 +626,8 @@ const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 're
 
 @Injectable()
 export class BookOrdersService {
+  private readonly logger = new Logger(BookOrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -2355,6 +2359,8 @@ export class BookOrdersService {
         /* For `studentIdForOrder`: a guest row's `userId` is NULL forever, and
            the number is what finds the account to notify. */
         phone: true,
+        /* For `markPrinting`'s notice, which greets by the FIRST name. */
+        fullName: true,
         courseId: true,
         deletedAt: true,
         deletionReason: true,
@@ -2623,14 +2629,30 @@ export class BookOrdersService {
    * already gone to the printer. The packing list is downloaded, the rows are
    * selected, and this is the button that records what happened to them.
    *
-   * ## Nothing is sent to the student
+   * ## The student IS told, behind `bookPrintNotice` (2026-11-17)
    *
-   * Deliberately, and it is the only transition on this model that tells nobody.
-   * Paper entering a print shop is not news to a student, and a message about
-   * it would promise a date the run itself cannot keep — `book_order_shipped`
-   * stays the first thing they hear. That also makes the audit row the ONLY
-   * record this happened, which is why `book-order:printing` is an action of its
-   * own rather than a flag on `book-order:ship`.
+   * This used to be the one transition that told nobody, on the reasoning that
+   * paper entering a print shop is not news. It was: orders sat «في المطبعة»
+   * for days after the payment was confirmed, students heard nothing until
+   * «اتشحن», and they filled the silence by asking in chat. So the student now
+   * gets a chat message in their own thread (`copy.bookPrintNotice`) and a
+   * `book_order_printing` bell notification — the same two channels
+   * `markShippedMany` uses. Neither promises a date; a run comes back when it
+   * comes back.
+   *
+   * One order, one notice: `printNoticeSentAt` is CLAIMED with a conditional
+   * update inside the same transaction as the notification row, so a bulk run
+   * racing a single click, or an order rejected, restored and printed again,
+   * never messages twice. The chat message goes after the commit — it opens
+   * its own transaction in `OutreachService`, and a failure there is logged,
+   * never allowed to undo a print run that really happened.
+   *
+   * Platform only, no WhatsApp: a guest order with no account behind its number
+   * gets nothing here, exactly like the bell. The courier hand-off is where the
+   * WhatsApp copy lives.
+   *
+   * With the entitlement off (every teacher stack by default) this is the old
+   * behaviour byte for byte: the status moves and nobody is told.
    *
    * ## Only from `paid`
    *
@@ -2657,20 +2679,54 @@ export class BookOrdersService {
     }
 
     const now = new Date();
-    /* One statement, because `book_orders_printing_status_has_a_stamp` will not
-       accept the status without the timestamp — so the constraint can only ever
-       fire on a bug in this method, which is what a constraint is for. */
-    await this.prisma.bookOrder.update({
-      where: { id: order.id },
-      data: { status: 'printing', printedAt: now, printedByUserId: adminId },
+    const notify = isFeatureEnabled('bookPrintNotice');
+    const studentId = notify ? await this.studentIdForOrder(order) : null;
+
+    const told = await this.prisma.$transaction(async (tx) => {
+      /* One statement, because `book_orders_printing_status_has_a_stamp` will
+         not accept the status without the timestamp — so the constraint can
+         only ever fire on a bug in this method, which is what a constraint is
+         for. */
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: { status: 'printing', printedAt: now, printedByUserId: adminId },
+      });
+      if (studentId === null) return false;
+
+      // The claim. Zero rows means this order was already told — see above.
+      const claimed = await tx.bookOrder.updateMany({
+        where: { id: order.id, printNoticeSentAt: null },
+        data: { printNoticeSentAt: now },
+      });
+      if (claimed.count === 0) return false;
+
+      await this.notifications.emit(tx, {
+        userId: studentId,
+        kind: 'book_order_printing',
+        orderId: order.id,
+      });
+      return true;
     });
+
+    if (told && studentId !== null) {
+      // After the commit, never inside it. See `NotificationsService.announce`.
+      await this.notifications.announce(studentId);
+      try {
+        await this.outreach.postAdminMessage(
+          studentId,
+          formatWithName(copy.bookPrintNotice, order.fullName),
+        );
+      } catch (error) {
+        this.logger.error(`print notice chat message failed for order ${order.id}`, error as Error);
+      }
+    }
 
     await this.audit.record({
       action: 'book-order:printing',
       resourceType: AUDIT_RESOURCES.bookOrder,
       resourceId: order.id,
       outcome: 'success',
-      metadata: { userId: order.userId, courseId: order.courseId, adminId },
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, notified: told },
     });
 
     return { id: order.id, status: 'printing', printedAt: now.toISOString() };
@@ -2682,8 +2738,10 @@ export class BookOrdersService {
    *
    * ## Why this one CAN be a loop of simple updates
    *
-   * Unlike `markShippedMany`, nothing here is sent anywhere. There is no
-   * WhatsApp socket to half-succeed against, so the only failure mode is a row
+   * Unlike `markShippedMany`, nothing here leaves the platform. The print
+   * notice (behind `bookPrintNotice`) is the student's own thread and bell, and
+   * `markPrinting` never lets it fail the row — there is no WhatsApp socket to
+   * half-succeed against, so the only failure mode is a row
    * that was not `paid`, and that is reported per id exactly the way the other
    * batches report theirs — `skipped`, with the reason named, so the admin can
    * see WHICH three of thirty did not move instead of re-reading thirty rows.

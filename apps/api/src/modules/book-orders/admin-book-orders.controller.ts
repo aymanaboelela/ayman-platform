@@ -258,7 +258,8 @@ export class AdminBookOrdersController {
    * `book-order:ship`, not a permission of its own: this is the same desk
    * moving the same parcel one step earlier, and a clerk who may record that a
    * box left may certainly record that paper went to the printer. It takes no
-   * `whatsapp` flag because nothing is sent — see `markPrinting`.
+   * `whatsapp` flag: the only notice (behind `bookPrintNotice`) is the
+   * platform thread and the bell, never WhatsApp — see `markPrinting`.
    */
   @RequirePermission('book-order:ship')
   @RequireCsrf()
