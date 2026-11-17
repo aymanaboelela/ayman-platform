@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { arabicCount } from '@ayman/contracts/arabic-count';
 import type { BacklogItem, BacklogItemKind } from '@ayman/contracts/backlog';
+import { quizHref } from '@/lib/quiz-links';
 import { backlogCopy } from '@ayman/contracts/copy/backlog';
 import {
   PLAN_HORIZON_DAYS,
@@ -55,6 +56,9 @@ const shortDay = new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'shor
 const asDate = (day: string) => new Date(`${day}T00:00:00Z`);
 
 function itemHref(item: BacklogItem): string {
+  // A monthly exam is on the exam shelf, outside the lesson chain: its door is
+  // the paper's own page, the one the dashboard band and the course page use.
+  if (item.monthlyExam) return quizHref(item.lessonId);
   const page = `/courses/${encodeURIComponent(item.courseSlug)}/lessons/${item.lessonId}`;
   return item.kind === 'homework' ? `${page}#homework` : page;
 }

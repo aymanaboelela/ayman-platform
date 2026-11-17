@@ -3,7 +3,8 @@ import { z } from '@ayman/contracts/zod';
 /**
  * «المتراكم عليّا» — everything a student could do right now and hasn't:
  * lectures not finished, quizzes never sat, homework never handed in (or sent
- * back for another go).
+ * back for another go), and a «امتحان الشهر» they never sat while it can
+ * still be sat (open now, or past its deadline but kept open).
  *
  * A READ of what the path already decided, never a second decision. Every row
  * here is a lesson whose gate `LessonGateService` resolved as `available` —
@@ -29,6 +30,12 @@ export const BacklogItemSchema = z.object({
    * otherwise.
    */
   status: z.enum(['not_started', 'in_progress', 'redo']),
+  /**
+   * An `exam` row that is a «امتحان الشهر» rather than the course's final
+   * exam. Those live on the exam shelf, outside the lesson chain, so the row
+   * opens `/quizzes/:lessonId` instead of the lesson page. Absent otherwise.
+   */
+  monthlyExam: z.boolean().optional(),
 });
 
 export const BacklogCourseSchema = z.object({

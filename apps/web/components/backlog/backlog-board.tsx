@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { arabicCount } from '@ayman/contracts/arabic-count';
 import type { BacklogCourse, BacklogItem, BacklogItemKind, StudentBacklog } from '@ayman/contracts/backlog';
+import { quizHref } from '@/lib/quiz-links';
 import { backlogCopy } from '@ayman/contracts/copy/backlog';
 import { CourseArt, SubjectMark } from '@/components/course-art';
 import { CountUp } from '@/components/rank/count-up';
@@ -69,6 +70,9 @@ function actionLabel(item: BacklogItem): string {
 /** The lesson page; homework lands on its own card under the video
  *  (`#homework`, the same anchor «الطريق لفوق» in `/rank` uses). */
 function itemHref(item: BacklogItem): string {
+  // A monthly exam is on the exam shelf, outside the lesson chain: its door is
+  // the paper's own page, the one the dashboard band and the course page use.
+  if (item.monthlyExam) return quizHref(item.lessonId);
   const page = `/courses/${encodeURIComponent(item.courseSlug)}/lessons/${item.lessonId}`;
   return item.kind === 'homework' ? `${page}#homework` : page;
 }

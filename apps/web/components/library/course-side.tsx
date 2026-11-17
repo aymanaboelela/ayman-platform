@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Award, BookOpen, ChevronLeft, ClipboardCheck, Users } from 'lucide-react';
+import { Award, BookOpen, CalendarOff, ChevronLeft, ClipboardCheck, GraduationCap, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { arabicCount } from '@ayman/contracts/arabic-count';
 import type { BookShippingRates } from '@ayman/contracts/books';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { StudentExam } from '@ayman/contracts/quiz/scheduled';
 import { CertificatesPayloadSchema } from '@ayman/contracts/share-cards';
 import { apiGetAuthed } from '@/lib/api-server';
 import { formatEGP } from '@/lib/price';
 import { quizHref } from '@/lib/quiz-links';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { BookOrderButton } from '@/components/site/book-order-button';
 
 const c = copy.library.side;
@@ -80,6 +81,79 @@ export function CourseExamCard({ exam }: { exam: StudentExam }) {
         )
       ) : null}
     </section>
+  );
+}
+
+const ce = copy.dashboard.exams;
+
+/**
+ * «امتحانات الشهر» — every other paper of THIS course, under the one the card
+ * above holds.
+ *
+ * It used to live on the home page (`MonthlyExamsSection`); the «Cinema» home
+ * dropped it, and with it the only door to a paper whose deadline had passed.
+ * A kept-open exam («يفضل متاح بعد الميعاد») is still sittable — the engine
+ * never shuts it — so a student who missed the night has to be able to find it
+ * here, on the course it belongs to («الامتحانات اللي وقتها خلص تفضل ظاهرة
+ * عشان يمتحنوها»). A sat paper shows its mark and opens its result; a closed
+ * one that was NOT kept open is a statement, not a link.
+ */
+export function CourseMonthlyExams({ exams }: { exams: readonly StudentExam[] }) {
+  if (exams.length === 0) return null;
+  return (
+    <section className="cp-mexams" aria-labelledby="cp-mexams-title">
+      <h2 id="cp-mexams-title" className="cp-mexams__title">
+        {ce.closedTitle}
+      </h2>
+      <ul className="cp-mexams__list">
+        {exams.map((exam) => (
+          <li key={exam.lessonId}>
+            <MonthlyExamRow exam={exam} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function MonthlyExamRow({ exam }: { exam: StudentExam }) {
+  const sittable = !exam.hasSat && (exam.phase === 'open' || (exam.phase === 'closed' && exam.keptOpen));
+  const score = exam.hasSat ? exam.scaledScore : null;
+  /* Null on a sat paper = essays still with the instructor — never «٠». */
+  const line =
+    score !== null
+      ? formatCopy(ce.scoreLine, { score: formatMark(score), outOf: formatMark(exam.gradeOutOf) })
+      : exam.hasSat
+        ? tenantSentence(copy.quiz.essayPending)
+        : exam.phase === 'upcoming'
+          ? exam.openFrom
+            ? formatCopy(c.examOpensAt, { date: stamp.format(new Date(exam.openFrom)) })
+            : c.examUpcoming
+          : exam.phase === 'open'
+            ? c.examOpen
+            : exam.keptOpen
+              ? ce.lateOpen
+              : ce.missed;
+
+  return (
+    <div className={sittable ? 'cp-mexam cp-mexam--owed' : 'cp-mexam'}>
+      <span className="cp-mexam__well" aria-hidden="true">
+        {exam.hasSat ? <GraduationCap className="size-4" /> : sittable ? <ClipboardCheck className="size-4" /> : <CalendarOff className="size-4" />}
+      </span>
+      <span className="cp-mexam__text">
+        <span className="cp-mexam__name">{exam.title}</span>
+        <span className="cp-mexam__line">{line}</span>
+      </span>
+      {sittable ? (
+        <Link href={quizHref(exam.lessonId)} className="cp-mexam__go">
+          {c.examStartShort}
+        </Link>
+      ) : exam.hasSat ? (
+        <Link href={quizHref(exam.lessonId)} className="cp-mexam__go cp-mexam__go--quiet">
+          {c.examResult}
+        </Link>
+      ) : null}
+    </div>
   );
 }
 

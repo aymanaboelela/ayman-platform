@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts';
 import { DEFAULT_BOOK_SHIPPING_RATES } from '@ayman/contracts/books';
 import type { StudentExam } from '@ayman/contracts/quiz/scheduled';
-import { CourseExamCard, CourseLinks } from './course-side';
+import { CourseExamCard, CourseLinks, CourseMonthlyExams } from './course-side';
 
 const c = copy.library.side;
 
@@ -45,6 +45,36 @@ describe('CourseExamCard', () => {
     render(<CourseExamCard exam={{ ...EXAM, hasSat: true }} />);
     const go = screen.getByRole('link', { name: c.examResult });
     expect(go.className).toContain('cp-exam__go--quiet');
+  });
+});
+
+describe('CourseMonthlyExams', () => {
+  const ce = copy.dashboard.exams;
+  const CLOSED: StudentExam = { ...EXAM, phase: 'closed', keptOpen: true, openUntil: '2026-10-14T17:00:00.000Z' };
+
+  it('a missed paper that was kept open is still a door — the orange one', () => {
+    render(<CourseMonthlyExams exams={[CLOSED]} />);
+    expect(screen.getByText(ce.lateOpen)).toBeTruthy();
+    const go = screen.getByRole('link', { name: c.examStartShort });
+    expect(go.getAttribute('href')).toBe(`/quizzes/${EXAM.lessonId}`);
+    expect(go.className).not.toContain('--quiet');
+  });
+
+  it('a missed paper that was NOT kept open is a statement, not a link', () => {
+    render(<CourseMonthlyExams exams={[{ ...CLOSED, keptOpen: false }]} />);
+    expect(screen.getByText(ce.missed)).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('a sat paper shows its mark and opens its result quietly', () => {
+    render(<CourseMonthlyExams exams={[{ ...CLOSED, hasSat: true, scaledScore: 18 }]} />);
+    expect(screen.getByText('18 من 20')).toBeTruthy();
+    expect(screen.getByRole('link', { name: c.examResult }).className).toContain('--quiet');
+  });
+
+  it('renders nothing without papers', () => {
+    const { container } = render(<CourseMonthlyExams exams={[]} />);
+    expect(container.innerHTML).toBe('');
   });
 });
 

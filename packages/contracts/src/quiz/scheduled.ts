@@ -113,9 +113,10 @@ export const StudentExamSchema = z.object({
   title: z.string(),
   phase: ExamPhaseSchema,
   /**
-   * Both nullable because the columns are. A scheduled exam always has
-   * `openFrom` (that is what makes it scheduled and what the read filters on);
-   * `openUntil` may be absent, which means "open from then on". On a kept-open
+   * Both nullable because the columns are. A scheduled exam has `openFrom`
+   * or an on-time deadline (the read filters on either — a paper reopened by
+   * hand may carry only the deadline); `openUntil` may be absent, which means
+   * "open from then on". On a kept-open
    * exam it is the ON-TIME deadline (`examDeadline`), not the engine's null.
    */
   openFrom: z.iso.datetime().nullable(),

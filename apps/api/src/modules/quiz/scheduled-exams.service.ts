@@ -603,7 +603,11 @@ export class ScheduledExamsService {
         isPublished: true,
         OR: shown,
         section: { title: EXAM_SHELF_TITLE, isPublished: true },
-        quiz: { isPublished: true, openFrom: { not: null } },
+        // A start time OR an on-time deadline makes it a scheduled paper. The
+        // first mid-month exam was reopened by hand with no `openFrom` at all
+        // (deadline only, kept open) — filtering on `openFrom` alone hid it
+        // from every student list while the engine still let them sit it.
+        quiz: { isPublished: true, OR: [{ openFrom: { not: null } }, { lateAfter: { not: null } }] },
       },
       select: {
         id: true,
