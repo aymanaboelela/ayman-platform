@@ -142,8 +142,8 @@ export function LessonPlayerView({
   /*
    * The tabs, most urgent first — the first one is the one open on arrival.
    * The homework is a thing to DO; the materials were uploaded to be read; the
-   * summary is for after the video; notes are the student's own; the quiz
-   * hangs off the lecture and has its row in the outline too.
+   * summary is for after the video; notes are the student's own. The quiz is
+   * placed last of all, below — it jumps the queue while unsat.
    */
   const tabs: LessonTab[] = [];
   if (payload.homework && panels.homework) {
@@ -189,16 +189,29 @@ export function LessonPlayerView({
    * attachment) lesson it is a bonus alongside that lesson's own completion
    * rule, not the rule itself — hence `variant="attached"`, which swaps the
    * copy rather than the mechanics.
+   *
+   * Where it sits: the lecture's quiz is solved FROM the lecture — no outline
+   * row of its own (Ayman, 2026-11-17: «مكان المحاضرة حل الكويز… ميبقاش في
+   * قسم منفصل»). Pushed last, it was the fifth tab, which a phone scrolls out
+   * of view, so the one thing he called «مهم أوي» was invisible under the
+   * video. Until it has been sat it is the FIRST tab — open on arrival, the
+   * card right under the player — with the red disc homework uses; after
+   * that it drops in behind the homework, where the score stays one tap away.
    */
   if (!isQuiz && payload.quiz) {
-    tabs.push({
+    const quizSat = progress.state === 'passed' || progress.state === 'failed';
+    const quizTab: LessonTab = {
       id: 'quiz',
       label: t.quiz,
       icon: <CircleCheck className="size-4" />,
+      count: quizSat ? undefined : 1,
+      alert: !quizSat,
       content: (
         <QuizLesson lessonId={payload.lesson.id} progress={progress} variant="attached" facts={payload.quiz} />
       ),
-    });
+    };
+    const afterHomework = tabs[0]?.id === 'homework' ? 1 : 0;
+    tabs.splice(quizSat ? afterHomework : 0, 0, quizTab);
   }
 
   return (

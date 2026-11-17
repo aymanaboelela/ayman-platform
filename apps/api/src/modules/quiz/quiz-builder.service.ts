@@ -14,6 +14,10 @@ interface PoolSourceFilter {
   types?: QuestionType[];
 }
 
+/** An in-progress attempt untouched for this long is abandoned, not live —
+ *  see `moveToLesson`. Longer than any sitting a student takes in one go. */
+const LIVE_ATTEMPT_WINDOW_MS = 3 * 60 * 60 * 1000;
+
 @Injectable()
 export class QuizBuilderService {
   constructor(
@@ -146,9 +150,25 @@ export class QuizBuilderService {
      * Moving underneath it 404s the student mid-exam with their answers
      * already saved — the one failure here that cannot be undone by moving
      * the quiz back. Submitted attempts are unaffected: review is resolved
-     * through the attempt, which travels with the quiz. */
+     * through the attempt, which travels with the quiz.
+     *
+     * Only a LIVE sitting counts. An untimed quiz has no deadline to close an
+     * attempt the student walked away from, so one left open on 2026-10-19
+     * blocked its quiz from ever moving again. An abandoned attempt survives
+     * the move: resume is looked up by quiz + student, not by lesson, so the
+     * student finds it again on the quiz's new lesson. Live = touched within
+     * the window (every answer save stamps `lastActivityAt`) or a timed
+     * attempt whose clock is still running. */
+    const now = Date.now();
     const inFlight = await this.prisma.quizAttempt.count({
-      where: { quizId, state: 'in_progress' },
+      where: {
+        quizId,
+        state: 'in_progress',
+        OR: [
+          { lastActivityAt: { gt: new Date(now - LIVE_ATTEMPT_WINDOW_MS) } },
+          { deadlineAt: { gt: new Date(now) } },
+        ],
+      },
     });
     if (inFlight > 0) throw new BadRequestException({ code: 'attempt_in_progress' });
 
