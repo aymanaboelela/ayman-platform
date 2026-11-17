@@ -37,7 +37,7 @@ import {
 // them and `EntitlementService` is not reachable from here. They are imported
 // so that «إيه اللي الطالب ده فاتحه أصلًا» has ONE definition: the checkout
 // must not offer (or charge for) a month the gate would have opened anyway.
-import { courseAccessScopes } from '../entitlement/grant-liveness';
+import { courseAccessScopes, grantLiveness } from '../entitlement/grant-liveness';
 import { monthSliceOf } from '../entitlement/month-access';
 import type { WalletPurchaseInput, WalletPurchaseResult } from '@ayman/contracts/wallet';
 import { debitWallet } from '../wallet/wallet-ledger';
@@ -867,7 +867,13 @@ export class PaymentsService {
   async listOwnedMonths(
     userId: string,
     courseId: string,
-  ): Promise<{ ownedMonthIds: string[]; coversAll: boolean; pending: boolean }> {
+  ): Promise<{
+    ownedMonthIds: string[];
+    coversAll: boolean;
+    pending: boolean;
+    ownedTermIds: string[];
+    coversAllTerms: boolean;
+  }> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
       select: {
@@ -882,11 +888,50 @@ export class PaymentsService {
     // `pending` — a claim for this course already waiting in the review queue.
     // `submit()` refuses a second one, so the library's «شهور جديدة اتفتحت»
     // card says «بيتراجع» instead of offering a button that ends there.
-    const [ownership, pending] = await Promise.all([
+    const [ownership, terms, pending] = await Promise.all([
       this.monthOwnership(userId, course),
+      this.termOwnership(userId, course),
       this.prisma.paymentSubmission.count({ where: { userId, courseId, status: 'pending' } }),
     ]);
-    return { ...ownership, pending: pending > 0 };
+    return { ...ownership, ...terms, pending: pending > 0 };
+  }
+
+  /**
+   * «الترم التاني اتفتح» — which terms this student already holds, for the
+   * library's term card and the checkout's term picker.
+   *
+   * Not derivable from `coversAll`: `monthSliceOf` reads a `term` grant as
+   * «every month», so a «الترم الأول» student is `coversAll: true` and yet
+   * still has «الترم التاني» to buy. That student is exactly who the card is
+   * for — the term was opened before any of its lectures, so there is no
+   * padlock anywhere to carry them to the checkout (the same missing door
+   * «شهر ٢» had, see `MonthOfferCard`).
+   *
+   * `coversAllTerms` is a live course-wide grant (year, «٣ شهور», monthly
+   * course plan, admin, platform): `resolveTermAccess` lets those through
+   * every term, so offering one would sell a term they already have.
+   * `course_month` is neither — a month buyer holds no term.
+   */
+  private async termOwnership(
+    userId: string,
+    course: MonthOfferingCourse,
+  ): Promise<{ ownedTermIds: string[]; coversAllTerms: boolean }> {
+    const grants = await this.prisma.accessGrant.findMany({
+      where: { userId, OR: courseAccessScopes(course) },
+      select: { scope: true, termId: true, validFrom: true, validUntil: true, revokedAt: true },
+    });
+    const now = new Date();
+    const live = grants.filter((grant) => grantLiveness(grant, now) === 'live');
+    return {
+      ownedTermIds: [
+        ...new Set(
+          live
+            .filter((grant) => grant.scope === 'term' && grant.termId !== null)
+            .map((grant) => grant.termId as string),
+        ),
+      ],
+      coversAllTerms: live.some((grant) => grant.scope !== 'term' && grant.scope !== 'course_month'),
+    };
   }
 
   /**

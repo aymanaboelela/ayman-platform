@@ -21,6 +21,8 @@ import { LtrRatio } from '@/components/ltr-ratio';
 import { CourseOutlineView } from '@/components/library/course-outline';
 import { CourseCertificatesLink, CourseExamCard, CourseLinks } from '@/components/library/course-side';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
+import { activeSalePrice } from '@ayman/contracts/sale';
+import { TermOfferCard, type TermOffer } from '@/components/player/term-offer-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { formatDuration } from '@/components/site/course-card';
 import { RichText } from '@/components/content/rich-text';
@@ -108,6 +110,8 @@ const OwnedMonthsSchema = z.object({
   ownedMonthIds: z.uuid().array(),
   coversAll: z.boolean().default(false),
   pending: z.boolean().default(false),
+  ownedTermIds: z.uuid().array().default([]),
+  coversAllTerms: z.boolean().default(false),
 });
 
 export default async function LibraryCoursePage({ params }: { params: Promise<Params> }) {
@@ -203,6 +207,33 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
             title: month.title,
             lessonCount: month.lessonCount,
             priceCents: month.priceCents,
+          })),
+          pending: ownership?.pending ?? false,
+        }
+      : null;
+
+  /*
+   * «الترم التاني اتفتح» — the month card's twin, for a student who already
+   * holds a term. `coversAll` hides the month card from them (a term opens
+   * every month), so without this a «الترم الأول» student had no way at all
+   * to the term opened next: it is booked before its first lecture exists, so
+   * there is no padlock to press.
+   *
+   * Term holders only. A month buyer still reaches every term from the plan
+   * grid, and a course-wide subscriber already has every term.
+   */
+  const offerTerms =
+    ownership && outline.enrolled && !ownership.coversAllTerms && ownership.ownedTermIds.length > 0
+      ? course.terms.filter((term) => !ownership.ownedTermIds.includes(term.id))
+      : [];
+  const termOffer: TermOffer | null =
+    offerTerms.length > 0
+      ? {
+          terms: offerTerms.map((term) => ({
+            id: term.id,
+            title: term.title,
+            priceCents:
+              activeSalePrice(term.priceCents, term.salePriceCents, course.saleEndsAt) ?? term.priceCents,
           })),
           pending: ownership?.pending ?? false,
         }
@@ -438,6 +469,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           />
 
           {monthOffer ? <MonthOfferCard courseSlug={course.slug} offer={monthOffer} /> : null}
+          {termOffer ? <TermOfferCard courseSlug={course.slug} offer={termOffer} /> : null}
         </div>
 
         <div className="cp-layout__main">
