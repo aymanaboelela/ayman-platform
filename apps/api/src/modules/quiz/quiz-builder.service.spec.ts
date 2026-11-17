@@ -341,6 +341,68 @@ describe('QuizBuilderService', () => {
       await prisma.user.delete({ where: { id: student.id } });
     });
 
+    it('moves past an untimed sitting abandoned days ago, and the attempt goes with the quiz', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(quizId);
+      const student = await prisma.user.create({
+        data: { id: randomUUID(), name: 'Student', email: `${randomUUID()}@example.test`, role: 'student' },
+      });
+      const longAgo = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000);
+      const attempt = await prisma.quizAttempt.create({
+        data: {
+          quizId,
+          userId: student.id,
+          attemptNo: 1,
+          state: 'in_progress',
+          sumMarks: 1,
+          gradeOutOf: 100,
+          passPercent: 70,
+          startedAt: longAgo,
+          lastActivityAt: longAgo,
+        },
+      });
+      const toLessonId = await createLesson();
+
+      await service.moveToLesson(quizId, toLessonId);
+
+      expect((await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } })).lessonId).toBe(toLessonId);
+      const after = await prisma.quizAttempt.findUniqueOrThrow({ where: { id: attempt.id } });
+      expect(after.state).toBe('in_progress');
+      expect(after.quizId).toBe(quizId);
+
+      await prisma.quizAttempt.delete({ where: { id: attempt.id } });
+      await prisma.user.delete({ where: { id: student.id } });
+    });
+
+    it('still refuses an idle sitting whose timer is running', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(quizId);
+      const student = await prisma.user.create({
+        data: { id: randomUUID(), name: 'Student', email: `${randomUUID()}@example.test`, role: 'student' },
+      });
+      const longAgo = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000);
+      const attempt = await prisma.quizAttempt.create({
+        data: {
+          quizId,
+          userId: student.id,
+          attemptNo: 1,
+          state: 'in_progress',
+          sumMarks: 1,
+          gradeOutOf: 100,
+          passPercent: 70,
+          lastActivityAt: longAgo,
+          deadlineAt: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+
+      await expect(service.moveToLesson(quizId, await createLesson())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      await prisma.quizAttempt.delete({ where: { id: attempt.id } });
+      await prisma.user.delete({ where: { id: student.id } });
+    });
+
     it('404s on a quiz or a lesson that does not exist', async () => {
       const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
       extraQuizIds.push(quizId);
