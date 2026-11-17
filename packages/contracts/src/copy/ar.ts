@@ -3892,6 +3892,21 @@ export const copy = {
       noneChosen: 'لازم شهر واحد على الأقل',
       pending: 'طلب الاشتراك بيتراجع — الشهر بيتفتح أول ما يتأكد.',
     },
+
+    /**
+     * «الترم التاني اتفتح» — the same door as `monthOffer`, for a term. A term
+     * is opened for booking before its first lecture exists, so there is no
+     * padlock anywhere that would lead a «الترم الأول» student to buy it.
+     */
+    termOffer: {
+      eyebrow: 'اتفتح للحجز',
+      titleOne: '«{term}» اتفتح',
+      titleMany: 'ترمات جديدة اتفتحت',
+      lead: 'الاشتراك في الترم بيفتح كل محاضراته أول ما تنزل، من غير دفع تاني.',
+      soon: 'المحاضرات هتنزل قريب',
+      cta: 'الاشتراك في الترم ده',
+      pending: 'طلب الاشتراك بيتراجع — الترم بيتفتح أول ما يتأكد.',
+    },
   },
 
   /**

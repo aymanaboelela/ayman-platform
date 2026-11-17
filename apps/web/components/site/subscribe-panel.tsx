@@ -109,6 +109,14 @@ const OWNED_MONTHS_SCHEMA = z.object({
   ownedMonthIds: z.uuid().array(),
   /** A term, «٣ شهور», a year or an admin grant — every month is open. */
   coversAll: z.boolean().default(false),
+  /**
+   * The terms already held. Separate from `coversAll` on purpose: a
+   * «الترم الأول» grant opens every MONTH, yet «الترم التاني» is still for
+   * sale to that same student — the term picker must offer it, and only it.
+   */
+  ownedTermIds: z.uuid().array().default([]),
+  /** A year, «٣ شهور» or an admin grant — every term is open, none to sell. */
+  coversAllTerms: z.boolean().default(false),
 });
 
 /**
@@ -563,6 +571,8 @@ export function SubscribePanel({
   /** Every month is already open — see `OWNED_MONTHS_SCHEMA`. The «شهر» card
    *  gives way to one sentence saying so. */
   const [coversAll, setCoversAll] = useState(false);
+  const [ownedTermIds, setOwnedTermIds] = useState<string[]>([]);
+  const [coversAllTerms, setCoversAllTerms] = useState(false);
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -796,6 +806,8 @@ export function SubscribePanel({
       if (ownedMonthsResult.status === 'fulfilled') {
         setOwnedMonthIds(ownedMonthsResult.value.ownedMonthIds);
         setCoversAll(ownedMonthsResult.value.coversAll);
+        setOwnedTermIds(ownedMonthsResult.value.ownedTermIds);
+        setCoversAllTerms(ownedMonthsResult.value.coversAllTerms);
       }
 
       if (settingsResult.status === 'fulfilled') {
@@ -857,7 +869,13 @@ export function SubscribePanel({
          * jumping past the grid would land on the payment step with a code
          * nobody has quoted. That link keeps its existing path untouched.
          */
-        const asked = couponFromLocation() === null ? requestedPlan(live) : null;
+        // A term already held is not offered — a link naming one (an old
+        // «الترم التاني اتفتح» card, a shared link) opens the plain grid.
+        const sellableTerms = owned?.coversAllTerms
+          ? []
+          : live.terms.filter((term) => !(owned?.ownedTermIds ?? []).includes(term.id));
+        const asked =
+          couponFromLocation() === null ? requestedPlan({ ...live, terms: sellableTerms }) : null;
         if (asked?.plan === 'monthly' && live.months.length > 0) {
           // «شهر» here means named months, and the link named none: the
           // picker, with nothing ticked. Not for a student every month is
@@ -941,12 +959,20 @@ export function SubscribePanel({
   const yearlyWasCents = saleYearlyCents !== null ? regularYearlyCents : null;
   /** Each discounted term's regular price, by id — the «قبل» on its card. */
   const termWasCents = new Map<string, number>();
-  const terms = (livePlans ? livePlans.terms : cachedTerms).map((term) => {
-    const onSale = activeSalePrice(term.priceCents, term.salePriceCents, sale.endsAt);
-    if (onSale === null) return term;
-    termWasCents.set(term.id, term.priceCents);
-    return { ...term, priceCents: onSale };
-  });
+  /*
+   * Only the terms still to buy. A «الترم الأول» student coming for
+   * «الترم التاني» would otherwise be offered both, and the one they already
+   * hold costs a second transfer the review queue then has to refund. With
+   * one left, `choosePlan` goes straight to the payment form for it.
+   */
+  const terms = (livePlans ? livePlans.terms : cachedTerms)
+    .filter((term) => !coversAllTerms && !ownedTermIds.includes(term.id))
+    .map((term) => {
+      const onSale = activeSalePrice(term.priceCents, term.salePriceCents, sale.endsAt);
+      if (onSale === null) return term;
+      termWasCents.set(term.id, term.priceCents);
+      return { ...term, priceCents: onSale };
+    });
   /** When ANY plan is on offer and the offer has an end — said once, above the cards. */
   const saleUntil =
     sale.endsAt !== null && (monthlyWasCents !== null || yearlyWasCents !== null || termWasCents.size > 0)

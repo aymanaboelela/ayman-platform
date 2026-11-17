@@ -1005,6 +1005,8 @@ describe('PaymentsService', () => {
         ownedMonthIds: [monthTwoId],
         coversAll: false,
         pending: false,
+        ownedTermIds: [],
+        coversAllTerms: false,
       });
       // Another student's purchase is not this student's — `userId` comes off
       // the session, never the URL.
@@ -1012,6 +1014,8 @@ describe('PaymentsService', () => {
         ownedMonthIds: [],
         coversAll: false,
         pending: false,
+        ownedTermIds: [],
+        coversAllTerms: false,
       });
     });
 
@@ -1034,6 +1038,45 @@ describe('PaymentsService', () => {
       // And it says WHY, so the picker can say «اشتراكك فاتح كل الشهور» once
       // instead of padlocking every card.
       expect(owned.coversAll).toBe(true);
+      // A year opens every term too — the term card must not sell one.
+      expect(owned.coversAllTerms).toBe(true);
+      expect(owned.ownedTermIds).toEqual([]);
+    });
+
+    it('names the term a student holds and leaves the other one for sale', async () => {
+      const claim = await service.submit(studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: termAId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      await service.approve(adminId, claim.id);
+
+      const owned = await service.listOwnedMonths(studentId, termCourseId);
+      // `coversAll` is true (a term grant reads as «every month»), which is
+      // exactly why the term answer has to be separate: term B is still unsold.
+      expect(owned.ownedTermIds).toEqual([termAId]);
+      expect(owned.coversAllTerms).toBe(false);
+    });
+
+    it('drops a term grant its term\'s closing revoked', async () => {
+      const claim = await service.submit(studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: termAId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      await service.approve(adminId, claim.id);
+      await prisma.accessGrant.updateMany({
+        where: { userId: studentId, courseId: termCourseId, scope: 'term' },
+        data: { revokedAt: new Date() },
+      });
+
+      const owned = await service.listOwnedMonths(studentId, termCourseId);
+      expect(owned.ownedTermIds).toEqual([]);
+      expect(owned.coversAllTerms).toBe(false);
     });
 
     it('drops a revoked month grant — `revokedAt` is a month subscription\'s only cutoff', async () => {
@@ -1055,6 +1098,8 @@ describe('PaymentsService', () => {
         ownedMonthIds: [],
         coversAll: false,
         pending: false,
+        ownedTermIds: [],
+        coversAllTerms: false,
       });
     });
 
@@ -1072,6 +1117,8 @@ describe('PaymentsService', () => {
         ownedMonthIds: [],
         coversAll: false,
         pending: true,
+        ownedTermIds: [],
+        coversAllTerms: false,
       });
     });
 

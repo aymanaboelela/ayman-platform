@@ -318,6 +318,16 @@
   color: var(--a-11);
 }
 
+/* «الترم التاني اتفتح» — one price row and one button per term. */
+.mo-card__term {
+  display: grid;
+  gap: 0.5rem;
+}
+.mo-card__term-name {
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+
 .mo-card__foot {
   display: flex;
   flex-wrap: wrap;

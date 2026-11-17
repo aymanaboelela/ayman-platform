@@ -115,7 +115,13 @@ export class PaymentsController {
   ownedMonths(
     @CurrentUser() user: AuthenticatedUser,
     @Param('courseId', ParseUUIDPipe) courseId: string,
-  ): Promise<{ ownedMonthIds: string[]; coversAll: boolean; pending: boolean }> {
+  ): Promise<{
+    ownedMonthIds: string[];
+    coversAll: boolean;
+    pending: boolean;
+    ownedTermIds: string[];
+    coversAllTerms: boolean;
+  }> {
     return this.payments.listOwnedMonths(user.id, courseId);
   }
 }
