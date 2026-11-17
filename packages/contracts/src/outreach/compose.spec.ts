@@ -455,6 +455,8 @@ describe('composeOutreach — content', () => {
     // The book notices greet outside the composer, through the same rule.
     expect(formatWithName(copy.bookShipNotice, 'M. Ahmed', { days: '3' })).toMatch(/^كتابك/u);
     expect(formatWithName(copy.bookShipNotice, 'منى أحمد علي', { days: '3' })).toMatch(/^يا منى، كتابك/u);
+    expect(formatWithName(copy.bookPrintNotice, 'M. Ahmed', {})).toMatch(/^طلبك للكتاب/u);
+    expect(formatWithName(copy.bookPrintNotice, 'منى أحمد علي', {})).toMatch(/^يا منى، طلبك/u);
   });
 
   it('stops a caps-lock name from shouting in the greeting', () => {
@@ -772,8 +774,11 @@ describe('the voice — one message, written for either reader', () => {
     // Not composed here, but sent to the same students in the same thread —
     // «والمندوب هيتصل بيك» lived in these, outside every list above.
     copy.bookShipNotice,
+    copy.bookPrintNotice,
     ...Object.values(copy.bookCourierNotice),
     copy.notifications.bookOrderShippedDetail,
+    copy.notifications.bookOrderPrinting,
+    copy.notifications.bookOrderPrintingDetail,
   ];
 
   /**

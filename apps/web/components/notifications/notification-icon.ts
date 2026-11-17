@@ -10,6 +10,7 @@ import {
   PackageX,
   Send,
   Trophy,
+  Printer,
   Truck,
   Wallet,
   NotebookPen,
@@ -75,6 +76,9 @@ export function iconFor(entry: StudentNotification) {
     */
     case 'book_order_shipped':
       return Truck;
+    // «في الطباعة» — the printer itself, the step before the truck.
+    case 'book_order_printing':
+      return Printer;
     case 'book_order_delivered':
       return PackageCheck;
     case 'book_order_rejected':
@@ -160,6 +164,7 @@ export function toneFor(entry: StudentNotification): NotificationTone {
       return 'problem';
     case 'book_order_placed':
     case 'book_order_shipped':
+    case 'book_order_printing':
     case 'book_order_delivered':
       return 'parcel';
     case 'conversation_reply':

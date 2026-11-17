@@ -302,6 +302,16 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         href: MY_BOOK_ORDERS_HREF,
       };
 
+    case 'book_order_printing':
+      return {
+        title: formatCopy(c.bookOrderPrinting, { book: entry.bookTitle }),
+        // No date — a print run comes back when it comes back. What happens
+        // next instead, same as the chat message.
+        detail: c.bookOrderPrintingDetail,
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
+      };
+
     case 'book_order_delivered':
       return {
         title: formatCopy(c.bookOrderDelivered, { book: entry.bookTitle }),

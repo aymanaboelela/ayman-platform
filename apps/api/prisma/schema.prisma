@@ -3272,12 +3272,19 @@ model BookOrder {
   /// `deliveredAt` is reachable from `paid` without a `shippedAt`. Inventing a
   /// print time to satisfy the sequence would put a lie one column over.
   ///
-  /// No notification fires here, deliberately: paper entering a print shop is
-  /// not news to a student, and a message about it would promise a date the run
-  /// cannot keep. `printedByUserId` is the only record of who sent it — which is
-  /// why `book-order:printing` is an audit action of its own.
+  /// The student IS told now, behind `bookPrintNotice` (2026-11-17): orders sat
+  /// «في المطبعة» for days with no word after the payment was confirmed, and
+  /// students asked in chat. The notice promises no date — see
+  /// `BookOrdersService.markPrinting`. `printedByUserId` is the only record of
+  /// who sent it — which is why `book-order:printing` is an audit action of its
+  /// own.
   printedAt       DateTime? @map("printed_at")
   printedByUserId String?   @map("printed_by_user_id")
+  /// «في الطباعة» notice guard — one order, one notice. Claimed atomically
+  /// (`updateMany … where printNoticeSentAt IS NULL`) in the same transaction as
+  /// the notification row, so a re-clicked row, a bulk run racing a single
+  /// click, or an order restored and printed again never messages twice.
+  printNoticeSentAt DateTime? @map("print_notice_sent_at")
 
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
   /// action. Records ONLY that the order shipped; no notification is sent to
@@ -5334,6 +5341,10 @@ enum NotificationKind {
   /// وبعدين إيه؟»: the platform knew the order shipped and told nobody, so the
   /// student's only way to find out was to ask. Carries `bookOrderId`.
   book_order_shipped
+  /// STUDENT — «الكتاب في الطباعة». The silent stretch between «الدفع اتأكد» and
+  /// «اتشحن» was days long and students filled it by asking in chat. Carries
+  /// `orderId`. Behind the `bookPrintNotice` entitlement.
+  book_order_printing
   /// STUDENT — «الكتاب وصلك». Sent when the admin confirms arrival, and worded
   /// to close the loop rather than to congratulate: it says the order is
   /// complete and where to go if it is not. Carries `bookOrderId`.

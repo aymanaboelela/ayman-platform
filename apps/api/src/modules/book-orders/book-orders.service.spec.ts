@@ -17,6 +17,20 @@ import { FinanceOverviewService } from '../expenses/finance-overview.service';
 import { DEFAULT_BOOK_SHIPPING_RATES, bookShippingCentsFor } from '@ayman/contracts/books';
 import { BookOrdersService } from './book-orders.service';
 
+/* `bookPrintNotice` is on for this suite (it runs as his stack, where every
+   key is on) except in the one case that closes it — a variable rather than a
+   `jest.fn`, so a case that forgets to restore it fails the next one loudly.
+   Every other key keeps the real module's answer. */
+let printNoticeOn = true;
+jest.mock('../../common/entitlements', () => {
+  const actual = jest.requireActual('../../common/entitlements');
+  return {
+    ...actual,
+    isFeatureEnabled: (key: string) =>
+      key === 'bookPrintNotice' ? printNoticeOn : actual.isFeatureEnabled(key),
+  };
+});
+
 /**
  * Pinned so these assertions do not move when someone edits the live delivery
  * rates in the shared dev database. These three are the real defaults.
@@ -1659,6 +1673,134 @@ describe('BookOrdersService', () => {
       });
       return order;
     };
+
+    /* The chat half of the print notice goes through `OutreachService`, which
+       this suite does not build — stubbed to record who was told what. Both
+       methods, because the «مرتجع» case below swaps in its own `sendManual`
+       stub and later cases still reach `postAdminMessage`. */
+    let posted: { userId: string; body: string }[] = [];
+    beforeEach(() => {
+      posted = [];
+      (service as unknown as { outreach: unknown }).outreach = {
+        postAdminMessage: async (userId: string, body: string) => {
+          posted.push({ userId, body });
+        },
+        sendManual: async () => ({ conversationId: '', messageId: '' }),
+      };
+    });
+
+    const printNotices = (orderId: string) =>
+      prisma.notification.findMany({
+        where: { kind: 'book_order_printing', payload: { path: ['orderId'], equals: orderId } },
+      });
+
+    describe('«في الطباعة» — the student is told', () => {
+      it('writes one notification and one chat message, and stamps the guard', async () => {
+        const order = await paidOrder();
+        await service.markPrinting(adminId, order.id);
+
+        const written = await printNotices(order.id);
+        expect(written).toHaveLength(1);
+        expect(written[0]!.userId).toBe(studentId);
+
+        expect(posted).toHaveLength(1);
+        expect(posted[0]!.userId).toBe(studentId);
+        expect(posted[0]!.body).toContain('في الطباعة');
+        expect(posted[0]!.body).toContain('«طلبات الكتب»');
+
+        const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+        expect(row.printNoticeSentAt).not.toBeNull();
+      });
+
+      /* The status check already refuses a second click; this is the path that
+         gets PAST it — an order rejected and restored to `paid`, then printed
+         again. The guard column is what keeps it to one notice. */
+      it('never tells the same order twice, even back through paid', async () => {
+        const order = await paidOrder();
+        await service.markPrinting(adminId, order.id);
+        await prisma.bookOrder.update({
+          where: { id: order.id },
+          data: { status: 'paid', printedAt: null, printedByUserId: null },
+        });
+
+        await service.markPrinting(adminId, order.id);
+
+        expect(await printNotices(order.id)).toHaveLength(1);
+        expect(posted).toHaveLength(1);
+        const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+        expect(row.status).toBe('printing');
+      });
+
+      it('reaches a guest order through the phone it carries', async () => {
+        /* Its own account and number: the shared `linkedPhone` already carries
+           orders from other blocks, and the duplicate guard would 409 this. */
+        const stamp = Date.now();
+        const phone = `+2012${String(stamp).slice(-8)}`;
+        const owner = await prisma.user.create({
+          data: {
+            id: `book-print-guest-${stamp}`,
+            name: 'طالب الطباعة',
+            email: `book-print-guest-${stamp}@t.test`,
+            phoneNumber: phone,
+          },
+        });
+        const order = await service.create(null, { ...address(), phone });
+        await service.submitPayment(null, order.id, {
+          senderPhone: '01011112222',
+          screenshotKey: validScreenshotKey(),
+        });
+        await service.markPrinting(adminId, order.id);
+
+        const written = await printNotices(order.id);
+        expect(written.map((row) => row.userId)).toEqual([owner.id]);
+        expect(posted.map((entry) => entry.userId)).toEqual([owner.id]);
+
+        // Notifications cascade with the user; the guest order is book-scoped
+        // and goes with `afterAll`'s cart cleanup.
+        await prisma.user.delete({ where: { id: owner.id } });
+      });
+
+      it('tells a whole bulk run, once each', async () => {
+        const first = await paidOrder();
+        const second = await paidOrder();
+        await service.markPrintingMany(adminId, [first.id, second.id, first.id]);
+
+        expect(await printNotices(first.id)).toHaveLength(1);
+        expect(await printNotices(second.id)).toHaveLength(1);
+        expect(posted).toHaveLength(2);
+      });
+
+      /* A teacher stack by default: the button does what it always did. */
+      it('tells nobody with bookPrintNotice off, and leaves the guard unset', async () => {
+        printNoticeOn = false;
+        try {
+          const order = await paidOrder();
+          const result = await service.markPrinting(adminId, order.id);
+          expect(result.status).toBe('printing');
+
+          expect(await printNotices(order.id)).toHaveLength(0);
+          expect(posted).toHaveLength(0);
+          const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+          expect(row.printNoticeSentAt).toBeNull();
+        } finally {
+          printNoticeOn = true;
+        }
+      });
+
+      /* The print run really happened; a chat outage must not undo it or turn
+         the click into an error. */
+      it('keeps the order at the printer when the chat message fails', async () => {
+        (service as unknown as { outreach: unknown }).outreach = {
+          postAdminMessage: async () => {
+            throw new Error('thread unavailable');
+          },
+        };
+        const order = await paidOrder();
+        const result = await service.markPrinting(adminId, order.id);
+        expect(result.status).toBe('printing');
+        expect(await printNotices(order.id)).toHaveLength(1);
+      });
+    });
 
     it('stamps printedAt, records who sent it, and moves status to printing', async () => {
       const order = await paidOrder();
