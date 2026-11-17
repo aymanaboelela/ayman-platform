@@ -227,7 +227,7 @@
 
 /* Nothing to put there (no exam, no row, no month offer): no empty row and
    no doubled gap above the units on a phone. */
-.cp-layout__top:not(:has(.cp-exam, .cp-link, .mo-card)) {
+.cp-layout__top:not(:has(.cp-exam, .cp-mexams, .cp-link, .mo-card)) {
   display: none;
 }
 
@@ -352,6 +352,105 @@
   .cp-exam__go-short {
     display: none;
   }
+}
+
+/* ── «امتحانات الشهر»: the course's other papers ───────────────────────── */
+
+/* A day card under the night one: the papers already behind the student. A
+   kept-open one they still owe gets the orange press — the same weight the
+   exam card's button carries, because it is the same kind of door. */
+.cp-mexams {
+  display: grid;
+  gap: var(--s-8);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+}
+
+.cp-mexams__title {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.cp-mexams__list {
+  display: grid;
+  gap: var(--s-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cp-mexam {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.cp-mexam__well {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-md);
+  background: var(--n-3);
+  color: var(--n-11);
+}
+
+.cp-mexam--owed .cp-mexam__well {
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+  color: var(--a-11);
+}
+
+.cp-mexam__text {
+  display: grid;
+  min-inline-size: 0;
+  line-height: 1.4;
+}
+
+.cp-mexam__name {
+  overflow: hidden;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-mexam__line {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.cp-mexam__go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.cp-mexam__go:hover {
+  background: var(--a-10);
+}
+
+.cp-mexam__go--quiet {
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+.cp-mexam__go--quiet:hover {
+  background: var(--n-4);
 }
 
 /* ── the small rows: group · book · certificates ────────────────────────── */

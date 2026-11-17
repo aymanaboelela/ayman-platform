@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { BacklogCourse, BacklogItem, StudentBacklog } from '@ayman/contracts/backlog';
 import type { LearningPath, PathNode } from '@ayman/contracts/path';
+import type { StudentExam } from '@ayman/contracts/quiz/scheduled';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ScheduledExamsService } from '../quiz/scheduled-exams.service';
 import { PathService } from './path.service';
 
 /** A quiz that can still be sat. `failed` is not here: a quiz is one sitting
@@ -28,6 +30,18 @@ export interface LessonHomeworkRow {
   open: boolean;
 }
 
+/**
+ * A «امتحان الشهر» is owed while it can still be sat and has not been: open
+ * now, or past its deadline on a paper kept open («يفضل متاح بعد الميعاد»).
+ * `upcoming` is not owed yet, a closed paper that was NOT kept open is a door
+ * that no longer opens, and anything sat is history — the same «one sitting»
+ * rule the attached quizzes follow above.
+ */
+function examOwed(exam: StudentExam): boolean {
+  if (exam.hasSat) return false;
+  return exam.phase === 'open' || (exam.phase === 'closed' && exam.keptOpen);
+}
+
 function itemStatus(node: PathNode): BacklogItem['status'] {
   return node.state === 'in_progress' ? 'in_progress' : 'not_started';
 }
@@ -45,6 +59,7 @@ export class BacklogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly path: PathService,
+    private readonly exams: ScheduledExamsService,
   ) {}
 
   async forUser(userId: string): Promise<StudentBacklog> {
@@ -118,7 +133,17 @@ export class BacklogService {
     homeworkRows?: readonly LessonHomeworkRow[],
   ): Promise<StudentBacklog> {
     const courses = path.courses.filter((course) => course.published);
-    const rows = homeworkRows ?? (await this.homeworkFromPath(userId, path));
+    const [rows, studentExams] = await Promise.all([
+      homeworkRows ?? this.homeworkFromPath(userId, path),
+      // The monthly exams sit on their own shelf, which the path leaves out on
+      // purpose (they are not in the lesson chain) — so they are read here,
+      // from the same service the course page and the dashboard band read.
+      this.exams.forStudent(userId),
+    ]);
+    const owedExams = new Map<string, StudentExam[]>();
+    for (const exam of studentExams.exams.filter(examOwed)) {
+      owedExams.set(exam.courseId, [...(owedExams.get(exam.courseId) ?? []), exam]);
+    }
     const homeworkByLesson = new Map(
       rows.filter((row) => row.open).map((row) => [row.lessonId, row.status]),
     );
@@ -129,6 +154,12 @@ export class BacklogService {
     const result: BacklogCourse[] = courses.flatMap((course) => {
       const items: BacklogItem[] = [];
       const base = { courseId: course.id, courseSlug: course.slug, courseTitle: course.title };
+
+      // The month's papers first: they are the rows with a mark that counts.
+      for (const exam of owedExams.get(course.id) ?? []) {
+        items.push({ ...base, id: `exam:${exam.lessonId}`, kind: 'exam', lessonId: exam.lessonId, title: exam.title, status: 'not_started', monthlyExam: true });
+        counts.quizzes += 1;
+      }
 
       for (const node of course.nodes) {
         const isLessonStop = node.id === node.lessonId;

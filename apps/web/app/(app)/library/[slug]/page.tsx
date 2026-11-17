@@ -19,7 +19,7 @@ import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { isolateLtrRuns } from '@/components/dashboard/ltr-runs';
 import { LtrRatio } from '@/components/ltr-ratio';
 import { CourseOutlineView } from '@/components/library/course-outline';
-import { CourseCertificatesLink, CourseExamCard, CourseLinks } from '@/components/library/course-side';
+import { CourseCertificatesLink, CourseExamCard, CourseLinks, CourseMonthlyExams } from '@/components/library/course-side';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { activeSalePrice } from '@ayman/contracts/sale';
 import { TermOfferCard, type TermOffer } from '@/components/player/term-offer-card';
@@ -248,9 +248,11 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
 
   // THIS course's exam only — `bandExam` over the student's whole list would
   // put another course's paper on this page.
-  const exam = studentExams
-    ? bandExam(studentExams.exams.filter((entry) => entry.courseId === course.id))
-    : null;
+  const courseExams = studentExams ? studentExams.exams.filter((entry) => entry.courseId === course.id) : [];
+  const exam = bandExam(courseExams);
+  // Every other paper of this course — the closed ones above all, which the
+  // card cannot hold and a kept-open one is still sittable from.
+  const otherExams = courseExams.filter((entry) => entry.lessonId !== exam?.lessonId);
 
   const book =
     hasBook && shippingRates
@@ -455,6 +457,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       <div className="cp-layout">
         <div className="cp-layout__top">
           {exam ? <CourseExamCard exam={exam} /> : null}
+          <CourseMonthlyExams exams={otherExams} />
 
           <CourseLinks
             groupUrl={pathCourse?.whatsappGroupUrl ?? null}

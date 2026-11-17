@@ -12,6 +12,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { CentersService } from '../centers/centers.service';
 import { BacklogService } from '../dashboard/backlog.service';
+import type { ScheduledExamsService } from '../quiz/scheduled-exams.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { PathService } from '../dashboard/path.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
@@ -59,7 +60,8 @@ describe('GuardianReportService — the whole page over real rows', () => {
   const gate = new LessonGateService(prisma, entitlement);
   const dashboard = new DashboardService(prisma, new QuizScoreFeed(prisma), gate);
   const path = new PathService(prisma, gate);
-  const backlog = new BacklogService(prisma, path);
+  const scheduled = { forStudent: async () => ({ exams: [], serverTime: new Date().toISOString() }) } as unknown as ScheduledExamsService;
+  const backlog = new BacklogService(prisma, path, scheduled);
   const rank = new CohortRankService(prisma);
   const mistakes = new MistakesService(prisma);
   const report = new GuardianReportService(

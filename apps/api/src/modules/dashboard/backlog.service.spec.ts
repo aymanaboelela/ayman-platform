@@ -1,6 +1,8 @@
 import type { LearningPath, PathCourse, PathNode } from '@ayman/contracts/path';
 import { StudentBacklogSchema } from '@ayman/contracts/backlog';
+import type { StudentExam } from '@ayman/contracts/quiz/scheduled';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { ScheduledExamsService } from '../quiz/scheduled-exams.service';
 import { BacklogService } from './backlog.service';
 import type { PathService } from './path.service';
 
@@ -35,13 +37,38 @@ function service(
   courses: PathCourse[],
   homework: string[] = [],
   submissions: { lessonId: string; status: string }[] = [],
+  exams: StudentExam[] = [],
 ): BacklogService {
   const path = { forUser: async (): Promise<LearningPath> => ({ courses, currentCourseId: null, clearedLessons: 0, totalLessons: 0, percent: 0 }) };
   const prisma = {
     lessonHomework: { findMany: async () => homework.map((lessonId) => ({ lessonId })) },
     homeworkSubmission: { findMany: async () => submissions },
   };
-  return new BacklogService(prisma as unknown as PrismaService, path as unknown as PathService);
+  const scheduled = { forStudent: async () => ({ exams, serverTime: new Date().toISOString() }) };
+  return new BacklogService(
+    prisma as unknown as PrismaService,
+    path as unknown as PathService,
+    scheduled as unknown as ScheduledExamsService,
+  );
+}
+
+function exam(over: Partial<StudentExam> & { lessonId: string }): StudentExam {
+  return {
+    courseId: 'c1',
+    courseTitle: 'برمجة',
+    courseSlug: 'prog-2',
+    title: over.lessonId,
+    phase: 'closed',
+    openFrom: null,
+    openUntil: '2026-09-12T17:00:00.000Z',
+    keptOpen: true,
+    durationSeconds: 5400,
+    gradeOutOf: 100,
+    coveredLessons: [],
+    scaledScore: null,
+    hasSat: false,
+    ...over,
+  };
 }
 
 describe('BacklogService', () => {
@@ -75,6 +102,41 @@ describe('BacklogService', () => {
     ]).forUser('u');
     expect(result.courses[0]!.items[0]).toMatchObject({ kind: 'exam' });
     expect(result.counts.quizzes).toBe(1);
+  });
+
+  it('owes a monthly exam never sat while it can still be sat, first in its course', async () => {
+    const result = await service(
+      [course({ nodes: [node({ id: 'l1' })] })],
+      [],
+      [],
+      [
+        exam({ lessonId: 'late' }), // past the deadline, kept open → owed
+        exam({ lessonId: 'now', phase: 'open', keptOpen: false }), // open tonight → owed
+        exam({ lessonId: 'shut', keptOpen: false }), // closed and NOT kept open → a door that does not open
+        exam({ lessonId: 'sat', hasSat: true, scaledScore: 80 }), // sat → history
+        exam({ lessonId: 'soon', phase: 'upcoming' }), // not owed yet
+        exam({ lessonId: 'other', courseId: 'c9' }), // a course not on their path
+      ],
+    ).forUser('u');
+
+    expect(StudentBacklogSchema.parse(result)).toEqual(result);
+    expect(result.courses[0]!.items.map((item) => [item.id, item.kind, item.monthlyExam ?? false])).toEqual([
+      ['exam:late', 'exam', true],
+      ['exam:now', 'exam', true],
+      ['l1', 'lecture', false],
+    ]);
+    expect(result.counts.quizzes).toBe(2);
+  });
+
+  it('lists a course with nothing owed but a monthly exam', async () => {
+    const result = await service(
+      [course({ nodes: [node({ id: 'l1', gate: 'cleared', state: 'completed' })] })],
+      [],
+      [],
+      [exam({ lessonId: 'late' })],
+    ).forUser('u');
+    expect(result.courses).toHaveLength(1);
+    expect(result.courses[0]!.items[0]).toMatchObject({ kind: 'exam', lessonId: 'late', monthlyExam: true });
   });
 
   it('owes homework on a watched lecture until it is handed in', async () => {
