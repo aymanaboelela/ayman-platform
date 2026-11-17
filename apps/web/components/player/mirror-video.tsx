@@ -159,6 +159,26 @@ export const HLS_CONFIG: Partial<HlsConfig> = {
    */
   abrEwmaDefaultEstimate: 1_500_000,
   /*
+   * How much of the measured line a rung may use. hls.js's 0.95 / 0.7 assume
+   * the line holds its speed from one segment to the next. Ours does not.
+   *
+   * «الفيديو بيعلّق والنت عند الناس حلو» (2026-11-17, a 50-minute lecture that
+   * was a cache HIT on every segment): Cloudflare serves Egypt from Marseille,
+   * and one machine measured 1.1 → 9 Mbit/s per segment within the hour. With
+   * two segments buffered hls.js compares against AVERAGE-BANDWIDTH (720p:
+   * 1.19 Mbit/s), so 0.95 kept 720p on a 1.3 Mbit/s estimate. The next 6 s
+   * segment was 1.2–1.6 MB at the peak bitrate and took longer than 6 s to
+   * arrive. A few of those in a row and the picture froze.
+   *
+   * 0.7 / 0.5 leave headroom for a dip: 720p now needs ~1.7 Mbit/s held, and
+   * climbing back to it needs ~4 Mbit/s. On a steady good line it reaches 720p
+   * just the same. On a line that swings, it sits at 480p instead of
+   * freezing at 720p. A student who wants 720p regardless can still pick it
+   * from the quality menu, which pins the rung.
+   */
+  abrBandWidthFactor: 0.7,
+  abrBandWidthUpFactor: 0.5,
+  /*
    * Never fetch more pixels than the player shows. A 1080p segment is
    * three times a 480p one, and on a phone in portrait the player is 360
    * pixels wide — every byte above that is data spent on nothing and a
