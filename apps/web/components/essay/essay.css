@@ -462,3 +462,13 @@
 @media (max-width: 479px) {
   .es-home__cta { width: 100%; }
 }
+
+/* The three numbers over the page. Two or three tiles depending on whether
+   anything is marked yet, and either way they share ONE row — the default
+   two-column grid left the third alone on a line of its own on a phone. */
+.es .eg-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+}
+.es .eg-tile {
+  padding: 0.75rem;
+}

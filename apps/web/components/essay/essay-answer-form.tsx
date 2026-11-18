@@ -157,7 +157,11 @@ export function EssayAnswerForm({
       for (const page of staged) URL.revokeObjectURL(page.preview);
       setStaged([]);
       setText('');
-      if (replacing) setOpen(false);
+      // Closed whichever way it was opened: this instance survives the refresh
+      // below, and by then the answer exists, so what belongs here is the
+      // «تغيير الحل» button — not an empty upload box under an answer that
+      // was just received.
+      setOpen(false);
       // The card is drawn from the page's own read, so the new state arrives
       // with it rather than from a second state machine here.
       router.refresh();

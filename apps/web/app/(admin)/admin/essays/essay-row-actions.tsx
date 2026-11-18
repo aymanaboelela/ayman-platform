@@ -137,7 +137,7 @@ function EssayEditDialog({
         if (!next) onClose();
       }}
     >
-      <DialogContent closeLabel={c.form.back}>
+      <DialogContent closeLabel={c.form.back} className="flex max-w-[600px] flex-col gap-4">
         <DialogHeader>
           <DialogTitle>{c.form.editTitle}</DialogTitle>
         </DialogHeader>
@@ -182,6 +182,7 @@ function EssayEditDialog({
           onChange={setCourseIds}
           label={c.form.courses}
           hint={c.form.coursesHint}
+          searchLabel={c.form.coursesSearch}
         />
 
         {error ? (

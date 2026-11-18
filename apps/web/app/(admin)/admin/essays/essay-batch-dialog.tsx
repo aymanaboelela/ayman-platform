@@ -150,12 +150,12 @@ export function EssayBatchDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent closeLabel={c.back}>
+      <DialogContent closeLabel={c.back} className="flex max-w-[680px] flex-col gap-4">
         <DialogHeader>
           <DialogTitle>{c.addTitle}</DialogTitle>
         </DialogHeader>
 
-        <CoursePicker courses={courses} value={courseIds} onChange={setCourseIds} label={c.courses} hint={c.coursesHint} />
+        <CoursePicker courses={courses} value={courseIds} onChange={setCourseIds} label={c.courses} hint={c.coursesHint} searchLabel={c.coursesSearch} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-[length:var(--fs-text-sm)] text-fg">

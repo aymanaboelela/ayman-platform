@@ -1,7 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { Check } from 'lucide-react';
+import { Input } from '@ayman/ui/components/input';
 import { cn } from '@ayman/ui/lib/cn';
+
+/** Above this many courses the picker grows a search box. */
+const SEARCH_FROM = 8;
 
 export interface CoursePick {
   id: string;
@@ -22,19 +27,39 @@ export function CoursePicker({
   onChange,
   label,
   hint,
+  searchLabel,
 }: {
   courses: readonly CoursePick[];
   value: readonly string[];
   onChange: (next: string[]) => void;
   label: string;
   hint: string;
+  searchLabel: string;
 }) {
+  const [query, setQuery] = useState('');
   const chosen = new Set(value);
+  const needle = query.trim();
+  // What is already chosen always stays on screen, whatever is typed: a chip
+  // that vanished while filtering would be a choice nobody can see or undo.
+  const shown = courses.filter((course) => chosen.has(course.id) || needle === '' || course.title.includes(needle));
+
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="text-[length:var(--fs-text-sm)] font-medium text-fg">{label}</legend>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {courses.map((course) => {
+      {courses.length > SEARCH_FROM ? (
+        <Input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={searchLabel}
+          aria-label={searchLabel}
+          className="mt-1.5"
+        />
+      ) : null}
+      {/* A bounded box: a stack with thirty courses must not push the
+          questions — the reason the dialog was opened — off the screen. */}
+      <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-line bg-surface-2 p-2">
+        {shown.map((course) => {
           const on = chosen.has(course.id);
           return (
             <button

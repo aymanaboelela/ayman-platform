@@ -168,6 +168,7 @@ export const dailyEssayCopy = {
       back: 'رجوع',
       courses: 'الأسئلة لمين؟',
       coursesHint: 'من غير اختيار كورس، الأسئلة بتنزل لكل الطلبة المشتركين.',
+      coursesSearch: 'بحث باسم الكورس',
       startDay: 'أول يوم',
       day: 'اليوم',
       skipFriday: 'من غير يوم الجمعة',
