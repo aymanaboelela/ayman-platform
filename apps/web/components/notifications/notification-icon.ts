@@ -98,9 +98,10 @@ export function iconFor(entry: StudentNotification) {
       «فيه ملاحظات» are the title, and giving the returned one a warning icon
       would make an ordinary «حلوة، بس فيه حتة» read as something going wrong.
     */
+    // `essay_marked` («السؤال المقالي») rides with the homework pair: written
+    // work marked by hand, the same object.
     case 'homework_submitted':
     case 'homework_reviewed':
-    // «السؤال المقالي» — written work marked by hand, the same object.
     case 'essay_marked':
       return NotebookPen;
 
