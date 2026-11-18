@@ -21,7 +21,7 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/curre
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MediaService, type UploadFile } from '../media/media.service';
 import { HomeworkService } from './homework.service';
-import { SubmitHomeworkDto } from './homework.dto';
+import { SubmitHomeworkDto, SubmitHomeworkTextDto } from './homework.dto';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
@@ -83,6 +83,25 @@ export class HomeworkController {
     @Body() body: SubmitHomeworkDto,
   ): Promise<MyHomeworkSubmission> {
     return this.homework.submit(user.id, lessonId, body);
+  }
+
+  /**
+   * «اكتب الحل» — the answer typed on the ministry tablet.
+   *
+   * Its own route rather than a second shape on `submissions`, so the feature
+   * key can sit on it: `@RequireFeature` here REPLACES the controller's
+   * `homework` key, which `HomeworkService.submitText` re-checks by hand.
+   */
+  @RequireFeature('homework.typedAnswer')
+  @RequirePermission('homework:submit')
+  @UsePipes(ZodValidationPipe)
+  @Post('lessons/:lessonId/text')
+  submitText(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('lessonId', ParseUUIDPipe) lessonId: string,
+    @Body() body: SubmitHomeworkTextDto,
+  ): Promise<MyHomeworkSubmission> {
+    return this.homework.submitText(user.id, lessonId, body);
   }
 
   /**

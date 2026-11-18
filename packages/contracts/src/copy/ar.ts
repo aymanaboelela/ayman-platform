@@ -4013,6 +4013,25 @@ export const copy = {
     imagesGone: 'الصور اتشالت بعد المراجعة، والتسليم متسجّل.',
     /** «فكّر أكتر وابعته تاني» — the line above the reopened upload box. */
     reopened: 'الواجب مفتوح تاني — رفع الحل الجديد من هنا.',
+
+    // ── «اكتب الحل» — only on the ministry tablet (a Samsung Galaxy Tab) ──
+    /** The two ways to hand in, as a pair of tabs. Nouns, not imperatives:
+     *  «صوّر»/«اكتب» only work on a male reader. */
+    modePhoto: 'تصوير الحل',
+    modeType: 'كتابة الحل',
+    /** Above the tabs, so it is clear why this screen has a choice at all. */
+    modeLead: 'على تابلت الوزارة، الحل ينفع يتكتب هنا بدل ما يتصوّر.',
+    typeTitle: 'كتابة الحل',
+    /** `{max}` is the character ceiling. */
+    typeHint: 'رقم السؤال قبل كل إجابة — لحد {max} حرف.',
+    typePlaceholder: '١- …\n٢- …',
+    typeEmpty: 'لازم الحل يتكتب الأول.',
+    /** «١٢٠ / ١٠٠٠٠» under the box. */
+    typeCount: '{n} / {max}',
+    /** The heading over the typed answer once it is handed in. */
+    typedLabel: 'الحل المكتوب',
+    /** In place of «اتسلّم ٣ صور» for a typed answer. */
+    submittedTyped: 'اتسلّم الحل مكتوب',
     /** The card on a lecture whose homework the student has not opened yet,
      *  used as the collapsed summary in the outline. */
     badge: 'واجب',

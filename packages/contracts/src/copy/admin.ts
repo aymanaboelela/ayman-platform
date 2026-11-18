@@ -1190,6 +1190,13 @@ const admin = {
      *  submission itself is intact. */
     imagesGone: 'الصور اتمسحت بعد المراجعة — التسليم نفسه لسه متسجّل.',
     imagesExpired: 'الصور اتمسحت بعد ٣٠ يوم — التسليم نفسه لسه متسجّل.',
+    /** «اكتب الحل» — a typed answer, in place of «٣ صور» on the queue row. */
+    typed: 'مكتوب',
+    /** The heading over a typed answer on the review screen. */
+    typedAnswer: 'الحل مكتوب',
+    /** Under it, followed by the model the browser reported («SM-X205»),
+     *  which the screen isolates as LTR so it does not flip the sentence. */
+    typedDevice: 'اتكتب من تابلت',
     yourNote: 'اللي بعتّه',
     editGrade: 'تعديل الدرجة والرد',
     saveEdit: 'حفظ التعديل',

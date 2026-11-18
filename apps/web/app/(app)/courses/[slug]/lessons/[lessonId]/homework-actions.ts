@@ -2,6 +2,7 @@
 
 import {
   HomeworkSubmitSchema,
+  HomeworkTextSubmitSchema,
   MyHomeworkSubmissionSchema,
   type HomeworkImageInput,
 } from '@ayman/contracts/homework';
@@ -40,6 +41,29 @@ export async function submitHomeworkAction(
     await apiSend(
       'POST',
       `/api/homework/lessons/${encodeURIComponent(lessonId)}/submissions`,
+      MyHomeworkSubmissionSchema,
+      body,
+    );
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * «اكتب الحل» — the typed answer from the ministry tablet. Small enough to
+ * cross a Server Action (10,000 characters at most), so no upload step.
+ */
+export async function submitHomeworkTextAction(
+  lessonId: string,
+  text: string,
+  deviceModel: string,
+): Promise<HomeworkActionResult> {
+  try {
+    const body = HomeworkTextSubmitSchema.parse({ text, deviceModel });
+    await apiSend(
+      'POST',
+      `/api/homework/lessons/${encodeURIComponent(lessonId)}/text`,
       MyHomeworkSubmissionSchema,
       body,
     );

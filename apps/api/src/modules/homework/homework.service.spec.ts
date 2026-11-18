@@ -1,7 +1,7 @@
 // Prisma 7 doesn't auto-load .env, and this spec runs outside Nest's bootstrap
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -548,6 +548,74 @@ describe('HomeworkService', () => {
       await expect(
         service.submit(studentId, lessonId, { images: [{ storageKey: storedKey(), sizeBytes: 1 }] }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('typed on the ministry tablet («اكتب الحل»)', () => {
+    it('tells the card the option is on for this stack', async () => {
+      expect((await service.forStudent(studentId, lessonId))?.typedAnswer).toBe(true);
+    });
+
+    it('keeps the text, the tablet it came from, and no pages', async () => {
+      const submission = await service.submitText(studentId, lessonId, {
+        text: '١- الإجابة ب\n٢- البروتوكول هو HTTPS',
+        deviceModel: 'SM-X205',
+      });
+
+      expect(submission.status).toBe('submitted');
+      expect(submission.imageCount).toBe(0);
+      expect(submission.imageIds).toHaveLength(0);
+      expect(submission.answerText).toBe('١- الإجابة ب\n٢- البروتوكول هو HTTPS');
+
+      // What he reads on the review screen, and what the queue row says.
+      const detail = await service.adminDetail(submission.id);
+      expect(detail.answerText).toBe('١- الإجابة ب\n٢- البروتوكول هو HTTPS');
+      expect(detail.deviceModel).toBe('SM-X205');
+      const list = await service.adminList('pending', courseId, 25, 0, lessonId);
+      expect(list.rows.find((row) => row.id === submission.id)?.typed).toBe(true);
+    });
+
+    it('refuses a device that is not a Galaxy Tab', async () => {
+      // A phone (`SM-S…`) — the option is for the tablet, where photographing a
+      // sheet of paper is the clumsy part.
+      await expect(
+        service.submitText(studentId, lessonId, { text: 'الحل', deviceModel: 'SM-S918B' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(await prisma.homeworkSubmission.count({ where: { userId: studentId, lessonId } })).toBe(0);
+    });
+
+    it('refuses a draft exercise as a 404, like the photo upload', async () => {
+      await expect(
+        service.submitText(studentId, unpublishedLessonId, { text: 'الحل', deviceModel: 'SM-X205' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('can follow a photographed attempt, and the old pages go', async () => {
+      const photo = storedKey();
+      await service.submit(studentId, lessonId, { images: [{ storageKey: photo, sizeBytes: 1 }] });
+      const row = await prisma.homeworkSubmission.findFirstOrThrow({ where: { userId: studentId, lessonId } });
+      await service.review(adminId, row.id, { decision: 'needs_work', grade: null, message: 'راجع السؤال التاني.' });
+
+      const typed = await service.submitText(studentId, lessonId, { text: 'الحل الجديد', deviceModel: 'SM-T295' });
+
+      expect(typed.attempt).toBe(2);
+      expect(typed.imageCount).toBe(0);
+      expect(typed.answerText).toBe('الحل الجديد');
+      expect(objects.has(photo)).toBe(false);
+    });
+
+    it('drops the typed text when the next attempt is photographed', async () => {
+      await service.submitText(studentId, lessonId, { text: 'محاولة أولى', deviceModel: 'SM-X205' });
+      const row = await prisma.homeworkSubmission.findFirstOrThrow({ where: { userId: studentId, lessonId } });
+      await service.review(adminId, row.id, { decision: 'needs_work', grade: null, message: 'ناقص تعريف.' });
+
+      const photographed = await service.submit(studentId, lessonId, {
+        images: [{ storageKey: storedKey(), sizeBytes: 1 }],
+      });
+
+      expect(photographed.answerText).toBeNull();
+      const saved = await prisma.homeworkSubmission.findFirstOrThrow({ where: { userId: studentId, lessonId } });
+      expect(saved.deviceModel).toBeNull();
     });
   });
 

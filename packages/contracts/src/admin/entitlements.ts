@@ -448,6 +448,18 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'لما الطلب يروح للمطبعة، الطالب بتوصله رسالة في الشات وإشعار إن الدفع اتأكد والكتاب في الطباعة — مرة واحدة لكل طلب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". «اكتب الحل»: a student on the ministry tablet (a Samsung
+     * Galaxy Tab) can type the homework answer instead of photographing it.
+     * Offered only on a Galaxy Tab — `isMinistryTabletModel` — and with it off
+     * the card is exactly the photo upload it always was.
+     */
+    key: 'homework.typedAnswer',
+    nameAr: 'حل الواجب كتابة على تابلت الوزارة',
+    descriptionAr: 'الطالب اللي فاتح من تابلت الوزارة يقدر يكتب حل الواجب بدل ما يصوّره، والمصحّح بيقرا الحل مكتوب.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

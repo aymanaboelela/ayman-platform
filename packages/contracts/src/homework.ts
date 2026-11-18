@@ -118,6 +118,57 @@ export const HomeworkSubmitSchema = z
 
 export type HomeworkSubmitInput = z.infer<typeof HomeworkSubmitSchema>;
 
+/* ── «اكتب الحل» — the typed answer, ministry tablet only ────────────── */
+
+/**
+ * The ceiling on a typed answer. Same number as the CHECK in the migration.
+ *
+ * Ten thousand characters is several pages of Arabic — far more than any
+ * exercise here needs — and it exists for the same reason `maxImages` does:
+ * so one submission cannot become something nobody can review.
+ */
+export const MAX_HOMEWORK_TEXT = 10_000;
+
+/**
+ * Whether a device model is the ministry tablet.
+ *
+ * The tablets the Ministry hands to secondary students are Samsung Galaxy Tabs
+ * (made in Samsung's Beni Suef factory, Knox-managed), and the exact model has
+ * changed from one cohort to the next — so this matches the Galaxy Tab FAMILY
+ * rather than one model: `SM-T…` (Tab A / older Tab S), `SM-X…` (the newer
+ * Tab A and Tab S lines) and `SM-P…` (Tab A with S Pen).
+ *
+ * ⚠️ A consumer Galaxy Tab bought in a shop matches too. That is accepted, not
+ * missed: the model string is the only signal the browser gives, the ministry
+ * builds carry no marker of their own, and a student on a Galaxy Tab of their
+ * own is in exactly the same position — no separate camera, a sheet of paper
+ * that is awkward to photograph with a 10-inch tablet.
+ *
+ * Phones are `SM-A…`, `SM-S…`, `SM-G…`, `SM-N…`, `SM-M…`, `SM-F…`, so none of
+ * them match.
+ */
+export function isMinistryTabletModel(model: string | null | undefined): boolean {
+  return typeof model === 'string' && /^SM-[TXP]\d{3}/i.test(model.trim());
+}
+
+/**
+ * The typed answer, as it crosses to the API.
+ *
+ * `deviceModel` is what the browser reported. It is a CLAIM — anything on the
+ * client can be edited — so the API re-checks it with `isMinistryTabletModel`
+ * and stores it, which is what this gate can honestly do: keep the option off
+ * every screen that is not a Galaxy Tab, and leave a record of where each
+ * typed answer said it came from.
+ */
+export const HomeworkTextSubmitSchema = z
+  .object({
+    text: z.string().trim().min(1).max(MAX_HOMEWORK_TEXT),
+    deviceModel: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+export type HomeworkTextSubmitInput = z.infer<typeof HomeworkTextSubmitSchema>;
+
 /**
  * The student's own view of where their answer stands.
  *
@@ -136,6 +187,8 @@ export const MyHomeworkSubmissionSchema = z.object({
    *  re-derives ownership per request. Empty once they have been cleaned up. */
   imageIds: z.array(z.uuid()),
   imagesPurged: z.boolean(),
+  /** «اكتب الحل» — the typed answer, or `null` for a photographed one. */
+  answerText: z.string().nullable().default(null),
   grade: z.number().min(0).max(100).nullable(),
   reviewNote: z.string().nullable(),
   submittedAt: z.iso.datetime(),
@@ -151,6 +204,14 @@ export type MyHomeworkSubmission = z.infer<typeof MyHomeworkSubmissionSchema>;
 export const StudentHomeworkSchema = z.object({
   body: z.string(),
   maxImages: z.number().int(),
+  /**
+   * Whether «اكتب الحل» is switched on for this stack (`homework.typedAnswer`).
+   *
+   * Only half the gate: the card still offers it only when the device is a
+   * Galaxy Tab (`isMinistryTabletModel`), which only the browser can tell.
+   * Defaulted so an older API that does not send it reads as «off».
+   */
+  typedAnswer: z.boolean().default(false),
   submission: MyHomeworkSubmissionSchema.nullable(),
 });
 
@@ -168,6 +229,9 @@ export const AdminHomeworkRowSchema = z.object({
   status: HomeworkStatusSchema,
   attempt: z.number().int(),
   imageCount: z.number().int(),
+  /** A typed answer («اكتب الحل») rather than photographs — the queue says
+   *  «مكتوب» instead of «٠ صورة». */
+  typed: z.boolean().default(false),
   imagesPurged: z.boolean(),
   grade: z.number().nullable(),
   submittedAt: z.iso.datetime(),
@@ -210,6 +274,10 @@ export const AdminHomeworkDetailSchema = AdminHomeworkRowSchema.extend({
    *  opening the course editor in a second tab. */
   prompt: z.string(),
   imageIds: z.array(z.uuid()),
+  /** The typed answer («اكتب الحل»), or `null` for a photographed one. */
+  answerText: z.string().nullable().default(null),
+  /** The tablet it was typed on, as the browser reported it («SM-X205»). */
+  deviceModel: z.string().nullable().default(null),
   reviewNote: z.string().nullable(),
   reviewedAt: z.iso.datetime().nullable(),
   /** The student's phone, for the «كلّمه» button — the same field the student

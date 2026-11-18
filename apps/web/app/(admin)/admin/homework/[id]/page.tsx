@@ -122,7 +122,7 @@ export default async function AdminHomeworkDetailPage({
                 </span>
               ) : null}
               <span>
-                {submission.imageCount} {c.imageUnit}
+                {submission.answerText !== null ? c.typed : `${submission.imageCount} ${c.imageUnit}`}
               </span>
             </p>
           </div>
@@ -188,7 +188,26 @@ export default async function AdminHomeworkDetailPage({
       </section>
 
       <section className="mt-4">
-        {submission.imageIds.length > 0 ? (
+        {submission.answerText !== null ? (
+          // «اكتب الحل» — typed on the ministry tablet. Plain text with the
+          // student's own line breaks, never markup.
+          <div className="rounded-xl border border-line bg-surface-2 p-4 sm:p-5">
+            <h2 className="text-[length:var(--fs-text-sm)] font-semibold text-fg-muted">{c.typedAnswer}</h2>
+            <p
+              dir="auto"
+              className="mt-1.5 whitespace-pre-line text-[length:var(--fs-text-base)] leading-relaxed text-fg"
+            >
+              {submission.answerText}
+            </p>
+            {submission.deviceModel ? (
+              <p className="mt-3 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {c.typedDevice}{' '}
+                {/* Latin inside Arabic — isolated, or «SM-X205» flips (CLAUDE.md §7). */}
+                <bdi dir="ltr">{submission.deviceModel}</bdi>
+              </p>
+            ) : null}
+          </div>
+        ) : submission.imageIds.length > 0 ? (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {submission.imageIds.map((imageId, index) => (
               <li

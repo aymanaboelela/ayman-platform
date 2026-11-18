@@ -5,7 +5,14 @@ import {
   HOMEWORK_SUGGESTION_COUNT,
   pickHomeworkSuggestions,
 } from '@ayman/contracts/copy/homework';
-import { HomeworkReviewSchema, HomeworkSubmitSchema, MAX_HOMEWORK_IMAGES } from '@ayman/contracts/homework';
+import {
+  HomeworkReviewSchema,
+  HomeworkSubmitSchema,
+  HomeworkTextSubmitSchema,
+  MAX_HOMEWORK_IMAGES,
+  MAX_HOMEWORK_TEXT,
+  isMinistryTabletModel,
+} from '@ayman/contracts/homework';
 
 describe('homework review contract', () => {
   it('refuses a grade on work that is coming back', () => {
@@ -166,4 +173,24 @@ describe('HomeworkImageInputSchema — only a homework photo', () => {
       expect(HomeworkImageInputSchema.safeParse({ storageKey, sizeBytes: 10 }).success).toBe(false);
     },
   );
+});
+
+describe('«اكتب الحل» — the ministry tablet', () => {
+  it('recognises the Galaxy Tab family', () => {
+    for (const model of ['SM-T295', 'SM-T515', 'SM-X205', 'SM-X200', 'SM-P205', 'sm-x205', ' SM-T505 ']) {
+      expect(isMinistryTabletModel(model)).toBe(true);
+    }
+  });
+
+  it('leaves phones, other brands and an empty answer out', () => {
+    for (const model of ['SM-S918B', 'SM-A546E', 'SM-G991B', 'SM-N986B', 'Pixel 7', 'K', '', null, undefined]) {
+      expect(isMinistryTabletModel(model)).toBe(false);
+    }
+  });
+
+  it('caps the typed answer at the same length as the database', () => {
+    expect(HomeworkTextSubmitSchema.safeParse({ text: 'ا'.repeat(MAX_HOMEWORK_TEXT), deviceModel: 'SM-X205' }).success).toBe(true);
+    expect(HomeworkTextSubmitSchema.safeParse({ text: 'ا'.repeat(MAX_HOMEWORK_TEXT + 1), deviceModel: 'SM-X205' }).success).toBe(false);
+    expect(HomeworkTextSubmitSchema.safeParse({ text: '   ', deviceModel: 'SM-X205' }).success).toBe(false);
+  });
 });

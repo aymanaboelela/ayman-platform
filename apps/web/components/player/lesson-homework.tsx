@@ -2,20 +2,29 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Clock3, ImagePlus, NotebookPen, RotateCcw, X } from 'lucide-react';
+import { Camera, CheckCircle2, Clock3, ImagePlus, Keyboard, NotebookPen, RotateCcw, X } from 'lucide-react';
 // The `/copy` SUBPATH, never the root barrel: this is a client component on
 // the busiest student route, and a barrel import registers the whole
 // contracts module set as a client reference. `client-barrel.test.ts`
 // fails the build for it.
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
-import type { MyHomeworkSubmission, StudentHomework } from '@ayman/contracts/homework';
+import {
+  MAX_HOMEWORK_TEXT,
+  isMinistryTabletModel,
+  type MyHomeworkSubmission,
+  type StudentHomework,
+} from '@ayman/contracts/homework';
 import { Button } from '@ayman/ui/components/button';
 import { cn } from '@ayman/ui/lib/cn';
 import { uploadHomeworkImage, type UploadFailure } from '@/lib/upload-client';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { actionErrorMessage, isStaleActionError } from '@/lib/stale-tab';
-import { submitHomeworkAction } from '@/app/(app)/courses/[slug]/lessons/[lessonId]/homework-actions';
+import {
+  submitHomeworkAction,
+  submitHomeworkTextAction,
+} from '@/app/(app)/courses/[slug]/lessons/[lessonId]/homework-actions';
+import { detectDeviceModel } from '@/lib/device-model';
 
 const c = copy.homework;
 
@@ -85,6 +94,33 @@ export function LessonHomework({
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const section = useRef<HTMLElement>(null);
+  /*
+   * «اكتب الحل» — the ministry tablet's second way to hand in.
+   *
+   * `tabletModel` stays `null` (and the card is the plain photo upload it
+   * always was) unless the stack has `homework.typedAnswer` on AND the browser
+   * reports a Galaxy Tab. Read after mount because only the browser knows the
+   * device, and the model is a high-entropy hint that has to be asked for —
+   * `lib/device-model.ts`.
+   */
+  const [tabletModel, setTabletModel] = useState<string | null>(null);
+  const [mode, setMode] = useState<'photo' | 'type'>('photo');
+  const [text, setText] = useState('');
+
+  useEffect(() => {
+    if (!homework.typedAnswer) return;
+    let alive = true;
+    void detectDeviceModel().then((model) => {
+      if (!alive || !isMinistryTabletModel(model)) return;
+      setTabletModel(model);
+      // The tablet is the reason this option exists, so it opens on it; the
+      // photo tab is one tap away for a student who prefers paper.
+      setMode('type');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [homework.typedAnswer]);
 
   /*
    * `#homework` — «الطريق لفوق» في `/rank` بيودّي هنا. المتصفح والراوتر
@@ -156,6 +192,32 @@ export function LessonHomework({
       // the page.
       if (page) URL.revokeObjectURL(page.preview);
       return current.filter((_, position) => position !== index);
+    });
+  }
+
+  function submitText() {
+    if (!tabletModel) return;
+    if (text.trim().length === 0) {
+      setError(c.typeEmpty);
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      let result: Awaited<ReturnType<typeof submitHomeworkTextAction>>;
+      try {
+        result = await submitHomeworkTextAction(lessonId, text, tabletModel);
+      } catch (error) {
+        // Same stale-deploy handling as the photo path below.
+        if (!isStaleActionError(error)) throw error;
+        setError(actionErrorMessage(error, null) ?? c.submitFailed);
+        return;
+      }
+      if (!result.ok) {
+        setError(c.submitFailed);
+        return;
+      }
+      setText('');
+      router.refresh();
     });
   }
 
@@ -243,6 +305,64 @@ export function LessonHomework({
               </p>
             ) : null}
 
+            {tabletModel ? (
+              <div className="mb-4">
+                <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.modeLead}</p>
+                <div role="tablist" aria-label={c.title} className="mt-2 grid grid-cols-2 gap-2">
+                  <ModeTab
+                    active={mode === 'type'}
+                    onSelect={() => {
+                      setMode('type');
+                      setError(null);
+                    }}
+                    icon={Keyboard}
+                    label={c.modeType}
+                  />
+                  <ModeTab
+                    active={mode === 'photo'}
+                    onSelect={() => {
+                      setMode('photo');
+                      setError(null);
+                    }}
+                    icon={Camera}
+                    label={c.modePhoto}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {tabletModel && mode === 'type' ? (
+              <div>
+                <label
+                  htmlFor={`homework-text-${lessonId}`}
+                  className="text-[length:var(--fs-text-base)] font-semibold text-fg"
+                >
+                  {c.typeTitle}
+                </label>
+                <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg-muted">
+                  {formatCopy(c.typeHint, { max: MAX_HOMEWORK_TEXT.toLocaleString('ar-EG') })}
+                </p>
+                <textarea
+                  id={`homework-text-${lessonId}`}
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  maxLength={MAX_HOMEWORK_TEXT}
+                  rows={10}
+                  dir="auto"
+                  placeholder={c.typePlaceholder}
+                  className="mt-3 block w-full resize-y rounded-[var(--r-md)] border border-line bg-surface-1 px-3 py-2.5 text-[length:var(--fs-text-base)] leading-relaxed text-fg placeholder:text-fg-muted focus:border-[color:var(--e-ink)] focus:outline-none"
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button type="button" onClick={submitText} disabled={pending || text.trim().length === 0}>
+                    {pending ? c.submitting : reopened ? c.resubmit : c.submit}
+                  </Button>
+                  <span className="ms-auto text-[length:var(--fs-text-xs)] text-fg-muted tabular-nums">
+                    {formatCopy(c.typeCount, { n: text.length, max: MAX_HOMEWORK_TEXT })}
+                  </span>
+                </div>
+              </div>
+            ) : (
+            <>
             <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">
               {c.uploadTitle}
             </p>
@@ -310,6 +430,8 @@ export function LessonHomework({
                 </span>
               ) : null}
             </div>
+            </>
+            )}
 
             {error ? (
               <p
@@ -331,9 +453,25 @@ function Verdict({ submission }: { submission: MyHomeworkSubmission }) {
   return (
     <div className="mt-4 rounded-[var(--r-md)] border border-line bg-surface-3 p-3.5">
       <p className="text-[length:var(--fs-text-sm)] text-fg-muted tabular-nums">
-        {formatCopy(c.submittedCount, { n: submission.imageCount })}
+        {submission.answerText !== null
+          ? c.submittedTyped
+          : formatCopy(c.submittedCount, { n: submission.imageCount })}
         {submission.attempt > 1 ? ` · ${c.attempt} ${submission.attempt}` : ''}
       </p>
+
+      {submission.answerText !== null ? (
+        <div className="mt-2.5">
+          <p className="text-[length:var(--fs-text-xs)] font-semibold text-fg-muted">{c.typedLabel}</p>
+          {/* Plain text, `whitespace-pre-line` — the student's own words, never
+              markup. Same reasoning as the homework body above. */}
+          <p
+            dir="auto"
+            className="mt-1 whitespace-pre-line rounded-[var(--r-md)] border border-line bg-surface-2 px-3 py-2.5 text-[length:var(--fs-text-base)] leading-relaxed text-fg"
+          >
+            {submission.answerText}
+          </p>
+        </div>
+      ) : null}
 
       {submission.imageIds.length > 0 ? (
         <ul className="mt-2.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -385,6 +523,37 @@ function Verdict({ submission }: { submission: MyHomeworkSubmission }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** One of the two «تصوير الحل» / «كتابة الحل» tabs on the ministry tablet. */
+function ModeTab({
+  active,
+  onSelect,
+  icon: Icon,
+  label,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  icon: typeof Camera;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onSelect}
+      className={cn(
+        'inline-flex items-center justify-center gap-2 rounded-[var(--r-md)] border px-3 py-2.5 text-[length:var(--fs-text-sm)] font-semibold transition-colors',
+        active
+          ? 'border-[color:var(--e-ink)] bg-[color:var(--e-tint)] text-[color:var(--e-ink)]'
+          : 'border-line bg-surface-1 text-fg-muted hover:text-fg',
+      )}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+      {label}
+    </button>
   );
 }
 

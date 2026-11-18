@@ -1849,6 +1849,16 @@ model HomeworkSubmission {
   /// pages that have since been cleaned up".
   imagesPurgedAt DateTime? @map("images_purged_at")
 
+  /// «اكتب الحل» — the answer TYPED rather than photographed, and NULL on a
+  /// photographed submission. Only accepted from the ministry tablet (see
+  /// `isMinistryTabletModel` in `@ayman/contracts/homework`), behind the
+  /// `homework.typedAnswer` feature. Never purged: unlike the photographs it
+  /// costs nothing to keep, and it is the record of what was handed in.
+  answerText  String? @map("answer_text") @db.Text
+  /// The tablet the typed answer came from, as the browser reported it
+  /// («SM-X205»). NULL on a photographed submission.
+  deviceModel String? @map("device_model") @db.VarChar(64)
+
   createdAt   DateTime @default(now()) @map("created_at")
   /// When the CURRENT attempt was handed in — moves forward on a resubmission,
   /// while `createdAt` stays the first time this student ever answered.
