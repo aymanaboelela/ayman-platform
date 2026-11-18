@@ -289,6 +289,8 @@ model User {
   referralsMade              Referral[]              @relation("ReferralReferrer")
   referredBy                 Referral?               @relation("ReferralReferred")
   referralsVoided            Referral[]              @relation("ReferralVoidedBy")
+  /// «الحساب ده جه منين» — see `UserAcquisition`.
+  acquisition                UserAcquisition?
   /// «كوبونات الخصم» — the codes this admin made, and the ones this student used.
   couponsCreated             Coupon[]                @relation("CouponCreatedBy")
   couponRedemptions          CouponRedemption[]
@@ -4990,6 +4992,54 @@ model Referral {
   /// The WhatsApp notice's scan: credited, recently.
   @@index([status, creditedAt])
   @@map("referrals")
+  @@schema("app")
+}
+
+/// «الحساب ده جه منين» — the ad link a browser arrived through before it made
+/// this account. One row per account, written once and never updated.
+///
+/// ## The first touch, not the last
+///
+/// The browser keeps the FIRST link it arrived through and ignores later ones
+/// until it expires, and `userId` being the primary key means the account can
+/// hold only one. A student who saw the reel on Monday and signed up from a
+/// different link on Thursday is still Monday's — the ad that found them.
+///
+/// ## Every value here was typed by a stranger
+///
+/// They come off a URL, through the visitor's own browser. The lengths below
+/// are the contract's (`@ayman/contracts/acquisition-touch`) and the API
+/// cleans them on the way in; nothing reads these columns as anything but
+/// text to group by and print.
+///
+/// ## No row is the common case
+///
+/// An account that came from a search, a friend or a typed address has none.
+/// So does every account older than this table: `AcquisitionService.claim`
+/// refuses any account past a day old, which is what keeps the existing
+/// cohort — and what it paid — from ever being assigned to a campaign.
+///
+/// `Cascade`: this is a note ABOUT the account and means nothing without it.
+model UserAcquisition {
+  userId       String   @id @map("user_id")
+  /// `utm_source` / `utm_medium`, lower-cased. NULL where the link did not say.
+  source       String?  @db.VarChar(120)
+  medium       String?  @db.VarChar(120)
+  campaign     String?  @db.VarChar(120)
+  content      String?  @db.VarChar(120)
+  term         String?  @db.VarChar(120)
+  /// Facebook's own click id — present on a click whose link carried no `utm_*`.
+  fbclid       String?  @db.VarChar(512)
+  /// The pathname of the page the visitor landed on. Never the query string.
+  landingPath  String?  @map("landing_path") @db.VarChar(300)
+  /// When the link was opened, on the SERVER's clock — the API derives it from
+  /// an age the browser reports, never from the browser's own timestamp.
+  firstTouchAt DateTime @map("first_touch_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_acquisition")
   @@schema("app")
 }
 
