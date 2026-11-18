@@ -148,6 +148,18 @@ export type EmitInput =
    */
   | { userId: string; kind: 'honor_board_listed'; pinId: string }
   /**
+   * STUDENT — «السؤال المقالي اتصحّح». The mark and what it is out of are
+   * stored: they are what the student was told at that moment.
+   */
+  | {
+      userId: string;
+      kind: 'essay_marked';
+      submissionId: string;
+      essayId: string;
+      mark: number;
+      maxMarks: number;
+    }
+  /**
    * «المحفظة». Amounts are numbers, not prose, so they are stored — a sum of
    * money does not get renamed after the fact the way a title does. The
    * student's NAME on the admin kind is still resolved at read time.
@@ -1021,6 +1033,15 @@ function toEntry(
       // An account deleted since still leaves a request worth knowing about.
       studentName: names.get(topupId) ?? '',
     };
+  }
+
+  if (row.kind === 'essay_marked') {
+    const submissionId = payloadString(row.payload, 'submissionId');
+    const essayId = payloadString(row.payload, 'essayId');
+    const mark = payloadNumber(row.payload, 'mark');
+    const maxMarks = payloadNumber(row.payload, 'maxMarks');
+    if (!submissionId || !essayId || mark === null || maxMarks === null) return null;
+    return { ...base, kind: 'essay_marked', submissionId, essayId, mark, maxMarks };
   }
 
   if (row.kind === 'wallet_credited') {

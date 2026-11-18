@@ -109,6 +109,8 @@ const admin = {
      * answer from him, and the only one where the answer is a mark.
      */
     homework: 'الواجبات',
+    /** «السؤال المقالي اليومي» — the schedule and the marking queue. */
+    essays: 'الأسئلة المقالية',
     /**
      * لوحة الشرف — تحت «تصحيح الورق» في مجموعة التدريس.
      *

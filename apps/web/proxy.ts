@@ -133,6 +133,8 @@ export const PROTECTED_PREFIXES = [
   // The engagement screens — each page reads its own `/api/me/*` row with
   // `apiGetAuthed`, unconditionally.
   '/daily',
+  // «السؤال المقالي اليومي» — same: its page reads `/api/me/essay` authed.
+  '/essay',
   '/plan',
   '/notes',
   '/badges',

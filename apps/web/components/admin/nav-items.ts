@@ -36,6 +36,7 @@ import {
   MessagesSquare,
   Newspaper,
   NotebookPen,
+  PenLine,
   PackageOpen,
   Wallet,
   Smartphone,
@@ -324,6 +325,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: NotebookPen,
     permission: 'homework:read',
     feature: 'homework',
+    group: 'exams',
+  },
+  {
+    // «السؤال المقالي اليومي» — the schedule and its marking queue, directly
+    // under الواجب: the same act (written work waiting on a mark) and the same
+    // permission, so whoever may open one may open the other.
+    href: '/admin/essays',
+    labelAr: copy.admin.nav.essays,
+    icon: PenLine,
+    permission: 'homework:read',
+    feature: 'dailyEssay',
     group: 'exams',
   },
   {

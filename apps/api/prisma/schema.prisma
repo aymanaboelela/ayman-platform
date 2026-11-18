@@ -232,6 +232,11 @@ model User {
   // expected to take with it.
   homeworkSubmissions        HomeworkSubmission[]    @relation("HomeworkSubmissionStudent")
   homeworkReviewed           HomeworkSubmission[]    @relation("HomeworkSubmissionReviewer")
+  // «السؤال المقالي اليومي» — the same split as the homework pair above, for
+  // the same reason: the answer goes with the student's account, the mark
+  // outlives the marker's.
+  dailyEssaySubmissions      DailyEssaySubmission[]  @relation("DailyEssaySubmissionStudent")
+  dailyEssaysMarked          DailyEssaySubmission[]  @relation("DailyEssaySubmissionMarker")
   /// Ledger rows this account entered — see `Expense.createdBy`.
   expensesCreated            Expense[]
   /// Refunds this account issued — see `Refund.createdBy`. `SetNull` there,
@@ -1123,6 +1128,9 @@ model Course {
   arenaMatches     ArenaMatch[]
   /// «قسم التحديات» — المواضيع اللي الطلبة بيتحدّوا فيها — شوف `ChallengeTopic`.
   challengeTopics  ChallengeTopic[]
+  /// «السؤال المقالي اليومي» — the daily questions addressed to this course's
+  /// students. See `DailyEssayCourse`.
+  dailyEssays      DailyEssayCourse[]
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -5387,6 +5395,10 @@ enum NotificationKind {
   /// in the student's own thread, exactly like `instructor_message`, because
   /// that is where they can be answered.
   homework_reviewed
+  /// STUDENT — «السؤال المقالي اتصحّح». Carries `submissionId` and the mark
+  /// out of the question's own total, both frozen at the marking: the row is
+  /// a record of what the student was told.
+  essay_marked
   /// STUDENT — «اسمك على لوحة الشرف». An admin added this student to the
   /// board by hand (`HonorBoardPin`), and this is the only way they would
   /// ever learn: the board is a PUBLIC page they have no reason to open, and
@@ -7653,5 +7665,157 @@ model VideoKeyFlag {
   @@unique([userId, day])
   @@index([day(sort: Desc)])
   @@map("video_key_flags")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// «السؤال المقالي اليومي» — one written question a day, answered on paper
+// (photographed) or typed, and marked by hand against a model answer.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Where one student's answer to one daily essay stands. Two states and no
+/// «ابعته تاني»: a daily question is one sitting, marked once out of its own
+/// total — unlike الواجب, which goes back and forth until it is right.
+enum DailyEssayStatus {
+  submitted
+  marked
+
+  @@map("daily_essay_status")
+  @@schema("app")
+}
+
+/// One question, on one Cairo day.
+///
+/// ## Scheduled, not dealt
+///
+/// «سؤال اليوم» (`DailyAnswer`) deals each student a different question from
+/// the bank. This is the opposite: the teacher writes the questions ahead,
+/// each with its model answer, and lays them on the calendar — so everyone in
+/// the audience answers the SAME question that day and the marker reads thirty
+/// answers against one model answer.
+///
+/// ## Who it is for
+///
+/// `courses` — the students with live access to any of those courses. An
+/// essay with NO course rows is for every student who has live access to
+/// anything. A join table rather than one `course_id` because the same
+/// question is usually set for a year's two or three course variants at once.
+model DailyEssay {
+  id  String   @id @default(uuid(7)) @db.Uuid
+  /// The Cairo calendar day the question appears on, never a UTC one.
+  day DateTime @db.Date
+
+  /// The question. PLAIN TEXT with newlines, never HTML — same rule and same
+  /// reason as `LessonHomework.body`.
+  body        String @db.Text
+  /// «الإجابة النموذجية». The marker reads it beside every answer; the student
+  /// sees it only once their own answer is marked, or once the question has
+  /// closed for them.
+  modelAnswer String @map("model_answer") @db.Text
+
+  /// What the answer is marked out of. Small on purpose (the default is 10):
+  /// the marker picks a number, not a percentage.
+  maxMarks  Int @default(10) @map("max_marks")
+  maxImages Int @default(4) @map("max_images")
+
+  /// Off = hidden from students whatever its day. Separate from deletion
+  /// because a question with answers on it can never be hard-deleted.
+  isPublished Boolean @default(true) @map("is_published")
+
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  courses     DailyEssayCourse[]
+  submissions DailyEssaySubmission[]
+
+  /// «النهارده إيه» and the schedule screen both read by day.
+  @@index([day])
+  @@map("daily_essays")
+  @@schema("app")
+}
+
+/// The audience of one essay — see `DailyEssay`.
+model DailyEssayCourse {
+  essayId  String @map("essay_id") @db.Uuid
+  courseId String @map("course_id") @db.Uuid
+
+  essay  DailyEssay @relation(fields: [essayId], references: [id], onDelete: Cascade)
+  course Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([essayId, courseId])
+  @@index([courseId])
+  @@map("daily_essay_courses")
+  @@schema("app")
+}
+
+/// One student's answer to one daily essay, and — after the photographs are
+/// gone — the record that they answered it. Same lifecycle as
+/// `HomeworkSubmission`: marking deletes the pictures and keeps the row, so the
+/// student's page still reads the mark, the note and «سلّمت ٣ صور».
+model DailyEssaySubmission {
+  id      String @id @default(uuid(7)) @db.Uuid
+  essayId String @map("essay_id") @db.Uuid
+  userId  String @map("user_id")
+
+  status DailyEssayStatus @default(submitted)
+
+  imageCount Int     @default(0) @map("image_count")
+  /// The answer typed instead of photographed; NULL on a photographed one.
+  /// Never purged.
+  answerText String? @map("answer_text") @db.Text
+
+  /// Out of `maxMarks` below. NULL until marked.
+  mark       Decimal? @db.Decimal(5, 2)
+  /// The total the mark is OUT OF, frozen when the answer is marked — editing
+  /// the question's `maxMarks` later must not turn a 7/10 into a 7/20.
+  maxMarks   Int?     @map("max_marks")
+  /// The marker's note, optional: a mark beside the model answer already says
+  /// most of it.
+  reviewNote String?  @map("review_note") @db.Text
+
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewedById String?   @map("reviewed_by_id")
+
+  imagesPurgedAt DateTime? @map("images_purged_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  /// Moves forward when an unmarked answer is replaced.
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  essay      DailyEssay        @relation(fields: [essayId], references: [id], onDelete: Restrict)
+  user       User              @relation("DailyEssaySubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?             @relation("DailyEssaySubmissionMarker", fields: [reviewedById], references: [id], onDelete: SetNull)
+  images     DailyEssayImage[]
+
+  /// One answer per student per question.
+  @@unique([essayId, userId])
+  /// The marking queue: «اللي مستنّي» first, oldest at the top.
+  @@index([status, submittedAt])
+  /// A student's own answers, newest first.
+  @@index([userId, submittedAt(sort: Desc)])
+  /// The image sweep reads oldest-first across every status.
+  @@index([submittedAt])
+  @@map("daily_essay_submissions")
+  @@schema("app")
+}
+
+/// One photographed page of one answer. Under the same private `hw/` prefix as
+/// a homework photograph (`HomeworkImage`) — the same pipeline, the same
+/// lifetime rules, and its own table so each sweep deletes only its own rows.
+model DailyEssayImage {
+  id           String @id @default(uuid(7)) @db.Uuid
+  submissionId String @map("submission_id") @db.Uuid
+
+  storageKey String @map("storage_key")
+  sizeBytes  Int    @map("size_bytes")
+  position   Int    @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  submission DailyEssaySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, position])
+  @@map("daily_essay_images")
   @@schema("app")
 }

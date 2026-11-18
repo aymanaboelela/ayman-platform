@@ -108,6 +108,12 @@ export const NOTIFICATION_KINDS = [
   'homework_submitted',
   'homework_reviewed',
   /**
+   * STUDENT — «السؤال المقالي اتصحّح». The mark and its total are STORED, not
+   * resolved: they are what the student was told, and the question's total can
+   * be edited afterwards.
+   */
+  'essay_marked',
+  /**
    * STUDENT — «اسمك على لوحة الشرف».
    *
    * الكِند الوحيد اللي الطالب مالوش أي طريقة تانية يعرف بيه: اللوحة صفحة
@@ -462,6 +468,16 @@ export const HomeworkReviewedNotificationSchema = z.object({
   grade: z.number().min(0).max(100).nullable(),
 });
 
+/** STUDENT — «سؤالك المقالي اتصحّح: ٨ من ١٠». Opens `/essay`. */
+export const EssayMarkedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('essay_marked'),
+  submissionId: z.uuid(),
+  essayId: z.uuid(),
+  mark: z.number().min(0),
+  maxMarks: z.number().int().min(1),
+});
+
 /**
  * STUDENT — «اسمك على لوحة الشرف».
  *
@@ -588,6 +604,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   CourseCompletedNotificationSchema,
   HomeworkSubmittedNotificationSchema,
   HomeworkReviewedNotificationSchema,
+  EssayMarkedNotificationSchema,
   HonorBoardListedNotificationSchema,
   WalletTopupSubmittedNotificationSchema,
   WalletCreditedNotificationSchema,

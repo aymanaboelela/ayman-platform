@@ -98,8 +98,11 @@ export function iconFor(entry: StudentNotification) {
       «فيه ملاحظات» are the title, and giving the returned one a warning icon
       would make an ordinary «حلوة، بس فيه حتة» read as something going wrong.
     */
+    // `essay_marked` («السؤال المقالي») rides with the homework pair: written
+    // work marked by hand, the same object.
     case 'homework_submitted':
     case 'homework_reviewed':
+    case 'essay_marked':
       return NotebookPen;
 
     /* لوحة الشرف — نفس الكأس اللي في عنوان القسم على الصفحة الرئيسية
@@ -144,6 +147,7 @@ export function toneFor(entry: StudentNotification): NotificationTone {
       return 'answer';
     case 'quiz_graded':
     case 'homework_reviewed':
+    case 'essay_marked':
     case 'extra_attempt_granted':
       return 'marked';
     case 'payment_approved':

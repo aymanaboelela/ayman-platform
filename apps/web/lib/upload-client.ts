@@ -397,6 +397,25 @@ export function uploadHomeworkImage(
   );
 }
 
+/**
+ * One page of a daily-essay answer — the same pipeline, limits and outcome
+ * shape as `uploadHomeworkImage` above, against the essay's own gate.
+ */
+export function uploadEssayImage(
+  essayId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<{ storageKey: string; sizeBytes: number }>> {
+  return upload(
+    `/api/me/essay/${encodeURIComponent(essayId)}/images`,
+    file,
+    MAX_UPLOAD_BYTES,
+    (json) => z.object({ storageKey: z.string(), sizeBytes: z.number().int() }).parse(json),
+    onProgress,
+    true,
+  );
+}
+
 export function uploadConversationAttachment(
   file: File,
   onProgress?: (fraction: number) => void,

@@ -15,6 +15,7 @@ import {
   Medal,
   MonitorSmartphone,
   NotebookPen,
+  PenLine,
   Route,
   Sparkles,
   StickyNote,
@@ -117,6 +118,9 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
     ? [{ href: '/backlog', labelAr: copy.nav.backlog, icon: ListTodo, group: 'study' as const }]
     : []),
   { href: '/daily', labelAr: copy.nav.daily, icon: Flame, feature: 'dailyQuestion', group: 'study' },
+  /* «السؤال المقالي اليومي» — beside the other daily question: the same habit,
+     written and marked by hand instead of picked and marked by machine. */
+  { href: '/essay', labelAr: copy.nav.essay, icon: PenLine, feature: 'dailyEssay', group: 'study' },
   /* «أوضة المذاكرة» — the third habit: the timer to study by. */
   { href: '/focus', labelAr: copy.nav.focus, icon: Timer, feature: 'focusRoom', group: 'study' },
   /*

@@ -463,6 +463,8 @@ export const copy = {
     certificates: 'شهاداتي',
     /** The engagement screens — every other word on them is `copy/engagement.ts`. */
     daily: 'سؤال اليوم',
+    /** «السؤال المقالي اليومي» — the rest of its words are in `copy/daily-essay.ts`. */
+    essay: 'السؤال المقالي',
     plan: 'خطة المذاكرة',
     notes: 'ملاحظاتي',
     badges: 'أوسمتي',
@@ -5367,6 +5369,14 @@ export const copy = {
     homeworkAcceptedGrade: 'الدرجة {grade} من 100',
     homeworkNeedsWork: 'واجب {lesson} فيه ملاحظات',
     homeworkNeedsWorkDetail: 'مهندس أيمن كتب لك رد، والواجب مفتوح تاني.',
+    /**
+     * «السؤال المقالي اليومي» — the answer has a mark on it. No teacher's name
+     * in either line, so neither needs a tenant gate. `{mark}` and `{max}` are
+     * numbers.
+     */
+    essayMarked: 'سؤالك المقالي اتصحّح ✅',
+    essayMarkedDetail: 'الدرجة {mark} من {max} — والإجابة النموذجية جنبها.',
+    essaySubtitle: 'السؤال المقالي اليومي',
     /**
      * لوحة الشرف — «اسمك عليها».
      *

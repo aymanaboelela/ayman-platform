@@ -134,6 +134,7 @@ import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
 import { ShareCardsModule } from '../modules/share-cards/share-cards.module';
 import { EngagementModule } from '../modules/engagement/engagement.module';
+import { DailyEssayModule } from '../modules/daily-essay/daily-essay.module';
 import { ReferralsController } from '../modules/referrals/referrals.controller';
 import { AdminReferralsController } from '../modules/referrals/admin-referrals.controller';
 import { ReferralsService } from '../modules/referrals/referrals.service';
@@ -436,6 +437,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «سؤال اليوم» / «ملاحظاتي» / «خطة المذاكرة» / «أوسمتي» / «ملخص الشهر» —
         // all five entitlements open here (no TENANT_KEY = Ayman's stack).
         EngagementModule,
+        // «السؤال المقالي اليومي» — enrollment, media and notifications are all
+        // already here. Its image sweep is a cron, inert without
+        // `ScheduleModule`.
+        DailyEssayModule,
         AdminProfileModule,
       ],
       providers: [
@@ -3366,6 +3371,129 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
      * would be captured as a submission id and every page on the review screen
      * would 400 from `ParseUUIDPipe`.
      */
+    /*
+     * «السؤال المقالي اليومي» — `DailyEssayController` and
+     * `AdminDailyEssayController`, behind the `dailyEssay` entitlement (open
+     * here: no TENANT_KEY = Ayman's stack).
+     *
+     * The student's half is self-scoped on `homework:submit`: the page and the
+     * summary answer for whoever is signed in, and a question id that is not
+     * addressed to the caller (or does not exist) is a 404 from the audience
+     * gate — which runs BEFORE the payload is looked at, so the upload row
+     * with no file is a 404 and not a 400.
+     */
+    { label: 'essay page: anonymous', method: 'get', path: () => '/api/me/essay', actor: 'anonymous', status: 401 },
+    { label: 'essay page: student', method: 'get', path: () => '/api/me/essay', actor: 'student', status: 200 },
+    { label: 'essay summary: anonymous', method: 'get', path: () => '/api/me/essay/summary', actor: 'anonymous', status: 401 },
+    { label: 'essay summary: student', method: 'get', path: () => '/api/me/essay/summary', actor: 'student', status: 200 },
+    { label: 'essay image: anonymous', method: 'get', path: () => `/api/me/essay/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    // 404 and not 400: proof the static `images/` segment wins over `:essayId`.
+    { label: 'essay image: student, unknown page', method: 'get', path: () => `/api/me/essay/images/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'essay image upload: anonymous', method: 'post', path: () => `/api/me/essay/${randomUUID()}/images`, actor: 'anonymous', status: 401 },
+    { label: 'essay image upload: student, unknown question', method: 'post', path: () => `/api/me/essay/${randomUUID()}/images`, actor: 'student', status: 404 },
+    {
+      label: 'essay answer: anonymous',
+      method: 'post',
+      path: () => `/api/me/essay/${randomUUID()}/answer`,
+      actor: 'anonymous',
+      body: () => ({ text: 'إجابتي.' }),
+      status: 401,
+    },
+    {
+      label: 'essay answer: student, unknown question',
+      method: 'post',
+      path: () => `/api/me/essay/${randomUUID()}/answer`,
+      actor: 'student',
+      body: () => ({ text: 'إجابتي.' }),
+      status: 404,
+    },
+    {
+      // The contract's own refusal: photographs OR text, never neither.
+      label: 'essay answer: student, empty answer is 400',
+      method: 'post',
+      path: () => `/api/me/essay/${randomUUID()}/answer`,
+      actor: 'student',
+      body: () => ({ images: [], text: null }),
+      status: 400,
+    },
+    /*
+     * The teacher's half. `homework:read` sees the schedule and the answers,
+     * `homework:review` marks, `lesson:write` writes the questions — the
+     * permissions the same three acts already carry on الواجب.
+     */
+    { label: 'admin essays schedule: anonymous', method: 'get', path: () => '/api/admin/daily-essays', actor: 'anonymous', status: 401 },
+    { label: 'admin essays schedule: student', method: 'get', path: () => '/api/admin/daily-essays', actor: 'student', status: 403 },
+    { label: 'admin essays schedule: admin', method: 'get', path: () => '/api/admin/daily-essays', actor: 'admin', status: 200 },
+    { label: 'admin essays queue: anonymous', method: 'get', path: () => '/api/admin/daily-essays/submissions', actor: 'anonymous', status: 401 },
+    { label: 'admin essays queue: student', method: 'get', path: () => '/api/admin/daily-essays/submissions', actor: 'student', status: 403 },
+    { label: 'admin essays queue: admin', method: 'get', path: () => '/api/admin/daily-essays/submissions', actor: 'admin', status: 200 },
+    { label: 'admin essays queue: admin, junk essayId is 400', method: 'get', path: () => '/api/admin/daily-essays/submissions?essayId=nope', actor: 'admin', status: 400 },
+    { label: 'admin essays pending count: anonymous', method: 'get', path: () => '/api/admin/daily-essays/submissions/pending-count', actor: 'anonymous', status: 401 },
+    { label: 'admin essays pending count: student', method: 'get', path: () => '/api/admin/daily-essays/submissions/pending-count', actor: 'student', status: 403 },
+    // 200 and not 400: proof `pending-count` is matched before `submissions/:id`.
+    { label: 'admin essays pending count: admin', method: 'get', path: () => '/api/admin/daily-essays/submissions/pending-count', actor: 'admin', status: 200 },
+    { label: 'admin essay answer detail: anonymous', method: 'get', path: () => `/api/admin/daily-essays/submissions/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin essay answer detail: student', method: 'get', path: () => `/api/admin/daily-essays/submissions/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin essay answer detail: admin, unknown answer', method: 'get', path: () => `/api/admin/daily-essays/submissions/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin essay image: anonymous', method: 'get', path: () => `/api/admin/daily-essays/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin essay image: student', method: 'get', path: () => `/api/admin/daily-essays/images/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin essay image: admin, unknown page', method: 'get', path: () => `/api/admin/daily-essays/images/${randomUUID()}`, actor: 'admin', status: 404 },
+    {
+      label: 'admin essay mark: anonymous',
+      method: 'post',
+      path: () => `/api/admin/daily-essays/submissions/${randomUUID()}/mark`,
+      actor: 'anonymous',
+      body: () => ({ mark: 8, note: null }),
+      status: 401,
+    },
+    {
+      label: 'admin essay mark: student',
+      method: 'post',
+      path: () => `/api/admin/daily-essays/submissions/${randomUUID()}/mark`,
+      actor: 'student',
+      body: () => ({ mark: 8, note: null }),
+      status: 403,
+    },
+    {
+      label: 'admin essay mark: admin, unknown answer',
+      method: 'post',
+      path: () => `/api/admin/daily-essays/submissions/${randomUUID()}/mark`,
+      actor: 'admin',
+      body: () => ({ mark: 8, note: null }),
+      status: 404,
+    },
+    {
+      label: 'admin essays create: anonymous',
+      method: 'post',
+      path: () => '/api/admin/daily-essays',
+      actor: 'anonymous',
+      body: () => ({ startDay: '2030-01-01', items: [{ body: 'سؤال للتجربة', modelAnswer: 'إجابة' }] }),
+      status: 401,
+    },
+    {
+      label: 'admin essays create: student',
+      method: 'post',
+      path: () => '/api/admin/daily-essays',
+      actor: 'student',
+      body: () => ({ startDay: '2030-01-01', items: [{ body: 'سؤال للتجربة', modelAnswer: 'إجابة' }] }),
+      status: 403,
+    },
+    {
+      // No items: refused by the pipe, so the row proves the gate is passed
+      // without writing a question into the shared database.
+      label: 'admin essays create: admin, empty batch is 400',
+      method: 'post',
+      path: () => '/api/admin/daily-essays',
+      actor: 'admin',
+      body: () => ({ startDay: '2030-01-01', items: [] }),
+      status: 400,
+    },
+    { label: 'admin essay update: anonymous', method: 'patch', path: () => `/api/admin/daily-essays/${randomUUID()}`, actor: 'anonymous', body: () => ({ isPublished: false }), status: 401 },
+    { label: 'admin essay update: student', method: 'patch', path: () => `/api/admin/daily-essays/${randomUUID()}`, actor: 'student', body: () => ({ isPublished: false }), status: 403 },
+    { label: 'admin essay update: admin, unknown question', method: 'patch', path: () => `/api/admin/daily-essays/${randomUUID()}`, actor: 'admin', body: () => ({ isPublished: false }), status: 404 },
+    { label: 'admin essay delete: anonymous', method: 'delete', path: () => `/api/admin/daily-essays/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin essay delete: student', method: 'delete', path: () => `/api/admin/daily-essays/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin essay delete: admin, unknown question', method: 'delete', path: () => `/api/admin/daily-essays/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'admin homework list: anonymous', method: 'get', path: () => '/api/admin/homework', actor: 'anonymous', status: 401 },
     { label: 'admin homework list: student', method: 'get', path: () => '/api/admin/homework', actor: 'student', status: 403 },
     { label: 'admin homework list: admin', method: 'get', path: () => '/api/admin/homework', actor: 'admin', status: 200 },

@@ -182,6 +182,7 @@ describe('STUDENT_TABS', () => {
       '/plan',
       '/backlog',
       '/daily',
+      '/essay',
       '/focus',
       '/mistakes',
       '/notes',
@@ -266,6 +267,7 @@ describe('STUDENT_NAV entitlement rows', () => {
     expect(byHref.get('/certificates')).toBe('shareCards');
     expect(byHref.get('/game')).toBe('quizGame');
     expect(byHref.get('/daily')).toBe('dailyQuestion');
+    expect(byHref.get('/essay')).toBe('dailyEssay');
     expect(byHref.get('/plan')).toBe('studyPlan');
     expect(byHref.get('/notes')).toBe('lessonNotes');
     expect(byHref.get('/badges')).toBe('badges');

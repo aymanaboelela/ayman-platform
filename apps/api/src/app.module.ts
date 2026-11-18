@@ -59,6 +59,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { CentersModule } from './modules/centers/centers.module';
 import { CenterReservationsModule } from './modules/center-reservations/center-reservations.module';
 import { HomeworkModule } from './modules/homework/homework.module';
+import { DailyEssayModule } from './modules/daily-essay/daily-essay.module';
 import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
 import { ArenaModule } from './modules/arena/arena.module';
 import { MistakesModule } from './modules/mistakes/mistakes.module';
@@ -202,6 +203,7 @@ import { PasswordResetModule } from './modules/password-reset/password-reset.mod
     BookOrdersModule,
     // الواجب — the exercise on a lecture, and the photographs of the answer.
     HomeworkModule,
+    DailyEssayModule,
     /*
      * إيه اللي الستاك ده مسموح له يشغّله — المستند الموقّع اللي صاحب
      * السوفتوير بيصدّره. ⚠️ مش `EntitlementModule` اللي فوق: ده عن وصول
