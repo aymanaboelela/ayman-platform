@@ -167,14 +167,19 @@ describe('DailyEssayService', () => {
     });
 
     it('hides a question that is for another course, not yet due, or unpublished', async () => {
-      await essay(D1, [otherCourseId]);
-      await essay(D2, [courseId]);
-      await essay(D1, [courseId], { isPublished: false });
+      const hidden = [
+        await essay(D1, [otherCourseId]),
+        await essay(D2, [courseId]),
+        await essay(D1, [courseId], { isPublished: false }),
+      ];
 
       const page = await service.page(studentId, at(D1));
 
+      // By id, not `toEqual([])`: a database with somebody's earlier
+      // «for everyone» questions in it would legitimately list those.
       expect(page.today).toBeNull();
-      expect(page.history).toEqual([]);
+      const listed = page.history.map((entry) => entry.id);
+      for (const id of hidden) expect(listed).not.toContain(id);
     });
 
     it('treats a question with no course as for every student who holds a real course', async () => {
@@ -330,6 +335,12 @@ describe('DailyEssayService', () => {
       const first = await essay(D1, [courseId]);
       const second = await essay(D2, [courseId]);
       const older = await service.submit(otherStudentId, second, { images: [], text: 'أقدم إجابة' }, new Date(`${D2}T08:00:00Z`));
+      // Older than anything a shared database could already hold, so «the
+      // oldest waiting anywhere» is this row whatever else is in the table.
+      await prisma.dailyEssaySubmission.update({
+        where: { id: older.id },
+        data: { submittedAt: new Date('2001-01-01T00:00:00Z') },
+      });
       const mine = await service.submit(studentId, first, { images: [], text: 'إجابتي' }, new Date(`${D2}T09:00:00Z`));
       const sibling = await service.submit(otherStudentId, first, { images: [], text: 'نفس السؤال' }, new Date(`${D2}T10:00:00Z`));
 
