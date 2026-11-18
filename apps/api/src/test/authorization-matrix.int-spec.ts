@@ -999,6 +999,33 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
       status: 404,
     },
+    // «اكتب الحل» — the same gates in the same order as `submissions`. The
+    // device model is a Galaxy Tab here so the 404s below are the enrolment
+    // and the missing homework, not the device check.
+    {
+      label: 'homework typed answer: anonymous',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/text`,
+      actor: 'anonymous',
+      body: () => ({ text: 'الحل', deviceModel: 'SM-X205' }),
+      status: 401,
+    },
+    {
+      label: 'homework typed answer: non-enrolled is 404',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/text`,
+      actor: 'other',
+      body: () => ({ text: 'الحل', deviceModel: 'SM-X205' }),
+      status: 404,
+    },
+    {
+      label: 'homework typed answer: enrolled student, no homework set',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/text`,
+      actor: 'student',
+      body: () => ({ text: 'الحل', deviceModel: 'SM-X205' }),
+      status: 404,
+    },
     { label: 'homework image: anonymous', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
     // A page belonging to nobody, asked for by a student who owns nothing: the
     // owner is compiled INTO the query, so this is the same 404 another

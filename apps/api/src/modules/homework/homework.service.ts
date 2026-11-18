@@ -1,12 +1,20 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   HOMEWORK_IMAGE_RETENTION_DAYS,
+  isMinistryTabletModel,
   type AdminHomeworkDetail,
   type AdminHomeworkLessonSummary,
   type AdminHomeworkRow,
   type HomeworkFilter,
   type HomeworkReviewInput,
   type HomeworkSubmitInput,
+  type HomeworkTextSubmitInput,
   type MyHomeworkSubmission,
   type StudentHomework,
 } from '@ayman/contracts/homework';
@@ -154,6 +162,65 @@ export class HomeworkService {
       if (!stat) throw new BadRequestException('image was not uploaded');
     }
 
+    return this.handIn(userId, lessonId, homework.courseId, {
+      images: input.images,
+      answerText: null,
+      deviceModel: null,
+    });
+  }
+
+  /**
+   * «اكتب الحل» — the answer typed on the ministry tablet instead of
+   * photographed.
+   *
+   * Same lifecycle as `submit` in every respect (one answer per student per
+   * lecture, a resubmission only after «فكّر أكتر», the same admin alert), and
+   * it goes through the same `handIn`. Switching between the two on a
+   * resubmission is allowed: a student who typed and was handed it back may
+   * photograph the second attempt, and the other way round.
+   *
+   * ⚠️ `homework` is checked by hand. This route's `@RequireFeature` names
+   * `homework.typedAnswer`, and a method-level decorator REPLACES the
+   * controller's `@RequireFeature('homework')` rather than adding to it
+   * (`getAllAndOverride`), so without this line a stack with homework off and
+   * the typed answer on would take submissions on a feature it does not show.
+   *
+   * The device check is the honest half of the gate — see
+   * `HomeworkTextSubmitSchema`: the model is the client's claim, so this keeps
+   * the option to Galaxy Tabs and records the claim, nothing more.
+   */
+  async submitText(
+    userId: string,
+    lessonId: string,
+    input: HomeworkTextSubmitInput,
+  ): Promise<MyHomeworkSubmission> {
+    if (!isFeatureEnabled('homework')) throw new NotFoundException();
+    const homework = await this.requireOpenHomework(userId, lessonId);
+    if (!isMinistryTabletModel(input.deviceModel)) {
+      throw new ForbiddenException('typed answers are for the ministry tablet');
+    }
+    return this.handIn(userId, lessonId, homework.courseId, {
+      images: [],
+      answerText: input.text,
+      deviceModel: input.deviceModel,
+    });
+  }
+
+  /**
+   * The write both hand-ins share: the row (created, or reset for another
+   * attempt), its pages, the admin alert — and, after the commit, the previous
+   * attempt's photographs deleted from the bucket.
+   */
+  private async handIn(
+    userId: string,
+    lessonId: string,
+    courseId: string,
+    answer: {
+      images: HomeworkSubmitInput['images'];
+      answerText: string | null;
+      deviceModel: string | null;
+    },
+  ): Promise<MyHomeworkSubmission> {
     const existing = await this.prisma.homeworkSubmission.findUnique({
       where: { lessonId_userId: { lessonId, userId } },
       select: { id: true, status: true, attempt: true },
@@ -182,7 +249,11 @@ export class HomeworkService {
             data: {
               status: 'submitted',
               attempt: existing.attempt + 1,
-              imageCount: input.images.length,
+              imageCount: answer.images.length,
+              // Written on EVERY hand-in, so a photographed second attempt
+              // does not carry the first attempt's typed text, or the reverse.
+              answerText: answer.answerText,
+              deviceModel: answer.deviceModel,
               submittedAt: now,
               // The previous verdict goes with the previous answer. Leaving the
               // old mark on the row would show «مقبول ٧٠» over work he has not
@@ -200,15 +271,17 @@ export class HomeworkService {
             data: {
               lessonId,
               userId,
-              courseId: homework.courseId,
-              imageCount: input.images.length,
+              courseId,
+              imageCount: answer.images.length,
+              answerText: answer.answerText,
+              deviceModel: answer.deviceModel,
               submittedAt: now,
             },
             select: SUBMISSION_SELECT,
           });
 
       await tx.homeworkImage.createMany({
-        data: input.images.map((image, index) => ({
+        data: answer.images.map((image, index) => ({
           submissionId: row.id,
           storageKey: image.storageKey,
           sizeBytes: image.sizeBytes,
@@ -284,6 +357,7 @@ export class HomeworkService {
     return {
       body: homework.body,
       maxImages: homework.maxImages,
+      typedAnswer: isFeatureEnabled('homework.typedAnswer'),
       submission: submission ? toMySubmission(submission) : null,
     };
   }
@@ -420,6 +494,7 @@ export class HomeworkService {
       where: { id },
       select: {
         ...ROW_SELECT,
+        answerText: true,
         reviewNote: true,
         reviewedAt: true,
         images: { orderBy: [{ position: 'asc' }, { id: 'asc' }], select: { id: true } },
@@ -442,6 +517,8 @@ export class HomeworkService {
       // opening the course editor in a second tab.
       prompt: row.lesson.homework?.body ?? '',
       imageIds: row.images.map((image) => image.id),
+      answerText: row.answerText,
+      deviceModel: row.deviceModel,
       reviewNote: row.reviewNote,
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
       studentPhone: row.user.phoneNumber,
@@ -762,6 +839,7 @@ const SUBMISSION_SELECT = {
   submittedAt: true,
   reviewedAt: true,
   imagesPurgedAt: true,
+  answerText: true,
   images: { orderBy: [{ position: 'asc' }, { id: 'asc' }], select: { id: true, position: true } },
 } satisfies Prisma.HomeworkSubmissionSelect;
 
@@ -773,6 +851,9 @@ const ROW_SELECT = {
   grade: true,
   submittedAt: true,
   imagesPurgedAt: true,
+  // Set on every typed hand-in and only then — the cheap way for a list row to
+  // know «مكتوب» without reading the text itself.
+  deviceModel: true,
   courseId: true,
   lessonId: true,
   user: { select: { id: true, name: true } },
@@ -789,6 +870,7 @@ interface SubmissionRow {
   submittedAt: Date;
   reviewedAt: Date | null;
   imagesPurgedAt: Date | null;
+  answerText: string | null;
   images: { id: string; position: number }[];
 }
 
@@ -813,6 +895,7 @@ function toMySubmission(row: SubmissionRow): MyHomeworkSubmission {
     imageCount: row.imageCount,
     imageIds: row.images.map((image) => image.id),
     imagesPurged: row.imagesPurgedAt !== null,
+    answerText: row.answerText,
     grade: decimalToNumber(row.grade),
     reviewNote: row.reviewNote,
     submittedAt: row.submittedAt.toISOString(),
@@ -828,6 +911,7 @@ function toRow(row: {
   grade: unknown;
   submittedAt: Date;
   imagesPurgedAt: Date | null;
+  deviceModel: string | null;
   courseId: string;
   lessonId: string;
   user: { id: string; name: string | null };
@@ -838,6 +922,7 @@ function toRow(row: {
     status: row.status,
     attempt: row.attempt,
     imageCount: row.imageCount,
+    typed: row.deviceModel !== null,
     imagesPurged: row.imagesPurgedAt !== null,
     grade: decimalToNumber(row.grade),
     submittedAt: row.submittedAt.toISOString(),

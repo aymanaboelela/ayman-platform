@@ -417,7 +417,7 @@ function HomeworkRow({ row, filter, lessonId }: { row: AdminHomeworkRow; filter:
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-muted">
           <span className="inline-flex items-center gap-1 tabular-nums">
             <Images className="size-3.5" aria-hidden="true" />
-            {row.imageCount} {c.imageUnit}
+            {row.typed ? c.typed : `${row.imageCount} ${c.imageUnit}`}
           </span>
           <span className="whitespace-nowrap tabular-nums">{submittedAtFormatter.format(new Date(row.submittedAt))}</span>
           {row.grade !== null ? (
