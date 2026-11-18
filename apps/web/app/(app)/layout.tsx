@@ -43,6 +43,7 @@ import { StudentFeaturesSlot } from '@/components/app/student-features-slot';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
 import { GuideSlot } from '@/components/guide/guide-slot';
+import { FirstTouchClaim } from '@/components/acquisition/first-touch-claim';
 
 /**
  * `noindex, nofollow` for the whole signed-in area — dashboard, path, player,
@@ -210,6 +211,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         why that matters). See `components/guide/guide-slot.tsx`.
       */}
       <GuideSlot surface="app" />
+      {/*
+        Renders nothing. Hands the API the ad link this browser first arrived
+        through, once, now that there is an account to attach it to — the
+        other half of `<FirstTouchCapture>` in the root layout. Here because
+        this shell is where every new account lands (`/onboarding`), whichever
+        way it was made. See `components/acquisition/first-touch-claim.tsx`.
+      */}
+      <FirstTouchClaim />
     </StudentShell>
   );
 }

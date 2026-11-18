@@ -18,6 +18,7 @@ import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import { StaleBuildWatch } from '@/components/pwa/stale-build-watch';
 import { StaleNavigationHold } from '@/components/pwa/stale-navigation-hold';
+import { FirstTouchCapture } from '@/components/acquisition/first-touch-capture';
 // `Clarity` is deliberately NOT imported or mounted below — see the long
 // comment at its old call site, right after `<StaleBuildWatch />`.
 import './globals.css';
@@ -317,6 +318,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           mounted on every page. See `lib/stale-navigation.ts`.
         */}
         <StaleNavigationHold />
+        {/*
+          Renders nothing. Remembers the ad link this browser arrived through
+          (`utm_*`, `fbclid`) so the account it later makes can say where it
+          came from — first-party, in `localStorage`, and sent nowhere until
+          there is an account.
+
+          At the ROOT because an ad can point at any page: the landing page, a
+          course, a news article, `/register` itself. It is not the `<Clarity>`
+          this file refuses just below, and must not grow into it: one read of
+          `location` per document load, no script from anywhere else, and
+          nothing that touches `history`. See `lib/first-touch.ts`.
+        */}
+        <FirstTouchCapture />
         {/*
           ⚠️ `<Clarity>` is DELIBERATELY not mounted — read before re-adding it.
 
