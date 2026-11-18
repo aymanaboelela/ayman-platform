@@ -507,6 +507,12 @@ export const AUDIT_ACTIONS = [
   'lesson:set-homework',
   'lesson:remove-homework',
   'homework:accept',
+  // «السؤال المقالي اليومي» — writing the schedule, and marking an answer
+  // (which also deletes its photographs).
+  'essay:create',
+  'essay:update',
+  'essay:delete',
+  'essay:mark',
   'homework:return',
   /*
    * لوحة الشرف بالإيد — نشر اسم طالب قاصر على صفحة عامة بدوسة زرار.

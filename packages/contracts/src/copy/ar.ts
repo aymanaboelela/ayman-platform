@@ -5368,6 +5368,14 @@ export const copy = {
     homeworkNeedsWork: 'واجب {lesson} فيه ملاحظات',
     homeworkNeedsWorkDetail: 'مهندس أيمن كتب لك رد، والواجب مفتوح تاني.',
     /**
+     * «السؤال المقالي اليومي» — the answer has a mark on it. No teacher's name
+     * in either line, so neither needs a tenant gate. `{mark}` and `{max}` are
+     * numbers.
+     */
+    essayMarked: 'سؤالك المقالي اتصحّح ✅',
+    essayMarkedDetail: 'الدرجة {mark} من {max} — والإجابة النموذجية جنبها.',
+    essaySubtitle: 'السؤال المقالي اليومي',
+    /**
      * لوحة الشرف — «اسمك عليها».
      *
      * الكِند الوحيد اللي الطالب مالوش أي طريقة تانية يعرف بيه: اللوحة صفحة

@@ -100,6 +100,8 @@ export function iconFor(entry: StudentNotification) {
     */
     case 'homework_submitted':
     case 'homework_reviewed':
+    // «السؤال المقالي» — written work marked by hand, the same object.
+    case 'essay_marked':
       return NotebookPen;
 
     /* لوحة الشرف — نفس الكأس اللي في عنوان القسم على الصفحة الرئيسية
@@ -144,6 +146,7 @@ export function toneFor(entry: StudentNotification): NotificationTone {
       return 'answer';
     case 'quiz_graded':
     case 'homework_reviewed':
+    case 'essay_marked':
     case 'extra_attempt_granted':
       return 'marked';
     case 'payment_approved':

@@ -460,6 +460,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'الطالب اللي فاتح من تابلت الوزارة يقدر يكتب حل الواجب بدل ما يصوّره، والمصحّح بيقرا الحل مكتوب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first". «السؤال المقالي اليومي»: one written question a day that
+     * the teacher schedules ahead with its model answer, the student answers
+     * on paper (photographed) or typed, and a person marks. Off for a tenant
+     * by default because it is marking WORK — a stack that opens it has to
+     * have somebody reading the answers. Nothing in it carries his identity.
+     */
+    key: 'dailyEssay',
+    nameAr: 'السؤال المقالي اليومي',
+    descriptionAr: 'سؤال مقالي كل يوم بإجابته النموذجية: الطالب يجاوب بصورة من الكراسة أو كتابة، والمصحّح يحط الدرجة، وكله في قسم واحد عند الطالب.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

@@ -411,6 +411,16 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         href: `/honor-board?round=${entry.day}`,
       };
 
+    // «السؤال المقالي اتصحّح» — opens the section, where the mark sits beside
+    // the student's own answer and the model answer.
+    case 'essay_marked':
+      return {
+        title: c.essayMarked,
+        detail: formatCopy(c.essayMarkedDetail, { mark: entry.mark, max: entry.maxMarks }),
+        subtitle: c.essaySubtitle,
+        href: '/essay',
+      };
+
     case 'wallet_credited':
       return {
         title: formatCopy(

@@ -84,6 +84,8 @@
     "./arabic-count": "./src/arabic-count.ts",
     "./admin/content-months": "./src/admin/content-months.ts",
     "./homework": "./src/homework.ts",
+    "./daily-essay": "./src/daily-essay.ts",
+    "./copy/daily-essay": "./src/copy/daily-essay.ts",
     "./copy/homework": "./src/copy/homework.ts",
     "./books": "./src/books.ts",
     "./book-orders": "./src/book-orders.ts",

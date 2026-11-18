@@ -112,6 +112,11 @@ export const AUDIT_RESOURCES = {
   /// اتمسحت», and a deletion of somebody's uploaded work is exactly the kind of
   /// irreversible act the audit filter exists to be able to answer for.
   homeworkSubmission: 'homework_submissions',
+  /// «السؤال المقالي اليومي» — the question on its day, and one student's
+  /// answer to it. Two types for the reason `book`/`book_orders` are two:
+  /// «مين غيّر السؤال» and «مين حط الدرجة دي» are different searches.
+  dailyEssay: 'daily_essays',
+  dailyEssaySubmission: 'daily_essay_submissions',
   /// لوحة الشرف — الصف اللي المدرّس حطّه بإيده. نوع لوحده عشان «مين نشر اسم
   /// الطالب ده على الصفحة الرئيسية» لازم تبقى فلتر واحد على شاشة الأوديت،
   /// ومسح الصف بيخلّي سطر الأوديت هو الأثر الوحيد إنه كان موجود.

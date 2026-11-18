@@ -335,6 +335,16 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: `video-key-burst-${entry.studentId}`,
       };
 
+    // No teacher's name in either line, so it ships as written on every stack.
+    case 'essay_marked':
+      return {
+        title: c.essayMarked,
+        body: formatCopy(c.essayMarkedDetail, { mark: entry.mark, max: entry.maxMarks }),
+        url: '/essay',
+        // One tray entry per answer: two marked on the same day are two things.
+        tag: `essay-marked-${entry.submissionId}`,
+      };
+
     default:
       return null;
   }
