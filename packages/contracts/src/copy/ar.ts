@@ -463,6 +463,8 @@ export const copy = {
     certificates: 'شهاداتي',
     /** The engagement screens — every other word on them is `copy/engagement.ts`. */
     daily: 'سؤال اليوم',
+    /** «السؤال المقالي اليومي» — the rest of its words are in `copy/daily-essay.ts`. */
+    essay: 'السؤال المقالي',
     plan: 'خطة المذاكرة',
     notes: 'ملاحظاتي',
     badges: 'أوسمتي',

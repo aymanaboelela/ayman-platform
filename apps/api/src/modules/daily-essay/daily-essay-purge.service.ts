@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { ESSAY_IMAGE_RETENTION_DAYS } from '@ayman/contracts/daily-essay';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DailyEssayService } from './daily-essay.service';

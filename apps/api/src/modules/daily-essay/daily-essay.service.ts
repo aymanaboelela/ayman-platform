@@ -162,7 +162,7 @@ export class DailyEssayService {
       essays.find((entry) => entry.submission !== null) ??
       null;
 
-    return { essay, stats: await this.stats(userId) };
+    return { day: today, essay, stats: await this.stats(userId) };
   }
 
   /**

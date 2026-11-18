@@ -246,8 +246,9 @@ export type EssayPayload = z.infer<typeof EssayPayloadSchema>;
  * one, otherwise the newest one still open, otherwise `null` and no card.
  */
 export const EssaySummarySchema = z.object({
+  /** The Cairo day the server answered on — tells «النهارده» from «امبارح». */
+  day: DayKeySchema,
   essay: StudentEssaySchema.nullable(),
-  /** Marked answers the student has not been shown yet are not tracked; this is just the count. */
   stats: EssayStatsSchema,
 });
 

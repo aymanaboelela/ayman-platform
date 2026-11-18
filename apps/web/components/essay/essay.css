@@ -1,0 +1,464 @@
+/* =============================================================================
+   «السؤال المقالي اليومي» — the student's page and the card on the dashboard.
+
+   The same language as the other study screens (`engagement.css`, which this
+   builds on for `.eg-btn`, `.eg-tile` and the `--viz-*` hues): a container with
+   a coloured head, a chip that says where things stand, a button on every
+   state. One hue for the whole feature — teal — read through `--h`, so the
+   mark, the model answer and the note can each take their OWN colour inside it
+   and stay tellable apart: green is the model answer, amber is the marker's
+   note, neutral is the student's own work.
+   ========================================================================== */
+
+.es {
+  --h: var(--viz-2);
+  --h2: var(--viz-5);
+}
+
+/* ── The card: one question ──────────────────────────────────────────────── */
+.es-card {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1.5px solid color-mix(in oklab, var(--h) 30%, var(--color-line));
+  background: var(--color-surface-1);
+}
+.es-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  padding: 0.85rem 1rem;
+  background: color-mix(in oklab, var(--h) 11%, var(--color-surface-1));
+  border-block-end: 1px solid color-mix(in oklab, var(--h) 24%, var(--color-line));
+}
+/* Today's question is the page's one loud object: the head takes the hue. */
+.es-card--today {
+  box-shadow: var(--shadow-md);
+}
+.es-card--today .es-card__head {
+  padding-block: 1.1rem;
+  border-block-end: 0;
+  color: var(--eg-on-hue);
+  background:
+    radial-gradient(90% 140% at 100% 0%, color-mix(in oklab, var(--h) 75%, transparent) 0%, transparent 60%),
+    linear-gradient(135deg, color-mix(in oklab, var(--h) 80%, var(--n-12)) 0%, var(--h2) 100%);
+}
+.es-card__icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--h) 20%, var(--color-surface-1));
+  color: var(--h);
+}
+.es-card--today .es-card__icon {
+  background: rgb(255 255 255 / 0.2);
+  color: var(--eg-on-hue);
+}
+.es-card__titles {
+  min-width: 0;
+  flex: 1 1 10rem;
+}
+.es-card__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+}
+.es-card__date {
+  font-size: var(--fs-text-sm);
+  opacity: 0.85;
+}
+.es-card__body {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+@media (min-width: 768px) {
+  .es-card__body { padding: 1.25rem 1.5rem 1.5rem; }
+}
+
+/* «الدرجة من ١٠» — on the hue in today's head, tinted elsewhere. */
+.es-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  background: color-mix(in oklab, var(--h) 14%, var(--color-surface-1));
+  border: 1px solid color-mix(in oklab, var(--h) 30%, transparent);
+}
+.es-card--today .es-marks {
+  background: rgb(255 255 255 / 0.18);
+  border-color: rgb(255 255 255 / 0.3);
+}
+
+/* Where the answer stands. `--k` is the state's own colour. */
+.es-status {
+  --k: var(--n-8);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  background: color-mix(in oklab, var(--k) 16%, var(--color-surface-1));
+  color: color-mix(in oklab, var(--k) 72%, var(--color-fg));
+  border: 1px solid color-mix(in oklab, var(--k) 34%, transparent);
+}
+.es-status[data-status='open'] { --k: var(--viz-1); }
+.es-status[data-status='waiting'] { --k: var(--viz-5); }
+.es-status[data-status='marked'] { --k: var(--viz-6); }
+/* On the coloured head the tint would vanish, so the chip turns solid. */
+.es-card--today .es-status {
+  background: var(--color-surface-1);
+  color: color-mix(in oklab, var(--k) 78%, var(--color-fg));
+  border-color: transparent;
+}
+
+.es-question {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-medium);
+  line-height: 1.8;
+}
+
+/* ── The blocks under the question ───────────────────────────────────────── */
+.es-block {
+  --k: var(--n-8);
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--k) 28%, var(--color-line));
+  background: color-mix(in oklab, var(--k) 6%, var(--color-surface-1));
+}
+.es-block[data-kind='model'] { --k: var(--viz-6); }
+.es-block[data-kind='note'] { --k: var(--viz-1); }
+.es-block[data-kind='waiting'] { --k: var(--viz-5); }
+.es-block__label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-block-end: 0.4rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: color-mix(in oklab, var(--k) 70%, var(--color-fg));
+}
+.es-block__text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.es-block__meta {
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-sm);
+}
+
+/* The mark — the number the student came back for, so it is the biggest thing
+   in a marked card. */
+.es-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 1rem;
+  border-radius: var(--r-md);
+  color: var(--eg-on-hue);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--viz-6) 82%, var(--n-12)) 0%, var(--viz-2) 100%);
+}
+.es-score__num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: clamp(2rem, 8vw, 3rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.es-score__of {
+  font-size: 0.55em;
+  opacity: 0.8;
+}
+.es-score__label {
+  font-weight: var(--fw-bold);
+}
+.es-score__sub {
+  font-size: var(--fs-text-sm);
+  opacity: 0.9;
+}
+
+.es-thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
+}
+@media (min-width: 640px) {
+  .es-thumbs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.es-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-3);
+}
+.es-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.es-thumb__remove {
+  position: absolute;
+  inset-block-start: 0.25rem;
+  inset-inline-end: 0.25rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--color-surface-1) 82%, transparent);
+  color: var(--color-fg);
+  cursor: pointer;
+}
+
+/* ── The answer form ─────────────────────────────────────────────────────── */
+.es-form {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: var(--r-md);
+  border: 1.5px dashed color-mix(in oklab, var(--h) 40%, var(--color-line));
+  background: color-mix(in oklab, var(--h) 4%, var(--color-surface-1));
+}
+.es-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.es-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--min-tap-size);
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--color-line);
+  background: var(--color-surface-1);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+.es-mode[aria-selected='true'] {
+  border-color: var(--h);
+  background: color-mix(in oklab, var(--h) 14%, var(--color-surface-1));
+  color: color-mix(in oklab, var(--h) 72%, var(--color-fg));
+}
+.es-form__title {
+  font-weight: var(--fw-bold);
+}
+.es-form__hint {
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-sm);
+}
+.es-textarea {
+  display: block;
+  width: 100%;
+  min-height: 11rem;
+  padding: 0.7rem 0.85rem;
+  resize: vertical;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--color-line);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+  font-size: var(--fs-text-base);
+  line-height: 1.8;
+}
+.es-textarea:focus {
+  outline: none;
+  border-color: var(--h);
+}
+.es-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.es-form__count {
+  margin-inline-start: auto;
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-xs);
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+.es-form__error {
+  color: var(--err);
+  font-size: var(--fs-text-sm);
+}
+
+/* ── «الأسئلة اللي فاتت» ─────────────────────────────────────────────────── */
+.es-history {
+  display: grid;
+  gap: 0.75rem;
+}
+.es-item {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+}
+.es-item[open] {
+  border-color: color-mix(in oklab, var(--h) 34%, var(--color-line));
+}
+.es-item__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+.es-item__summary::-webkit-details-marker { display: none; }
+.es-item__main {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+.es-item__date {
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.es-item__excerpt {
+  overflow: hidden;
+  font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.es-item__mark {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--viz-6) 72%, var(--color-fg));
+}
+.es-item__chevron {
+  flex-shrink: 0;
+  color: var(--color-fg-muted);
+  transition: transform var(--d-hover) var(--ease-out);
+}
+.es-item[open] .es-item__chevron { transform: rotate(-90deg); }
+.es-item__body {
+  display: grid;
+  gap: 1rem;
+  padding: 0 1rem 1rem;
+}
+
+.es-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 2rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1.5px dashed color-mix(in oklab, var(--h) 34%, var(--color-line));
+  background: color-mix(in oklab, var(--h) 4%, var(--color-surface-1));
+  text-align: center;
+}
+.es-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--h) 16%, var(--color-surface-1));
+  color: var(--h);
+}
+.es-empty__title { font-weight: var(--fw-bold); }
+.es-empty__body { color: var(--color-fg-muted); font-size: var(--fs-text-sm); }
+
+/* ── The card on the dashboard ───────────────────────────────────────────── */
+.es-home {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1rem;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 1rem 1.1rem;
+  border-radius: var(--r-lg);
+  color: var(--eg-on-hue);
+  background:
+    radial-gradient(80% 140% at 100% 0%, color-mix(in oklab, var(--h) 75%, transparent) 0%, transparent 60%),
+    linear-gradient(135deg, color-mix(in oklab, var(--h) 80%, var(--n-12)) 0%, var(--h2) 100%);
+  box-shadow: var(--shadow-md);
+}
+.es-home__icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.2);
+}
+.es-home__main {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+.es-home__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+}
+.es-home__question {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-block-start: 0.15rem;
+  opacity: 0.95;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.es-home__line {
+  margin-block-start: 0.35rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  opacity: 0.9;
+}
+.es-home__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--min-tap-size);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--r-full);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+/* The whole card is the link; the pill is what says so. */
+.es-home__cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+@media (max-width: 479px) {
+  .es-home__cta { width: 100%; }
+}

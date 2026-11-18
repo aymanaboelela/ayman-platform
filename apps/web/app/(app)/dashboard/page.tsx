@@ -53,6 +53,7 @@ import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-car
 import { FacebookGroupCard } from '@/components/dashboard/facebook-group-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { TodayStrip } from '@/components/engagement/today-strip';
+import { EssayHomeCard } from '@/components/essay/essay-home-card';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
 import { StudyTiles } from '@/components/dashboard/study-tiles';
 import { HomeHero } from '@/components/dashboard/home-hero';
@@ -482,6 +483,15 @@ export default async function DashboardPage() {
             showRing={false}
           />
         )}
+
+        {/* «سؤال مقالي اليوم» — under «ناقصك» on both homes: it is today's own
+            task, and the one daily thing somebody marks by hand. Its own
+            Suspense boundary, so the read never holds the page back. */}
+        {features.dailyEssay ? (
+          <Suspense fallback={null}>
+            <EssayHomeCard />
+          </Suspense>
+        ) : null}
 
         {/*
           «Cinema»: the book box, right under «ناقصك النهارده». The shop and the
