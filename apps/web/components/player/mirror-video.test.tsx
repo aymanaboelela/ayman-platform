@@ -15,13 +15,14 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
     nextLevel: number;
     startLevel: number;
     bandwidthEstimate: number;
+    config: Record<string, unknown>;
     handlers: Record<string, () => void>;
   }> = [];
   class FakeHls {
     static isSupported() {
       return true;
     }
-    static Events = { MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched', FRAG_LOADED: 'fragLoaded', ERROR: 'error' };
+    static Events = { MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched', FRAG_LOADED: 'fragLoaded', FRAG_BUFFERED: 'fragBuffered', ERROR: 'error' };
     static ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };
     static ErrorDetails = { KEY_LOAD_ERROR: 'keyLoadError', KEY_LOAD_TIMEOUT: 'keyLoadTimeOut' };
     // The base `videoKeyLoader` extends — never called here, only subclassed.
@@ -32,8 +33,11 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
     startLevel = 0;
     bandwidthEstimate = 0;
     handlers: Record<string, () => void> = {};
+    config: Record<string, unknown>;
     constructor(config: Record<string, unknown>) {
       built.push(config);
+      // hls.js keeps its own merged copy, which is what the player writes to.
+      this.config = { ...config };
       instances.push(this);
     }
     on(event: string, handler: () => void) {
@@ -117,6 +121,35 @@ describe('MirrorVideo playback tuning', () => {
     // Held in whole seconds: three events inside one second are one value.
     expect(seek.value).toBe('12');
     expect(seek.getAttribute('aria-valuetext')).toBe('0:12 / 1:40');
+  });
+});
+
+describe('MirrorVideo headroom follows the buffer', () => {
+  function bufferedTo(element: HTMLVideoElement, end: number, at = 0) {
+    Object.defineProperty(element, 'buffered', {
+      configurable: true,
+      value: { length: 1, start: () => 0, end: () => end },
+    });
+    Object.defineProperty(element, 'currentTime', { configurable: true, writable: true, value: at });
+  }
+
+  it('lets a deep buffer hold 720p, and tightens again as it drains', async () => {
+    const { container } = renderMirror();
+    await act(async () => {});
+    const hls = instances[0]!;
+    const video = container.querySelector('video')!;
+
+    // A minute ahead: the line can dip and nothing freezes, so use more of it.
+    bufferedTo(video, 60);
+    act(() => hls.handlers.fragBuffered!());
+    expect(hls.config.abrBandWidthFactor).toBe(0.9);
+    expect(hls.config.abrBandWidthUpFactor).toBe(0.75);
+
+    // Five seconds ahead: back to #823's headroom, the anti-freeze setting.
+    bufferedTo(video, 65, 60);
+    act(() => hls.handlers.fragBuffered!());
+    expect(hls.config.abrBandWidthFactor).toBe(0.7);
+    expect(hls.config.abrBandWidthUpFactor).toBe(0.5);
   });
 });
 
