@@ -117,57 +117,59 @@ jobs:
 
           echo "main is at ${head:0:7}, committed ${committed} ($((age / 60)) min ago)"
 
-          # A merge takes ~2 min of checks plus ~8-10 for the VPS to rebuild.
-          # Anything younger than that is not late, it is in progress, and an
-          # alert on it would be noise every single time anyone merges — which
-          # is how a monitor teaches people to ignore it.
-          if [ "$age" -lt 1800 ]; then
-            echo "younger than 30 min — still within the normal deploy window, nothing to judge yet"
+          # Since #812 (2026-11-15) a push to main never deploys. Only the
+          # nightly `schedule` run and a manual `workflow_dispatch` reach the
+          # `deploy to production` job, so the push run's deploy is ALWAYS
+          # `skipped` and this check went red on every tick the day after it
+          # shipped, with production perfectly current.
+          #
+          # The nightly is cron '0 2 * * *', but GitHub fires it late, and not
+          # by a little: the 2026-11-15/16/17 runs started 08:34, 08:43 and
+          # 09:51 UTC. A commit merged just after one nightly starts waits for
+          # the next one, plus ~30 min of checks and up to ~25 of deploy. 30h
+          # covers that. Anything younger is waiting for its nightly, not late.
+          if [ "$age" -lt 108000 ]; then
+            echo "younger than 30h — waiting for the nightly (or a manual dispatch) to deploy it, nothing to judge yet"
             exit 0
           fi
 
-          # Pinned to the CI workflow by name. The unfiltered query returns
-          # every workflow that ran for this sha and `[0]` would be whichever
-          # finished last, which is not necessarily the one that owns the
-          # deploy job. Newest-first within CI, so a re-run wins over the
-          # original — that is the run whose verdict currently stands.
-          run=$(gh api "repos/$REPO/actions/runs?branch=main&event=push&head_sha=$head&per_page=20" \
-                  --jq 'first(.workflow_runs[] | select(.name == "CI")) | "\(.id) \(.status) \(.conclusion)"')
+          # Any CI run for this exact sha whose deploy succeeded settles it,
+          # whichever event started it. Only schedule/dispatch runs can have
+          # one, so asking every run is not wasted on push runs for long.
+          ids=$(gh api "repos/$REPO/actions/runs?branch=main&head_sha=$head&per_page=50" \
+                  --jq '.workflow_runs[] | select(.name == "CI" and (.event == "schedule" or .event == "workflow_dispatch")) | .id')
 
-          if [ -z "$run" ] || [ "$run" = "null" ]; then
-            # Not treated as "production is stranded", because it is a
-            # different fact and a less certain one — a workflow can be
-            # missing here because it was deleted, or because the API has not
-            # indexed it yet. Still worth saying out loud: a commit on `main`
-            # with no CI run at all has had nothing check it.
-            echo "::warning::no CI push run found for ${head:0:7} — cannot tell whether it deployed"
+          if [ -z "$ids" ]; then
+            echo "::error::production is stranded — main is at ${head:0:7}, committed $((age / 3600))h ago, and no nightly or manual CI run has picked it up."
+            echo "::error::Check that the nightly schedule in ci.yml still fires, or run: gh workflow run ci.yml --ref main"
+            exit 1
+          fi
+
+          pending=0
+          for id in $ids; do
+            deploy=$(gh api "repos/$REPO/actions/runs/$id/jobs" \
+                       --jq '.jobs[] | select(.name == "deploy to production") | "\(.status) \(.conclusion)"')
+            echo "run $id: deploy to production ${deploy:-missing}"
+            case "$deploy" in
+              "completed success")
+                echo "deploy to production: success — main and production agree"
+                exit 0 ;;
+              completed*|"") ;;
+              *) pending=1 ;;
+            esac
+          done
+
+          # A deploy still queued or running gets the next tick, ten minutes
+          # later, to decide.
+          if [ "$pending" = 1 ]; then
+            echo "a deploy for ${head:0:7} is still in progress — waiting for it to finish"
             exit 0
           fi
 
-          id=${run%% *}; rest=${run#* }; status=${rest%% *}; conclusion=${rest#* }
-          echo "run $id: $status/$conclusion"
-
-          # Still going after 30 minutes is unusual but not yet wrong — the
-          # playwright shards plus a queue can get there. Let the next tick,
-          # ten minutes later, be the one that decides.
-          if [ "$status" != "completed" ]; then
-            echo "run is $status — waiting for it to finish"
-            exit 0
-          fi
-
-          deploy=$(gh api "repos/$REPO/actions/runs/$id/jobs" \
-                     --jq '.jobs[] | select(.name == "deploy to production") | .conclusion')
-
-          if [ "$deploy" = "success" ]; then
-            echo "deploy to production: success — main and production agree"
-            exit 0
-          fi
-
-          # `skipped` is the case this job was written for and it gets its own
-          # sentence, because "skipped" is the word that made it invisible.
-          echo "::error::production is stranded — main is at ${head:0:7} and 'deploy to production' is '${deploy:-missing}', not 'success'."
-          echo "::error::A SKIPPED deploy is not a failed one; nothing else will tell you. Fix the red job on main, or redeploy the current commit from the Dokploy panel."
-          echo "run: https://github.com/$REPO/actions/runs/$id"
+          # `skipped` is the case this job was written for: a red check upstream
+          # skips the deploy, and a skipped job sends no email.
+          echo "::error::production is stranded — main is at ${head:0:7} and no nightly or manual run deployed it (skipped or failed)."
+          echo "::error::A SKIPPED deploy is not a failed one; nothing else will tell you. Fix the red job on main, then: gh workflow run ci.yml --ref main"
 
           # Dokploy also rebuilds on merge through its own GitHub integration,
           # so production is not certainly stale — but it is certainly
