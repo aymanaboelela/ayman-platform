@@ -13,6 +13,7 @@ import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome
 import { QualityItem } from './quality-item';
 import { capForWidth, knownBandwidth, saveBandwidth, startRung } from './start-rung';
 import { videoKeyLoader } from './video-key-loader';
+import { abrFactorsFor, bufferAhead } from './buffer-aware-abr';
 
 const c = copy.player.controls;
 
@@ -175,6 +176,11 @@ export const HLS_CONFIG: Partial<HlsConfig> = {
    * just the same. On a line that swings, it sits at 480p instead of
    * freezing at 720p. A student who wants 720p regardless can still pick it
    * from the quality menu, which pins the rung.
+   *
+   * These are the STARTING values, for an empty buffer. Once a lecture has
+   * buffered ahead, `buffer-aware-abr.ts` loosens them as the buffer grows
+   * (0.9 / 0.75 at 30 s), because a flat 0.7 kept a line that only dips now
+   * and then on 480p — «الصورة مش حلوة خالص».
    */
   abrBandWidthFactor: 0.7,
   abrBandWidthUpFactor: 0.5,
@@ -226,6 +232,8 @@ interface HlsHandle {
   startLevel: number;
   /** hls.js's running estimate of the line, bit/s — saved for the next lecture. */
   bandwidthEstimate: number;
+  /** Live config — hls.js re-reads the ABR factors on every level decision. */
+  config: { abrBandWidthFactor: number; abrBandWidthUpFactor: number };
   levels: { height: number; width?: number; bitrate: number; averageBitrate?: number }[];
 }
 
@@ -354,6 +362,13 @@ export function MirrorVideo({
         instance.on(Hls.Events.FRAG_LOADED, () => {
           timed += 1;
           if (timed >= 3 && timed % 3 === 0) saveBandwidth(instance.bandwidthEstimate);
+        });
+        // Headroom follows the buffer: generous while a lot is buffered ahead,
+        // careful when it runs low. See `buffer-aware-abr.ts`.
+        instance.on(Hls.Events.FRAG_BUFFERED, () => {
+          const { down, up } = abrFactorsFor(bufferAhead(element));
+          instance.config.abrBandWidthFactor = down;
+          instance.config.abrBandWidthUpFactor = up;
         });
         instance.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
           setAutoHeight(instance.levels[data.level]?.height ?? null);
