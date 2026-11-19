@@ -473,6 +473,19 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'سؤال مقالي كل يوم بإجابته النموذجية: الطالب يجاوب بصورة من الكراسة أو كتابة، والمصحّح يحط الدرجة، وكله في قسم واحد عند الطالب.',
     defaultForTenant: false,
   },
+  {
+    /*
+     * "Ayman first", like everything new — and this key closes the REPORT
+     * only. Recording which ad link an account came through runs on every
+     * stack, ungated, so a teacher opened later finds their history already
+     * there instead of starting from the day of the checkbox. It reads that
+     * stack's own accounts and payments and carries nothing of his.
+     */
+    key: 'signupSources',
+    nameAr: 'مصادر التسجيل',
+    descriptionAr: 'كل لينك إعلان جاب كام حساب جديد، وكام واحد منهم دفع، ودفعوا كام — من غير أي كود من فيسبوك أو غيره.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

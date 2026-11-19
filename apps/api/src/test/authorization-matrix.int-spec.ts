@@ -46,6 +46,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { PromoBannersModule } from '../modules/promo-banners/promo-banners.module';
 import { SubscribersModule } from '../modules/subscribers/subscribers.module';
+import { AcquisitionModule } from '../modules/acquisition/acquisition.module';
 import { AgentTokensModule } from '../modules/agent-tokens/agent-tokens.module';
 import { WaHistoryModule } from '../modules/wa-history/wa-history.module';
 import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
@@ -395,6 +396,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «البانرات الترويجية» — Prisma and `AuditService` only, both already here.
         PromoBannersModule,
         SubscribersModule,
+        // «مصادر التسجيل» — Prisma only, already here.
+        AcquisitionModule,
         // «ربط Claude» — Prisma and `AuditService` only, both already here.
         AgentTokensModule,
         // «مين كلّمني على واتساب» — Prisma and its own identity lookup only.
@@ -2285,6 +2288,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'home-blocks restore: student', method: 'post', path: () => `/api/admin/home-blocks/${homeBlockId}/restore`, actor: 'student', status: 403 },
     { label: 'home-blocks order: anonymous', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'anonymous', status: 401 },
     { label: 'home-blocks order: student', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'student', status: 403 },
+
+    // ── «مصادر التسجيل» ──
+    // The claim is self-scoped (`profile:write`, the account off the session) and
+    // ungated. The touch below is older than a browser may keep one, so the 200 is
+    // a refusal: the guard is proved and nothing is written.
+    { label: 'acquisition claim: anonymous', method: 'post', path: () => '/api/me/acquisition', actor: 'anonymous', status: 401, body: () => ({ source: 'facebook', medium: 'paid', campaign: 'matrix', content: null, term: null, fbclid: null, landingPath: '/', ageSeconds: 40 * 24 * 60 * 60 }) },
+    { label: 'acquisition claim: student', method: 'post', path: () => '/api/me/acquisition', actor: 'student', status: 200, body: () => ({ source: 'facebook', medium: 'paid', campaign: 'matrix', content: null, term: null, fbclid: null, landingPath: '/', ageSeconds: 40 * 24 * 60 * 60 }) },
+    // The report is money per campaign: `payment:read`, behind `signupSources`
+    // (open here because the fixture runs as Ayman's stack).
+    { label: 'acquisition report: anonymous', method: 'get', path: () => '/api/admin/acquisition/report', actor: 'anonymous', status: 401 },
+    { label: 'acquisition report: student', method: 'get', path: () => '/api/admin/acquisition/report', actor: 'student', status: 403 },
+    { label: 'acquisition report: admin', method: 'get', path: () => '/api/admin/acquisition/report?from=2026-01-01', actor: 'admin', status: 200 },
 
     // ── «المشتركين» — names and phones, so `student:read` on every route ──
     // Behind `subscribersReport`, open here because the fixture runs as Ayman's stack.

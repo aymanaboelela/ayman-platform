@@ -5,25 +5,35 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@ayman/ui/lib/cn';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminAcquisitionCopy } from '@ayman/contracts/copy/admin-acquisition';
 
 const c = copy.analytics;
 
 const TABS = [
-  { href: '/admin/analytics', label: c.navOverview, exact: true, money: false },
-  { href: '/admin/analytics/lessons', label: c.navLessons, exact: false, money: false },
-  { href: '/admin/analytics/videos', label: c.navVideos, exact: false, money: false },
-  { href: '/admin/analytics/students', label: c.navStudents, exact: false, money: false },
+  { href: '/admin/analytics', label: c.navOverview, exact: true, gate: null },
+  { href: '/admin/analytics/lessons', label: c.navLessons, exact: false, gate: null },
+  { href: '/admin/analytics/videos', label: c.navVideos, exact: false, gate: null },
+  { href: '/admin/analytics/students', label: c.navStudents, exact: false, gate: null },
   // Money, so its own permission — see `AnalyticsNav`, which decides.
-  { href: '/admin/analytics/money', label: c.navMoney, exact: false, money: true },
+  { href: '/admin/analytics/money', label: c.navMoney, exact: false, gate: 'money' },
+  // Money AND a feature this stack may not have — `AnalyticsNav` again.
+  { href: '/admin/analytics/sources', label: adminAcquisitionCopy.nav, exact: false, gate: 'sources' },
 ] as const;
 
-/** Four screens, one subject — five for a reader allowed to see the money. A
+/** Four screens, one subject — up to six for a reader allowed to see the money. A
  *  sub-nav rather than sidebar entries: they share a filter vocabulary and a
  *  reader moves between them constantly, which is exactly the case tabs are
  *  for. */
-export function AnalyticsNavLinks({ showMoney }: { showMoney: boolean }) {
+export function AnalyticsNavLinks({
+  showMoney,
+  showSources,
+}: {
+  showMoney: boolean;
+  showSources: boolean;
+}) {
   const pathname = usePathname();
-  const tabs = TABS.filter((tab) => showMoney || !tab.money);
+  const open = { money: showMoney, sources: showSources };
+  const tabs = TABS.filter((tab) => tab.gate === null || open[tab.gate]);
   const navRef = useRef<HTMLElement>(null);
 
   // On a phone the last tabs are past the edge, and landing on it with its
