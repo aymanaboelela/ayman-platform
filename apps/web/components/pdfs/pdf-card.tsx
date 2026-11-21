@@ -28,10 +28,12 @@ export function PdfCard({ pdf }: { pdf: PdfListItem }) {
           </span>
           {pdf.year ? <span className="pdf-tag pdf-tag--plain">{c.year[pdf.year]}</span> : null}
         </p>
-        <h3 className="pdf-card__title">
+        <h3 className="pdf-card__title" dir="auto">
           <Link href={page}>{pdf.title}</Link>
         </h3>
-        <p className="pdf-card__desc">{pdf.description}</p>
+        <p className="pdf-card__desc" dir="auto">
+          {pdf.description}
+        </p>
         <p className="pdf-card__meta">
           {pdf.pageCount ? <span>{formatCopy(c.pages, { n: String(pdf.pageCount) })}</span> : null}
           <span>{pdfSizeLabel(pdf.sizeBytes)}</span>

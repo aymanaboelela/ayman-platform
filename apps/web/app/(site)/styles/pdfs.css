@@ -401,13 +401,18 @@
 
 .pdf-page__grid {
   display: grid;
+  /* An explicit `minmax(0, 1fr)` track, not the implicit `auto` one: an auto
+     track sizes to its content's max-content, and `.pdf-facts` reports four
+     7rem columns side by side (484px), so on a phone the whole info column
+     overflowed the 375px screen and was cut off at the start edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(2rem, 5vw, 4rem);
   align-items: center;
 }
 
 @media (min-width: 56rem) {
   .pdf-page__grid {
-    grid-template-columns: minmax(16rem, 22rem) 1fr;
+    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
   }
 }
 

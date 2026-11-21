@@ -85,8 +85,14 @@ export default async function PdfPage({ params }: { params: Promise<{ slug: stri
               </span>
               {pdf.year ? <span className="pdf-tag pdf-tag--plain">{c.year[pdf.year]}</span> : null}
             </p>
-            <h1 className="pdf-page__title">{pdf.title}</h1>
-            <p className="pdf-page__desc">{pdf.description}</p>
+            {/* `dir="auto"`: the Languages files have English titles and text, and
+                inside the RTL page their punctuation flipped («+2000», «.Term 1»). */}
+            <h1 className="pdf-page__title" dir="auto">
+              {pdf.title}
+            </h1>
+            <p className="pdf-page__desc" dir="auto">
+              {pdf.description}
+            </p>
 
             <dl className="pdf-facts">
               {pdf.pageCount ? (
@@ -131,7 +137,9 @@ export default async function PdfPage({ params }: { params: Promise<{ slug: stri
             <h2 className="pdf-group__title" data-category={pdf.category}>
               {c.about}
             </h2>
-            <MarkdownBody blocks={blocks} />
+            <div dir="auto">
+              <MarkdownBody blocks={blocks} />
+            </div>
           </div>
         </section>
       ) : null}
