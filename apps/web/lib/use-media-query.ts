@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
+import { useWeakDevice } from '@/lib/weak-device';
 
 /**
  * Subscribes to a media query.
@@ -69,10 +70,20 @@ export function useMediaQuery(query: string, serverValue: boolean): boolean {
  * fails `pointer: coarse` first; this catches the lab, the touch laptop, and
  * the half-width desktop window — none of which have the room for a
  * cursor-reactive effect anyway.
+ *
+ * ## And a fourth: the machine itself
+ *
+ * A wide, fine-pointer screen says nothing about the GPU behind it. An old
+ * dual-core laptop passes all three gates above and then runs the splash
+ * cursor's fluid simulation at ~20 fps, so every mouse movement stutters on
+ * every page. `useWeakDevice` (`lib/weak-device.ts`) answers that from the
+ * browser's hardware hints AND from the splash cursor's own measured frame
+ * rate, and turns every effect behind this gate off together.
  */
 export function useAmbientEffectsAllowed(): boolean {
   const reduced = useMediaQuery('(prefers-reduced-motion: reduce)', true);
   const coarse = useMediaQuery('(pointer: coarse)', true);
   const wide = useMediaQuery('(min-width: 64rem)', false);
-  return !reduced && !coarse && wide;
+  const weak = useWeakDevice();
+  return !reduced && !coarse && wide && !weak;
 }
