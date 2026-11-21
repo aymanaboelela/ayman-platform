@@ -110,6 +110,22 @@ describe('WhatsappDeviceService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('a campaign stops at 32 of day one’s 40 — the last 8 wait for codes and replies', async () => {
+    const { prisma } = fakePrisma({ usedToday: 32, first: new Date(), latestFrom: '+201110000000' });
+    const service = new WhatsappDeviceService(prisma);
+
+    for (const source of ['campaign', 'outreach'] as const) {
+      await expect(service.send({ phone: '+201001234567', text: 'x', source })).rejects.toBeInstanceOf(DeviceCeilingError);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // The «نسيت كلمة السر» code that died behind a full day on 2026-11-04.
+    fetchMock.mockImplementation(() => respond(200, { messageId: 'O1', onWhatsApp: true }));
+    for (const source of ['otp', 'bot'] as const) {
+      expect((await service.send({ phone: '+201001234567', text: 'x', source })).messageId).toBe('O1');
+    }
+  });
+
   it('a test send is never refused by the ceiling — it is how the operator finds out anything works', async () => {
     const { prisma } = fakePrisma({ usedToday: 999, first: new Date(), latestFrom: '+201110000000' });
     fetchMock.mockImplementation(() => respond(200, { messageId: 'T1', onWhatsApp: true }));
