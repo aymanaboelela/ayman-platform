@@ -17,10 +17,49 @@ import { z } from '@ayman/contracts/zod';
  * المساعد panel... and replying works» — see `OutreachService.threadFor`.
  */
 
+/**
+ * «طلبة كورس» — the students of one course, optionally narrowed by whether
+ * they hold one curriculum month: «اللي في الكورس ومشتركوش في الشهر التالت،
+ * عايز أبعتلهم يشتركوا».
+ *
+ * `access` reads the SAME verdict the player opens lectures by
+ * (`monthSliceOf`), so «مشترك في شهر ٣» includes a term or yearly subscriber
+ * whose grant covers it — never "has a `course_month` row for it", which would
+ * nag every term student to buy a month they already own. With no `monthId`
+ * the question is the course as a whole: any live subscription to it.
+ *
+ * `paidBefore` narrows to students who held a paid grant to this course at
+ * some point, lapsed or not. Without it «ماشتركوش» also reaches everybody who
+ * enrolled and never paid anything, which is a different message.
+ */
+export const BroadcastAccessSchema = z.enum(['any', 'has', 'missing']);
+
+export const BroadcastCourseTargetSchema = z.object({
+  type: z.literal('course'),
+  courseId: z.uuid(),
+  monthId: z.uuid().optional(),
+  access: BroadcastAccessSchema.default('any'),
+  paidBefore: z.boolean().default(false),
+});
+
 export const BroadcastTargetSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('all') }),
   z.object({ type: z.literal('user'), userId: z.string() }),
+  BroadcastCourseTargetSchema,
 ]);
+
+/**
+ * `GET /api/admin/broadcast/courses` — what the «طلبة كورس» picker offers.
+ * Its own read rather than the content editor's months route: that one is
+ * `section:write`, and sending a message must not need the authority to
+ * rearrange a course.
+ */
+export const BroadcastCourseOptionSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  months: z.array(z.object({ id: z.uuid(), monthIndex: z.number().int(), title: z.string() })),
+});
+export const BroadcastCoursesSchema = z.object({ courses: z.array(BroadcastCourseOptionSchema) });
 
 /** `.strict()` — Global Constraint 8: an unknown field is a 400, not a
  *  silently-dropped one. */
@@ -33,7 +72,7 @@ export const BroadcastRequestSchema = z
 
 /**
  * `GET /api/admin/broadcast/recipient-count` — what the confirm dialog shows
- * BEFORE the send button is pressable, for `target: { type: 'all' }`. The one
+ * BEFORE the send button is pressable, for `all` and `course` targets. The one
  * thing standing between an admin and messaging every active student is
  * seeing the number first.
  */
@@ -51,6 +90,11 @@ export const RecipientCountSchema = z.object({ count: z.number().int().min(0) })
 export const BroadcastResponseSchema = z.object({ queued: z.number().int().min(0) });
 
 export type BroadcastTarget = z.infer<typeof BroadcastTargetSchema>;
+export type BroadcastTargetInput = z.input<typeof BroadcastTargetSchema>;
+export type BroadcastCourseTarget = z.infer<typeof BroadcastCourseTargetSchema>;
+export type BroadcastAccess = z.infer<typeof BroadcastAccessSchema>;
+export type BroadcastCourseOption = z.infer<typeof BroadcastCourseOptionSchema>;
+export type BroadcastCourses = z.infer<typeof BroadcastCoursesSchema>;
 export type BroadcastRequest = z.infer<typeof BroadcastRequestSchema>;
 export type RecipientCount = z.infer<typeof RecipientCountSchema>;
 export type BroadcastResponse = z.infer<typeof BroadcastResponseSchema>;

@@ -1,6 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { BroadcastTarget } from '@ayman/contracts/outreach/broadcast';
+import type {
+  BroadcastCourseOption,
+  BroadcastCourseTarget,
+  BroadcastTarget,
+} from '@ayman/contracts/outreach/broadcast';
 import { PrismaService } from '../../prisma/prisma.service';
+import { courseAccessScopes } from '../entitlement/grant-liveness';
+import { monthSliceOf, sliceCoversMonthlyExam, type MonthScopedGrant } from '../entitlement/month-access';
 import { OutreachService } from './outreach.service';
 
 /**
@@ -35,7 +41,83 @@ export class BroadcastService {
     });
   }
 
+  /**
+   * The «طلبة كورس» picker. Drafts are left out — nobody is enrolled in a
+   * course that was never published — but archived ones stay: an archived
+   * course still has the students who bought it.
+   */
+  async courses(): Promise<BroadcastCourseOption[]> {
+    const rows = await this.prisma.course.findMany({
+      where: { status: { not: 'draft' } },
+      select: {
+        id: true,
+        title: true,
+        months: { select: { id: true, monthIndex: true, title: true }, orderBy: { monthIndex: 'asc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows;
+  }
+
+  /**
+   * Who a `course` target means. "In the course" is an enrolment row — the
+   * same membership `/admin/students?courseId=` lists — and the month
+   * question is answered per student by `monthSliceOf`, the function the
+   * player opens lectures with. Asking `scope = 'course_month'` directly
+   * would call a term or yearly subscriber «مشتركش في شهر ٣» and send them a
+   * nudge to buy what they already own.
+   */
+  private async courseStudentIds(target: BroadcastCourseTarget): Promise<string[]> {
+    const course = await this.prisma.course.findUnique({
+      where: { id: target.courseId },
+      select: { id: true, subjectId: true, requiresGrant: true, months: { select: { id: true } } },
+    });
+    if (!course) throw new NotFoundException();
+    if (target.monthId && !course.months.some((month) => month.id === target.monthId)) {
+      throw new NotFoundException();
+    }
+
+    const enrolled = await this.prisma.enrollment.findMany({
+      where: { courseId: course.id, user: { role: 'student', bannedAt: null } },
+      select: { userId: true },
+      distinct: ['userId'],
+      orderBy: { userId: 'asc' },
+    });
+    const userIds = enrolled.map((row) => row.userId);
+    if (userIds.length === 0 || (target.access === 'any' && !target.paidBefore)) return userIds;
+
+    const grants = await this.prisma.accessGrant.findMany({
+      where: { userId: { in: userIds }, OR: courseAccessScopes(course) },
+      select: { id: true, userId: true, scope: true, monthId: true, validFrom: true, validUntil: true, revokedAt: true },
+      // Newest first — the order `monthSliceOf` documents for its provenance.
+      orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
+    });
+    const byUser = new Map<string, MonthScopedGrant[]>();
+    for (const grant of grants) {
+      const list = byUser.get(grant.userId);
+      if (list) list.push(grant);
+      else byUser.set(grant.userId, [grant]);
+    }
+
+    const now = new Date();
+    return userIds.filter((userId) => {
+      const own = byUser.get(userId) ?? [];
+      // «اشترك قبل كده» — any grant this course was ever sold through, live
+      // or lapsed. `platform` is the free account every sign-up gets, not a
+      // purchase.
+      if (target.paidBefore && !own.some((grant) => grant.scope !== 'platform')) return false;
+      if (target.access === 'any') return true;
+
+      const slice = monthSliceOf(own, now);
+      const covered = target.monthId
+        ? slice.everything || slice.monthIds.has(target.monthId)
+        : sliceCoversMonthlyExam(slice);
+      return target.access === 'has' ? covered : !covered;
+    });
+  }
+
   async recipientCount(target: BroadcastTarget): Promise<number> {
+    if (target.type === 'course') return (await this.courseStudentIds(target)).length;
     if (target.type === 'user') {
       const exists = await this.prisma.user.findFirst({
         where: { id: target.userId, role: 'student', bannedAt: null },
@@ -74,12 +156,14 @@ export class BroadcastService {
       return { queued: 1 };
     }
 
-    const students = await this.allStudentIds();
-    void this.deliverAll(
-      students.map((row) => row.id),
-      body,
-    );
-    return { queued: students.length };
+    // Resolved by the same method `recipientCount` read, so the number the
+    // confirm dialog showed is the list that gets the message.
+    const userIds =
+      target.type === 'course'
+        ? await this.courseStudentIds(target)
+        : (await this.allStudentIds()).map((row) => row.id);
+    void this.deliverAll(userIds, body);
+    return { queued: userIds.length };
   }
 
   /**
