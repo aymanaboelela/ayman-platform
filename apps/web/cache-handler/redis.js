@@ -372,18 +372,38 @@ export function createCacheHandler(options = {}) {
        * and says why in its own header comment: an in-memory cache is fragile,
        * so warming an entry that is about to be evicted is not worth it. That
        * reasoning does not apply to a persistent store — so between
-       * `revalidate` and `expire` this serves the entry with `revalidate: -1`,
-       * which tells Next to use it now and refresh in the background. The
-       * visitor gets a cache hit instead of waiting on the API.
+       * `revalidate` and `expire` this serves the entry and lets Next refresh
+       * it in the background. The visitor gets a cache hit instead of waiting
+       * on the API.
+       *
+       * The stale signal is the entry's AGE, never a negative `revalidate`.
+       * Next decides "serve now, refresh in background" from
+       * `now > timestamp + revalidate * 1000` alone (`use-cache-wrapper.js`),
+       * so a past-revalidate entry returned with its real numbers already
+       * triggers the refresh. A `revalidate: -1` did the same here, but it
+       * also flows into the page: the wrapper folds every inner entry's
+       * `revalidate` into the page's by `min()`, so an ISR regeneration of `/`
+       * that read one stale entry was stored with `revalidate: -1`, and the
+       * next visitor got a 500 — «Invalid revalidate configuration provided:
+       * -1 < 1» from `app-page-runtime.js`, four times on the landing page in
+       * November 2026.
+       *
+       * A tag marked stale (not expired) has no age to point at, so its
+       * timestamp is moved back just past `revalidate` instead: same refresh,
+       * and every number Next can propagate stays positive. The real
+       * timestamp is still what the tag checks above compare against.
        */
-      const stale = age > meta.revalidate * 1000 || areTagsStale(tagManifest, meta.tags, meta.timestamp);
+      const tagStale = areTagsStale(tagManifest, meta.tags, meta.timestamp);
+      const timestamp = tagStale
+        ? Math.min(meta.timestamp, now() - meta.revalidate * 1000 - 1)
+        : meta.timestamp;
 
       return {
         tags: meta.tags,
         stale: meta.stale,
-        timestamp: meta.timestamp,
+        timestamp,
         expire: meta.expire,
-        revalidate: stale ? -1 : meta.revalidate,
+        revalidate: meta.revalidate,
         value: streamOf(payload),
       };
     },
