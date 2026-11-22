@@ -37,7 +37,14 @@ test.describe('tablet rail', () => {
     await expect(page.locator('html')).not.toHaveAttribute('data-rail', 'expanded');
 
     // المقياس الحقيقي: الريل بعرض الأيقونة، فالمحتوى واخد باقي الشاشة.
-    const railBox = await page.locator('.rail').boundingBox();
+    // `:visible` — the shell streams in as `<div hidden id="S:<n>">` and React
+    // reveals it with `$RC` in a batch up to ~300 ms after it arrives, so for a
+    // moment after `load` the DOM holds the hidden copy as well (the same Next
+    // 16.4 behaviour `site-nav-lockup.e2e.ts` documents). A strict locator on a
+    // slow runner lands in that window. Checked: no duplicate segment ids.
+    const rail = page.locator('.rail:visible');
+    await expect(rail).toHaveCount(1);
+    const railBox = await rail.boundingBox();
     expect(railBox).not.toBeNull();
     if (!railBox) return;
     // ٧٦ بكسل هو `--rail-w-collapsed`، و٢٩٦ هو المفتوح. أي رقم تحت ١٥٠ معناه
@@ -65,7 +72,9 @@ test.describe('tablet rail', () => {
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-rail', 'expanded');
 
-    const railBox = await page.locator('.rail').boundingBox();
+    const rail = page.locator('.rail:visible');
+    await expect(rail).toHaveCount(1);
+    const railBox = await rail.boundingBox();
     expect(railBox).not.toBeNull();
     if (!railBox) return;
     expect(railBox.width).toBeGreaterThan(150);
@@ -79,7 +88,9 @@ test.describe('tablet rail', () => {
     // موجود عشان قفل التابلت مايزحفش فوق.
     await page.goto('/dashboard');
 
-    const railBox = await page.locator('.rail').boundingBox();
+    const rail = page.locator('.rail:visible');
+    await expect(rail).toHaveCount(1);
+    const railBox = await rail.boundingBox();
     expect(railBox).not.toBeNull();
     if (!railBox) return;
     expect(railBox.width).toBeGreaterThan(150);
