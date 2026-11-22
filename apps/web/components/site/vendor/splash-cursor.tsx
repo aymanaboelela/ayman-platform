@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import { framesSayTooSlow } from '@/lib/weak-device';
 
 interface ColorRGB {
   r: number;
@@ -27,6 +28,8 @@ interface SplashCursorProps {
   TRANSPARENT?: boolean;
   RAINBOW_MODE?: boolean;
   COLOR?: string;
+  /** ADAPTED FOR THIS REPO — see the frame watchdog in the effect. */
+  onTooSlow?: () => void;
 }
 
 interface Pointer {
@@ -96,7 +99,8 @@ export default function SplashCursor({
   BACK_COLOR = DEFAULT_BACK_COLOR,
   TRANSPARENT = true,
   RAINBOW_MODE = true,
-  COLOR = '#ff0000'
+  COLOR = '#ff0000',
+  onTooSlow
 }: SplashCursorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -191,7 +195,12 @@ export default function SplashCursor({
           depth: false,
           stencil: false,
           antialias: false,
-          preserveDrawingBuffer: false
+          preserveDrawingBuffer: false,
+          // ADAPTED FOR THIS REPO: no context at all rather than one the
+          // browser already knows is slow — software rendering (SwiftShader)
+          // or a blocklisted GPU. Either runs this simulation at a few fps,
+          // and the null it returns takes the existing "no WebGL" exit.
+          failIfMajorPerformanceCaveat: true
         };
 
         let gl = canvas.getContext('webgl2', params) as WebGL2RenderingContext | null;
@@ -960,7 +969,51 @@ export default function SplashCursor({
      */
     let raf = 0;
 
+    /* ---- ADAPTED FOR THIS REPO: a machine too weak for this turns it off ----
+     *
+     * The mount's hardware hints (`lib/weak-device.ts`) are a guess made before
+     * a single frame; this is the measurement. Once the loop is running, skip a
+     * warm-up (shader compile, the route's own hydration) and then watch the
+     * real interval between frames. If the median says the GPU cannot hold
+     * ~36 fps with this simulation on top of the page, stop, hide the canvas,
+     * and report it — the mount remembers the verdict and unmounts every
+     * ambient effect, so the next page never loads the shader at all.
+     *
+     * `performance.now()` deltas rather than `calcDeltaTime()`: that one is
+     * clamped to 16.6 ms, which would make every machine look fast. Gaps over
+     * 250 ms are a backgrounded tab or a hidden `<Activity>` segment, not a
+     * slow GPU, and are dropped rather than counted.
+     */
+    const WATCH_WARMUP_FRAMES = 45;
+    const WATCH_SAMPLE_FRAMES = 90;
+    let watchLastAt = 0;
+    let watchSeen = 0;
+    let watchDone = !onTooSlow;
+    let tooSlow = false;
+    const watchIntervals: number[] = [];
+
+    function frameBudgetBlown(): boolean {
+      if (watchDone) return false;
+      const now = performance.now();
+      const gap = now - watchLastAt;
+      watchLastAt = now;
+      if (gap <= 0 || gap > 250 || document.visibilityState !== 'visible') return false;
+      watchSeen += 1;
+      if (watchSeen <= WATCH_WARMUP_FRAMES) return false;
+      watchIntervals.push(gap);
+      if (watchIntervals.length < WATCH_SAMPLE_FRAMES) return false;
+      watchDone = true;
+      return framesSayTooSlow(watchIntervals);
+    }
+
     function updateFrame() {
+      if (frameBudgetBlown()) {
+        tooSlow = true;
+        raf = 0;
+        canvas.style.visibility = 'hidden';
+        onTooSlow?.();
+        return;
+      }
       const dt = calcDeltaTime();
       if (resizeCanvas()) initFramebuffers();
       updateColors(dt);
@@ -979,7 +1032,9 @@ export default function SplashCursor({
      * close, so it must not be reintroduced by the thing that opens it.
      */
     const startFrameLoop = () => {
-      if (raf) return;
+      // `tooSlow`: a restored context or a late first-input handler must not
+      // restart a loop the watchdog stopped.
+      if (raf || tooSlow) return;
       updateFrame();
     };
 
@@ -1476,6 +1531,7 @@ export default function SplashCursor({
       canvas.style.visibility = 'hidden';
     };
     const onContextRestored = () => {
+      if (tooSlow) return;
       canvas.style.visibility = '';
       // Buffers do not survive the loss; everything must be rebuilt before a
       // single frame is drawn, or the first draw runs against dead handles.
@@ -1548,7 +1604,8 @@ export default function SplashCursor({
     BACK_COLOR,
     TRANSPARENT,
     RAINBOW_MODE,
-    COLOR
+    COLOR,
+    onTooSlow
   ]);
 
   return (

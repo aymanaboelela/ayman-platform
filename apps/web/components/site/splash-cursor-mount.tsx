@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { rampHex } from '@/lib/ramp-color';
 import { useAmbientEffectsAllowed } from '@/lib/use-media-query';
+import { markDeviceTooSlow } from '@/lib/weak-device';
 
 /**
  * React Bits' `SplashCursor` — a full-viewport WebGL fluid that reacts to the
@@ -12,14 +13,20 @@ import { useAmbientEffectsAllowed } from '@/lib/use-media-query';
  * It renders a `position: fixed`, `pointer-events: none` canvas, so it never
  * intercepts a click; it only paints over the page.
  *
- * Three guards, all here rather than in the vendored file so a re-fetch cannot
- * drop them:
+ * Four guards, here or wired from here so a re-fetch of the vendored file
+ * cannot silently drop them:
  *
  * - **Off under reduced motion.** The whole component is continuous ambient
  *   movement tied to input; there is no reduced variant of it worth shipping.
  * - **Off on coarse pointers.** There is no hovering cursor to trail on a
  *   touchscreen, and the simulation is the single most expensive thing on the
  *   page — running it on phone GPUs to paint on taps is a bad trade.
+ * - **Off on weak machines.** `useAmbientEffectsAllowed` also asks
+ *   `lib/weak-device.ts`, so a low-memory / few-core laptop never loads the
+ *   shader. A machine that looks fine but cannot hold the frame rate is caught
+ *   by the vendored file's frame watchdog, which calls `markDeviceTooSlow`
+ *   through `onTooSlow` — that flips the gate, this returns null, and the
+ *   unmount gives the WebGL context back.
  * - **Lazy and client-only.** A 41kB shader module has no business in the
  *   server bundle or on the critical path.
  *
@@ -63,6 +70,7 @@ export function SplashCursorMount() {
       // extra dye texture per frame buys nothing visible at this opacity.
       DYE_RESOLUTION={768}
       SIM_RESOLUTION={112}
+      onTooSlow={markDeviceTooSlow}
     />
   );
 }
