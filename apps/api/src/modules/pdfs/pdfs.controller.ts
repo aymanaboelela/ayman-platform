@@ -86,7 +86,33 @@ export class PdfsController {
   @Public()
   @Throttle(DOWNLOAD_THROTTLE)
   @Get('pdfs/:slug/download')
-  async download(@Param('slug') slug: string, @Res() response: Response): Promise<void> {
+  download(@Param('slug') slug: string, @Res() response: Response): Promise<void> {
+    return this.sendFile(slug, 'attachment', response);
+  }
+
+  /**
+   * The same file, `inline` — what the reader inside the student shell
+   * (`/files/:slug`) frames, so a student reads it without leaving the app.
+   *
+   * Identical to the download in every other header, the same way the lesson
+   * resources' `view`/`download` pair differs by one word: the sandbox CSP is
+   * what makes framing it on our own origin safe (see `document-viewer.tsx`),
+   * and it counts as a download because it IS the file being fetched. Public
+   * for the same reason the download is — the file is already one anonymous
+   * GET away, so an account check here would protect nothing.
+   */
+  @Public()
+  @Throttle(DOWNLOAD_THROTTLE)
+  @Get('pdfs/:slug/view')
+  view(@Param('slug') slug: string, @Res() response: Response): Promise<void> {
+    return this.sendFile(slug, 'inline', response);
+  }
+
+  private async sendFile(
+    slug: string,
+    disposition: 'inline' | 'attachment',
+    response: Response,
+  ): Promise<void> {
     gate();
     const file = await this.pdfs.startDownload(slug);
     if (!file) throw new NotFoundException();
@@ -97,7 +123,7 @@ export class PdfsController {
       'Content-Type': 'application/pdf',
       'Content-Length': String(info.size),
       'X-Content-Type-Options': 'nosniff',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(`${file.title}.pdf`)}`,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(`${file.title}.pdf`)}`,
       // `no-store`: every press is counted, and a cached copy is a download
       // the counter never saw.
       'Cache-Control': 'no-store',

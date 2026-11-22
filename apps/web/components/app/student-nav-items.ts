@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarCheck,
   Crown,
+  FileText,
   Flame,
   Gamepad2,
   Gift,
@@ -101,6 +102,17 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * account settings in the footer.
    */
   { href: '/codes', labelAr: copy.nav.unlockCodes, icon: Ticket, group: 'main' },
+  /*
+   * «ملفات PDF» — the PDFs published from `/admin/pdfs`, read inside the shell
+   * (`/files`). They were only on the public `/pdfs`, so a student who wanted
+   * a summary had to leave the app for the marketing site to find it.
+   *
+   * `aymanOnly`, not a `feature`: the whole PDF surface — API included — is
+   * gated on `IS_AYMAN` (`pdfs.controller.ts`), so an entitlement opened for
+   * a teacher would light a row onto a page with nothing behind it. Opening
+   * PDFs to a teacher means moving that API gate first, then this row.
+   */
+  ...(aymanOnly(true) ? [{ href: '/files', labelAr: copy.nav.pdfs, icon: FileText, group: 'main' as const }] : []),
 
   /* ── «المذاكرة»: the tools a student studies WITH, daily habits first. ── */
   /*

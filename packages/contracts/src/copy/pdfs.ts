@@ -61,6 +61,30 @@ export const pdfsCopy = {
   coursesBody: 'الملف ده جزء من المنهج. الشرح بالفيديو والتمارين والامتحانات على المنصة.',
   coursesCta: 'شوف الكورسات',
 
+  /**
+   * `/files` — the same files inside the student shell. Its own lines rather
+   * than the public ones: «من غير حساب» is a pitch to a stranger, and the
+   * reader here has an account and is mid-study.
+   */
+  student: {
+    eyebrow: 'مكتبة الملفات',
+    lead: 'كل الملخصات والمراجعات والامتحانات اللي بتتنشر — تقراها هنا جوه المنصة أو تحمّلها على جهازك.',
+    empty: 'لسه مفيش ملفات منشورة. أول ما يتنزل ملف هيظهر هنا.',
+    emptyYear: 'مفيش ملفات للصف ده لسه. جرّب «كل الصفوف».',
+    /** Under the big number in the page head. */
+    countLabel: 'ملف منشور',
+    yearFilter: 'الصف',
+    both: 'للصفين',
+    read: 'اقرأ هنا',
+    download: 'حمّل',
+    openTab: 'افتحه في صفحة لوحده',
+    back: 'كل الملفات',
+    frameTitle: 'قارئ الملف',
+    frameHint: 'الملف مش ظاهر؟ على بعض الموبايلات القارئ مابيشتغلش جوه الصفحة — افتحه في صفحة لوحده أو حمّله.',
+    related: 'ملفات كمان',
+    newBadge: 'جديد',
+  },
+
   admin: {
     title: 'ملفات PDF',
     lead: 'كل ملف ليه صفحة بتظهر في جوجل، ولينك تحطه تحت فيديو اليوتيوب ينزّل على طول.',
