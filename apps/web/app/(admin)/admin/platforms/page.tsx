@@ -90,7 +90,9 @@ async function PlatformsBody() {
   await connection();
   const list = await tenantList();
   const c = copy.admin.platforms;
-  const signable = list.tenants.map((tenant) => ({ key: tenant.key, name: tenant.name }));
+  // `features` rides along so the form starts each instructor's boxes at what
+  // their stack runs NOW — see `documentFeatures`.
+  const signable = list.tenants.map((tenant) => ({ key: tenant.key, name: tenant.name, features: tenant.features }));
   // A tenant Dokploy holds can take a document straight into its environment.
   const appliable = list.tenants.filter((tenant) => tenant.composeId !== null).map((tenant) => tenant.key);
 
