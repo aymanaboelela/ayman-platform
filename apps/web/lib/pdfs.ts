@@ -52,6 +52,17 @@ export function pdfDownloadPath(slug: string): string {
   return `${pdfApiPath(slug)}/download`;
 }
 
+/** The same file `inline` — what the student shell's reader frames. */
+export function pdfViewPath(slug: string): string {
+  return `${pdfApiPath(slug)}/view`;
+}
+
+/** The reader inside the student shell — `/files/:slug`, never the public
+ *  `/pdfs/:slug`, which would drop the student out of the app's chrome. */
+export function studentPdfPath(slug: string): string {
+  return `/files/${encodeURIComponent(slug)}`;
+}
+
 export async function getPdf(slug: string): Promise<PdfDetail | null> {
   if (!IS_AYMAN) return null;
   return getPdfByPath(pdfApiPath(slug));

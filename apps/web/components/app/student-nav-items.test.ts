@@ -179,6 +179,7 @@ describe('STUDENT_TABS', () => {
     expect(rest.length + STUDENT_TABS.length).toBe(primary.length);
     expect(rest.map((item) => item.href)).toEqual([
       '/codes',
+      '/files',
       '/plan',
       '/backlog',
       '/daily',
@@ -238,6 +239,11 @@ describe('STUDENT_NAV on a stack that teaches physics', () => {
     expect(hrefs).not.toContain('/playground');
   });
 
+  it('has no «ملفات PDF» row — the PDF API 404s off Ayman\'s stack', async () => {
+    const { STUDENT_NAV: nav } = await physicsNav();
+    expect(nav.map((item) => item.href)).not.toContain('/files');
+  });
+
   it('keeps every other row, in the same order', async () => {
     const { STUDENT_NAV: nav } = await physicsNav();
     expect(nav.map((item) => item.href)).toEqual(
@@ -249,6 +255,7 @@ describe('STUDENT_NAV on a stack that teaches physics', () => {
           // `/certificates` are NOT here: they stay in the table behind their
           // entitlement and the rail hides them at render — see below.)
           href !== '/backlog' &&
+          href !== '/files' &&
           href !== '/arena' &&
           href !== '/mistakes',
       ),

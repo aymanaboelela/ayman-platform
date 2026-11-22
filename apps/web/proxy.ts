@@ -159,6 +159,10 @@ export const PROTECTED_PREFIXES = [
   '/store',
   // `/external-books` — opens with an unconditional `apiGetAuthed`.
   '/external-books',
+  // `/files` — «ملفات PDF» inside the shell. Its reads are public, so it is
+  // here for the `/store` reason above: it renders inside `<StudentShell>`.
+  // The public, indexed copy of the same list is `/pdfs`.
+  '/files',
   /*
     `/notifications` was missing from this list until 2026-08-13, and it is the
     case the paragraph above already describes rather than a new one:

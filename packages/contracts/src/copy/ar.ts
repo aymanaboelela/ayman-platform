@@ -394,6 +394,8 @@ export const copy = {
     books: 'الكتب',
     /** «الكتب الخارجية» — question banks on outside books, every course at once. */
     externalBooks: 'الكتب الخارجية',
+    /** «ملفات PDF» — `/files`, the public PDFs inside the student shell. */
+    pdfs: 'ملفات PDF',
     playground: 'تجربة الكود',
     /** «كود الكورس» — where a code bought on WhatsApp gets typed in. */
     unlockCodes: 'كود الكورس',

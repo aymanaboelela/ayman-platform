@@ -2412,6 +2412,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'pdfs public list: anonymous', method: 'get', path: () => '/api/pdfs', actor: 'anonymous', status: 200 },
     { label: 'pdfs public detail: anonymous', method: 'get', path: () => '/api/pdfs/no-such-pdf', actor: 'anonymous', status: 404 },
     { label: 'pdfs download: anonymous, unknown', method: 'get', path: () => '/api/pdfs/no-such-pdf/download', actor: 'anonymous', status: 404 },
+    { label: 'pdfs view: anonymous, unknown', method: 'get', path: () => '/api/pdfs/no-such-pdf/view', actor: 'anonymous', status: 404 },
     { label: 'pdfs admin list: anonymous', method: 'get', path: () => '/api/admin/pdfs', actor: 'anonymous', status: 401 },
     { label: 'pdfs admin list: student', method: 'get', path: () => '/api/admin/pdfs', actor: 'student', status: 403 },
     { label: 'pdfs admin list: admin', method: 'get', path: () => '/api/admin/pdfs', actor: 'admin', status: 200 },
@@ -3962,6 +3963,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/pdfs',
           'GET /api/pdfs/:slug',
           'GET /api/pdfs/:slug/download',
+          // The same file `inline`, framed by the student shell's reader.
+          'GET /api/pdfs/:slug/view',
           // «اختبارات مجانية». Reads only — grading happens in the visitor's
           // browser and nothing is written back — and the service filters
           // `published: true` in SQL, so a draft set is unreachable.
