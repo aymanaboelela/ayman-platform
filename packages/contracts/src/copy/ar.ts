@@ -2052,6 +2052,12 @@ export const copy = {
       /** Above the list under the podium — not «العشرة»: places come from
        *  the score now, and one round can list dozens of names. */
       restTitle: 'باقي الأوائل',
+      /* ── /honor-board, the hall (2026-11 redesign) ──────────────────────── */
+      /** The two figures in the band. Labels sit UNDER a number, so they are
+       *  phrased to read after any count without an Arabic plural rule —
+       *  «129 / اسم على اللوحة», «35 / في المركز الأول». */
+      statNames: 'اسم على اللوحة',
+      statFirsts: 'في المركز الأول',
       /** `{score}` and `{outOf}` are Western digits, isolated by the card. */
       score: '{score} من {outOf}',
       /** The landing cards are links now — the accessible name of each one. */

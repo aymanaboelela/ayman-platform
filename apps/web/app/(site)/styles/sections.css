@@ -3807,9 +3807,74 @@
    overnight is recognisably the same object in the same place.
    --------------------------------------------------------------------------- */
 .honor-board__slot--filled {
+  /* The same metal as `/honor-board` (`.honor-hall`), so the card on the
+     landing page and the hall it opens are visibly one board. */
+  --slot-gold: oklch(0.8 0.13 82);
+  --slot-gold-hi: oklch(0.92 0.09 92);
+  --slot-gold-ink: oklch(0.42 0.1 70);
+  --slot-gold-text: var(--slot-gold-hi);
+  align-items: center;
+  overflow: hidden;
+  padding-block-start: 1.75rem;
   border-style: solid;
-  border-color: color-mix(in oklch, var(--a-9) 35%, transparent);
-  background: color-mix(in oklab, var(--a-9) 6%, var(--site-card-2));
+  border-color: color-mix(in oklab, var(--slot-gold) 40%, var(--site-line));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--slot-gold) 10%, var(--site-card-2)), var(--site-card-2) 55%);
+  box-shadow: var(--site-shadow-sm);
+  text-align: center;
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+
+/* A gold edge across the top — the card's one ornament. */
+.honor-board__slot--filled::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 1.25rem;
+  block-size: 3px;
+  border-end-start-radius: var(--r-full);
+  border-end-end-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--slot-gold), var(--slot-gold-hi), var(--slot-gold));
+}
+
+.honor-board__slot--filled:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--site-shadow-md);
+}
+
+/* The medal moves to the corner and takes the metal: on a filled card the
+   prize is won, so it is no longer the muted «reserved» disc. */
+.honor-board__slot--filled .honor-board__slot-mark {
+  position: absolute;
+  inset-block-start: 0.875rem;
+  inset-inline-start: 0.875rem;
+  inline-size: 2rem;
+  block-size: 2rem;
+  background: linear-gradient(135deg, var(--slot-gold-hi), var(--slot-gold));
+  color: var(--slot-gold-ink);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .honor-board__slot--filled {
+    --slot-gold-text: var(--slot-gold-ink);
+  }
+}
+
+:root[data-theme='light'] .honor-board__slot--filled {
+  --slot-gold-text: var(--slot-gold-ink);
+}
+
+.honor-board__slot--filled .honor-board__slot-rank {
+  color: var(--slot-gold-text);
+}
+
+.honor-board__slot--filled .honor-board__slot-course {
+  align-self: center;
+}
+
+.honor-board__slot--filled .honor-board__slot-avatar {
+  order: -1;
+  margin-block-end: 0.25rem;
+  box-shadow: 0 0 0 3px var(--site-card-2), 0 0 0 6px var(--slot-gold);
 }
 
 /* The face of a filled place — the instructor's photograph of the winner, or
@@ -3891,107 +3956,6 @@
   text-underline-offset: 0.25em;
 }
 
-/* ── /honor-board ─────────────────────────────────────────────────────────
-   The archive. It reuses `.honor-board__slot*` wholesale so a round in the
-   archive is drawn by the same rules as the live board — two sets of card
-   styles is two places for the board to stop looking like itself. */
-/* Width and gutter come from `.site-shell` on the element itself, the same as
-   every other page in this group — a second container token here would be a
-   page that drifts out of line with the header above it the first time the
-   shell changes. */
-.honor-archive {
-  padding-block: var(--s-48) var(--s-64);
-}
-
-.honor-archive__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--a-11);
-  font-size: var(--fs-text-sm);
-}
-
-.honor-archive__title {
-  margin-block-start: var(--s-8);
-  font-size: var(--fs-title-1);
-  font-weight: var(--fw-bold);
-  color: var(--site-fg);
-}
-
-.honor-archive__lead {
-  margin-block-start: var(--s-8);
-  color: var(--site-fg-2);
-}
-
-.honor-archive__body {
-  display: grid;
-  gap: var(--s-24);
-  margin-block-start: var(--s-32);
-}
-
-/* The rail goes beside the board only once there is room for both; on a phone
-   it stacks above, which is the reading order anyway — pick a round, then see
-   who was on it. */
-@media (min-width: 64rem) {
-  .honor-archive__body {
-    grid-template-columns: 16rem minmax(0, 1fr);
-    align-items: start;
-  }
-}
-
-.honor-archive__rail-title {
-  font-size: var(--fs-text-sm);
-  font-weight: var(--fw-semibold);
-  color: var(--site-fg-2);
-}
-
-.honor-archive__rail-list {
-  display: grid;
-  gap: 0.5rem;
-  margin-block-start: var(--s-12);
-  padding: 0;
-  list-style: none;
-}
-
-.honor-archive__rail-item {
-  display: grid;
-  gap: 0.125rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--site-line-strong);
-  border-radius: var(--r-lg);
-  transition: border-color 160ms ease-out, background-color 160ms ease-out;
-}
-
-.honor-archive__rail-item:hover {
-  border-color: color-mix(in oklch, var(--a-9) 40%, transparent);
-}
-
-.honor-archive__rail-item--on {
-  border-color: color-mix(in oklch, var(--a-9) 55%, transparent);
-  background: color-mix(in oklch, var(--a-9) 10%, transparent);
-}
-
-.honor-archive__rail-date {
-  font-size: var(--fs-text-sm);
-  font-weight: var(--fw-semibold);
-  color: var(--site-fg);
-}
-
-.honor-archive__rail-exam {
-  font-size: var(--fs-text-xs);
-  color: var(--site-fg-2);
-}
-
-/* Two across at most in the archive, never four: the rail has already taken
-   a quarter of the row, and four cards in what is left turns every Egyptian
-   full name into three lines. */
-@media (min-width: 64rem) {
-  .honor-archive__slots {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-block-start: 0;
-  }
-}
-
 .honor-board__slot-name {
   font-size: var(--fs-title-4);
   font-weight: var(--fw-semibold);
@@ -4056,67 +4020,231 @@
   font-size: var(--fs-text-sm);
 }
 
-/* ── /honor-board, the podium ──────────────────────────────────────────────
-   «عاوز أعرف العشرة الأوائل بشكل حلو، صورهم واضحة وأسماءهم، وألوان».
+/* ── /honor-board, the hall ────────────────────────────────────────────────
+   «عاوز يبقى ليها ديزاين تاني، شكلها بروفشنال وشيك» (2026-11).
 
-   The page is a prize-giving, not a table: one band that congratulates, then
-   per course a podium for the first three — gold, silver, bronze, the first
-   raised in the middle — and the rest of the ten as coloured rows under it.
+   The page used to be one long grid of identical tinted cards — on a round
+   where thirty-five students scored 100 it was a wall of the same box, and
+   a first place looked exactly like a fourteenth. The redesign is a hall:
 
-   The three medal colours are fixed hues, not the tenant accent: gold is gold
-   on every stack, and a «silver» drawn in somebody's brand blue would stop
-   reading as second place. */
-.honor-hero {
-  --honor-gold: oklch(0.82 0.15 85);
-  --honor-gold-deep: oklch(0.62 0.14 70);
-  display: grid;
-  align-items: center;
-  gap: var(--s-24);
-  padding: var(--s-24);
-  border-radius: var(--r-lg);
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--honor-gold) 28%, transparent), transparent 60%),
-    linear-gradient(135deg, color-mix(in oklab, var(--a-9) 14%, var(--site-card-2)), var(--site-card-2));
-  border: 1px solid color-mix(in oklab, var(--honor-gold) 40%, transparent);
-  overflow: hidden;
+   1. A dark band (`--site-ink`, the shared ink panel, so it is each stack's
+      own deep colour) with a gold hairline, the congratulation and two
+      figures. Dark in both themes — a prize-giving is lit like a stage.
+   2. The rounds as one row of chips, so the board gets the full width.
+   3. Per course: the podium when places 1–3 are single, otherwise medal
+      TIERS — gold, silver, bronze — every holder of a place as an equal
+      portrait card under its heading.
+   4. Everybody below as a quiet ranked list: number, face, name, mark. (A
+      score bar was tried and dropped: on a board of 96–100s every bar is
+      the same length, which is decoration pretending to be data.)
+
+   The metals are fixed hues, not the tenant accent: gold is gold on every
+   stack, and a «silver» drawn in somebody's brand blue would stop reading as
+   second place. They are defined once on `.honor-hall` and read everywhere
+   below, so the three stacks share one set of medals.
+   ------------------------------------------------------------------------- */
+.honor-hall {
+  --hall-gold: oklch(0.8 0.13 82);
+  --hall-gold-hi: oklch(0.92 0.09 92);
+  --hall-gold-ink: oklch(0.42 0.1 70);
+  --hall-silver: oklch(0.82 0.015 250);
+  --hall-silver-hi: oklch(0.95 0.008 250);
+  --hall-silver-ink: oklch(0.42 0.03 250);
+  --hall-bronze: oklch(0.7 0.1 52);
+  --hall-bronze-hi: oklch(0.86 0.07 60);
+  --hall-bronze-ink: oklch(0.42 0.09 45);
+  /* The metal as TEXT on the page (a place word, a count). Dark ink on a
+     light page; on a dark page that ink vanishes, so it flips to the bright
+     end of the same metal. Same selector pair as `theme.css`. */
+  --hall-gold-text: var(--hall-gold-hi);
+  --hall-silver-text: var(--hall-silver-hi);
+  --hall-bronze-text: var(--hall-bronze-hi);
+  /* The site header is `fixed`, so the page clears it itself — the old
+     archive started under it and lost its eyebrow. Same rule as books.css. */
+  padding-block: calc(var(--site-nav-h) + var(--s-24)) var(--s-64);
 }
 
-@media (min-width: 48rem) {
-  .honor-hero--host {
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding-block: var(--s-24) 0;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .honor-hall {
+    --hall-gold-text: var(--hall-gold-ink);
+    --hall-silver-text: var(--hall-silver-ink);
+    --hall-bronze-text: var(--hall-bronze-ink);
   }
 }
 
-.honor-hero__title {
-  margin-block-start: var(--s-8);
-  font-size: var(--fs-title-1);
+:root[data-theme='light'] .honor-hall {
+  --hall-gold-text: var(--hall-gold-ink);
+  --hall-silver-text: var(--hall-silver-ink);
+  --hall-bronze-text: var(--hall-bronze-ink);
+}
+
+/* ── The band ── */
+.hall-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: end;
+  gap: var(--s-24);
+  padding: var(--s-32) var(--s-24);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  color: var(--site-ink-fg);
+  background:
+    radial-gradient(60% 90% at 0% 0%, color-mix(in oklab, var(--hall-gold) 22%, transparent), transparent 70%),
+    radial-gradient(70% 120% at 100% 100%, color-mix(in oklab, var(--a-9) 30%, transparent), transparent 70%),
+    var(--site-ink);
+  /* The gold hairline, inset so it reads as a frame and not as a border that
+     the radius has to fight. */
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--hall-gold) 38%, transparent),
+    var(--site-shadow-lg);
+}
+
+@media (min-width: 48rem) {
+  .hall-hero {
+    padding: var(--s-48) var(--s-48) var(--s-48);
+  }
+
+  /* With the portrait, the photo stands ON the band's bottom edge, like
+     somebody on a stage, so the band loses its bottom padding. */
+  .hall-hero--host {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block-end: 0;
+  }
+}
+
+/* The wreath, huge and faint, behind the words — the one ornament. */
+.hall-hero__wreath {
+  position: absolute;
+  z-index: -1;
+  /* Centred with auto margins, not `50%` + `translate`: a percentage
+     translate is physical and points the wrong way in RTL. */
+  inset-block-start: 50%;
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: 34rem;
+  max-inline-size: 140%;
+  translate: 0 -50%;
+  color: var(--hall-gold);
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.hall-hero--host .hall-hero__wreath {
+  inset-inline: auto -6rem;
+  margin-inline: 0;
+}
+
+.hall-hero__text {
+  display: grid;
+  justify-items: start;
+  padding-block-end: 0;
+}
+
+@media (min-width: 48rem) {
+  .hall-hero--host .hall-hero__text {
+    padding-block-end: var(--s-48);
+  }
+}
+
+.hall-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklab, var(--hall-gold) 45%, transparent);
+  color: var(--hall-gold-hi);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+}
+
+.hall-hero__title {
+  margin-block-start: var(--s-16);
+  font-size: var(--fs-display-2);
   font-weight: var(--fw-bold);
-  color: var(--site-fg);
+  line-height: 1.15;
+  color: var(--site-ink-fg);
   text-wrap: balance;
 }
 
-.honor-hero__lead {
-  margin-block-start: var(--s-8);
-  max-inline-size: 38rem;
-  color: var(--site-fg-2);
-  font-size: var(--fs-text-base);
+/* The gold underline under the title — short, like a rule in a certificate. */
+.hall-hero__title::after {
+  content: '';
+  display: block;
+  inline-size: 4.5rem;
+  block-size: 3px;
+  margin-block-start: var(--s-16);
+  border-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--hall-gold), var(--hall-gold-hi));
 }
 
-.honor-hero__exam {
-  display: inline-block;
+.hall-hero__lead {
   margin-block-start: var(--s-16);
-  padding: 0.375rem 0.875rem;
-  border-radius: var(--r-full);
-  background: color-mix(in oklab, var(--honor-gold) 22%, transparent);
-  color: var(--site-fg);
+  max-inline-size: 36rem;
+  color: var(--site-ink-fg-2);
+  font-size: var(--fs-text-lg);
+  line-height: 1.8;
+}
+
+.hall-hero__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-12);
+  margin: var(--s-24) 0 0;
+}
+
+/* The number on top, its label under it. `column-reverse` because the markup
+   is dt-then-dd (the only valid order inside a `<dl>` group). */
+.hall-hero__stat {
+  display: flex;
+  flex-direction: column-reverse;
+  min-inline-size: 8.5rem;
+  padding: 0.75rem 1.125rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--site-ink-fg) 7%, transparent);
+  border: 1px solid var(--site-ink-line);
+}
+
+.hall-hero__stat-n {
+  margin: 0;
+  color: var(--hall-gold-hi);
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  line-height: 1.1;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+.hall-hero__stat-label {
+  color: var(--site-ink-fg-2);
+  font-size: var(--fs-text-sm);
+}
+
+.hall-hero__exam {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-block-start: var(--s-24);
+  color: var(--site-ink-fg);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
 }
 
-/* The portrait stands ON the band's bottom edge, like somebody on a stage,
-   rather than floating in a framed box. */
-.honor-hero__host {
+.hall-hero__exam-date {
+  padding: 0.2rem 0.625rem;
+  border-radius: var(--r-full);
+  background: var(--hall-gold);
+  color: var(--hall-gold-ink);
+  font-weight: var(--fw-bold);
+}
+
+.hall-hero__host {
   position: relative;
   justify-self: center;
   inline-size: 11rem;
@@ -4124,307 +4252,490 @@
 }
 
 @media (min-width: 64rem) {
-  .honor-hero__host {
-    inline-size: 18rem;
+  .hall-hero__host {
+    inline-size: 17rem;
   }
 }
 
-.honor-hero__host-photo {
+.hall-hero__host-photo {
   display: block;
   inline-size: 100%;
   block-size: auto;
   aspect-ratio: 4 / 5;
   object-fit: cover;
-  border-start-start-radius: var(--r-lg);
-  border-start-end-radius: var(--r-lg);
-  border-end-start-radius: var(--r-lg);
-  border-end-end-radius: var(--r-lg);
-  box-shadow: 0 1.25rem 2.5rem -1.5rem color-mix(in oklab, var(--honor-gold-deep) 70%, transparent);
+  border-radius: var(--r-lg);
+  /* A gold edge on the portrait's three visible sides. */
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--hall-gold) 70%, transparent);
 }
 
 @media (min-width: 48rem) {
-  .honor-hero__host-photo {
+  .hall-hero__host-photo {
     border-end-start-radius: 0;
     border-end-end-radius: 0;
   }
 }
 
-.honor-hero__host-name {
+.hall-hero__host-name {
   position: absolute;
   inset-block-end: var(--s-12);
   inset-inline: var(--s-12);
   padding: 0.375rem 0.75rem;
   border-radius: var(--r-full);
-  background: color-mix(in oklab, var(--honor-gold) 92%, transparent);
-  color: oklch(0.25 0.04 70);
+  background: linear-gradient(90deg, var(--hall-gold), var(--hall-gold-hi));
+  color: var(--hall-gold-ink);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-bold);
   text-align: center;
+  box-shadow: var(--site-shadow-md);
 }
 
-/* On a phone the board comes before the list of past rounds — the visitor
-   came for the names. Beside each other on a desk, the rail stays first. */
-@media (max-width: 63.99rem) {
-  .honor-archive__body > .honor-archive__rail {
-    order: 2;
-  }
+/* ── The rounds ── */
+.hall-rounds {
+  margin-block-start: var(--s-24);
 }
 
-.honor-races {
-  display: grid;
-  gap: var(--s-32);
-  min-inline-size: 0;
-}
-
-.honor-race__label {
-  display: inline-block;
-  padding: 0.25rem 0.875rem;
-  border-radius: var(--r-full);
-  background: color-mix(in oklab, var(--a-9) 16%, transparent);
-  color: var(--a-11);
+.hall-rounds__title {
+  color: var(--site-fg-2);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
 }
 
-/* Phone: one column, first to third, top to bottom — the reading order.
-   Wider: three columns, the FIRST in the middle and raised. `order` and not
-   source order, so a screen reader still hears first, second, third. */
-.honor-podium {
+/* One row that scrolls sideways on a phone (no wrap — five rounds wrapped
+   into a stack push the board off the first screen) and wraps on a desk. */
+.hall-rounds__list {
+  display: flex;
+  gap: 0.5rem;
+  margin: var(--s-8) 0 0;
+  padding: 0 0 0.25rem;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+@media (min-width: 48rem) {
+  .hall-rounds__list {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+.hall-rounds__item {
+  display: grid;
+  gap: 0.125rem;
+  min-inline-size: 11rem;
+  max-inline-size: 18rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--site-line-strong);
+  background: var(--site-card);
+  transition: border-color 160ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.hall-rounds__item:hover {
+  border-color: color-mix(in oklab, var(--a-9) 45%, transparent);
+  box-shadow: var(--site-shadow-sm);
+}
+
+.hall-rounds__item--on {
+  border-color: color-mix(in oklab, var(--hall-gold) 55%, var(--site-ink));
+  background: var(--site-ink);
+}
+
+.hall-rounds__date {
+  color: var(--site-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+}
+
+.hall-rounds__exam {
+  overflow: hidden;
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hall-rounds__item--on .hall-rounds__date {
+  color: var(--hall-gold-hi);
+}
+
+.hall-rounds__item--on .hall-rounds__exam {
+  color: var(--site-ink-fg-2);
+}
+
+/* ── A race ── */
+.hall-races {
+  display: grid;
+  gap: var(--s-48);
+  margin-block-start: var(--s-48);
+}
+
+.hall-race {
+  min-inline-size: 0;
+}
+
+.hall-race__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+}
+
+.hall-race__label {
+  flex-shrink: 0;
+  color: var(--site-fg);
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+}
+
+.hall-race__rule {
+  flex: 1;
+  block-size: 1px;
+  background: linear-gradient(90deg, var(--site-line-strong), transparent);
+}
+
+/* ── The medal card (podium and tiers) ──
+   `--m*` is the place's metal; the three places set it, nothing else does. */
+.hall-card {
+  --m: var(--hall-gold);
+  --m-hi: var(--hall-gold-hi);
+  --m-ink: var(--hall-gold-ink);
+  --m-text: var(--hall-gold-text);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 1.5rem 0.875rem 1.125rem;
+  border-radius: var(--r-lg);
+  background: var(--site-card);
+  border: 1px solid var(--site-line);
+  box-shadow: var(--site-shadow-sm);
+  text-align: center;
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+/* The metal as a top edge — the card's one colour, so a wall of thirty-five
+   reads as a row of medals and not as thirty-five coloured boxes. */
+.hall-card::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 1.25rem;
+  block-size: 3px;
+  border-end-start-radius: var(--r-full);
+  border-end-end-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--m), var(--m-hi), var(--m));
+}
+
+.hall-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--site-shadow-md);
+}
+
+.hall-card[data-place='2'] {
+  --m: var(--hall-silver);
+  --m-hi: var(--hall-silver-hi);
+  --m-ink: var(--hall-silver-ink);
+  --m-text: var(--hall-silver-text);
+}
+
+.hall-card[data-place='3'] {
+  --m: var(--hall-bronze);
+  --m-hi: var(--hall-bronze-hi);
+  --m-ink: var(--hall-bronze-ink);
+  --m-text: var(--hall-bronze-text);
+}
+
+.hall-card__ring {
+  position: relative;
+  margin-block-end: 0.375rem;
+  padding: 3px;
+  border-radius: var(--r-full);
+  background: conic-gradient(from 200deg, var(--m), var(--m-hi), var(--m), var(--m-hi), var(--m));
+}
+
+.hall-card__face {
+  display: grid;
+  place-items: center;
+  inline-size: 6rem;
+  block-size: 6rem;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  border: 3px solid var(--site-card);
+  background: var(--site-card-2);
+}
+
+.hall-card__face--photo {
+  display: block;
+  object-fit: cover;
+}
+
+.hall-card__coin {
+  position: absolute;
+  inset-block-end: -0.375rem;
+  inset-inline: 0;
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  margin-inline: auto;
+  border-radius: var(--r-full);
+  border: 2px solid var(--site-card);
+  background: linear-gradient(135deg, var(--m-hi), var(--m));
+  color: var(--m-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+.hall-card__rank {
+  margin-block-start: 0.25rem;
+  color: var(--m-text);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.02em;
+}
+
+.hall-card__name {
+  margin-block-start: 0.25rem;
+  color: var(--site-fg);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+  /* `balance`, never an ellipsis: cutting a name on a board of honour is the
+     one place that is genuinely rude. */
+  text-wrap: balance;
+}
+
+.hall-card__score {
+  margin-block-start: auto;
+  padding: 0.2rem 0.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--m) 22%, transparent);
+  color: var(--site-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.hall-card__score--reason,
+.hall-row__score--reason {
+  font-weight: var(--fw-medium);
+}
+
+/* ── The podium: three single places, the first raised in the middle ── */
+.hall-podium {
   display: grid;
   gap: var(--s-16);
-  margin-block-start: var(--s-16);
+  margin: var(--s-24) 0 0;
   padding: 0;
   list-style: none;
 }
 
 @media (min-width: 40rem) {
-  .honor-podium {
+  .hall-podium {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: end;
+    max-inline-size: 56rem;
+    margin-inline: auto;
   }
 
-  .honor-podium__place[data-place='2'] { order: 1; }
-  .honor-podium__place[data-place='1'] { order: 2; }
-  .honor-podium__place[data-place='3'] { order: 3; }
-
-  .honor-podium__place[data-place='1'] {
-    padding-block-start: 2.25rem;
-  }
+  /* `order` and not source order, so a screen reader still hears first,
+     second, third. */
+  .hall-card--podium[data-place='2'] { order: 1; }
+  .hall-card--podium[data-place='1'] { order: 2; padding-block: 2.25rem 1.5rem; }
+  .hall-card--podium[data-place='3'] { order: 3; }
 }
 
-.honor-podium__place {
-  --place: oklch(0.82 0.15 85);
-  --place-ink: oklch(0.42 0.11 70);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1.5rem 1rem 1.25rem;
-  border-radius: var(--r-lg);
-  border: 1px solid color-mix(in oklab, var(--place) 55%, transparent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, var(--place) 26%, var(--site-card-2)),
-    var(--site-card-2) 70%
-  );
-  text-align: center;
+.hall-card--podium .hall-card__face {
+  inline-size: 7.5rem;
+  block-size: 7.5rem;
 }
 
-.honor-podium__place[data-place='2'] {
-  --place: oklch(0.80 0.02 250);
-  --place-ink: oklch(0.45 0.03 250);
-}
-
-.honor-podium__place[data-place='3'] {
-  --place: oklch(0.70 0.11 55);
-  --place-ink: oklch(0.45 0.10 50);
-}
-
-.honor-podium__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
-  border-radius: var(--r-full);
-  background: var(--place);
-  color: var(--place-ink);
-}
-
-.honor-podium__place[data-place='1'] .honor-podium__badge {
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-}
-
-/* The face is the subject. A thick ring in the place's metal, and a small
-   numbered coin on its edge so the place reads even before the words do. */
-.honor-podium__ring {
-  position: relative;
-  padding: 0.3rem;
-  border-radius: var(--r-full);
-  background: conic-gradient(from 210deg, var(--place), color-mix(in oklab, var(--place) 45%, var(--site-card)), var(--place));
-  box-shadow: 0 0.75rem 2rem -1rem color-mix(in oklab, var(--place) 90%, transparent);
-}
-
-.honor-podium__face {
-  display: grid;
-  place-items: center;
-  inline-size: 8rem;
-  block-size: 8rem;
-  border-radius: var(--r-full);
-  overflow: hidden;
-  background: var(--site-card);
-  border: 3px solid var(--site-card);
+.hall-card--podium[data-place='1'] {
+  border-color: color-mix(in oklab, var(--hall-gold) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--hall-gold) 14%, var(--site-card)), var(--site-card) 60%);
 }
 
 @media (min-width: 64rem) {
-  .honor-podium__face {
-    inline-size: 9rem;
-    block-size: 9rem;
-  }
-
-  .honor-podium__place[data-place='1'] .honor-podium__face {
-    inline-size: 10rem;
-    block-size: 10rem;
+  .hall-card--podium[data-place='1'] .hall-card__face {
+    inline-size: 9.5rem;
+    block-size: 9.5rem;
   }
 }
 
-.honor-podium__face--photo {
-  display: block;
-  object-fit: cover;
+/* ── The tiers: every holder of a shared place, as equals ── */
+.hall-tier {
+  --m: var(--hall-gold);
+  --m-ink: var(--hall-gold-ink);
+  --m-text: var(--hall-gold-text);
+  margin-block-start: var(--s-24);
 }
 
-.honor-podium__num {
-  position: absolute;
-  inset-block-end: 0.25rem;
-  inset-inline-end: 0.25rem;
-  display: grid;
-  place-items: center;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
-  border-radius: var(--r-full);
-  border: 3px solid var(--site-card-2);
-  background: var(--place);
-  color: var(--place-ink);
-  font-size: var(--fs-text-base);
-  font-weight: var(--fw-bold);
-  line-height: 1;
+.hall-tier[data-place='2'] {
+  --m: var(--hall-silver);
+  --m-ink: var(--hall-silver-ink);
+  --m-text: var(--hall-silver-text);
 }
 
-.honor-podium__rank {
-  margin-block-start: 0.25rem;
-  color: var(--place-ink);
-  font-size: var(--fs-text-sm);
-  font-weight: var(--fw-bold);
+.hall-tier[data-place='3'] {
+  --m: var(--hall-bronze);
+  --m-ink: var(--hall-bronze-ink);
+  --m-text: var(--hall-bronze-text);
 }
 
-.honor-podium__name {
+.hall-tier__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--site-fg);
   font-size: var(--fs-title-4);
   font-weight: var(--fw-bold);
-  text-wrap: balance;
 }
 
-.honor-podium__score {
-  padding: 0.25rem 0.75rem;
+.hall-tier__medal {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
   border-radius: var(--r-full);
-  background: color-mix(in oklab, var(--place) 30%, transparent);
-  color: var(--site-fg);
-  font-size: var(--fs-text-sm);
-  font-weight: var(--fw-semibold);
+  background: var(--m);
+  color: var(--m-ink);
 }
 
-.honor-podium__score--reason,
-.honor-rest__score--reason {
-  font-weight: var(--fw-medium);
+.hall-tier__count {
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--m) 24%, transparent);
+  color: var(--m-text);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
 }
 
-.honor-rest__title {
-  margin-block-start: var(--s-24);
+.hall-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+  margin: var(--s-12) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .hall-cards {
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--s-16);
+  }
+}
+
+/* ── The ranked list: fourth place down ── */
+.hall-board-wrap {
+  margin-block-start: var(--s-32);
+}
+
+.hall-board__title {
   color: var(--site-fg-2);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
 }
 
-.honor-rest {
+.hall-board {
   display: grid;
-  gap: 0.625rem;
-  margin-block-start: var(--s-12);
+  margin: var(--s-12) 0 0;
   padding: 0;
   list-style: none;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  overflow: hidden;
 }
 
-@media (min-width: 48rem) {
-  .honor-rest {
+/* Two columns on a desk, read top-to-bottom then across — a leaderboard,
+   not a grid of tiles. */
+@media (min-width: 56rem) {
+  .hall-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The divider between the columns is drawn by the second cell of each row,
+     not by a gap over a coloured container — an odd count left that colour
+     showing as a filled empty cell at the end. */
+  .hall-row:nth-child(even) {
+    border-inline-start: 1px solid var(--site-line);
   }
 }
 
-.honor-rest__row {
+.hall-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  border-radius: var(--r-lg);
-  border: 1px solid color-mix(in oklab, var(--a-9) 28%, transparent);
-  background: color-mix(in oklab, var(--a-9) 7%, var(--site-card-2));
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  background: var(--site-card);
+  border-block-end: 1px solid var(--site-line);
 }
 
-.honor-rest__num {
-  display: grid;
+.hall-row:hover {
+  background: var(--site-bg-tint);
+}
+
+.hall-row__num {
   flex-shrink: 0;
-  place-items: center;
-  inline-size: 2rem;
-  block-size: 2rem;
-  border-radius: var(--r-full);
-  background: var(--a-9);
-  color: var(--on-accent-ink);
+  min-inline-size: 1.75rem;
+  color: var(--site-fg-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-base);
   font-weight: var(--fw-bold);
-  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-.honor-rest__face {
+.hall-row__face {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  inline-size: 3.5rem;
-  block-size: 3.5rem;
+  inline-size: 3rem;
+  block-size: 3rem;
   border-radius: var(--r-full);
   overflow: hidden;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--a-9) 55%, transparent);
+  box-shadow: 0 0 0 2px var(--site-card), 0 0 0 3px var(--site-line-strong);
 }
 
-.honor-rest__face--photo {
+.hall-row__face--photo {
   display: block;
   object-fit: cover;
 }
 
-.honor-rest__who {
+.hall-row__who {
   display: grid;
   flex: 1;
   min-inline-size: 0;
 }
 
-.honor-rest__name {
+.hall-row__name {
   color: var(--site-fg);
   font-weight: var(--fw-semibold);
   text-wrap: balance;
 }
 
-.honor-rest__rank {
+.hall-row__rank {
   color: var(--site-fg-2);
   font-size: var(--fs-text-xs);
 }
 
-.honor-rest__score {
+.hall-row__score {
   flex-shrink: 0;
-  padding: 0.25rem 0.625rem;
+  padding: 0.25rem 0.75rem;
   border-radius: var(--r-full);
-  background: color-mix(in oklab, var(--a-9) 18%, transparent);
-  color: var(--a-11);
+  background: var(--site-card-2);
+  color: var(--site-fg);
   font-size: var(--fs-text-sm);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+
+/* The drawn avatar fills its disc edge to edge in every honour surface. */
+.hall-card__face--art,
+.hall-row__face--art {
+  overflow: hidden;
 }
 
 /* The landing card's drawn avatar fills its disc edge to edge. */
