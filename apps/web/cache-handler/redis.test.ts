@@ -138,6 +138,15 @@ let client: FakeRedis;
 const now = () => clock;
 const silent = () => {};
 
+/**
+ * Next's own stale test for a handler hit, copied from `use-cache-wrapper.js`
+ * (`currentTime > entry.timestamp + entry.revalidate * 1000`): true means it
+ * serves the entry now and regenerates it in the background.
+ */
+function isStaleToNext(hit: { timestamp: number; revalidate: number }) {
+  return clock > hit.timestamp + hit.revalidate * 1000;
+}
+
 function handler(overrides: Record<string, unknown> = {}) {
   return createCacheHandler({ client, now, onError: silent, ...overrides });
 }
@@ -199,6 +208,7 @@ describe('expiry', () => {
     clock += 30_000;
     const hit = await cache.get('k');
     expect(hit.revalidate).toBe(60);
+    expect(isStaleToNext(hit)).toBe(false);
   });
 
   it('serves stale-while-revalidate between revalidate and expire', async () => {
@@ -210,12 +220,12 @@ describe('expiry', () => {
     const hit = await cache.get('k');
     // The whole point of a persistent handler: Next's in-memory default drops
     // this entry, forcing the visitor to wait on the API. This serves it, and
-    // Next sees `now > timestamp + revalidate` and refreshes in the background.
+    // its age alone is what makes Next refresh it in the background.
     expect(hit).toBeDefined();
     expect(await read(hit)).toBe('stale-ok');
-    expect(clock).toBeGreaterThan(hit.timestamp + hit.revalidate * 1000);
-    // Never negative: Next copies it into the PAGE's cache life, and a page
-    // with `revalidate: -1` throws «Invalid revalidate configuration provided».
+    expect(isStaleToNext(hit)).toBe(true);
+    // Never negative: Next folds this into the page's own revalidate, and a
+    // page stored with -1 throws «Invalid revalidate configuration provided».
     expect(hit.revalidate).toBe(60);
   });
 
@@ -264,10 +274,8 @@ describe('tags', () => {
 
     const hit = await cache.get('k');
     expect(hit).toBeDefined();
-    // Young by age, stale by tag: the timestamp is moved past Next's line so
-    // it serves and refreshes — with a positive `revalidate`, never -1.
-    expect(hit.revalidate).toBeGreaterThan(0);
-    expect(clock).toBeGreaterThan(hit.timestamp + hit.revalidate * 1000);
+    expect(isStaleToNext(hit)).toBe(true);
+    expect(hit.revalidate).toBeGreaterThanOrEqual(1);
 
     clock += 300_001; // the future expiry has now passed
     expect(await cache.get('k')).toBeUndefined();

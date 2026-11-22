@@ -372,32 +372,36 @@ export function createCacheHandler(options = {}) {
        * and says why in its own header comment: an in-memory cache is fragile,
        * so warming an entry that is about to be evicted is not worth it. That
        * reasoning does not apply to a persistent store — so between
-       * `revalidate` and `expire` this SERVES the entry, and the visitor gets a
-       * cache hit instead of waiting on the API.
+       * `revalidate` and `expire` this serves the entry and lets Next refresh
+       * it in the background. The visitor gets a cache hit instead of waiting
+       * on the API.
        *
-       * ⚠️ It used to say "stale" with `revalidate: -1`, and that number leaked.
-       * Next copies a hit's `revalidate` into the page's own cache life (the
-       * minimum over every entry the render read), so a page that read one
-       * stale entry while regenerating ended with `revalidate: -1` and threw
-       * «Invalid revalidate configuration provided: -1 < 1» — production's
-       * `/admin/errors`, on `/`, four times. And the signal was never needed:
-       * Next decides "serve now, refresh in the background" ITSELF, from
-       * `now > timestamp + revalidate * 1000` (`use-cache-wrapper.js`,
-       * `shouldTriggerBackgroundRevalidation`, next 16.4.6).
+       * The stale signal is the entry's AGE, never a negative `revalidate`.
+       * Next decides "serve now, refresh in background" from
+       * `now > timestamp + revalidate * 1000` alone (`use-cache-wrapper.js`),
+       * so a past-revalidate entry returned with its real numbers already
+       * triggers the refresh. A `revalidate: -1` did the same here, but it
+       * also flows into the page: the wrapper folds every inner entry's
+       * `revalidate` into the page's by `min()`, so an ISR regeneration of `/`
+       * that read one stale entry was stored with `revalidate: -1`, and the
+       * next visitor got a 500 — «Invalid revalidate configuration provided:
+       * -1 < 1» from `app-page-runtime.js`, four times on the landing page in
+       * November 2026.
        *
-       * So `revalidate` is always the entry's real, positive value. An entry
-       * past it by AGE already trips Next's check unchanged. One that is stale
-       * only because a tag was marked stale (`updateTags` with a future
-       * `expire`) is young by age, so its `timestamp` is moved back past the
-       * line — the same "serve, then refresh" Next would do for an old one.
+       * A tag marked stale (not expired) has no age to point at, so its
+       * timestamp is moved back just past `revalidate` instead: same refresh,
+       * and every number Next can propagate stays positive. The real
+       * timestamp is still what the tag checks above compare against.
        */
       const tagStale = areTagsStale(tagManifest, meta.tags, meta.timestamp);
-      const youngButTagStale = tagStale && age <= meta.revalidate * 1000;
+      const timestamp = tagStale
+        ? Math.min(meta.timestamp, now() - meta.revalidate * 1000 - 1)
+        : meta.timestamp;
 
       return {
         tags: meta.tags,
         stale: meta.stale,
-        timestamp: youngButTagStale ? now() - meta.revalidate * 1000 - 1 : meta.timestamp,
+        timestamp,
         expire: meta.expire,
         revalidate: meta.revalidate,
         value: streamOf(payload),
