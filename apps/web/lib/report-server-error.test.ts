@@ -87,6 +87,16 @@ describe('buildServerErrorReport', () => {
     expect(buildServerErrorReport(aborted, request(), context)).toBeNull();
   });
 
+  it('skips a resume that React recovered from on an action, and only there', () => {
+    const resume = thrown(
+      "Couldn't find all resumable slots by key/index during replaying. The tree doesn't match so React will fallback to client rendering.",
+    );
+    const action = { ...context, routePath: '/', routeType: 'action', renderSource: 'server-rendering' } as ServerErrorContext;
+    expect(buildServerErrorReport(resume, request({ path: '/', method: 'POST' }), action)).toBeNull();
+    // The same sentence on a GET render is a real mismatch — it stays filed.
+    expect(buildServerErrorReport(resume, request({ path: '/' }), context)).not.toBeNull();
+  });
+
   it('copes with something that is not an Error being thrown', () => {
     expect(buildServerErrorReport('plain string', request(), context)!.message).toBe('plain string');
     expect(buildServerErrorReport({ odd: true }, request(), context)!.message).toBe(

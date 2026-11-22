@@ -159,8 +159,52 @@ export function bound(init?: RequestInit): RequestInit | undefined {
  * arrives at the error boundary as an `ApiRequestError` like any other, so the
  * one place that decides what to show the student keeps one shape to read.
  */
+/**
+ * How long to wait before ONE retry of a 429, or `null` when a retry cannot
+ * help.
+ *
+ * `/admin/errors` showed the shape: «/api/me/league failed with 429» ten times
+ * in 2.5 seconds for one student, «/api/session failed with 429» 63 times for
+ * another. The API's `short` limiter is 10 requests a second per session, and
+ * one server render fans out — the layout's session, profile and entitlements
+ * reads, the page's own reads, and the RSC renders Next fires for prefetched
+ * links, all carrying the same cookie in the same second. The eleventh call
+ * gets a 429 and the student gets an error screen for a limit that resets in
+ * one second.
+ *
+ * `@nestjs/throttler` names the window that refused: `Retry-After-short: 1`.
+ * Every refusing window is a header, so the wait is the LONGEST of them, and
+ * only a burst (<= 2 s) is worth holding a render for. A `medium` refusal
+ * (up to 60 s) is a real overload of that session and goes to the error
+ * boundary as before, where `UPSTREAM_BUSY_DIGEST` already retries politely.
+ */
+export const BURST_RETRY_MAX_S = 2;
+
+export function burstRetryDelayMs(headers: Headers): number | null {
+  let longest = -1;
+  headers.forEach((value, name) => {
+    if (!name.toLowerCase().startsWith('retry-after')) return;
+    const seconds = Number(value);
+    longest = Math.max(longest, Number.isFinite(seconds) && seconds >= 0 ? seconds : Infinity);
+  });
+  if (longest < 0 || longest > BURST_RETRY_MAX_S) return null;
+  // A hair past the reset, so the retry does not land in the same window.
+  return Math.max(longest, 1) * 1000 + 100;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   try {
+    const response = await fetch(resolve(path), bound(init));
+    // Server-side GETs only: a GET is safe to repeat and its init carries no
+    // one-shot body stream. A throttled write goes to its caller unchanged.
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (typeof window !== 'undefined' || response.status !== 429 || method !== 'GET') return response;
+    const wait = burstRetryDelayMs(response.headers);
+    if (wait === null) return response;
+    await response.body?.cancel();
+    await sleep(wait);
     return await fetch(resolve(path), bound(init));
   } catch (cause) {
     if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {

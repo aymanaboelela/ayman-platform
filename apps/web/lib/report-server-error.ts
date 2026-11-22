@@ -124,6 +124,20 @@ export function buildServerErrorReport(
   // nothing (`isAbortError`); so does the log.
   if (error.name === 'AbortError' || error.name === 'ResponseAborted') return null;
 
+  /*
+   * A server action whose re-render could not resume the prerendered shell.
+   * React says what it does next in the message itself — «will fallback to
+   * client rendering» — so the visitor still gets the page, built in the
+   * browser. Production's log held 15 of these, every one `POST /` from a
+   * «Chrome/131» user agent two years stale on 2026-11 (bots replaying an old
+   * action id against a newer build), none signed in. Filed, it is a row that
+   * no change here can close. Only on an action, and only this sentence: a
+   * resume that fails on a GET is a real mismatch and stays in the log.
+   */
+  if (context.routeType === 'action' && error.message.startsWith("Couldn't find all resumable slots")) {
+    return null;
+  }
+
   const route = pathnameOf(request.path);
   if (!route) return null;
 

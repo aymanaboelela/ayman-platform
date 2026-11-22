@@ -209,11 +209,14 @@ describe('expiry', () => {
 
     const hit = await cache.get('k');
     // The whole point of a persistent handler: Next's in-memory default drops
-    // this entry, forcing the visitor to wait on the API. This serves it and
-    // signals a background refresh with a negative revalidate.
+    // this entry, forcing the visitor to wait on the API. This serves it, and
+    // Next sees `now > timestamp + revalidate` and refreshes in the background.
     expect(hit).toBeDefined();
     expect(await read(hit)).toBe('stale-ok');
-    expect(hit.revalidate).toBe(-1);
+    expect(clock).toBeGreaterThan(hit.timestamp + hit.revalidate * 1000);
+    // Never negative: Next copies it into the PAGE's cache life, and a page
+    // with `revalidate: -1` throws «Invalid revalidate configuration provided».
+    expect(hit.revalidate).toBe(60);
   });
 
   it('refuses an entry past expire', async () => {
@@ -261,7 +264,10 @@ describe('tags', () => {
 
     const hit = await cache.get('k');
     expect(hit).toBeDefined();
-    expect(hit.revalidate).toBe(-1);
+    // Young by age, stale by tag: the timestamp is moved past Next's line so
+    // it serves and refreshes — with a positive `revalidate`, never -1.
+    expect(hit.revalidate).toBeGreaterThan(0);
+    expect(clock).toBeGreaterThan(hit.timestamp + hit.revalidate * 1000);
 
     clock += 300_001; // the future expiry has now passed
     expect(await cache.get('k')).toBeUndefined();

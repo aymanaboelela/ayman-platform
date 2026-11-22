@@ -372,18 +372,34 @@ export function createCacheHandler(options = {}) {
        * and says why in its own header comment: an in-memory cache is fragile,
        * so warming an entry that is about to be evicted is not worth it. That
        * reasoning does not apply to a persistent store — so between
-       * `revalidate` and `expire` this serves the entry with `revalidate: -1`,
-       * which tells Next to use it now and refresh in the background. The
-       * visitor gets a cache hit instead of waiting on the API.
+       * `revalidate` and `expire` this SERVES the entry, and the visitor gets a
+       * cache hit instead of waiting on the API.
+       *
+       * ⚠️ It used to say "stale" with `revalidate: -1`, and that number leaked.
+       * Next copies a hit's `revalidate` into the page's own cache life (the
+       * minimum over every entry the render read), so a page that read one
+       * stale entry while regenerating ended with `revalidate: -1` and threw
+       * «Invalid revalidate configuration provided: -1 < 1» — production's
+       * `/admin/errors`, on `/`, four times. And the signal was never needed:
+       * Next decides "serve now, refresh in the background" ITSELF, from
+       * `now > timestamp + revalidate * 1000` (`use-cache-wrapper.js`,
+       * `shouldTriggerBackgroundRevalidation`, next 16.4.6).
+       *
+       * So `revalidate` is always the entry's real, positive value. An entry
+       * past it by AGE already trips Next's check unchanged. One that is stale
+       * only because a tag was marked stale (`updateTags` with a future
+       * `expire`) is young by age, so its `timestamp` is moved back past the
+       * line — the same "serve, then refresh" Next would do for an old one.
        */
-      const stale = age > meta.revalidate * 1000 || areTagsStale(tagManifest, meta.tags, meta.timestamp);
+      const tagStale = areTagsStale(tagManifest, meta.tags, meta.timestamp);
+      const youngButTagStale = tagStale && age <= meta.revalidate * 1000;
 
       return {
         tags: meta.tags,
         stale: meta.stale,
-        timestamp: meta.timestamp,
+        timestamp: youngButTagStale ? now() - meta.revalidate * 1000 - 1 : meta.timestamp,
         expire: meta.expire,
-        revalidate: stale ? -1 : meta.revalidate,
+        revalidate: meta.revalidate,
         value: streamOf(payload),
       };
     },
