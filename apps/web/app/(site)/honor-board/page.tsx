@@ -13,6 +13,7 @@ import { tenantName } from '@/lib/tenant';
 import { getHonorBoardRounds } from '@/lib/home-blocks';
 import { honorPlaceWord } from '@/lib/honor-place';
 import { getEntitlements } from '@/lib/entitlements';
+import { HonorLaurel } from '@/components/site/honor-laurel';
 
 const c = copy.landing.honorBoard;
 
@@ -21,21 +22,21 @@ export const metadata: Metadata = { title: c.archiveTitle };
 /**
  * «عرض الكل» — لوحة الشرف, every round that has ever been pinned.
  *
- * ## Why a rail of rounds and not one long list
+ * ## Why a row of rounds and not one long list
  *
  * The board is four names at a time and it refills every exam. Stacked
  * end to end that reads as one ever-growing leaderboard, which is the one
  * thing it is not: a تانية-لغات first place from September and a تانية-عربي
  * first place from October never sat the same paper and are not ranked
- * against each other. The rail makes the round the unit — «الناس اللي كانت
+ * against each other. The row makes the round the unit — «الناس اللي كانت
  * وقتها على اللوحة» — and each panel is then a board exactly like the one on
  * the landing page.
  *
  * ## The round is a link, not a tab
  *
  * `?round=` in the URL rather than client state, so a round can be sent to
- * somebody. It also means this page has no JavaScript of its own: the rail is
- * links and the panel is server-rendered, the same shape `/admin/grading`
+ * somebody. It also means this page has no JavaScript of its own: the rounds
+ * are links and the panel is server-rendered, the same shape `/admin/grading`
  * uses for its tabs.
  *
  * ## Why it can 404
@@ -64,14 +65,17 @@ export default async function HonorBoardArchivePage({
 
   if (board.periods.length === 0) {
     return (
-      <main className="honor-archive site-shell">
-        <header className="honor-archive__head">
-          <p className="honor-archive__eyebrow">
-            <Trophy size={18} strokeWidth={1.5} aria-hidden="true" />
-            {c.eyebrow}
-          </p>
-          <h1 className="honor-archive__title">{c.archiveTitle}</h1>
-          <p className="honor-archive__lead">{c.archiveEmpty}</p>
+      <main className="honor-hall site-shell">
+        <header className="hall-hero hall-hero--empty">
+          <HonorLaurel className="hall-hero__wreath" />
+          <div className="hall-hero__text">
+            <p className="hall-hero__eyebrow">
+              <Trophy size={16} strokeWidth={1.75} aria-hidden="true" />
+              {c.eyebrow}
+            </p>
+            <h1 className="hall-hero__title">{c.archiveTitle}</h1>
+            <p className="hall-hero__lead">{c.archiveEmpty}</p>
+          </div>
         </header>
       </main>
     );
@@ -86,46 +90,74 @@ export default async function HonorBoardArchivePage({
      nothing else branches. */
   const host = brandImage(await getBranding(), 'honorHost');
   const races = groupByRace(active.entries);
+  const firsts = active.entries.filter((entry) => entry.rank === 1).length;
 
   return (
-    <main className="honor-archive site-shell">
-      <header className={host ? 'honor-hero honor-hero--host' : 'honor-hero'}>
-        <div className="honor-hero__text">
-          <p className="honor-archive__eyebrow">
-            <Trophy size={18} strokeWidth={1.5} aria-hidden="true" />
+    <main className="honor-hall site-shell">
+      {/*
+        THE BAND. «بروفشنال وشيك»: one dark, quiet panel with a gold hairline,
+        the congratulation, and two figures — how many names this round put on
+        the board and how many of them took first place. Dark in BOTH themes on
+        purpose: a prize-giving is lit like a stage, and the tenant accent only
+        tints it, so the three stacks each get their own colour of the same
+        room. Fixed hues (gold, cream, ink) are the metal and the paper, not
+        brand — see `.hall-hero` in sections.css.
+      */}
+      <header className={host ? 'hall-hero hall-hero--host' : 'hall-hero'}>
+        <HonorLaurel className="hall-hero__wreath" />
+        <div className="hall-hero__text">
+          <p className="hall-hero__eyebrow">
+            <Trophy size={16} strokeWidth={1.75} aria-hidden="true" />
             {c.title}
           </p>
-          <h1 className="honor-hero__title">{c.hostTitle}</h1>
-          <p className="honor-hero__lead">{c.hostBody}</p>
+          <h1 className="hall-hero__title">{c.hostTitle}</h1>
+          <p className="hall-hero__lead">{c.hostBody}</p>
+          <dl className="hall-hero__stats">
+            <div className="hall-hero__stat">
+              <dt className="hall-hero__stat-label">{c.statNames}</dt>
+              <dd className="hall-hero__stat-n">{active.entries.length}</dd>
+            </div>
+            {firsts > 0 ? (
+              <div className="hall-hero__stat">
+                <dt className="hall-hero__stat-label">{c.statFirsts}</dt>
+                <dd className="hall-hero__stat-n">{firsts}</dd>
+              </div>
+            ) : null}
+          </dl>
           {active.titles.length > 0 ? (
-            <p className="honor-hero__exam">
-              {active.titles.join(' · ')}
-              {' — '}
-              {dateFormatter.format(new Date(active.pinnedAt))}
+            <p className="hall-hero__exam">
+              <span>{active.titles.join(' · ')}</span>
+              <span className="hall-hero__exam-date">{dateFormatter.format(new Date(active.pinnedAt))}</span>
             </p>
           ) : null}
         </div>
         {host ? (
-          <figure className="honor-hero__host">
+          <figure className="hall-hero__host">
             <ThemedImage
               image={host}
               alt=""
-              sizes="(min-width: 64rem) 18rem, 11rem"
+              sizes="(min-width: 64rem) 17rem, 11rem"
               priority
-              className="honor-hero__host-photo"
+              className="hall-hero__host-photo"
             />
-            <figcaption className="honor-hero__host-name">
+            <figcaption className="hall-hero__host-name">
               {formatCopy(c.hostCaption, { name: tenantName(copy.site.name) })}
             </figcaption>
           </figure>
         ) : null}
       </header>
 
-      <div className="honor-archive__body">
-        {/* The rail. `<nav>` and not a list of buttons: these are addresses. */}
-        <nav className="honor-archive__rail" aria-label={c.archivePeriods}>
-          <h2 className="honor-archive__rail-title">{c.archivePeriods}</h2>
-          <ul className="honor-archive__rail-list">
+      {/*
+        The rounds, as one row of chips across the top rather than a side
+        rail. The rail took a quarter of the width from a board that, on a
+        round where thirty-five students scored 100, needs all of it. A row
+        scrolls sideways on a phone and wraps on a desk. Still `<nav>` + links:
+        a round is an address (`?round=`), and the page has no JavaScript.
+      */}
+      {board.periods.length > 1 ? (
+        <nav className="hall-rounds" aria-label={c.archivePeriods}>
+          <h2 className="hall-rounds__title">{c.archivePeriods}</h2>
+          <ul className="hall-rounds__list">
             {board.periods.map((period) => {
               const current = period.key === active.key;
               return (
@@ -133,24 +165,16 @@ export default async function HonorBoardArchivePage({
                   <Link
                     href={`/honor-board?round=${period.key}`}
                     aria-current={current ? 'page' : undefined}
-                    className={
-                      current
-                        ? 'honor-archive__rail-item honor-archive__rail-item--on'
-                        : 'honor-archive__rail-item'
-                    }
+                    className={current ? 'hall-rounds__item hall-rounds__item--on' : 'hall-rounds__item'}
                   >
                     {/* The date first, because that is what the reader is
                         scanning for; the exam under it, because two rounds a
                         month apart otherwise look identical. Western digits
                         via `ar-EG-u-nu-latn`, the rule every date here
                         follows. */}
-                    <span className="honor-archive__rail-date">
-                      {dateFormatter.format(new Date(period.pinnedAt))}
-                    </span>
+                    <span className="hall-rounds__date">{dateFormatter.format(new Date(period.pinnedAt))}</span>
                     {period.titles.length > 0 && (
-                      <span className="honor-archive__rail-exam">
-                        {period.titles.join(' · ')}
-                      </span>
+                      <span className="hall-rounds__exam">{period.titles.join(' · ')}</span>
                     )}
                   </Link>
                 </li>
@@ -158,83 +182,109 @@ export default async function HonorBoardArchivePage({
             })}
           </ul>
         </nav>
+      ) : null}
 
-        {/* One race per course — the board's own rule (see `courseLabel` in
-            the contract): a podium for each, never one podium across them. */}
-        <div className="honor-races">
-          {races.map((race) => {
-            const { podium, rest } = splitPodium(race.entries);
-            return (
-              <section className="honor-race" key={race.label || 'all'}>
-                {race.label ? <h2 className="honor-race__label">{race.label}</h2> : null}
+      {/* One race per course — the board's own rule (see `courseLabel` in
+          the contract): its own medals for each, never one ranking across
+          them. */}
+      <div className="hall-races">
+        {races.map((race) => {
+          const { podium, tiers, rest } = splitMedals(race.entries);
+          return (
+            <section className="hall-race" key={race.label || 'all'}>
+              {race.label ? (
+                <header className="hall-race__head">
+                  <h2 className="hall-race__label">{race.label}</h2>
+                  <span className="hall-race__rule" aria-hidden="true" />
+                </header>
+              ) : null}
 
-                {podium.length > 0 ? (
-                  <ol className="honor-podium" aria-label={c.podiumTitle}>
-                    {podium.map((entry, index) => (
-                      <li
-                        className="honor-podium__place"
-                        data-place={entry.rank}
-                        key={`${entry.studentName}-${entry.rank}-${index}`}
-                      >
-                        <span className="honor-podium__badge" aria-hidden="true">
-                          {entry.rank === 1 ? (
-                            <Crown size={20} strokeWidth={1.75} />
-                          ) : (
-                            <Medal size={20} strokeWidth={1.75} />
-                          )}
+              {podium.length > 0 ? (
+                <ol className="hall-podium" aria-label={c.podiumTitle}>
+                  {podium.map((entry, index) => (
+                    <MedalCard key={`${entry.studentName}-${entry.rank}-${index}`} entry={entry} podium />
+                  ))}
+                </ol>
+              ) : null}
+
+              {tiers.map((tier) => (
+                <div className="hall-tier" data-place={tier.rank} key={tier.rank}>
+                  <h3 className="hall-tier__title">
+                    <span className="hall-tier__medal" aria-hidden="true">
+                      {tier.rank === 1 ? <Crown size={16} strokeWidth={2} /> : <Medal size={16} strokeWidth={2} />}
+                    </span>
+                    {honorPlaceWord(tier.rank)}
+                    <span className="hall-tier__count">{tier.entries.length}</span>
+                  </h3>
+                  <ol className="hall-cards">
+                    {tier.entries.map((entry, index) => (
+                      <MedalCard key={`${entry.studentName}-${entry.rank}-${index}`} entry={entry} />
+                    ))}
+                  </ol>
+                </div>
+              ))}
+
+              {rest.length > 0 ? (
+                <div className="hall-board-wrap">
+                  {/* «باقي» only says something under medals; a race with
+                      none is headed by its course alone. */}
+                  {podium.length + tiers.length > 0 ? <h3 className="hall-board__title">{c.restTitle}</h3> : null}
+                  <ol className="hall-board">
+                    {rest.map((entry, index) => (
+                      <li className="hall-row" key={`${entry.studentName}-${entry.rank}-${index}`}>
+                        <span className="hall-row__num" aria-hidden="true">
+                          {entry.rank}
                         </span>
-                        <span className="honor-podium__ring">
-                          <HonorFace
-                            name={entry.studentName}
-                            photoKey={entry.photoKey}
-                            className="honor-podium__face"
-                            sizes="(min-width: 64rem) 10rem, 8rem"
-                          />
-                          <span className="honor-podium__num" aria-hidden="true">
-                            {entry.rank}
-                          </span>
+                        <HonorFace
+                          name={entry.studentName}
+                          photoKey={entry.photoKey}
+                          className="hall-row__face"
+                          sizes="3rem"
+                        />
+                        <span className="hall-row__who">
+                          <span className="hall-row__name">{entry.studentName}</span>
+                          <span className="hall-row__rank">{honorPlaceWord(entry.rank)}</span>
                         </span>
-                        <span className="honor-podium__rank">{honorPlaceWord(entry.rank)}</span>
-                        <span className="honor-podium__name">{entry.studentName}</span>
-                        <Score entry={entry} className="honor-podium__score" />
+                        <Score entry={entry} className="hall-row__score" />
                       </li>
                     ))}
                   </ol>
-                ) : null}
-
-                {rest.length > 0 ? (
-                  <>
-                    {/* «باقي» only says something under a podium; a race
-                        drawn as one list is headed by its course alone. */}
-                    {podium.length > 0 ? <h3 className="honor-rest__title">{c.restTitle}</h3> : null}
-                    <ol className="honor-rest">
-                      {rest.map((entry, index) => (
-                        <li className="honor-rest__row" key={`${entry.studentName}-${entry.rank}-${index}`}>
-                          <span className="honor-rest__num" aria-hidden="true">
-                            {entry.rank}
-                          </span>
-                          <HonorFace
-                            name={entry.studentName}
-                            photoKey={entry.photoKey}
-                            className="honor-rest__face"
-                            sizes="3.5rem"
-                          />
-                          <span className="honor-rest__who">
-                            <span className="honor-rest__name">{entry.studentName}</span>
-                            <span className="honor-rest__rank">{honorPlaceWord(entry.rank)}</span>
-                          </span>
-                          <Score entry={entry} className="honor-rest__score" />
-                        </li>
-                      ))}
-                    </ol>
-                  </>
-                ) : null}
-              </section>
-            );
-          })}
-        </div>
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
       </div>
     </main>
+  );
+}
+
+/**
+ * One medal-holder: a portrait in a ring of the place's metal, the name, the
+ * mark. The same card on the podium and in a tier, so a round that has a
+ * podium and a round that has thirty-five firsts read as the same board.
+ */
+function MedalCard({ entry, podium = false }: { entry: HonorBoardEntry; podium?: boolean }) {
+  return (
+    <li className={podium ? 'hall-card hall-card--podium' : 'hall-card'} data-place={entry.rank}>
+      <span className="hall-card__ring">
+        <HonorFace
+          name={entry.studentName}
+          photoKey={entry.photoKey}
+          className="hall-card__face"
+          sizes={podium ? '(min-width: 64rem) 10rem, 8rem' : '7rem'}
+        />
+        <span className="hall-card__coin" aria-hidden="true">
+          {entry.rank === 1 ? <Crown size={14} strokeWidth={2.25} /> : entry.rank}
+        </span>
+      </span>
+      {/* The place word only on the podium: in a tier it is the tier's
+          heading, and repeating it under every one of thirty-five names is
+          noise. */}
+      {podium ? <span className="hall-card__rank">{honorPlaceWord(entry.rank)}</span> : null}
+      <span className="hall-card__name">{entry.studentName}</span>
+      <Score entry={entry} className="hall-card__score" />
+    </li>
   );
 }
 
@@ -261,29 +311,34 @@ function formatMark(value: number): string {
 }
 
 /**
- * The podium, or no podium.
+ * The podium, or the medal tiers.
  *
  * A podium is three steps with one person on each: the first raised in the
  * middle, the second and third beside it (`data-place` → CSS `order`). That
  * only exists while places 1–3 are each held by ONE card. Places come from the
- * score now, so a round where thirty-five students scored 100 has thirty-five
+ * score, so a round where thirty-five students scored 100 has thirty-five
  * firsts — and picking one of them for the middle step would crown a student
- * the board itself says is level with the rest, while the CSS `order` would
- * sort every second above every first in a wrapped grid.
+ * the board itself says is level with the rest.
  *
- * So the moment any of the top three places is shared, the race is drawn as
- * the plain list instead: every name one under another, in place order, each
- * with its own number and word. That is also exactly what was asked for —
- * «اللي جابوا ١٠٠ كلهم الأول، وتحتهم الباقي واحد تحت التاني».
+ * So the moment any of the top three places is shared, those places are drawn
+ * as TIERS instead: «المركز الأول» with every first under it as equals, then
+ * «المركز التاني», then «التالت» — each in its own metal. Everybody from the
+ * fourth place down is the ranked list, whichever shape the top took. («اللي
+ * جابوا ١٠٠ كلهم الأول، وتحتهم الباقي واحد تحت التاني».)
  */
-function splitPodium(entries: HonorBoardEntry[]): {
+function splitMedals(entries: HonorBoardEntry[]): {
   podium: HonorBoardEntry[];
+  tiers: Array<{ rank: number; entries: HonorBoardEntry[] }>;
   rest: HonorBoardEntry[];
 } {
   const top = entries.filter((entry) => entry.rank <= 3);
+  const rest = entries.filter((entry) => entry.rank > 3);
   const shared = new Set(top.map((entry) => entry.rank)).size !== top.length;
-  if (shared) return { podium: [], rest: entries };
-  return { podium: top, rest: entries.filter((entry) => entry.rank > 3) };
+  if (!shared) return { podium: top, tiers: [], rest };
+  const tiers = [1, 2, 3]
+    .map((rank) => ({ rank, entries: top.filter((entry) => entry.rank === rank) }))
+    .filter((tier) => tier.entries.length > 0);
+  return { podium: [], tiers, rest };
 }
 
 /** Entries in the order they came (already sorted by place), split by course. */
