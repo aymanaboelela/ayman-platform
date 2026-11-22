@@ -14,6 +14,14 @@ const s = pdfsCopy.student;
 const NEW_FOR_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
+ * The ids that earn «جديد». Read once per request, outside render — the
+ * clock is not something a component body may read (`react-hooks/purity`).
+ */
+export function freshPdfIds(pdfs: readonly PdfListItem[], now: number = Date.now()): Set<string> {
+  return new Set(pdfs.filter((pdf) => now - new Date(pdf.publishedAt).getTime() < NEW_FOR_MS).map((pdf) => pdf.id));
+}
+
+/**
  * One file on `/files` — the student shell's twin of `PdfCard`.
  *
  * Not `PdfCard` itself because every link on that one goes to the public
@@ -24,9 +32,8 @@ const NEW_FOR_MS = 14 * 24 * 60 * 60 * 1000;
  * «اقرأ هنا» is the primary button because a student mid-study wants to look,
  * not to fill a phone with files; «حمّل» sits beside it for the one who does.
  */
-export function StudentPdfCard({ pdf, now }: { pdf: PdfListItem; now: number }) {
+export function StudentPdfCard({ pdf, fresh }: { pdf: PdfListItem; fresh: boolean }) {
   const reader = studentPdfPath(pdf.slug);
-  const fresh = now - new Date(pdf.publishedAt).getTime() < NEW_FOR_MS;
   return (
     <article className="files-card" data-category={pdf.category}>
       <Link href={reader} className="files-card__sheet" tabIndex={-1} aria-hidden="true">

@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { PDF_CATEGORIES, type PdfListItem } from '@ayman/contracts/pdfs';
 import { pdfsCopy } from '@ayman/contracts/copy/pdfs';
-import { StudentPdfCard } from '@/components/pdfs/student-pdf-card';
+import { StudentPdfCard, freshPdfIds } from '@/components/pdfs/student-pdf-card';
 import { getPdfListOrEmpty } from '@/lib/pdfs';
 import { IS_AYMAN } from '@/lib/tenant';
 
@@ -52,7 +52,7 @@ export default async function StudentFilesPage({
   if (!IS_AYMAN) notFound();
   const [{ year: rawYear }, { pdfs }] = await Promise.all([searchParams, getPdfListOrEmpty()]);
   const year: YearKey = rawYear === '1' || rawYear === '2' ? rawYear : 'all';
-  const now = Date.now();
+  const fresh = freshPdfIds(pdfs);
 
   const shown = year === 'all' ? pdfs : pdfs.filter((pdf) => pdf.year === null || String(pdf.year) === year);
   const groups = PDF_CATEGORIES.map((category) => ({
@@ -117,7 +117,7 @@ export default async function StudentFilesPage({
                 id={group.category}
                 title={c.categoryPlural[group.category]}
                 items={group.items}
-                now={now}
+                fresh={fresh}
               />
             ))
           )}
@@ -127,7 +127,17 @@ export default async function StudentFilesPage({
   );
 }
 
-function FilesGroup({ id, title, items, now }: { id: string; title: string; items: PdfListItem[]; now: number }) {
+function FilesGroup({
+  id,
+  title,
+  items,
+  fresh,
+}: {
+  id: string;
+  title: string;
+  items: PdfListItem[];
+  fresh: Set<string>;
+}) {
   return (
     <section id={id} className="files-group" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`} className="pdf-group__title" data-category={id}>
@@ -136,7 +146,7 @@ function FilesGroup({ id, title, items, now }: { id: string; title: string; item
       </h2>
       <div className="files-grid">
         {items.map((pdf) => (
-          <StudentPdfCard key={pdf.id} pdf={pdf} now={now} />
+          <StudentPdfCard key={pdf.id} pdf={pdf} fresh={fresh.has(pdf.id)} />
         ))}
       </div>
     </section>
