@@ -21,6 +21,12 @@ export interface TenantSummary {
   lastDeployAt: string | null;
   /** Unix seconds; `null` = no document (the declared defaults run). */
   entitlementsExp: number | null;
+  /**
+   * What the stack's LIVE document says about each feature, or `null` when it
+   * has none (or it has expired) and the declared defaults run. Not a secret:
+   * every stack publishes the same map at `GET /api/entitlements`.
+   */
+  features: Record<string, boolean> | null;
   /** `ADMIN_EMAIL`+`ADMIN_PASSWORD` still in its environment. */
   pendingHandover: boolean;
   /** Set only for a stack Dokploy does NOT rebuild on push by itself — the
@@ -55,6 +61,47 @@ export function documentExpiry(token: string | undefined): number | null {
 }
 
 /**
+ * `features` out of a compact JWS, unverified — or `null` for no document, an
+ * unreadable one, or one past its `exp`.
+ *
+ * ## Why the signing form needs this
+ *
+ * A document is a COMPLETE statement: every declared key is written, and an
+ * unticked box is a `false` the stack honours. The form used to start its
+ * boxes at the declared defaults whoever was picked, so opening ONE feature
+ * for an instructor re-stated the defaults for everything else — and silently
+ * closed whatever had been opened for them before. Sabry and Adel both had
+ * `video.upload` open (default off) on 2026-11-21, and a signing that only
+ * ticked the new feature would have taken their uploads away.
+ *
+ * An expired document is `null` on purpose: the stack has already fallen back
+ * to the defaults, so the defaults are what is true there.
+ *
+ * Unverified, like `documentExpiry`: the stack is what verifies. A document
+ * the stack rejects would be prefilled here while the defaults run there —
+ * a mismatch the owner sees as soon as the next signing lands.
+ */
+export function documentFeatures(token: string | undefined, now: number): Record<string, boolean> | null {
+  const payload = (token ?? '').split('.')[1];
+  if (!payload) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      exp?: unknown;
+      features?: unknown;
+    };
+    if (typeof parsed.exp !== 'number' || parsed.exp <= now) return null;
+    if (!parsed.features || typeof parsed.features !== 'object' || Array.isArray(parsed.features)) return null;
+    const features: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(parsed.features)) {
+      if (typeof value === 'boolean') features[key] = value;
+    }
+    return features;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Dokploy's stacks, plus any `CONTROL_PLANE_TENANTS` entry Dokploy does not
  * know (a stack on another server, or this key not yet connected) as a bare
  * row with only a name — so the signing form keeps every instructor it had.
@@ -71,6 +118,7 @@ export async function tenantList(now: Date = new Date()): Promise<TenantList> {
     status: 'unknown',
     lastDeployAt: null,
     entitlementsExp: null,
+    features: null,
     pendingHandover: false,
     webhookUrl: null,
   });
@@ -101,6 +149,7 @@ export async function tenantList(now: Date = new Date()): Promise<TenantList> {
           status: settledStatus(latest?.status ?? stack.compose.composeStatus),
           lastDeployAt: latest?.createdAt ?? null,
           entitlementsExp: documentExpiry(stack.env.TENANT_ENTITLEMENTS),
+          features: documentFeatures(stack.env.TENANT_ENTITLEMENTS, readAt),
           pendingHandover: Boolean((stack.env.ADMIN_EMAIL ?? '').trim() && (stack.env.ADMIN_PASSWORD ?? '').trim()),
           webhookUrl: deploysOnPush(stack.compose) ? null : webhookUrl(stack.compose.refreshToken),
         };

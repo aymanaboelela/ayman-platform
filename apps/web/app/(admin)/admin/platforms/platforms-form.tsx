@@ -14,13 +14,17 @@ import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { SettingsField, issuesFromErrors } from '../settings/settings-field';
 import { signEntitlementsAction } from './actions';
-import { DEFAULT_DAYS, SignRequestSchema, defaultFeatureValues, type SignRequest } from './schema';
+import { DEFAULT_DAYS, SignRequestSchema, featureValuesFor, type SignRequest } from './schema';
 
 /** Latin digits inside Arabic, like every other date on the platform. */
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'long' });
 
 export interface PlatformsFormProps {
-  tenants: readonly { key: string; name: string }[];
+  /**
+   * `features` is what that instructor's live document says — the boxes start
+   * there. `null`/absent = no live document, so they start at the defaults.
+   */
+  tenants: readonly { key: string; name: string; features?: Readonly<Record<string, boolean>> | null }[];
   features: readonly FeatureDeclaration[];
   /** Keys whose stack Dokploy holds — those get «وقّع وحطّه في منصته»,
    *  which writes the token into the stack and deploys it. */
@@ -46,9 +50,16 @@ export interface PlatformsFormProps {
  * كتب» something this screen can do, instead of a change to
  * `FEATURE_DECLARATIONS` that would land on all three platforms at once.
  *
- * The boxes START at `defaultForTenant`, so an untouched form re-states what
- * that stack already runs and every difference is one Ayman made on purpose.
- * Starting them all off would make a hurried save read as a shutdown.
+ * The boxes START at what the picked instructor's stack runs NOW — their live
+ * document, or the declared defaults when they have none — and are reset to
+ * that whenever another instructor is picked. So an untouched form re-states
+ * what the stack already runs and every difference is one Ayman made on
+ * purpose.
+ *
+ * ⚠️ They used to start at `defaultForTenant` for everyone. Because the
+ * document states every key, opening ONE feature then quietly re-closed
+ * whatever had been opened for that instructor before — see
+ * `documentFeatures` in `lib/provisioning/tenants.ts`.
  *
  * ⚠️ Unticking is NOT the same as never signing. With no document at all the
  * declared defaults apply — so a token whose job is to CLOSE something has to
@@ -78,9 +89,10 @@ export function PlatformsForm({ tenants, features, appliable = [] }: PlatformsFo
       // click to every signing for no gain.
       tenantKey: tenants[0]?.key ?? '',
       days: DEFAULT_DAYS,
-      features: defaultFeatureValues(),
+      features: featureValuesFor(tenants[0]?.features),
     },
   });
+  const picked = tenants.find((tenant) => tenant.key === form.watch('tenantKey'));
   const issues = issuesFromErrors(form.formState.errors);
 
   async function onSubmit(values: SignRequest) {
@@ -155,7 +167,18 @@ export function PlatformsForm({ tenants, features, appliable = [] }: PlatformsFo
               description={c.tenantHint}
               issues={issues}
               render={(controlProps) => (
-                <Select {...controlProps} {...form.register('tenantKey')}>
+                <Select
+                  {...controlProps}
+                  {...form.register('tenantKey', {
+                    // Another instructor = another stack's truth. Carrying the
+                    // previous one's ticks over would sign them onto this one.
+                    onChange: (event: { target: { value: string } }) =>
+                      form.setValue(
+                        'features',
+                        featureValuesFor(tenants.find((tenant) => tenant.key === event.target.value)?.features),
+                      ),
+                  })}
+                >
                   {tenants.map((tenant) => (
                     <option key={tenant.key} value={tenant.key}>
                       {/* The slug beside the name: it is the thing that has to
@@ -201,6 +224,11 @@ export function PlatformsForm({ tenants, features, appliable = [] }: PlatformsFo
             <h2 className="group-head__title">{c.featuresTitle}</h2>
             <span className="group-head__note">{c.featuresLead}</span>
           </div>
+          {/* Where the ticks below came from — the one fact that says whether
+              an untouched save changes anything on that stack. */}
+          <p className="mb-3 text-[length:var(--fs-text-sm)] text-fg-muted">
+            {picked?.features ? c.startsFromDocument : c.startsFromDefaults}
+          </p>
 
           <Card>
             <CardBody className="divide-y divide-line-subtle">

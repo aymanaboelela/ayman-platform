@@ -70,3 +70,22 @@ export function defaultFeatureValues(): Record<string, boolean> {
   for (const declaration of FEATURE_DECLARATIONS) out[declaration.key] = declaration.defaultForTenant;
   return out;
 }
+
+/**
+ * The boxes for ONE instructor: what their live document says, and the
+ * declared default for any key it does not mention (a feature declared after
+ * it was signed) — which is exactly what that stack runs today.
+ *
+ * `null`/`undefined` = no live document, so the defaults ARE the truth.
+ * Keys the document carries that are no longer declared are dropped: the
+ * signer only ever writes declared keys.
+ */
+export function featureValuesFor(current: Readonly<Record<string, boolean>> | null | undefined): Record<string, boolean> {
+  const out = defaultFeatureValues();
+  if (!current) return out;
+  for (const key of Object.keys(out)) {
+    const value = current[key];
+    if (typeof value === 'boolean') out[key] = value;
+  }
+  return out;
+}
