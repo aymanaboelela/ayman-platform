@@ -27,6 +27,17 @@ export default defineConfig({
     // locale hides bidi bugs that only appear under a real RTL UA.
     locale: 'ar-EG',
     timezoneId: 'Africa/Cairo',
+    // The suite asserts the FULL-effects page: the rotating headline, the
+    // nav's pin transition, GSAP entrances. A CI runner has <=4 cores and runs
+    // headless at ~30 fps, so lite mode (`lib/weak-device.ts`) would decide
+    // for it — by hints before first paint, or by the frame watchdog a few
+    // seconds in. Pin the visitor's own choice instead. `e2e/lite-mode.e2e.ts`
+    // clears it to test lite mode itself. (`browser.newContext()` does not
+    // inherit this — see `login-gated-content.e2e.ts`.)
+    storageState: {
+      cookies: [],
+      origins: [{ origin: 'http://localhost:3200', localStorage: [{ name: 'fx:mode', value: 'full' }] }],
+    },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
