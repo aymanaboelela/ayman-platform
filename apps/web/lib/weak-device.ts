@@ -1,6 +1,13 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import {
+  FX_MODE_KEY,
+  FX_VERDICT_KEY,
+  FX_VERDICT_TTL_MS,
+  FX_WEAK_CORES,
+  FX_WEAK_MEMORY_GB,
+} from '@/lib/security/prepaint-script';
 
 /**
  * "Is this machine too weak for the ambient effects?" — asked in two ways,
@@ -22,9 +29,25 @@ import { useSyncExternalStore } from 'react';
  * Asked for by the owner: many students are on weak machines, and there the
  * cursor trail turns every mouse movement into stutter, on every page,
  * including quizzes.
+ *
+ * ## 3. And what the visitor said — which beats both
+ *
+ * Hints guess and the watchdog can only judge what it measured, so either can
+ * be wrong about one particular machine: a weak laptop whose figures look fine,
+ * or the owner's own Mac caught in one bad minute. `fx:mode` (`lite` | `full`)
+ * is the visitor's own answer, written by `<FxToggle>`, and once it exists no
+ * hint or measurement overrides it.
+ *
+ * ## One decision, three readers
+ *
+ * `decideLite()` is the whole rule. The prepaint script runs the same rule
+ * before first paint and writes `data-fx="lite"` on `<html>`, which is what the
+ * stylesheet's lite backstop (`packages/ui/src/tokens/motion.css`) reads; the
+ * hooks below drive the JS effects; `isFxLite()` answers imperative code. Every
+ * change (`setFxMode`, `markDeviceTooSlow`) updates all three in the same tick.
  */
 
-const STORAGE_KEY = 'fx:weak-device';
+const STORAGE_KEY = FX_VERDICT_KEY;
 
 /**
  * How long a measured "too slow" verdict is trusted. Not forever: the same
@@ -32,7 +55,10 @@ const STORAGE_KEY = 'fx:weak-device';
  * two different machines, and a one-off bad minute — the owner's own Mac with a
  * dozen dev servers open — must not switch the effects off for good.
  */
-export const MEASURED_VERDICT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const MEASURED_VERDICT_TTL_MS = FX_VERDICT_TTL_MS;
+
+/** The visitor's explicit choice. `null` = never chosen, the machine decides. */
+export type FxMode = 'lite' | 'full';
 
 export interface DeviceHints {
   hardwareConcurrency?: number;
@@ -45,7 +71,11 @@ export function hintsSayWeak(hints: DeviceHints): boolean {
   if (hints.connection?.saveData === true) return true;
   // `<= 4` GB: Chrome rounds DOWN to a power of two, so a 6 GB machine reports
   // 4 and an 8 GB one reports 8 — the line falls between "struggles" and "fine".
-  if (typeof hints.deviceMemory === 'number' && hints.deviceMemory > 0 && hints.deviceMemory <= 4) {
+  if (
+    typeof hints.deviceMemory === 'number' &&
+    hints.deviceMemory > 0 &&
+    hints.deviceMemory <= FX_WEAK_MEMORY_GB
+  ) {
     return true;
   }
   // `<= 4` logical cores: dual-core-with-hyperthreading Celerons, i3s and the
@@ -54,7 +84,7 @@ export function hintsSayWeak(hints: DeviceHints): boolean {
   if (
     typeof hints.hardwareConcurrency === 'number' &&
     hints.hardwareConcurrency > 0 &&
-    hints.hardwareConcurrency <= 4
+    hints.hardwareConcurrency <= FX_WEAK_CORES
   ) {
     return true;
   }
@@ -67,6 +97,26 @@ export function storedVerdictIsFresh(raw: string | null, now: number): boolean {
   const at = Number(raw);
   if (!Number.isFinite(at) || at <= 0) return false;
   return now - at < MEASURED_VERDICT_TTL_MS && now >= at;
+}
+
+export function parseFxMode(raw: string | null): FxMode | null {
+  return raw === 'lite' || raw === 'full' ? raw : null;
+}
+
+/**
+ * THE rule. `FX_MODE` in the prepaint script runs the same one, in the same
+ * order (tested against this): the visitor's choice, else the hints, else a
+ * fresh measured verdict.
+ */
+export function decideLite(input: {
+  mode: FxMode | null;
+  hints: DeviceHints;
+  verdict: string | null;
+  now: number;
+}): boolean {
+  if (input.mode === 'lite') return true;
+  if (input.mode === 'full') return false;
+  return hintsSayWeak(input.hints) || storedVerdictIsFresh(input.verdict, input.now);
 }
 
 /**
@@ -90,52 +140,126 @@ export function framesSayTooSlow(intervals: readonly number[]): boolean {
 const listeners = new Set<() => void>();
 let cached: boolean | null = null;
 
-function readStored(): string | null {
+function readKey(key: string): string | null {
   try {
-    return window.localStorage.getItem(STORAGE_KEY);
+    return window.localStorage.getItem(key);
   } catch {
     // Private window / blocked storage: no memory, the hints still decide.
     return null;
   }
 }
 
-function getSnapshot(): boolean {
-  if (cached === null) {
-    cached =
-      hintsSayWeak(navigator as Navigator & DeviceHints) ||
-      storedVerdictIsFresh(readStored(), Date.now());
+function writeKey(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Not remembered; this page still follows the change.
   }
+}
+
+/** Keeps the stylesheet's view (`data-fx` on `<html>`) in step with the store. */
+function applyAttribute(lite: boolean): void {
+  if (lite) document.documentElement.setAttribute('data-fx', 'lite');
+  else document.documentElement.removeAttribute('data-fx');
+}
+
+function compute(): boolean {
+  return decideLite({
+    mode: parseFxMode(readKey(FX_MODE_KEY)),
+    hints: navigator as Navigator & DeviceHints,
+    verdict: readKey(STORAGE_KEY),
+    now: Date.now(),
+  });
+}
+
+function getSnapshot(): boolean {
+  if (cached === null) cached = compute();
   return cached;
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
+/** A change made in another tab (the toggle, or a verdict) lands here too. */
+function onStorage(event: StorageEvent): void {
+  if (event.key !== null && event.key !== FX_MODE_KEY && event.key !== STORAGE_KEY) return;
+  cached = compute();
+  applyAttribute(cached);
+  notify();
+}
+
+function subscribe(onChange: () => void) {
+  if (listeners.size === 0) window.addEventListener('storage', onStorage);
+  listeners.add(onChange);
+  return () => {
+    listeners.delete(onChange);
+    if (listeners.size === 0) window.removeEventListener('storage', onStorage);
+  };
 }
 
 // "Weak" until hydration, for the same reason `useAmbientEffectsAllowed`
 // defaults every gate to "suppress": the effect is absent from the server HTML
 // and appears only once the real answer is known.
-const getServerSnapshot = () => true;
+const suppressOnServer = () => true;
 
-function subscribe(onChange: () => void) {
-  listeners.add(onChange);
-  return () => {
-    listeners.delete(onChange);
-  };
+/** For gating an EFFECT: reports "weak" during SSR and hydration. */
+export function useWeakDevice(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, suppressOnServer);
 }
 
-export function useWeakDevice(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+// The opposite default, for things that change what a normal machine RENDERS
+// (the motion config, the toggle's state): the server HTML is the full-effects
+// page, and a lite machine switches after hydration — while its stylesheet has
+// already been lite since first paint, from the prepaint script.
+const fullOnServer = () => false;
+
+/** For changing behaviour or labels: reports "full" during SSR and hydration. */
+export function useFxLite(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, fullOnServer);
+}
+
+/** The visitor's explicit choice, or `null` if they never made one. Client only. */
+export function readFxMode(): FxMode | null {
+  return parseFxMode(readKey(FX_MODE_KEY));
+}
+
+/** For imperative code (an effect's first line, a scroll call). Client only. */
+export function isFxLite(): boolean {
+  return getSnapshot();
+}
+
+/**
+ * The visitor's own choice, from `<FxToggle>`. Permanent until changed again —
+ * and it also clears a measured verdict when they ask for FULL, so taking the
+ * effects back is not undone a week later by a stale measurement.
+ */
+export function setFxMode(mode: FxMode): void {
+  writeKey(FX_MODE_KEY, mode);
+  if (mode === 'full') {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Nothing to clear.
+    }
+  }
+  cached = mode === 'lite';
+  applyAttribute(cached);
+  notify();
 }
 
 /**
  * Called by an effect that measured itself and found the machine too slow.
- * Every `useAmbientEffectsAllowed` subscriber flips to "off" in the same tick,
- * so the other heavy layers on the page go with it rather than waiting for the
- * next load.
+ * Every subscriber flips to "lite" in the same tick, so the other heavy layers
+ * on the page go with it rather than waiting for the next load.
+ *
+ * A visitor who chose FULL has overruled the measurement in advance: nothing
+ * changes and nothing is stored.
  */
 export function markDeviceTooSlow(): void {
+  if (readFxMode() === 'full') return;
   cached = true;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, String(Date.now()));
-  } catch {
-    // Not remembered; this page still turns the effects off.
-  }
-  for (const listener of listeners) listener();
+  writeKey(STORAGE_KEY, String(Date.now()));
+  applyAttribute(true);
+  notify();
 }

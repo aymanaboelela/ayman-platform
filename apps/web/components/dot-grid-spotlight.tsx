@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useWeakDevice } from '@/lib/weak-device';
 
 /**
  * Writes the cursor position into two CSS custom properties that mask the
@@ -17,6 +18,13 @@ import { useEffect } from 'react';
  * below is the part that actually mattered.
  */
 export function DotGridSpotlight() {
+  // And off on a weak machine. `--mx`/`--my` are written on `<html>`, so every
+  // mouse move restyles the whole document before the mask repaints — cheap
+  // on a fast laptop, a stutter under the cursor on a slow one. A hook rather
+  // than a read inside the effect, so a frame watchdog that flips the verdict
+  // mid-visit unhooks the listener instead of waiting for the next load.
+  const lite = useWeakDevice();
+
   useEffect(() => {
     // Coarse pointers are gated for the same reason as reduced motion — and the
     // `(site)` layout's comment has claimed for a while that this component
@@ -39,7 +47,7 @@ export function DotGridSpotlight() {
     // `@media (pointer: coarse) { .dot-grid { mask-image: none } }` — that
     // deletes the marketing backdrop's vignette in both themes, which is a
     // design decision, not a performance fix.
-    if (window.matchMedia('(prefers-reduced-motion: reduce), (pointer: coarse)').matches) {
+    if (lite || window.matchMedia('(prefers-reduced-motion: reduce), (pointer: coarse)').matches) {
       return;
     }
 
@@ -59,7 +67,7 @@ export function DotGridSpotlight() {
       window.removeEventListener('pointermove', onMove);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [lite]);
 
   return null;
 }

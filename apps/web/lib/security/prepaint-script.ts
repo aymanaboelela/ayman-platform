@@ -1,9 +1,9 @@
 /**
- * The only inline script this application authors. It does five things that
- * must happen before anything else on the page runs: the two below, and
+ * The only inline script this application authors. It does six things that
+ * must happen before anything else on the page runs: the two below,
  * `CHUNK_SCRIPT_RESCUE`, `DOM_MUTATION_GUARD` and `STREAM_ID_GUARD` further
  * down, which have nothing to do with paint and are here for the same reason —
- * each is only correct if it is FIRST.
+ * each is only correct if it is FIRST — and `FX_MODE` at the end.
  *
  * The two pieces of persisted UI state that MUST be on `<html>` before first
  * paint (`app/layout.tsx`):
@@ -230,5 +230,41 @@ export const DOM_MUTATION_GUARD =
 export const STREAM_ID_GUARD =
   `(function(){try{var D=document,ID=/^\\w*[BPS]:[0-9a-f]+$/;function newest(id){if(typeof id!=='string'||!ID.test(id))return;var all=D.querySelectorAll('[id="'+id+'"]');for(var i=0;i<all.length-1;i++)all[i].removeAttribute('id');}function wrap(fn){return function(){for(var i=0;i<arguments.length;i++)newest(arguments[i]);return fn.apply(this,arguments);};}['$RC','$RS','$RR','$RX'].forEach(function(n){var f;Object.defineProperty(window,n,{configurable:true,get:function(){return f;},set:function(v){f=typeof v==='function'?wrap(v):v;}});});}catch(e){}})();`;
 
+/**
+ * The sixth job: `data-fx="lite"` on `<html>` for a machine that cannot carry
+ * the animation, BEFORE the first animation starts.
+ *
+ * «كل ما افتح المنصة الاقي الجهاز علق من كتر الانميشن» — a student on a weak
+ * laptop, about the landing page. The JS effects already had a weak-device
+ * gate (`lib/weak-device.ts`), but everything CSS drew stayed on: forty-odd
+ * `infinite` keyframe loops, the frosted `backdrop-filter` bars, the
+ * scroll-driven reveals. A stylesheet can only switch those off by reading
+ * something on `<html>`, and it has to be there at first paint — set after
+ * hydration, every loop and blur would already have started and been paid for.
+ *
+ * The same decision as `decideLite()` in `lib/weak-device.ts`, in the same
+ * order, from the same keys and thresholds (both read the constants below, and
+ * `prepaint-script.test.ts` runs this string against `decideLite` over the
+ * whole matrix, so the two cannot drift):
+ *
+ *   1. The visitor's own choice wins: `fx:mode` = `lite` | `full`.
+ *   2. Otherwise the hardware hints: Save-Data, `deviceMemory <= 4`,
+ *      `hardwareConcurrency <= 4`.
+ *   3. Otherwise a fresh measured verdict: `fx:weak-device` holds the epoch-ms a
+ *      frame watchdog found this machine too slow, trusted for seven days.
+ *
+ * Absent attribute = full effects. Its own IIFE and `try`, like the rest: a
+ * `localStorage` that throws still lets the hints decide.
+ */
+export const FX_MODE_KEY = 'fx:mode';
+export const FX_VERDICT_KEY = 'fx:weak-device';
+export const FX_VERDICT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** `<=` both: Chrome buckets memory DOWN to a power of two (6 GB reports 4). */
+export const FX_WEAK_MEMORY_GB = 4;
+export const FX_WEAK_CORES = 4;
+
+export const FX_MODE =
+  `(function(){try{var d=document.documentElement,n=navigator,o=null,v=null;try{o=localStorage.getItem('${FX_MODE_KEY}');v=localStorage.getItem('${FX_VERDICT_KEY}');}catch(x){}var l;if(o==='lite'){l=true;}else if(o==='full'){l=false;}else{var c=n.connection,m=n.deviceMemory,h=n.hardwareConcurrency,t=Date.now(),a=Number(v);l=!!(c&&c.saveData===true)||(typeof m==='number'&&m>0&&m<=${FX_WEAK_MEMORY_GB})||(typeof h==='number'&&h>0&&h<=${FX_WEAK_CORES})||(!!v&&isFinite(a)&&a>0&&t>=a&&t-a<${FX_VERDICT_TTL_MS});}if(l){d.setAttribute('data-fx','lite');}else{d.removeAttribute('data-fx');}}catch(e){}})();`;
+
 export const PREPAINT_SCRIPT =
-  THEME_AND_RAIL + CHUNK_SCRIPT_RESCUE + DOM_MUTATION_GUARD + STREAM_ID_GUARD;
+  THEME_AND_RAIL + CHUNK_SCRIPT_RESCUE + DOM_MUTATION_GUARD + STREAM_ID_GUARD + FX_MODE;

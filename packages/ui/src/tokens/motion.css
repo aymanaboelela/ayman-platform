@@ -24,6 +24,40 @@
   }
 }
 
+/* The same backstop for a machine too weak to carry the animation — and one
+   thing more, because on that machine motion is not the only cost.
+
+   `data-fx="lite"` is written on <html> before first paint by the prepaint
+   script (apps/web/lib/security/prepaint-script.ts, `FX_MODE`) and changed
+   afterwards by apps/web/lib/weak-device.ts: the visitor's own «الوضع الخفيف»
+   choice, else the hardware hints, else a measured frame rate. Reported by a
+   student: «كل ما افتح المنصة الاقي الجهاز علق من كتر الانميشن».
+
+   - The four motion lines are the reduced-motion backstop above, verbatim, so
+     everything already built to look right under reduced motion looks right
+     here too. `!important` for the same reason as there: a backstop that a
+     selector of higher specificity can outrank is not a backstop.
+   - `animation-timeline: auto` because a duration means nothing to a
+     scroll-driven animation: a 0.01ms reveal on `view()` still scrubs with
+     every scroll. On the document timeline it finishes at once, and every one
+     of them is `both`, so it finishes VISIBLE.
+   - `backdrop-filter: none` because frosted glass is neither an animation nor
+     a transition, and it is the dearest single declaration in the product:
+     the compositor re-blurs the backdrop on every frame the content under it
+     moves (see `.topbar` in apps/web/app/globals.css). */
+:root[data-fx='lite'],
+:root[data-fx='lite'] *,
+:root[data-fx='lite'] *::before,
+:root[data-fx='lite'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-timeline: auto !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 /* Shimmer uses translateX, never background-position: background-position
    repaints the whole element every frame. Lives here (not in the consuming
    app's CSS) because `Skeleton` (packages/ui/src/components/skeleton.tsx)

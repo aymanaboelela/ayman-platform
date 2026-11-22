@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, type DependencyList, type RefObject } from 'react';
 import { gsap } from '@/lib/gsap';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 export type GsapContext = {
   /** The element `scope` points at. Selector strings resolve inside it. */
@@ -74,7 +75,7 @@ export function useGsap(
     const element = scope.current;
     if (!element) return;
 
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = prefersLessMotion();
     let failed = false;
     let cause: unknown;
     const ctx = gsap.context(() => {

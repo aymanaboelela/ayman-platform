@@ -2,6 +2,7 @@
 
 import { LazyMotion, MotionConfig } from 'motion/react';
 import type { ReactNode } from 'react';
+import { useFxLite } from '@/lib/weak-device';
 
 /** Resolved after hydration, in its own chunk. See ./features. */
 const loadFeatures = () => import('./features').then((mod) => mod.default);
@@ -18,13 +19,20 @@ const loadFeatures = () => import('./features').then((mod) => mod.default);
  * fades. That combination — not "disable everything" — is the vestibular-safe
  * behaviour, and retrofitting it later means auditing every component.
  *
+ * On a weak machine (`data-fx="lite"`, `lib/weak-device.ts`) it is `always`:
+ * the same still-but-fading behaviour, for a visitor who never touched the OS
+ * setting but whose laptop cannot spare the frames. `useFxLite` reports "full"
+ * during SSR and hydration, so the server markup is unchanged and a lite
+ * machine switches on its first client render.
+ *
  * `children` is a prop, so passing Server Components through this client
  * component does not turn them into Client Components.
  */
 export function MotionProvider({ children }: { children: ReactNode }) {
+  const lite = useFxLite();
   return (
     <LazyMotion features={loadFeatures} strict>
-      <MotionConfig reducedMotion="user">{children}</MotionConfig>
+      <MotionConfig reducedMotion={lite ? 'always' : 'user'}>{children}</MotionConfig>
     </LazyMotion>
   );
 }

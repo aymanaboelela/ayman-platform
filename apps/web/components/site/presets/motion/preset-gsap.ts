@@ -1,6 +1,7 @@
 'use client';
 
 import { gsap, ScrollTrigger } from '@/lib/gsap';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 /**
  * The GSAP layer the teachers' landing presets share («يبقى فيه انيميشن من
@@ -56,7 +57,7 @@ const BELOW_FOLD = (node: Element) => node.getBoundingClientRect().top >= window
  * the nodes it kept — see the router note in the repo's memory of it).
  */
 export function runPresetMotion(root: HTMLElement, config: PresetMotionConfig): () => void {
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce = prefersLessMotion();
   const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const pendingReveal: HTMLElement[] = [];
   const pendingFigures = new Map<HTMLElement, string>();

@@ -9,6 +9,7 @@ import { MediaSlot } from '@/components/site/media-slot';
 import { ElectricCard } from '@/components/site/electric-card';
 import { TrackCardView, type TrackCard, type TrackPosters } from '@/components/site/track-card';
 import { TracksDragon, type DragonStage } from '@/components/site/tracks-dragon';
+import { useWeakDevice } from '@/lib/weak-device';
 import { DRAGON_IGNITES_AT, DRAGON_RIDE } from '@/lib/brand-assets';
 import { useRampHex } from '@/lib/ramp-color';
 import { IS_AYMAN } from '@/lib/tenant';
@@ -200,6 +201,11 @@ function CodeYearTracks({ posters }: { posters?: TrackPosters }) {
   // effect holding a stale `stageRef.current` captured from before TracksDragon
   // mounted.
   const wide = useMediaQuery('(min-width: 64rem)', false);
+  // The other half of `<TracksDragon>`'s gate: on a weak machine it renders no
+  // clips, so there is no scene to build either — and if a frame watchdog flips
+  // the verdict mid-visit, this dependency tears the running scene down in the
+  // same commit that unmounts the dragon.
+  const weak = useWeakDevice();
 
   // The two card oranges, read off the tenant's own ramp after hydration —
   // `useRampHex` rather than `rampHex` because `<ElectricCard>` puts this colour
@@ -249,7 +255,7 @@ function CodeYearTracks({ posters }: { posters?: TrackPosters }) {
       // would put a wide viewport permanently on the fallback path. It is in
       // this hook's dependency array, so a breakpoint crossing tears the context
       // down and rebuilds it in either direction.
-      if (reduced || !wide) return;
+      if (reduced || !wide || weak) return;
 
       // Each glyph drifts on its own clock. `yoyo` rather than `repeat: -1`
       // with a wrap: the glyphs must never appear to travel, only to breathe.
@@ -914,7 +920,7 @@ function CodeYearTracks({ posters }: { posters?: TrackPosters }) {
       };
     },
     ref,
-    [wide],
+    [wide, weak],
   );
 
   return (

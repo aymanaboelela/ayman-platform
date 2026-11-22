@@ -7,6 +7,7 @@ import { getBranding } from '@/lib/settings';
 import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
 import { BrandMarkProvider } from '@/components/brand-mark-provider';
 import { courseCoverStyle } from '@/lib/brand-image';
+import { FxWatchdog } from '@/components/motion/fx-watchdog';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { RouteScrollReset } from '@/components/motion/route-scroll-reset';
@@ -275,6 +276,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             >
               <RouteProgress>{children}</RouteProgress>
             </BrandMarkProvider>
+            {/* Measures the frame rate a few times per visit and switches the
+                whole product to lite mode on a machine that cannot keep up.
+                Here, once, so every surface is measured — not only the
+                marketing pages the splash cursor runs on. */}
+            <FxWatchdog />
           </MotionProvider>
         </NuqsAdapter>
         {/*

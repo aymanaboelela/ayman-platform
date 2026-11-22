@@ -8,6 +8,7 @@ import { copy } from '@ayman/contracts/copy';
 import { BrandLockup } from '@/components/brand-lockup';
 import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { FxToggle } from '@/components/fx-toggle';
 import { useStudentFeatureGate } from './student-features';
 import { guardActiveLink } from './student-nav-list';
 import {
@@ -198,6 +199,7 @@ export function DrawerMenu({
               <span key={item.href}>{link(item, 'dmenu__quiet-link')}</span>
             ))}
             <ThemeToggle className="dmenu__theme" />
+            <FxToggle className="dmenu__fx" />
             <SignOutButton className="dmenu__signout" />
           </div>
         </div>
