@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiRequestError, UPSTREAM_TIMEOUT_DIGEST, apiFetch } from './api';
+import { ApiRequestError, UPSTREAM_TIMEOUT_DIGEST, apiFetch, burstRetryDelayMs } from './api';
 import { UPSTREAM_BUSY_DIGEST } from './upstream-digest';
 
 /**
@@ -59,5 +59,50 @@ describe('apiFetch on the server', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(malformed));
 
     await expect(apiFetch('/api/x')).rejects.toBe(malformed);
+  });
+});
+
+describe('a burst 429 on the server gets one retry', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const throttled = (headers: Record<string, string>) => new Response('{}', { status: 429, headers });
+
+  it('reads the longest refusing window, and only a short one', () => {
+    expect(burstRetryDelayMs(new Headers({ 'retry-after-short': '1' }))).toBe(1100);
+    expect(burstRetryDelayMs(new Headers({ 'retry-after-short': '1', 'retry-after-medium': '40' }))).toBeNull();
+    expect(burstRetryDelayMs(new Headers({ 'retry-after': '2' }))).toBe(2100);
+    expect(burstRetryDelayMs(new Headers({ 'retry-after-short': 'soon' }))).toBeNull();
+    expect(burstRetryDelayMs(new Headers())).toBeNull();
+  });
+
+  it('waits out a short-window refusal and returns the retry’s answer', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(throttled({ 'retry-after-short': '1' }))
+      .mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = apiFetch('/api/me/league');
+    await vi.advanceTimersByTimeAsync(1100);
+    const response = await pending;
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not hold a render for a long window, nor repeat a write', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(throttled({ 'retry-after-medium': '30' }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await apiFetch('/api/session')).status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(throttled({ 'retry-after-short': '1' }));
+    expect((await apiFetch('/api/me/notes', { method: 'POST', body: '{}' })).status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

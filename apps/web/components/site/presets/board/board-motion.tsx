@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import type { PresetMotionConfig } from '../motion/preset-gsap';
 import { mountPresetMotion } from '../motion/mount';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 /** Cards that carry the cursor spotlight (`--mx` / `--my`). */
 const LIT = '.board-course, .board-feature, .board-tile__link, .board-honor--row, .board-quote';
@@ -78,7 +79,7 @@ export function BoardMotion() {
     const root = document.querySelector<HTMLElement>('[data-preset="board"]');
     if (!root) return;
 
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduce = prefersLessMotion();
     const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const cleanups: (() => void)[] = [];
 

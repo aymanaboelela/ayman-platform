@@ -51,6 +51,7 @@ import { hasScript } from '@/lib/playground/preview-document';
 import { runCode, type RunResult } from '@/lib/run-code';
 import { isPythonBooted, resetPython, runPython } from '@/lib/run-python';
 import { HtmlPreview, type PreviewLine, type PreviewRequest } from './html-preview';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 const c = copy.playground;
 
@@ -207,7 +208,7 @@ export function Playground() {
     const panel = outputRef.current;
     if (!panel) return;
     if (panel.getBoundingClientRect().top < window.innerHeight - 120) return;
-    const smooth = window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+    const smooth = !prefersLessMotion();
     panel.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
   }
 
@@ -284,7 +285,7 @@ export function Playground() {
 
   function tryFromGallery(example: PlaygroundExample) {
     loadExample(example, { autoRun: true });
-    const smooth = window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+    const smooth = !prefersLessMotion();
     workRef.current?.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
   }
 

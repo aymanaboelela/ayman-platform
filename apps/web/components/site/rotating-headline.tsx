@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { useWeakDevice } from '@/lib/weak-device';
 
 /**
  * React Bits' `RotatingText` wrapped for this codebase — the hero's second line,
@@ -38,8 +39,12 @@ export function RotatingHeadline({
   // `true` before hydration, so the server and the hydrating render both emit
   // the static phrase and the rotation starts only once it is safe.
   const reduced = useMediaQuery('(prefers-reduced-motion: reduce)', true);
+  // And the static phrase on a weak machine: a spring per word every 2.8 s,
+  // for as long as the hero is open, is the kind of loop lite mode exists to
+  // stop. Also `true` before hydration (`useWeakDevice`), like the line above.
+  const weak = useWeakDevice();
 
-  if (reduced || phrases.length < 2) return <span className={className}>{phrases[0]}</span>;
+  if (reduced || weak || phrases.length < 2) return <span className={className}>{phrases[0]}</span>;
 
   return (
     <RotatingText

@@ -11,6 +11,7 @@ import {
 } from '@/lib/brand-assets';
 import { IS_AYMAN } from '@/lib/tenant';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { useWeakDevice } from '@/lib/weak-device';
 
 /**
  * The handle `year-tracks.tsx` drives the stage through. Verbs and one reading,
@@ -153,11 +154,21 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
   // `(pointer: coarse)`, and a touch reader who has not asked for reduced
   // motion should still get the scene.
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)', true);
+  // But not on a weak machine (`lib/weak-device.ts`): two alpha-VP9 clips at
+  // 960px are decoded on the CPU — no GPU decodes the alpha plane — on exactly
+  // the laptops that have the least of it. «التنين المجنح ال طاير … بيهنج
+  // الجهاز». Returning null here is also what keeps both files unfetched.
+  //
+  // ⚠️ `CodeYearTracks` gates its scene on the SAME hook (`weak` beside `wide`
+  // in its `useGsap` guard and deps). The two must agree — a scene built for a
+  // dragon that never mounts is the trap `dragon-scene-two-gates-must-agree`
+  // describes.
+  const weak = useWeakDevice();
 
   const rideRef = useRef<HTMLVideoElement>(null);
   const blazeRef = useRef<HTMLVideoElement>(null);
   const active =
-    IS_AYMAN && wide && !reducedMotion && Boolean(DRAGON_RIDE) && Boolean(DRAGON_BLAZE);
+    IS_AYMAN && wide && !reducedMotion && !weak && Boolean(DRAGON_RIDE) && Boolean(DRAGON_BLAZE);
 
   useEffect(() => {
     if (!active || !DRAGON_RIDE) return;

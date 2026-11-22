@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { DRAGON_BLAZE } from '@/lib/brand-assets';
 import { IS_AYMAN } from '@/lib/tenant';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { useWeakDevice } from '@/lib/weak-device';
 import { AlphaVideoSources } from './alpha-video-sources';
 
 /**
@@ -56,7 +57,13 @@ export function FooterDragons() {
   // screen is the tablet signal; `true` on the server, so nothing renders
   // until the client has said otherwise.
   const touch = useMediaQuery('(pointer: coarse)', true);
-  const active = IS_AYMAN && wide && !touch && !reducedMotion && Boolean(DRAGON_BLAZE);
+  // Not on a weak machine either. Two alpha webms decoding at once is VP9
+  // with an alpha plane, which no GPU decodes — it is all CPU, on exactly the
+  // laptops that have the least of it. `<TracksDragon>` already sat behind this
+  // gate (through `useAmbientEffectsAllowed`); this pair, on every marketing
+  // page, did not. «التنين المجنح ال طاير … بيهنج الجهاز».
+  const weak = useWeakDevice();
+  const active = IS_AYMAN && wide && !touch && !reducedMotion && !weak && Boolean(DRAGON_BLAZE);
 
   useEffect(() => {
     const root = ref.current;

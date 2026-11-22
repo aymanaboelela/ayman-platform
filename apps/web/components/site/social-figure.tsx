@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 /** The first run of digits in «+108 ألف» / «1.5 ألف» / «850». */
 const NUMBER = /\d+(?:\.\d+)?/;
@@ -40,7 +41,7 @@ export function SocialFigure({ text }: { text: string }) {
     const match = NUMBER.exec(text);
     if (!box || !live || !match) return;
     if (typeof IntersectionObserver === 'undefined') return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (prefersLessMotion()) return;
     if (box.getBoundingClientRect().top < window.innerHeight) return;
 
     const target = Number(match[0]);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 /**
  * Closer than this to the newest message counts as «at the bottom» — close
@@ -32,7 +33,7 @@ export function distanceFromLatest(scroller: HTMLElement): number {
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? prefersLessMotion()
     : false;
 }
 

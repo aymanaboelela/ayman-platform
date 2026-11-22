@@ -2,6 +2,8 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MEASURED_VERDICT_TTL_MS,
+  decideLite,
+  parseFxMode,
   framesSayTooSlow,
   hintsSayWeak,
   storedVerdictIsFresh,
@@ -105,5 +107,86 @@ describe('useWeakDevice + markDeviceTooSlow', () => {
     const mod = await import('./weak-device');
     const { result } = renderHook(() => mod.useWeakDevice());
     expect(result.current).toBe(true);
+  });
+});
+
+describe('decideLite', () => {
+  const now = 1_800_000_000_000;
+  const strong = { hardwareConcurrency: 8, deviceMemory: 8 };
+  const weak = { hardwareConcurrency: 4, deviceMemory: 8 };
+
+  it('the visitor’s choice beats the hints and a fresh verdict', () => {
+    expect(decideLite({ mode: 'full', hints: weak, verdict: String(now - 1000), now })).toBe(false);
+    expect(decideLite({ mode: 'lite', hints: strong, verdict: null, now })).toBe(true);
+  });
+
+  it('without a choice, the hints or a fresh verdict decide', () => {
+    expect(decideLite({ mode: null, hints: strong, verdict: null, now })).toBe(false);
+    expect(decideLite({ mode: null, hints: weak, verdict: null, now })).toBe(true);
+    expect(decideLite({ mode: null, hints: strong, verdict: String(now - 1000), now })).toBe(true);
+  });
+
+  it('reads only the two known modes', () => {
+    expect(parseFxMode('lite')).toBe('lite');
+    expect(parseFxMode('full')).toBe('full');
+    expect(parseFxMode('auto')).toBeNull();
+    expect(parseFxMode(null)).toBeNull();
+  });
+});
+
+describe('setFxMode / markDeviceTooSlow keep <html data-fx> in step', () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    window.localStorage.clear();
+    document.documentElement.removeAttribute('data-fx');
+  });
+
+  it('LITE turns on the attribute and every hook, and is remembered', async () => {
+    vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 8, deviceMemory: 8 });
+    const mod = await import('./weak-device');
+    const { result } = renderHook(() => mod.useFxLite());
+    expect(result.current).toBe(false);
+
+    act(() => mod.setFxMode('lite'));
+
+    expect(result.current).toBe(true);
+    expect(document.documentElement.getAttribute('data-fx')).toBe('lite');
+    expect(window.localStorage.getItem('fx:mode')).toBe('lite');
+  });
+
+  it('FULL on a weak machine takes the effects back and forgets the old verdict', async () => {
+    vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 2, deviceMemory: 2 });
+    window.localStorage.setItem('fx:weak-device', String(Date.now() - 1000));
+    document.documentElement.setAttribute('data-fx', 'lite');
+    const mod = await import('./weak-device');
+    const { result } = renderHook(() => mod.useWeakDevice());
+    expect(result.current).toBe(true);
+
+    act(() => mod.setFxMode('full'));
+
+    expect(result.current).toBe(false);
+    expect(document.documentElement.hasAttribute('data-fx')).toBe(false);
+    expect(window.localStorage.getItem('fx:weak-device')).toBeNull();
+  });
+
+  it('a measurement cannot overrule a visitor who chose FULL', async () => {
+    vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 8, deviceMemory: 8 });
+    window.localStorage.setItem('fx:mode', 'full');
+    const mod = await import('./weak-device');
+    const { result } = renderHook(() => mod.useWeakDevice());
+
+    act(() => mod.markDeviceTooSlow());
+
+    expect(result.current).toBe(false);
+    expect(document.documentElement.hasAttribute('data-fx')).toBe(false);
+    expect(window.localStorage.getItem('fx:weak-device')).toBeNull();
+  });
+
+  it('markDeviceTooSlow sets the attribute the stylesheet reads', async () => {
+    vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 8, deviceMemory: 8 });
+    const mod = await import('./weak-device');
+    act(() => mod.markDeviceTooSlow());
+    expect(document.documentElement.getAttribute('data-fx')).toBe('lite');
   });
 });

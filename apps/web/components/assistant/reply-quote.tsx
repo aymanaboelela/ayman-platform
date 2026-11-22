@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { MessageReplyRef } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 const c = copy.assistant.chat;
 
@@ -28,7 +29,7 @@ const FLASH_MS = 1400;
 export function jumpToMessage(id: string): void {
   const row = document.getElementById(chatMessageDomId(id));
   if (!row) return;
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce = prefersLessMotion();
   row.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
   row.classList.remove('chat-row--flash');
   // Re-trigger the animation when the same quote is tapped twice.

@@ -514,7 +514,8 @@ test.describe('rail on a short window', () => {
     await page.setViewportSize({ width: 1280, height: 600 });
     await page.goto('/dashboard');
 
-    const rail = page.locator('.rail');
+    // `:visible` — see 'never collapses the course list to nothing' below.
+    const rail = page.locator('.rail:visible');
     const last = rail.getByRole('link', { name: copy.nav.backToSite });
 
     // موجود في الـDOM…
@@ -537,7 +538,14 @@ test.describe('rail on a short window', () => {
      * «كورساتي» ظاهر وتحته ولا كورس، والطالب بيقراها كإنه مش مشترك في حاجة.
      * الأرضية (`min-h-32`) هي اللي بتمنع ده.
      */
-    const box = await page.locator('.rail__courses').boundingBox();
+    // `:visible` — the shell streams in as `<div hidden id="S:7">` and React
+    // reveals it with `$RC` in a batch up to ~300 ms after it arrives, so for a
+    // moment after `load` the DOM holds the hidden copy as well (the same Next
+    // 16.4 behaviour `site-nav-lockup.e2e.ts` documents). A strict locator on a
+    // slow runner lands in that window. Checked: no duplicate segment ids.
+    const courses = page.locator('.rail__courses:visible');
+    await expect(courses).toHaveCount(1);
+    const box = await courses.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
     expect(box.height).toBeGreaterThan(40);

@@ -2398,6 +2398,13 @@
   }
 }
 
+/* Lite mode (`data-fx="lite"`) puts every scroll-driven animation on the
+   document timeline so it finishes at once — right for a reveal, wrong for a
+   progress bar, which would sit at 100% from the top of the page. */
+:root[data-fx='lite'] [data-preset='board'] .board-progress {
+  display: none;
+}
+
 @keyframes board-progress {
   to {
     transform: scaleX(1);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 /**
  * رقم بيتعدّ لحد قيمته — «المركز» بينزل من حجم الدفعة لحد ترتيب الطالب،
@@ -34,7 +35,7 @@ export function CountUp({
   useEffect(() => {
     const el = node.current;
     if (!el || from === to) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (prefersLessMotion()) return;
 
     let frame = 0;
     const start = performance.now();

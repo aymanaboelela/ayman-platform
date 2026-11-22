@@ -7,6 +7,7 @@ import { promoBannersCopy } from '@ayman/contracts/copy/promo-banners';
 import { formatCopy } from '@ayman/contracts/format';
 import { mediaUrl } from '@ayman/ui/branding';
 import type { ShownPromoBanner } from '@/lib/promo-banners';
+import { prefersLessMotion } from '@/lib/motion-preference';
 
 const c = promoBannersCopy.student;
 
@@ -95,7 +96,7 @@ export function PromoBannerStrip({ banners }: { banners: readonly ShownPromoBann
 
   useEffect(() => {
     if (count < 2 || paused) return;
-    if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (typeof window.matchMedia === 'function' && prefersLessMotion()) {
       return;
     }
     const timer = window.setInterval(() => {
