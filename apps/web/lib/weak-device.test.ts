@@ -87,6 +87,9 @@ describe('useWeakDevice + markDeviceTooSlow', () => {
     vi.resetModules();
     vi.unstubAllGlobals();
     window.localStorage.clear();
+    // markDeviceTooSlow writes it; left behind, it fails the next block's
+    // "attribute absent" check (hidden while a setFxMode test ran in between).
+    document.documentElement.removeAttribute('data-fx');
   });
 
   it('flips every subscriber to weak and remembers it', async () => {
@@ -134,7 +137,7 @@ describe('decideLite', () => {
   });
 });
 
-describe('setFxMode / markDeviceTooSlow keep <html data-fx> in step', () => {
+describe('a FULL pin', () => {
   afterEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
@@ -142,35 +145,7 @@ describe('setFxMode / markDeviceTooSlow keep <html data-fx> in step', () => {
     document.documentElement.removeAttribute('data-fx');
   });
 
-  it('LITE turns on the attribute and every hook, and is remembered', async () => {
-    vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 8, deviceMemory: 8 });
-    const mod = await import('./weak-device');
-    const { result } = renderHook(() => mod.useFxLite());
-    expect(result.current).toBe(false);
-
-    act(() => mod.setFxMode('lite'));
-
-    expect(result.current).toBe(true);
-    expect(document.documentElement.getAttribute('data-fx')).toBe('lite');
-    expect(window.localStorage.getItem('fx:mode')).toBe('lite');
-  });
-
-  it('FULL on a weak machine takes the effects back and forgets the old verdict', async () => {
-    vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 2, deviceMemory: 2 });
-    window.localStorage.setItem('fx:weak-device', String(Date.now() - 1000));
-    document.documentElement.setAttribute('data-fx', 'lite');
-    const mod = await import('./weak-device');
-    const { result } = renderHook(() => mod.useWeakDevice());
-    expect(result.current).toBe(true);
-
-    act(() => mod.setFxMode('full'));
-
-    expect(result.current).toBe(false);
-    expect(document.documentElement.hasAttribute('data-fx')).toBe(false);
-    expect(window.localStorage.getItem('fx:weak-device')).toBeNull();
-  });
-
-  it('a measurement cannot overrule a visitor who chose FULL', async () => {
+  it('cannot be overruled by a measurement', async () => {
     vi.stubGlobal('navigator', { ...navigator, hardwareConcurrency: 8, deviceMemory: 8 });
     window.localStorage.setItem('fx:mode', 'full');
     const mod = await import('./weak-device');

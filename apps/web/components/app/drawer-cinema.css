@@ -432,40 +432,6 @@
   color: var(--e-ink);
 }
 
-/* «الوضع الخفيف» (`<FxToggle>`) — a set-once control, so it sits
-   on the quiet line with the theme switch and reads like the links beside it.
-   The state word carries on/off; it takes a colour only when ON, so a glance
-   at the line says whether the platform is running light. */
-.drawer.dmenu .dmenu__fx {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-4);
-  min-block-size: var(--min-tap-size);
-  padding-inline: var(--s-4);
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: var(--fs-mono-label);
-  font-weight: var(--fw-medium);
-  color: var(--n-11);
-  cursor: pointer;
-}
-
-.drawer.dmenu .dmenu__fx:hover {
-  color: var(--e-ink);
-}
-
-.drawer.dmenu .dmenu__fx .fx-row__state {
-  padding-inline: var(--s-4);
-  border-radius: var(--r-full);
-  background: var(--n-3);
-}
-
-.drawer.dmenu .dmenu__fx[data-on='true'] .fx-row__state {
-  background: color-mix(in oklch, var(--ok), transparent 85%);
-  color: var(--ok);
-}
-
 /* `SignOutButton` brings a full-width row of Tailwind utilities for its other
    home in the account menu; here it is one word at the end of a line. */
 .drawer.dmenu .dmenu__signout {

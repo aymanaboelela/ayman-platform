@@ -33,7 +33,7 @@ test.describe('lite mode', () => {
     expect(layers).toEqual({ fx: 'lite', videos: 0, canvases: 0 });
   });
 
-  test('the visitor’s own FULL beats the hints', async ({ page }) => {
+  test('a FULL pin beats the hints', async ({ page }) => {
     await page.addInitScript(`${hints(2)}try{localStorage.setItem('fx:mode','full')}catch(e){}`);
     await page.goto('/');
     expect(await page.evaluate(() => document.documentElement.getAttribute('data-fx'))).toBeNull();

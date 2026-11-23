@@ -1,18 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronDown, Feather, MonitorSmartphone, ShieldCheck, UserRound } from 'lucide-react';
+import { ChevronDown, MonitorSmartphone, ShieldCheck, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@ayman/ui/components/dropdown-menu';
 import { SignOutButton } from '@/components/sign-out-button';
-import { setFxMode, useFxLite } from '@/lib/weak-device';
 import { UserAvatar } from './user-avatar';
 
 /**
@@ -44,7 +42,6 @@ export function AccountMenuClient({
   image: string | null;
   isAdmin: boolean;
 }) {
-  const lite = useFxLite();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -104,21 +101,6 @@ export function AccountMenuClient({
           </Link>
         </DropdownMenuItem>
 
-        {/*
-          «الوضع الخفيف» — the same switch as the drawer's `<FxToggle>`, as a
-          checkbox item so Radix gives it the menu's own semantics
-          (`menuitemcheckbox`) and its tick. `onSelect` is prevented so the menu
-          stays open: the change is something to see happen, like the theme.
-        */}
-        <DropdownMenuCheckboxItem
-          checked={lite}
-          onCheckedChange={(on) => setFxMode(on ? 'lite' : 'full')}
-          onSelect={(event) => event.preventDefault()}
-          title={copy.fx.hint}
-        >
-          <Feather className="size-4 shrink-0" aria-hidden="true" />
-          {copy.fx.label}
-        </DropdownMenuCheckboxItem>
 
         {isAdmin ? (
           <DropdownMenuItem asChild>
