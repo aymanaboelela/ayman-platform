@@ -12,7 +12,7 @@ import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
 import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
 import { QualityItem } from './quality-item';
 import { capForWidth, knownBandwidth, saveBandwidth, startRung } from './start-rung';
-import { videoKeyLoader } from './video-key-loader';
+import { requestNativeKeyTicket, videoKeyLoader } from './video-key-loader';
 import { abrFactorsFor, bufferAhead } from './buffer-aware-abr';
 
 const c = copy.player.controls;
@@ -73,8 +73,13 @@ export interface MirrorVideoProps {
   /**
    * Called when our copy cannot play at all. The caller's answer is to fall
    * back to YouTube, or to say plainly that an uploaded lecture failed.
+   *
+   * `'rate-limited'`: the key route answered 429 — this account opened more
+   * different lectures this hour than `KEY_LECTURES_PER_HOUR` allows. Not a
+   * fault a reload fixes (a reload is one more request), so the caller says
+   * so instead of «اعمل ريفرش».
    */
-  onFatal: () => void;
+  onFatal: (reason?: 'rate-limited') => void;
   /** The shell's fullscreen — owned by `VideoLesson`, which wraps this. */
   fullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -303,11 +308,15 @@ export function MirrorVideo({
      * (and `ManagedMediaSource` on an iPhone since iOS 17.1); the native path
      * is kept for the phones that have neither.
      */
-    const playNatively = () => {
+    const playNatively = async () => {
       if (element.canPlayType('application/vnd.apple.mpegurl') === '') {
         onFatal();
         return;
       }
+      // The element's own player fetches the key with no nonce; the key
+      // route only answers that for a lecture this page asked for first.
+      await requestNativeKeyTicket(mirror.hlsUrl);
+      if (disposed) return;
       element.src = mirror.hlsUrl;
       element.playbackRate = preferred;
       onPlayer(adapt(element, trim));
@@ -317,7 +326,7 @@ export function MirrorVideo({
       .then(({ default: Hls }) => {
         if (disposed) return;
         if (!Hls.isSupported()) {
-          playNatively();
+          void playNatively();
           return;
         }
 
@@ -386,7 +395,7 @@ export function MirrorVideo({
             data.details === Hls.ErrorDetails.KEY_LOAD_ERROR ||
             data.details === Hls.ErrorDetails.KEY_LOAD_TIMEOUT
           ) {
-            onFatal();
+            onFatal(data.response?.code === 429 ? 'rate-limited' : undefined);
             return;
           }
           // Fatal network and media errors are recoverable often enough that
@@ -409,7 +418,7 @@ export function MirrorVideo({
       })
       .catch(() => {
         // The chunk itself did not arrive — the element may still manage.
-        if (!disposed) playNatively();
+        if (!disposed) void playNatively();
       });
 
     return () => {

@@ -3671,6 +3671,15 @@ export const copy = {
      */
     videoOurCopyFailed: 'الفيديو مارضيش يشتغل. اعمل ريفرش للصفحة وجرّب تاني.',
     /*
+     * The key route's lectures-per-hour ceiling (`KEY_LECTURES_PER_HOUR`) —
+     * reached only by opening twenty DIFFERENT lectures inside one hour, which
+     * a student watching or revising does not do. Says the wait is short and
+     * that nothing is wrong with the account, and deliberately does NOT say
+     * «اعمل ريفرش»: every reload is one more request.
+     */
+    videoKeyRateLimited:
+      'اتفتح محاضرات كتير من الحساب ده في وقت قصير، فالتشغيل واقف مؤقتًا. المحاضرة هتشتغل تاني عادي خلال ساعة بالكتير.',
+    /*
      * The window between an instructor finishing an upload and the encoder
      * finishing with it — minutes, not hours. It names the wait instead of
      * showing a play button over a video that is not there yet, and it says

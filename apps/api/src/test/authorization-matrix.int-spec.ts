@@ -1986,6 +1986,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // student cannot watch is the same 404 as one that does not exist.
     { label: 'video key: anonymous', method: 'get', path: () => `/api/videos/${'a'.repeat(32)}/key`, actor: 'anonymous', status: 401 },
     { label: 'video key: student, not theirs', method: 'get', path: () => `/api/videos/${'a'.repeat(32)}/key`, actor: 'student', status: 404 },
+    // The iPhone native ticket: same door as the key, so a lecture the
+    // student cannot watch gets the same 404 and no ticket.
+    { label: 'video native ticket: anonymous', method: 'post', path: () => `/api/videos/${'a'.repeat(32)}/native`, actor: 'anonymous', status: 401 },
+    { label: 'video native ticket: student, not theirs', method: 'post', path: () => `/api/videos/${'a'.repeat(32)}/native`, actor: 'student', status: 404 },
     { label: 'admin video library list: anonymous', method: 'get', path: () => `/api/admin/videos`, actor: 'anonymous', status: 401 },
     { label: 'admin video library list: student', method: 'get', path: () => `/api/admin/videos`, actor: 'student', status: 403 },
     { label: 'admin video upload slot: anonymous', method: 'post', path: () => `/api/admin/videos/upload-slot`, actor: 'anonymous', status: 401, body: () => ({ title: 'x' }) },

@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type Hls from 'hls.js';
 import type { LoaderCallbacks, LoaderContext } from 'hls.js';
 import { VIDEO_KEY_NONCE_HEADER, videoKeyMaskMessage } from '@ayman/contracts/video';
-import { unwrapVideoKey, videoKeyLoader } from './video-key-loader';
+import { requestNativeKeyTicket, unwrapVideoKey, videoKeyLoader } from './video-key-loader';
 
 const ID = 'a'.repeat(32);
 const KEY = Buffer.alloc(16, 7);
@@ -61,5 +61,32 @@ describe('videoKeyLoader', () => {
     const context = { url: 'https://video.x.com/abc/0/seg_000.ts', responseType: 'arraybuffer' } as unknown as LoaderContext;
     expect(await load(Hls, context)).toBe(body);
     expect(seen[0]!.headers).toBeUndefined();
+  });
+});
+
+describe('requestNativeKeyTicket', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the site origin for a ticket for an uploaded lecture, with the CSRF header', async () => {
+    const calls: Array<[string, RequestInit]> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push([url, init]);
+      return new Response(null, { status: 204 });
+    });
+    await requestNativeKeyTicket(`https://video.example.test/v/${ID}/master.m3u8`);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![0]).toBe(`/api/videos/${ID}/native`);
+    expect(calls[0]![1].method).toBe('POST');
+    expect(Object.keys(calls[0]![1].headers as Record<string, string>)).toContain('x-csrf-token');
+  });
+
+  it('asks nothing for a YouTube mirror, and never throws when the network does', async () => {
+    const fetchSpy = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    await requestNativeKeyTicket('https://video.example.test/v/WndSPGcPmfM/master.m3u8');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await expect(requestNativeKeyTicket(`https://video.example.test/v/${ID}/master.m3u8`)).resolves.toBeUndefined();
   });
 });

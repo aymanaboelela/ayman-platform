@@ -1,6 +1,14 @@
 import type Hls from 'hls.js';
 import type { HlsConfig, Loader, LoaderCallbacks, LoaderConfiguration, LoaderContext } from 'hls.js';
-import { VIDEO_KEY_NONCE_HEADER, videoIdFromKeyUri, videoKeyMaskMessage } from '@ayman/contracts/video';
+import {
+  VIDEO_KEY_NONCE_HEADER,
+  videoIdFromHlsUrl,
+  videoIdFromKeyUri,
+  videoKeyMaskMessage,
+  videoNativeTicketPath,
+} from '@ayman/contracts/video';
+import { resolve } from '@/lib/api';
+import { CSRF_HEADER, readCsrfToken } from '@/lib/csrf';
 
 /**
  * The client half of the wrapped key — see `videoKeyMaskMessage` in contracts
@@ -66,4 +74,28 @@ export function videoKeyLoader(HlsClass: typeof Hls): LoaderClass {
       });
     }
   };
+}
+
+/**
+ * The native ticket — call it right before handing `hlsUrl` to a `<video>`
+ * element's OWN HLS player (an iPhone with no ManagedMediaSource: iOS before
+ * 17.1, or an in-app browser).
+ *
+ * That player fetches an encrypted lecture's key itself, with no nonce and
+ * nothing to unwrap with, so the key route gives it the plain key — but only
+ * for a lecture this page asked for first (`isLegacyNativeHlsClient` in
+ * contracts). Without this call an iPhone on the native path gets a 404 and
+ * the lecture never starts.
+ *
+ * Never throws: a plain lecture, a YouTube mirror, or a refused ticket all
+ * leave the player to fail (or not) exactly as it would have.
+ */
+export async function requestNativeKeyTicket(hlsUrl: string): Promise<void> {
+  const videoId = videoIdFromHlsUrl(hlsUrl);
+  if (videoId === null) return;
+  await fetch(resolve(videoNativeTicketPath(videoId)), {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { [CSRF_HEADER]: readCsrfToken() },
+  }).catch(() => undefined);
 }

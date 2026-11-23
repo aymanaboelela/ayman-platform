@@ -734,7 +734,8 @@ export function uploadPartCount(sizeBytes: number): number {
  * Now the key route answers our player only: the player sends a fresh random
  * nonce in `VIDEO_KEY_NONCE_HEADER`, and gets the key XORed with
  * SHA-256(`videoKeyMaskMessage(id, nonce)`)[0..16]. A request without the
- * header gets a 404 — except from an iPhone, see `isLegacyNativeHlsClient`.
+ * header gets a 404 — except from an iPhone holding a native ticket, see
+ * `isLegacyNativeHlsClient`.
  *
  * ⚠️ This is NOT cryptography against the student — the player has to know
  * how to unwrap, so anyone who reads our JavaScript can too. It is what turns
@@ -762,10 +763,38 @@ export function videoIdFromKeyUri(uri: string): string | null {
  * run hls.js and plays HLS itself — before iOS 17.1 there is no
  * ManagedMediaSource, so Safari's own player fetches the key, and it can send
  * neither a header nor unwrap anything. The owner's call (2026-11-14): those
- * students keep watching, knowingly at the price of a door that a spoofed
- * User-Agent opens. In-app browsers on an iPhone fall here too, which is why
- * this is not narrowed to an OS version.
+ * students keep watching. In-app browsers on an iPhone fall here too, which
+ * is why this is not narrowed to an OS version.
+ *
+ * ⚠️ The User-Agent alone is NOT the door any more (2026-11-23). On its own it
+ * made the wrap pointless: `yt-dlp --user-agent iPhone` plus the student's
+ * cookie got the plain key, no player reading required. Now an iPhone also
+ * needs a native ticket for that video — `POST videoNativeTicketPath(id)`,
+ * sent by our page's JavaScript right before it hands the playlist to the
+ * element (`playNatively` in `mirror-video.tsx`). Safari's own player cannot
+ * send a header, but the page beside it can ask first. A downloader now has
+ * to find and script that call, which is the same bar the nonce sets.
  */
 export function isLegacyNativeHlsClient(userAgent: string | undefined): boolean {
   return userAgent !== undefined && /\b(iPhone|iPod)\b/.test(userAgent);
+}
+
+/**
+ * Where the page asks for a native ticket before an iPhone's own player
+ * fetches an uploaded lecture's key. Site origin, cookie, CSRF header — a
+ * POST like any other write, so a cross-site page cannot mint one.
+ */
+export function videoNativeTicketPath(videoId: string): string {
+  return `/api/videos/${videoId}/native`;
+}
+
+/**
+ * The upload id inside a playlist URL our pipeline publishes
+ * (`https://<video origin>/v/<id>/master.m3u8`), or `null` for anything else —
+ * a YouTube mirror's 11-character id included, since its key (if any) is not
+ * on our key route.
+ */
+export function videoIdFromHlsUrl(url: string): string | null {
+  const match = /\/v\/([0-9a-f]{32})\/[^/]+\.m3u8(?:$|[?#])/.exec(url);
+  return match?.[1] ?? null;
 }

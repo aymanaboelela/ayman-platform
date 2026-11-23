@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isLegacyNativeHlsClient, videoIdFromKeyUri, videoKeyMaskMessage, VIDEO_KEY_NONCE_RE } from './video';
+import {
+  isLegacyNativeHlsClient,
+  videoIdFromHlsUrl,
+  videoIdFromKeyUri,
+  videoKeyMaskMessage,
+  videoNativeTicketPath,
+  VIDEO_KEY_NONCE_RE,
+} from './video';
 
 const ID = 'a'.repeat(32);
 
@@ -29,5 +36,16 @@ describe('the wrapped video key contract', () => {
     expect(isLegacyNativeHlsClient('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0 Safari/537.36')).toBe(false);
     expect(isLegacyNativeHlsClient('yt-dlp/2026.10.01')).toBe(false);
     expect(isLegacyNativeHlsClient(undefined)).toBe(false);
+  });
+
+  it('reads the upload id out of a published playlist URL, and not a YouTube mirror\'s', () => {
+    expect(videoIdFromHlsUrl(`https://video.x.com/v/${ID}/master.m3u8`)).toBe(ID);
+    expect(videoIdFromHlsUrl(`https://video.x.com/v/${ID}/0/index.m3u8`)).toBeNull();
+    expect(videoIdFromHlsUrl('https://video.x.com/v/WndSPGcPmfM/master.m3u8')).toBeNull();
+    expect(videoIdFromHlsUrl(`https://video.x.com/v/${ID}/seg_000.ts`)).toBeNull();
+  });
+
+  it('asks for the native ticket on the site origin, beside the key', () => {
+    expect(videoNativeTicketPath(ID)).toBe(`/api/videos/${ID}/native`);
   });
 });
