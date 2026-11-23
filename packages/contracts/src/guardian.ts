@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { GUARDIAN_CODE_ALPHABET, GUARDIAN_CODE_LENGTH } from '@ayman/contracts/guardian-code';
 
 /**
  * «كود ولي الأمر» — ٦ خانات: حروف وأرقام ورموز، وكل كود فيه واحد من كل نوع.
@@ -12,8 +13,7 @@ import { z } from '@ayman/contracts/zod';
  * صغير، وكود صح مكتوب بحروف صغيرة كان هيترفض — وهو نفس الكود بالظبط.
  * والمسافات بتتشال لأن النسخ واللصق بيجيب واحدة في الآخر كتير.
  */
-export const GUARDIAN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789@#$%&*+=?';
-export const GUARDIAN_CODE_LENGTH = 6;
+export { GUARDIAN_CODE_ALPHABET, GUARDIAN_CODE_LENGTH } from '@ayman/contracts/guardian-code';
 
 /** The alphabet as a regex character class — the symbols need escaping. */
 const GUARDIAN_CODE_SHAPE = new RegExp(
