@@ -16,7 +16,7 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
     startLevel: number;
     bandwidthEstimate: number;
     config: Record<string, unknown>;
-    handlers: Record<string, () => void>;
+    handlers: Record<string, (...args: unknown[]) => void>;
   }> = [];
   class FakeHls {
     static isSupported() {
@@ -32,7 +32,7 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
     nextLevel = -1;
     startLevel = 0;
     bandwidthEstimate = 0;
-    handlers: Record<string, () => void> = {};
+    handlers: Record<string, (...args: unknown[]) => void> = {};
     config: Record<string, unknown>;
     constructor(config: Record<string, unknown>) {
       built.push(config);
@@ -40,7 +40,7 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
       this.config = { ...config };
       instances.push(this);
     }
-    on(event: string, handler: () => void) {
+    on(event: string, handler: (...args: unknown[]) => void) {
       this.handlers[event] = handler;
     }
     loadSource() {}
@@ -286,5 +286,27 @@ describe('MirrorVideo opens on the rung this device can carry', () => {
     expect(store.get('ayman:player:bandwidth')).toBeUndefined();
     await act(async () => hls.handlers.fragLoaded?.());
     expect(JSON.parse(store.get('ayman:player:bandwidth') ?? 'null')).toMatchObject({ bps: 6_000_000 });
+  });
+
+  it('tells the lesson a 429 on the key is the hourly pause, not a broken lecture', async () => {
+    const reasons: unknown[] = [];
+    render(
+      <MirrorVideo
+        mirror={{ hlsUrl: 'https://video.example.test/v/abc/master.m3u8', maxHeight: 1080 }}
+        title="How AI Works"
+        posterUrl={null}
+        startAt={0}
+        onPlayer={() => {}}
+        onFatal={(reason) => reasons.push(reason)}
+        fullscreen={false}
+        onToggleFullscreen={() => {}}
+        watermark={null}
+      />,
+    );
+    await act(async () => {});
+    const hls = instances[0]!;
+    act(() => hls.handlers.error!('error', { fatal: true, details: 'keyLoadError', response: { code: 429 } }));
+    act(() => hls.handlers.error!('error', { fatal: true, details: 'keyLoadError', response: { code: 404 } }));
+    expect(reasons).toEqual(['rate-limited', undefined]);
   });
 });

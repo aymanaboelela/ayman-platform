@@ -51,7 +51,7 @@ type LockableOrientation = ScreenOrientation & {
  * Only `script` is worth retrying — the other two are properties of the video
  * on YouTube's side and will fail identically a second later.
  */
-type VideoFailure = 'embedBlocked' | 'removed' | 'unknown' | 'ourCopyFailed';
+type VideoFailure = 'embedBlocked' | 'removed' | 'unknown' | 'ourCopyFailed' | 'keyRateLimited';
 
 const FAILURE_COPY: Record<VideoFailure, string> = {
   embedBlocked: copy.player.videoEmbedBlocked,
@@ -68,6 +68,8 @@ const FAILURE_COPY: Record<VideoFailure, string> = {
    * genuinely clears them.
    */
   ourCopyFailed: copy.player.videoOurCopyFailed,
+  /* The key route's hourly ceiling — a pause, not a fault; see the copy. */
+  keyRateLimited: copy.player.videoKeyRateLimited,
 };
 
 /**
@@ -934,8 +936,14 @@ export function VideoLesson({
           fullscreen={fullscreen}
           onToggleFullscreen={toggleFullscreen}
           watermark={watermark}
-          onFatal={() => {
+          onFatal={(reason) => {
             setMirrorFailed(true);
+            if (reason === 'rate-limited') {
+              // Only an uploaded lecture's key can be refused, and it has no
+              // YouTube behind it — say it is a pause, not a fault.
+              setFailure('keyRateLimited');
+              return;
+            }
             if (isUpload) {
               // Nowhere to go. This lecture is ours and only ours, so the
               // panel names that instead of quietly trying a YouTube video

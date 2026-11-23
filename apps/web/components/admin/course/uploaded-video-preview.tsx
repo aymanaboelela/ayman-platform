@@ -6,7 +6,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { posterBesidePlaylist } from '@ayman/contracts/video';
 import { videoPreviewUrlAction } from '@/app/(admin)/admin/courses/actions';
 import { HLS_CONFIG } from '@/components/player/mirror-video';
-import { videoKeyLoader } from '@/components/player/video-key-loader';
+import { requestNativeKeyTicket, videoKeyLoader } from '@/components/player/video-key-loader';
 
 const c = copy.admin.lesson;
 
@@ -85,6 +85,9 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
         instance.loadSource(url);
         instance.attachMedia(element);
       } else {
+        // An iPhone's own player — see `requestNativeKeyTicket`.
+        await requestNativeKeyTicket(url);
+        if (!live) return;
         element.src = url;
       }
       // Pressing «تشغيل» IS the gesture; a browser that still refuses leaves the controls.

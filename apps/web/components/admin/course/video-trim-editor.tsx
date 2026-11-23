@@ -8,7 +8,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import { effectiveSeconds, trimProblem, type VideoCut, type VideoTrim } from '@ayman/contracts/video';
 import { cn } from '@ayman/ui/lib/cn';
 import { setVideoTrimAction, videoPreviewUrlAction } from '@/app/(admin)/admin/courses/actions';
-import { videoKeyLoader } from '@/components/player/video-key-loader';
+import { requestNativeKeyTicket, videoKeyLoader } from '@/components/player/video-key-loader';
 
 const c = copy.admin.lesson;
 
@@ -73,6 +73,9 @@ export function VideoTrimEditor({
         instance.loadSource(url);
         instance.attachMedia(element);
       } else {
+        // An iPhone's own player — see `requestNativeKeyTicket`.
+        await requestNativeKeyTicket(url);
+        if (!live) return;
         element.src = url;
       }
     })();
