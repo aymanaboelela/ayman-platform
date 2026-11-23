@@ -530,6 +530,18 @@
   color: rgb(255 255 255 / 0.78);
 }
 
+/* Two lines reserved on a phone. The fallback face is narrower than Plex
+   Arabic, so a subtitle that fits one line on first paint wraps to two when
+   the real face swaps in (`display: swap`, no preload — `lib/fonts.ts`) —
+   at 5.6 s on Slow 4G. Everything below moved with it: the overlapping card
+   jumped 27px, CLS 0.25 on its own (measured 2026-11-23, 412px). A floor,
+   not a height, so a longer subtitle still grows. */
+@media (max-width: 48rem) {
+  .course-hero__sub {
+    min-height: 2lh;
+  }
+}
+
 .course-detail {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);

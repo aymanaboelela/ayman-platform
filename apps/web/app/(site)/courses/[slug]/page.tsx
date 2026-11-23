@@ -300,9 +300,16 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 and the cover is a designed poster, so cropping it took the top
                 off the course's own title on the page that names the course.
               */
+              /*
+                `priority`: on a phone this cover IS the largest paint — the
+                aside sits ~355px down, inside the first screen. Lazy, it was
+                discovered only after layout and landed at 5.3 s on Slow 4G
+                (LCP 7.0 s, Lighthouse mobile, 2026-11-23).
+              */
               <CourseCover
                 coverKey={course.coverKey}
                 sizes="(min-width: 1400px) 500px, (min-width: 1024px) 37vw, 92vw"
+                priority
               />
             ) : (
               <span className="course-card__thumb-mark" aria-hidden="true">

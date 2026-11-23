@@ -1,6 +1,7 @@
 import { brandImage } from '@/lib/brand-image';
 import { getBranding } from '@/lib/settings';
 import { ThemedImage } from '@/components/themed-image';
+import { StillOffscreen } from '@/components/motion/still-offscreen';
 import { Brain, Check, Flame, Lightbulb, Sparkles, Trophy } from 'lucide-react';
 
 /** Rising embers — positions and timings vary per child in `practice.css`. */
@@ -18,14 +19,15 @@ const EMBERS = 14;
  * Shared by the landing-page invite and the `/practice` hero so the two never
  * drift. Decorative as a whole (`aria-hidden`); the section's own heading
  * says what it is. Every animation is CSS and stops under
- * `prefers-reduced-motion`. Without the photo (a stack that is not Ayman's)
+ * `prefers-reduced-motion` — and while the showcase is off screen
+ * (`<StillOffscreen>`). Without the photo (a stack that is not Ayman's)
  * the frame holds a designed gradient instead.
  */
 export async function PracticeShowcase({ priority = false }: { priority?: boolean }) {
   // An upload from «الهوية البصرية» first, his file second — `brandImage()`.
   const photo = brandImage(await getBranding(), 'practiceGuide');
   return (
-    <div className="practice-show" aria-hidden="true">
+    <StillOffscreen className="practice-show">
       <span className="practice-show__glow" />
       <div className="practice-show__frame">
         <div className="practice-show__window">
@@ -65,6 +67,6 @@ export async function PracticeShowcase({ priority = false }: { priority?: boolea
       <span className="practice-bubble practice-bubble--flame">
         <Flame size={18} />
       </span>
-    </div>
+    </StillOffscreen>
   );
 }

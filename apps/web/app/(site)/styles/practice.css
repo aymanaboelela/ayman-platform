@@ -173,6 +173,14 @@
 
 /* ── showcase: the photo in motion ────────────────────────────────────── */
 
+/* Every loop below reads `--practice-play` after its `animation` shorthand
+   (which would otherwise reset the play state). `<StillOffscreen>` writes
+   `data-still` while the showcase is off screen — and in the server HTML —
+   so the 23 loops cost nothing where nobody can see them. */
+.practice-show[data-still] {
+  --practice-play: paused;
+}
+
 .practice-show {
   position: relative;
   display: grid;
@@ -190,6 +198,7 @@
     radial-gradient(circle at 75% 65%, color-mix(in oklab, var(--color-warn) 45%, transparent), transparent 60%);
   filter: blur(28px);
   animation: practice-breathe 5s ease-in-out infinite alternate;
+  animation-play-state: var(--practice-play, running);
   will-change: opacity;
 }
 
@@ -219,6 +228,7 @@
     var(--site-accent-solid)
   );
   animation: practice-spin 6s linear infinite;
+  animation-play-state: var(--practice-play, running);
 }
 
 .practice-show__window {
@@ -236,6 +246,7 @@
   object-fit: cover;
   /* A slow push-in and drift, so the dragon is always flying. */
   animation: practice-kenburns 14s ease-in-out infinite alternate;
+  animation-play-state: var(--practice-play, running);
   transform-origin: 30% 60%;
 }
 
@@ -253,6 +264,7 @@
   background: linear-gradient(115deg, transparent 35%, color-mix(in oklab, var(--site-card) 45%, transparent) 50%, transparent 65%);
   transform: translateX(-120%);
   animation: practice-shine 5.5s ease-in-out infinite;
+  animation-play-state: var(--practice-play, running);
   mix-blend-mode: soft-light;
 }
 
@@ -273,6 +285,7 @@
   box-shadow: 0 0 10px 2px color-mix(in oklab, var(--color-warn) 70%, transparent);
   opacity: 0;
   animation: practice-ember 4.5s ease-out infinite;
+  animation-play-state: var(--practice-play, running);
 }
 
 .practice-show__embers i:nth-child(1) { inset-inline-start: 6%; animation-delay: 0s; }
@@ -302,6 +315,7 @@
   color: var(--site-on-accent);
   box-shadow: var(--site-shadow-md);
   animation: practice-bob 4.5s ease-in-out infinite alternate;
+  animation-play-state: var(--practice-play, running);
 }
 
 .practice-bubble--check {

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { RegisterSchema, type Register } from '@ayman/contracts/auth';
+import { useForm, type Resolver } from 'react-hook-form';
+import type { Register } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -17,6 +16,23 @@ import { useTurnstile } from '@/lib/turnstile';
 import { withNext } from '@/lib/safe-next';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
+
+/**
+ * zod and the auth schemas load when the form mounts, for the reason
+ * `login-form.tsx` gives: every public page prefetches `/register` (header,
+ * hero, footer), and a static import made that prefetch download all of zod
+ * on every landing visit. Same `RegisterSchema`, same `zodResolver`.
+ */
+const loadAuthSchemas = () => import('@ayman/contracts/auth');
+const loadZodResolver = () => import('@hookform/resolvers/zod');
+
+const registerResolver: Resolver<Register> = async (values, context, options) => {
+  const [{ RegisterSchema }, { zodResolver }] = await Promise.all([
+    loadAuthSchemas(),
+    loadZodResolver(),
+  ]);
+  return zodResolver(RegisterSchema)(values, context, options);
+};
 
 /** `next` comes from the page's Server Component — see `LoginForm`'s note. */
 export function RegisterForm({
@@ -35,7 +51,12 @@ export function RegisterForm({
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<Register>({ resolver: zodResolver(RegisterSchema) });
+  } = useForm<Register>({ resolver: registerResolver });
+
+  useEffect(() => {
+    // Warm-up only: a failure here resurfaces at the first validation.
+    for (const load of [loadAuthSchemas, loadZodResolver]) load().catch(() => {});
+  }, []);
 
   async function onSubmit(values: Register) {
     setFormError(null);
