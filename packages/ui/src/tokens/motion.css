@@ -29,8 +29,9 @@
 
    `data-fx="lite"` is written on <html> before first paint by the prepaint
    script (apps/web/lib/security/prepaint-script.ts, `FX_MODE`) and changed
-   afterwards by apps/web/lib/weak-device.ts: the visitor's own «الوضع الخفيف»
-   choice, else the hardware hints, else a measured frame rate. Reported by a
+   afterwards by apps/web/lib/weak-device.ts: a pinned `fx:mode` (e2e and
+   DevTools only, no UI writes it), else the hardware hints, else a measured
+   frame rate. Reported by a
    student: «كل ما افتح المنصة الاقي الجهاز علق من كتر الانميشن».
 
    - The four motion lines are the reduced-motion backstop above, verbatim, so

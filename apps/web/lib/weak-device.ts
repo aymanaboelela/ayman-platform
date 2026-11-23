@@ -30,13 +30,14 @@ import {
  * cursor trail turns every mouse movement into stutter, on every page,
  * including quizzes.
  *
- * ## 3. And what the visitor said — which beats both
+ * ## 3. A pin — which beats both
  *
- * Hints guess and the watchdog can only judge what it measured, so either can
- * be wrong about one particular machine: a weak laptop whose figures look fine,
- * or the owner's own Mac caught in one bad minute. `fx:mode` (`lite` | `full`)
- * is the visitor's own answer, written by `<FxToggle>`, and once it exists no
- * hint or measurement overrides it.
+ * `fx:mode` (`lite` | `full`) in localStorage, when present, decides, and no
+ * hint or measurement overrides it. Nothing in the UI writes it: there was a
+ * «الوضع الخفيف» switch for one day, and the owner took it out — the platform
+ * decides by itself, it is not the student's job (2026-11-23). So the key is a
+ * pin for the e2e suite (`playwright.config.ts`; CI runners have ≤4 cores and
+ * would trip the hints) and for checking either look by hand from DevTools.
  *
  * ## One decision, three readers
  *
@@ -44,7 +45,8 @@ import {
  * before first paint and writes `data-fx="lite"` on `<html>`, which is what the
  * stylesheet's lite backstop (`packages/ui/src/tokens/motion.css`) reads; the
  * hooks below drive the JS effects; `isFxLite()` answers imperative code. Every
- * change (`setFxMode`, `markDeviceTooSlow`) updates all three in the same tick.
+ * change (`markDeviceTooSlow`, another tab's storage event) updates all three
+ * in the same tick.
  */
 
 const STORAGE_KEY = FX_VERDICT_KEY;
@@ -57,7 +59,7 @@ const STORAGE_KEY = FX_VERDICT_KEY;
  */
 export const MEASURED_VERDICT_TTL_MS = FX_VERDICT_TTL_MS;
 
-/** The visitor's explicit choice. `null` = never chosen, the machine decides. */
+/** The pin (`fx:mode`). `null` = none, the machine decides. */
 export type FxMode = 'lite' | 'full';
 
 export interface DeviceHints {
@@ -181,7 +183,7 @@ function notify(): void {
   for (const listener of listeners) listener();
 }
 
-/** A change made in another tab (the toggle, or a verdict) lands here too. */
+/** A change made in another tab (a verdict) lands here too. */
 function onStorage(event: StorageEvent): void {
   if (event.key !== null && event.key !== FX_MODE_KEY && event.key !== STORAGE_KEY) return;
   cached = compute();
@@ -209,7 +211,7 @@ export function useWeakDevice(): boolean {
 }
 
 // The opposite default, for things that change what a normal machine RENDERS
-// (the motion config, the toggle's state): the server HTML is the full-effects
+// (the motion config): the server HTML is the full-effects
 // page, and a lite machine switches after hydration — while its stylesheet has
 // already been lite since first paint, from the prepaint script.
 const fullOnServer = () => false;
@@ -219,7 +221,7 @@ export function useFxLite(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, fullOnServer);
 }
 
-/** The visitor's explicit choice, or `null` if they never made one. Client only. */
+/** The pin, or `null` if there is none. Client only. */
 export function readFxMode(): FxMode | null {
   return parseFxMode(readKey(FX_MODE_KEY));
 }
@@ -230,31 +232,12 @@ export function isFxLite(): boolean {
 }
 
 /**
- * The visitor's own choice, from `<FxToggle>`. Permanent until changed again —
- * and it also clears a measured verdict when they ask for FULL, so taking the
- * effects back is not undone a week later by a stale measurement.
- */
-export function setFxMode(mode: FxMode): void {
-  writeKey(FX_MODE_KEY, mode);
-  if (mode === 'full') {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Nothing to clear.
-    }
-  }
-  cached = mode === 'lite';
-  applyAttribute(cached);
-  notify();
-}
-
-/**
  * Called by an effect that measured itself and found the machine too slow.
  * Every subscriber flips to "lite" in the same tick, so the other heavy layers
  * on the page go with it rather than waiting for the next load.
  *
- * A visitor who chose FULL has overruled the measurement in advance: nothing
- * changes and nothing is stored.
+ * A FULL pin has overruled the measurement in advance: nothing changes and
+ * nothing is stored.
  */
 export function markDeviceTooSlow(): void {
   if (readFxMode() === 'full') return;

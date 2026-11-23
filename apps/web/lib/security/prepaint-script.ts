@@ -247,7 +247,8 @@ export const STREAM_ID_GUARD =
  * `prepaint-script.test.ts` runs this string against `decideLite` over the
  * whole matrix, so the two cannot drift):
  *
- *   1. The visitor's own choice wins: `fx:mode` = `lite` | `full`.
+ *   1. A pin wins: `fx:mode` = `lite` | `full` (no UI writes it — the e2e
+ *      suite and DevTools do).
  *   2. Otherwise the hardware hints: Save-Data, `deviceMemory <= 4`,
  *      `hardwareConcurrency <= 4`.
  *   3. Otherwise a fresh measured verdict: `fx:weak-device` holds the epoch-ms a

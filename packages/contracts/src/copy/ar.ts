@@ -500,13 +500,6 @@ export const copy = {
     dark: 'داكن',
     system: 'حسب النظام',
   },
-  /** «الوضع الخفيف» — fewer animations for a weak machine (`components/fx-toggle.tsx`). */
-  fx: {
-    label: 'الوضع الخفيف',
-    hint: 'أنيميشن أقل عشان الأجهزة الضعيفة',
-    on: 'شغّال',
-    off: 'مقفول',
-  },
   onboarding: {
     title: 'نكمّل بيانات حسابك',
     subtitle: 'شوية معلومات سريعة عشان نعرف نوريك الكورسات اللي تخصّك إنت بس',
