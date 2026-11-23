@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
-import { GUARDIAN_CODE_LENGTH } from '@ayman/contracts/guardian';
+// Not `/guardian`: that module builds the zod schema (see guardian-code.ts).
+import { GUARDIAN_CODE_LENGTH } from '@ayman/contracts/guardian-code';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
