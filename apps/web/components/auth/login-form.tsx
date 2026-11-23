@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { LoginSchema, resolveLoginIdentifier, type Login } from '@ayman/contracts/auth';
+import { useForm, type Resolver } from 'react-hook-form';
+import type { Login } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
 import { passwordResetCopy } from '@ayman/contracts/copy/password-reset';
 import { formatCopy } from '@ayman/contracts/format';
@@ -17,9 +16,38 @@ import {
   signInWithEmail,
   signInWithPhone,
 } from '@/lib/auth-client';
-import { resolvePostLoginDestination } from '@/lib/onboarding-redirect';
+import { withNext } from '@/lib/safe-next';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
+
+/**
+ * zod, the auth schemas (with libphonenumber's Egypt metadata behind them) and
+ * the post-login redirect load when this form MOUNTS — never as static imports.
+ *
+ * Every public page links to `/login` (the header's «دخول»), Next prefetches a
+ * route as soon as its link is on screen, and React's Flight client preloads
+ * every client module a prefetched payload names. Static imports here put the
+ * whole zod library on the landing page's network tab for every visitor —
+ * Lighthouse mobile, 2026-11-23: an 89 KB-gzip zod chunk, all of it unused on
+ * the page that downloaded it. A prefetch never mounts anything, so the
+ * effect below is exactly the line between "might come here" and "is here".
+ *
+ * Validation is unchanged: the same `LoginSchema` through the same
+ * `zodResolver`, reached through `import()`. The mount effect warms all three
+ * chunks, so they are cached long before a password is typed; a submit that
+ * beats them just waits for them. `register-form.tsx` does the same.
+ */
+const loadAuthSchemas = () => import('@ayman/contracts/auth');
+const loadZodResolver = () => import('@hookform/resolvers/zod');
+const loadPostLogin = () => import('@/lib/onboarding-redirect');
+
+const loginResolver: Resolver<Login> = async (values, context, options) => {
+  const [{ LoginSchema }, { zodResolver }] = await Promise.all([
+    loadAuthSchemas(),
+    loadZodResolver(),
+  ]);
+  return zodResolver(LoginSchema)(values, context, options);
+};
 
 /**
  * What the form is refusing with, and whether the way out is a WhatsApp
@@ -83,7 +111,12 @@ export function LoginForm({
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<Login>({ resolver: zodResolver(LoginSchema) });
+  } = useForm<Login>({ resolver: loginResolver });
+
+  useEffect(() => {
+    // Warm-up only: a failure here resurfaces, and is handled, at the real call.
+    for (const load of [loadAuthSchemas, loadZodResolver, loadPostLogin]) load().catch(() => {});
+  }, []);
 
   async function onSubmit(values: Login) {
     setFormError(null);
@@ -99,6 +132,7 @@ export function LoginForm({
        * other wrong credential, instead of a client-side branch that "wrong
        * password" does not have (S1).
        */
+      const { resolveLoginIdentifier } = await loadAuthSchemas();
       const identifier = resolveLoginIdentifier(values.identifier);
       await (identifier.kind === 'phone'
         ? signInWithPhone({ phoneNumber: identifier.value, password: values.password })
@@ -183,7 +217,13 @@ export function LoginForm({
       setFormError({ message: copy.auth.errors.login, contactTeacher: false });
       return;
     }
-    const destination = await resolvePostLoginDestination(next);
+    // The session already exists by now, so a chunk that will not load must
+    // not strand the student on this form: fail toward onboarding, the same
+    // way `resolvePostLoginDestination` itself fails when its API check does.
+    const destination = await loadPostLogin().then(
+      ({ resolvePostLoginDestination }) => resolvePostLoginDestination(next),
+      () => withNext('/onboarding', next),
+    );
 
     // A FULL page navigation, not `router.replace` — the mirror image of the
     // rule `auth-client.ts`'s `signOut` already documents, and for the same

@@ -810,8 +810,12 @@
     align-content: flex-start;
   }
 
+  /* Two lines (2 × 1.12em) PLUS `.hero__rotate`'s `padding-block: 0.08em`
+     top and bottom. At a bare 2.24em a one-line phrase sat inside the reserve
+     but a two-line one overflowed it by those 0.16em — ~5px — so the hero body
+     shifted on every rotation, forever (CLS 0.03–0.04 each, 2026-11-23). */
   .hero__title .hero__title-accent {
-    min-height: 2.24em;
+    min-height: calc(2.24em + 0.16em);
   }
 }
 
@@ -4823,12 +4827,16 @@
   }
 
   .hero .hero__eyebrow,
-  .hero .hero__lead,
   .hero .hero__cta {
     animation: land-rise 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  .hero .hero__title > span {
+  /* The lead rises SOLID, like the title. It is the page's largest paint on
+     a phone, and an element at `opacity: 0` is not a paint at all — the
+     fade-in from a 320ms delay pushed LCP to whenever the animation got its
+     first frame on a busy main thread (render delay 7.4 s simulated). */
+  .hero .hero__title > span,
+  .hero .hero__lead {
     animation: land-rise-solid 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
