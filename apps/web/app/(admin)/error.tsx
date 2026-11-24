@@ -1,6 +1,7 @@
 'use client';
 
 import { copy } from '@ayman/contracts/copy/admin';
+import { ADMIN_FORBIDDEN_DIGEST } from '@/lib/admin-forbidden-digest';
 import { useErrorReport } from '@/lib/report-error';
 import { useErrorRetry } from '@/lib/use-error-retry';
 
@@ -42,6 +43,35 @@ export default function AdminError({
 }) {
   useErrorReport(error);
   const { retry, retrying, waiting } = useErrorRetry(error, reset);
+
+  /*
+   * «Not yours», said as that. A retry button and «الصفحة وقعت» over a 403 told
+   * an owner the screen was broken when it was the account's grants — and the
+   * retry could never work. No digest line either: there is nothing in the
+   * server log to look up. `ADMIN_FORBIDDEN_DIGEST`.
+   */
+  if (error.digest === ADMIN_FORBIDDEN_DIGEST) {
+    return (
+      <div className="mx-auto w-full max-w-[76rem]">
+        <div className="panel space-y-3 p-5 sm:p-6">
+          <h1 className="text-[length:var(--fs-title-3)] font-medium text-fg">
+            {copy.admin.error.forbiddenTitle}
+          </h1>
+          <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
+            {copy.admin.error.forbiddenBody}
+          </p>
+          <div className="pt-1">
+            <a
+              href="/admin"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-line px-4 text-[length:var(--fs-text-sm)] text-fg transition-colors duration-[160ms] hover:bg-surface-3"
+            >
+              {copy.admin.nav.overview}
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[76rem]">

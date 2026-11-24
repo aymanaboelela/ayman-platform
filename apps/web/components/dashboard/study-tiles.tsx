@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { STUDENT_NAV } from '@/components/app/student-nav-items';
+import { getFlags, stackFlag } from '@/lib/flags';
 
 /**
  * «المذاكرة والتحديات» on the dashboard — every study and challenge page this
@@ -25,12 +26,17 @@ const HUES = [35, 250, 295, 150, 75, 210, 340, 190, 20, 270, 120, 55] as const;
  */
 const ON_TODAY_STRIP = new Set(['/daily', '/plan', '/focus', '/cards', '/league', '/badges']);
 
-export function StudyTiles({ features, title }: { features: Entitlements; title: string }) {
+export async function StudyTiles({ features, title }: { features: Entitlements; title: string }) {
+  // The flag-gated rows («ساحة التحدي», «دفتر غلطاتي») too — the rail reads
+  // them through its slot, and a tile the rail hides is a door to a closed
+  // page. `getFlags` is `'use cache'` on one tag, shared with that slot.
+  const flags = await getFlags();
   const items = STUDENT_NAV.filter(
     (item) =>
       (item.group === 'study' || item.group === 'play') &&
       !ON_TODAY_STRIP.has(item.href) &&
-      (item.feature === undefined || features[item.feature]),
+      (item.feature === undefined || features[item.feature]) &&
+      (item.flag === undefined || stackFlag(flags, item.flag)),
   );
   if (items.length === 0) return null;
 

@@ -71,7 +71,7 @@ export function DrawerMenu({
   const active = activeStudentNav(pathname);
   const allowed = useStudentFeatureGate();
 
-  const shown = (item: StudentNavItem) => allowed(item.feature);
+  const shown = (item: StudentNavItem) => allowed(item);
   const tabs = STUDENT_TABS.filter(shown);
 
   /*

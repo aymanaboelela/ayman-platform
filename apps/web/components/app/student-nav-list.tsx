@@ -75,7 +75,7 @@ export function StudentNavList({
   const [pressed, setPressed] = useState<Record<string, boolean>>({});
 
   const items = STUDENT_NAV.filter((item) => {
-    if (item.footer || !allowed(item.feature)) return false;
+    if (item.footer || !allowed(item)) return false;
     if (only === 'tabs') return item.tab === true;
     if (only === 'rest') return item.tab !== true;
     return true;
@@ -183,7 +183,7 @@ export function StudentNavFooterList({ onNavigate }: { onNavigate?: () => void }
 
   return (
     <ul className="flex flex-col gap-1">
-      {STUDENT_NAV.filter((item) => item.footer && allowed(item.feature)).map((item) => {
+      {STUDENT_NAV.filter((item) => item.footer && allowed(item)).map((item) => {
         const isActive = active?.href === item.href;
         return (
           <li key={item.href}>

@@ -4,7 +4,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { arenaCopy } from '@ayman/contracts/copy/arena';
 import { cn } from '@ayman/ui/lib/cn';
 import { can, getSession } from '@/lib/session';
-import { IS_AYMAN } from '@/lib/tenant';
+import { flagEnabled } from '@/lib/flags';
 
 const c = copy.admin.games;
 
@@ -14,16 +14,17 @@ const c = copy.admin.games;
  * والتبويب اللي هيفتح على 403 مابيظهرش أصلًا — نفس قاعدة `AnalyticsNav`.
  */
 export async function GamesTabs({ active }: { active: 'questions' | 'stats' | 'arena' }) {
-  const session = await getSession();
+  const [session, arenaOn] = await Promise.all([getSession(), flagEnabled('arena.enabled')]);
   const tabs = [
     { key: 'questions', href: '/admin/games', label: c.tabQuestions, icon: ListChecks, show: can(session, 'question:write') },
     { key: 'stats', href: '/admin/games/stats', label: c.tabStats, icon: BarChart3, show: can(session, 'analytics:read') },
     /*
-     * «ساحة التحدي» — نفس صلاحية الإحصائيات. التبويب عند أيمن بس، زي بند
-     * الطالب: الفلاج (`arena.enabled`) مقفول افتراضيًا على أي ستاك تاني، والشاشة
-     * نفسها بترد «مش موجودة» لو اتقفل.
+     * «ساحة التحدي» — نفس صلاحية الإحصائيات، وورا نفس فلاج بند الطالب
+     * (`arena.enabled`): مفتوح عند أيمن افتراضيًا، ومقفول على أي ستاك تاني لحد
+     * ما المدرّس يفتحه. كان `IS_AYMAN`، فمدرّس فتح الساحة ماكانش شايف لوحتها.
+     * الشاشة نفسها بترد «مش موجودة» لو اتقفل.
      */
-    { key: 'arena', href: '/admin/games/arena', label: arenaCopy.admin.tab, icon: Swords, show: IS_AYMAN && can(session, 'analytics:read') },
+    { key: 'arena', href: '/admin/games/arena', label: arenaCopy.admin.tab, icon: Swords, show: arenaOn && can(session, 'analytics:read') },
   ].filter((tab) => tab.show);
   if (tabs.length < 2) return null;
 

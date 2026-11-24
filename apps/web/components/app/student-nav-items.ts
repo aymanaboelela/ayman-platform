@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { FeatureKey } from '@ayman/contracts/admin/entitlements';
+import type { StudentNavFlag } from './student-features';
 import { copy } from '@ayman/contracts/copy';
 import { aymanOnly } from '@/lib/tenant';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
@@ -63,6 +64,13 @@ export interface StudentNavItem {
    * from `/admin/platforms` shows up in that teacher's rail by itself.
    */
   feature?: FeatureKey;
+  /**
+   * A flag the row needs — the same promise as `feature`, for a surface
+   * switched from `/admin/flags`. The slot sends the stack's answer
+   * (`student-features.tsx`), so a teacher who switches it on gets the row
+   * without a rebuild.
+   */
+  flag?: StudentNavFlag;
   /** The rail section the row is drawn under — see `STUDENT_NAV_GROUPS`. */
   group: StudentNavGroup;
 }
@@ -136,12 +144,11 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   /* «أوضة المذاكرة» — the third habit: the timer to study by. */
   { href: '/focus', labelAr: copy.nav.focus, icon: Timer, feature: 'focusRoom', group: 'study' },
   /*
-   * «دفتر غلطاتي» — البند عند أيمن بس، فلاج `mistakes.enabled` مفتوح عنده
-   * افتراضيًا ومقفول عند الباقي (نفس بوابة «ساحة التحدي»).
+   * «دفتر غلطاتي» — ورا فلاج `mistakes.enabled`: مفتوح عند أيمن افتراضيًا
+   * ومقفول عند الباقي لحد ما المدرّس يفتحه من `/admin/flags`، والبند بيظهر
+   * لوحده ساعتها (نفس بوابة «ساحة التحدي»).
    */
-  ...(aymanOnly(true)
-    ? [{ href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen, group: 'study' as const }]
-    : []),
+  { href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen, flag: 'mistakes.enabled', group: 'study' },
   /* «ملاحظاتي» — the other study notebook, beside «غلطاتي». */
   { href: '/notes', labelAr: copy.nav.notes, icon: StickyNote, feature: 'lessonNotes', group: 'study' },
   { href: '/cards', labelAr: copy.nav.cards, icon: Layers, feature: 'flashCards', group: 'study' },
@@ -183,12 +190,12 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    */
   { href: '/game', labelAr: copy.nav.game, icon: Gamepad2, feature: 'quizGame', group: 'play' },
   /*
-   * «ساحة التحدي» — ماتش مباشر. البند عند أيمن بس، والصفحة والـAPI ورا فلاج
-   * `arena.enabled` (مفتوح عنده افتراضيًا ومقفول عند الباقي). القايمة بتتبني
-   * وقت البيلد ومابتقراش فلاجات، فستاك تاني فتح الفلاج بيوصلها من الرابط لحد
-   * ما يتعمل للقايمة باب بيقرا الفلاج.
+   * «ساحة التحدي» — ماتش مباشر. البند والصفحة والـAPI ورا فلاج
+   * `arena.enabled` (مفتوح عند أيمن افتراضيًا ومقفول عند الباقي). كان
+   * `aymanOnly` لأن القايمة ماكانتش بتقرا فلاجات، فمدرّس فتح الساحة كانت
+   * شغالة عنده ومحدش من طلبته لاقيها؛ دلوقتي الـslot بيبعت قيمة الفلاج.
    */
-  ...(aymanOnly(true) ? [{ href: '/arena', labelAr: copy.nav.arena, icon: Swords, group: 'play' as const }] : []),
+  { href: '/arena', labelAr: copy.nav.arena, icon: Swords, flag: 'arena.enabled', group: 'play' },
   /* «دوري الأسبوع» — the same «where am I» as «ترتيبي», but a race over this week's work. */
   { href: '/league', labelAr: copy.nav.league, icon: Crown, feature: 'weeklyLeague', group: 'play' },
 

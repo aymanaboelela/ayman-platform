@@ -1,9 +1,11 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { AdminFinanceOverviewSchema } from '@ayman/contracts/admin/expenses';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
+import { can, getSession } from '@/lib/session';
 import { formatEGPExact } from '@/lib/price';
 import { StatTile } from '@/components/admin/charts/stat-tile';
 import { FinanceTabs } from './finance-tabs';
@@ -55,6 +57,18 @@ function monthLabel(month: string): string {
  * that are sitting in a box. See `FinanceOverviewService.bookCostOfSales`.
  */
 export default async function FinanceOverviewPage() {
+  /*
+   * «المالية» in the sidebar is `payment:read`; this tab is `expense:read`
+   * (the whole P&L — see the controller). An account holding only the first
+   * lands here from the sidebar, so it goes to the tab it CAN read instead of
+   * a 403. Without either, `adminGet` below reaches the boundary as «not
+   * yours» (`ADMIN_FORBIDDEN_DIGEST`).
+   */
+  const session = await getSession();
+  if (!can(session, 'expense:read') && can(session, 'payment:read')) {
+    redirect('/admin/finance/subscriptions');
+  }
+
   const overview = await adminGet('/api/admin/expenses/overview', AdminFinanceOverviewSchema);
 
   // Every figure below is the API's — including the book profit, which used to

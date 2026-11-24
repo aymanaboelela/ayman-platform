@@ -235,6 +235,10 @@ const admin = {
      *  it also appears in the server log, and nothing else on this screen
      *  says so. */
     digestHint: 'الكود ده موجود جنب تفاصيل الخطأ في لوج السيرفر',
+    /** The API refused one of the page's reads with 403 — `ADMIN_FORBIDDEN_DIGEST`. */
+    forbiddenTitle: 'الصفحة دي مش ضمن صلاحيات حسابك',
+    forbiddenBody:
+      'الحساب ده مش متاح له يشوف كل اللي في الصفحة دي. لو محتاجها، صاحب المنصة يقدر يفتحهالك من «الفريق والصلاحيات».',
   },
   course: {
     /* ── ترتيب وفلترة الكورسات ────────────────────────────────────────
