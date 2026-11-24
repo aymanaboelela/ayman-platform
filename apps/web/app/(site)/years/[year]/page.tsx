@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { tenantName } from '@/lib/tenant';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
 import { bySubject } from '@/lib/subject-copy';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { isFreeCourse } from '@/lib/price';
@@ -81,8 +81,16 @@ export async function generateMetadata({
       robots: { index: false, follow: true },
     };
   }
+  /*
+   * His stack only, and only on the indexable branch above: the teacher query
+   * («مدرس برمجة تانية بكالوريا») leads, the page's own title follows. Another
+   * teacher's year page keeps the bare title, since «مدرس برمجة» names the
+   * subject and only his stack is known to teach this one at these grades.
+   * Grade pages (`year === null`) have no entry and keep it too.
+   */
+  const teacherPrefix = IS_AYMAN && page.year !== null ? copy.years.seoTeacherPrefix[page.year] : undefined;
   return buildMetadata({
-    title,
+    title: teacherPrefix ? `${teacherPrefix} — ${title}` : title,
     // ⚠️ `YEAR_TITLES[year]`, NOT `title` — `title` is already prefixed with
     // `copy.years.title` ("كورسات"), so interpolating it after the literal
     // below shipped "كورسات كورسات الصف الأول بكالوريا" to all three year

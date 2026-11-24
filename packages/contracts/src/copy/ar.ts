@@ -134,8 +134,20 @@ export const copy = {
   seo: {
     /** `%s | منصة أيمن أبو العلا` — the target phrase on every page's title. */
     defaultTitle: 'منصة أيمن أبو العلا — البرمجة وعلوم الحاسب للبكالوريا المصرية',
+    /**
+     * The landing page's `<meta name="description">` (via `SITE_DESCRIPTION`).
+     *
+     * It LEADS with «مدرس برمجة وذكاء اصطناعي لأولى ثانوي وتانية بكالوريا»
+     * because that is the phrase students type («احسن مدرس برمجه», «مدرس برمجه
+     * تانيه بكالوريا») — checked on Google on 2026-11-24, the home page was not
+     * in the first 40 results for either, while the pages that were all carried
+     * those words in their title and snippet. Google cuts the snippet near 155
+     * characters, so the query words have to come first; the rest stays as
+     * detail for the reader. Kept over 160 on purpose — `site-profiles.spec.ts`
+     * pins that this LONG one is not the string the seed writes.
+     */
     description:
-      'منصة المهندس أيمن أبو العلا لتعليم البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — شرح بالفيديو، ملخصات وملفات، امتحانات وكويزات على كل درس، ومسار تعليمي مرتّب خطوة بخطوة.',
+      'م. أيمن أبو العلا، مدرس برمجة وذكاء اصطناعي لأولى ثانوي وتانية بكالوريا: شرح فيديو لكل درس، ملخصات وملفات، امتحانات وكويزات على كل درس، ومسار تعليمي مرتّب خطوة بخطوة — أونلاين ومن السنتر.',
     /** Two lines, ≤160 chars, used as the OG/Twitter description on the landing page. */
     homeDescription:
       'البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
@@ -1849,8 +1861,14 @@ export const copy = {
      * ⚠️ Measured 2026-09-13: this name is contested. A sitting MP shares it and
      * owns the results for it, so a title of the bare name competes for a query
      * this page cannot win and skips the queries it can.
+     *
+     * 2026-11-24: «مدرس برمجة» without the shadda and with the grades students
+     * type («أولى وتانية بكالوريا»). Checked on Google that day: «احسن مدرس
+     * برمجه» returned no page of the site in its top 40, and the pages that did
+     * rank carried the plain word and the grades in their title. Google folds
+     * most diacritics, but the plain form is the one that cannot miss.
      */
-    aboutPageRoleTitle: 'أيمن أبو العلا — مدرّس البرمجة والذكاء الاصطناعي للبكالوريا',
+    aboutPageRoleTitle: 'أيمن أبو العلا — مدرس برمجة وذكاء اصطناعي لأولى وتانية بكالوريا',
     aboutPageLead: 'مدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية.',
     aboutPageDescription:
       'مين أيمن أبو العلا؟ مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية — أونلاين ومن السنتر، بشرح بالكود وتمرين على كل درس واختبارات بتقيس مستواك أول بأول.',
@@ -2075,6 +2093,21 @@ export const copy = {
     year1: 'الصف الأول بكالوريا',
     year2: 'الصف الثاني بكالوريا',
     year3: 'الصف الثالث بكالوريا',
+    /**
+     * Prepended to a year page's `<title>` on HIS stack only
+     * (`years/[year]/page.tsx`), never shown on the page.
+     *
+     * The page title alone («كورسات الصف الأول بكالوريا») matched nothing a
+     * student types when looking for a TEACHER: on 2026-11-24 «مدرس برمجة اولى
+     * ثانوي» returned no page of the site in Google's top 30, while the Facebook
+     * threads that did rank are titled in exactly these words. Year 1 says
+     * «أولى ثانوي» because that is how those threads spell it; the page title
+     * after it still carries «الصف الأول بكالوريا».
+     */
+    seoTeacherPrefix: {
+      1: 'مدرس برمجة أولى ثانوي',
+      2: 'مدرس برمجة تانية بكالوريا',
+    } as Record<number, string>,
     filterAll: 'الكل',
     filterFree: 'المجاني بس',
     empty: 'لسه مفيش كورسات منشورة للصف ده.',
