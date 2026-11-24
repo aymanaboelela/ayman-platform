@@ -134,8 +134,20 @@ export const copy = {
   seo: {
     /** `%s | منصة أيمن أبو العلا` — the target phrase on every page's title. */
     defaultTitle: 'منصة أيمن أبو العلا — البرمجة وعلوم الحاسب للبكالوريا المصرية',
+    /**
+     * The landing page's `<meta name="description">` (via `SITE_DESCRIPTION`).
+     *
+     * It LEADS with «مدرس برمجة وذكاء اصطناعي لأولى ثانوي وتانية بكالوريا»
+     * because that is the phrase students type («احسن مدرس برمجه», «مدرس برمجه
+     * تانيه بكالوريا») — checked on Google on 2026-11-24, the home page was not
+     * in the first 40 results for either, while the pages that were all carried
+     * those words in their title and snippet. Google cuts the snippet near 155
+     * characters, so the query words have to come first; the rest stays as
+     * detail for the reader. Kept over 160 on purpose — `site-profiles.spec.ts`
+     * pins that this LONG one is not the string the seed writes.
+     */
     description:
-      'منصة المهندس أيمن أبو العلا لتعليم البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — شرح بالفيديو، ملخصات وملفات، امتحانات وكويزات على كل درس، ومسار تعليمي مرتّب خطوة بخطوة.',
+      'م. أيمن أبو العلا، مدرس برمجة وذكاء اصطناعي لأولى ثانوي وتانية بكالوريا: شرح فيديو لكل درس، ملخصات وملفات، امتحانات وكويزات على كل درس، ومسار تعليمي مرتّب خطوة بخطوة — أونلاين ومن السنتر.',
     /** Two lines, ≤160 chars, used as the OG/Twitter description on the landing page. */
     homeDescription:
       'البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
