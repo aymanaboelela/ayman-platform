@@ -45,7 +45,9 @@ export function PdfSheet({
     <div className={`pdf-sheet pdf-sheet--${size}`} data-category={category} aria-hidden="true">
       <span className="pdf-sheet__fold" />
       <span className="pdf-sheet__kind">{pdfsCopy.category[category]}</span>
-      <span className="pdf-sheet__title">{title}</span>
+      <span className="pdf-sheet__title" dir="auto">
+        {title}
+      </span>
       <span className="pdf-sheet__lines">
         <i />
         <i />
