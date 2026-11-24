@@ -1861,8 +1861,14 @@ export const copy = {
      * ⚠️ Measured 2026-09-13: this name is contested. A sitting MP shares it and
      * owns the results for it, so a title of the bare name competes for a query
      * this page cannot win and skips the queries it can.
+     *
+     * 2026-11-24: «مدرس برمجة» without the shadda and with the grades students
+     * type («أولى وتانية بكالوريا»). Checked on Google that day: «احسن مدرس
+     * برمجه» returned no page of the site in its top 40, and the pages that did
+     * rank carried the plain word and the grades in their title. Google folds
+     * most diacritics, but the plain form is the one that cannot miss.
      */
-    aboutPageRoleTitle: 'أيمن أبو العلا — مدرّس البرمجة والذكاء الاصطناعي للبكالوريا',
+    aboutPageRoleTitle: 'أيمن أبو العلا — مدرس برمجة وذكاء اصطناعي لأولى وتانية بكالوريا',
     aboutPageLead: 'مدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية.',
     aboutPageDescription:
       'مين أيمن أبو العلا؟ مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية — أونلاين ومن السنتر، بشرح بالكود وتمرين على كل درس واختبارات بتقيس مستواك أول بأول.',
