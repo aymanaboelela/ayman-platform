@@ -2093,6 +2093,21 @@ export const copy = {
     year1: 'الصف الأول بكالوريا',
     year2: 'الصف الثاني بكالوريا',
     year3: 'الصف الثالث بكالوريا',
+    /**
+     * Prepended to a year page's `<title>` on HIS stack only
+     * (`years/[year]/page.tsx`), never shown on the page.
+     *
+     * The page title alone («كورسات الصف الأول بكالوريا») matched nothing a
+     * student types when looking for a TEACHER: on 2026-11-24 «مدرس برمجة اولى
+     * ثانوي» returned no page of the site in Google's top 30, while the Facebook
+     * threads that did rank are titled in exactly these words. Year 1 says
+     * «أولى ثانوي» because that is how those threads spell it; the page title
+     * after it still carries «الصف الأول بكالوريا».
+     */
+    seoTeacherPrefix: {
+      1: 'مدرس برمجة أولى ثانوي',
+      2: 'مدرس برمجة تانية بكالوريا',
+    } as Record<number, string>,
     filterAll: 'الكل',
     filterFree: 'المجاني بس',
     empty: 'لسه مفيش كورسات منشورة للصف ده.',
