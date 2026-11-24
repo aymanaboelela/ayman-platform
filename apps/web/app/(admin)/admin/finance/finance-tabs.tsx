@@ -6,9 +6,14 @@ import { can, getSession } from '@/lib/session';
 const c = copy.admin.finance;
 
 export const FINANCE_TABS = [
-  { href: '/admin/finance', label: c.tabOverview, permission: null },
-  { href: '/admin/finance/subscriptions', label: c.tabSubscriptions, permission: null },
-  { href: '/admin/finance/expenses', label: c.tabExpenses, permission: null },
+  // Each tab carries what ITS API asks for. They were all `null` on the
+  // assumption that whoever reaches «المالية» reads all three — but grants are
+  // per account, and a teacher stack's error log held an owner with
+  // `payment:read` and no `expense:read` opening the overview onto a 403, 14
+  // times. A tab that opens onto a 403 is worse than no tab.
+  { href: '/admin/finance', label: c.tabOverview, permission: 'expense:read' },
+  { href: '/admin/finance/subscriptions', label: c.tabSubscriptions, permission: 'payment:read' },
+  { href: '/admin/finance/expenses', label: c.tabExpenses, permission: 'expense:read' },
   // «يوم بيوم» lives under «التحليلات» (`/admin/analytics/money`) — a door to
   // it, like «السناتر» below, for whoever comes looking from the money side.
   // `payment:read` because that is what its API asks for; the screens above
@@ -35,15 +40,13 @@ export type FinanceTabHref = (typeof FINANCE_TABS)[number]['href'];
  *
  * A Server Component: the caller knows which tab it is, and shipping
  * `usePathname` for a highlight would be the whole client runtime for a border
- * colour. Same shape and same reasoning as `BooksTabs`. Async only for the one
- * permission-gated tab; `getSession` is per-request cached, so the page that
+ * colour. Same shape and same reasoning as `BooksTabs`. Async for the
+ * permission gates; `getSession` is per-request cached, so the page that
  * already read it pays nothing.
  */
 export async function FinanceTabs({ active }: { active: FinanceTabHref }) {
   const session = await getSession();
-  const tabs = FINANCE_TABS.filter(
-    (tab) => tab.permission === null || can(session, tab.permission),
-  );
+  const tabs = FINANCE_TABS.filter((tab) => can(session, tab.permission));
   return (
     <nav className="mt-4 flex flex-wrap gap-1.5" aria-label={c.title}>
       {tabs.map((tab) => (

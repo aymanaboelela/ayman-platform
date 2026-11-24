@@ -233,7 +233,9 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     // «الاشتراكات والإيرادات» — directly under the review queue: `payments`
     // decides a CLAIM, this reports the subscriptions those decisions
     // produced. Same `payment:read`, deliberately — see the controller's own
-    // note on why this is not a second permission.
+    // note on why this is not a second permission. The overview it lands on is
+    // `expense:read`; an account without that is sent on to «الاشتراكات»
+    // (`finance/page.tsx`) instead of a 403.
     href: '/admin/finance',
     labelAr: copy.admin.nav.finance,
     icon: Coins,

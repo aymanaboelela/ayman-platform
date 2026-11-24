@@ -18,7 +18,7 @@ import {
   type OutreachLogRow,
 } from '@ayman/contracts/outreach/admin';
 import type { OutreachKind } from '@ayman/contracts/outreach/kinds';
-import { adminGet } from '@/lib/admin-api';
+import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
 import { AymanAvatar } from '@/components/assistant/ayman-avatar';
 import { OutreachSettingsForm } from './outreach-settings-form';
 import { AutoOutreachCard } from './auto-outreach-card';
@@ -108,7 +108,10 @@ export default async function AdminOutreachPage({
     adminGet(`/api/admin/outreach?filter=${filter}&page=${page}&perPage=${PER_PAGE}`, RowsSchema),
     adminGet('/api/admin/outreach/stats', OutreachStatsSchema),
     adminGet('/api/admin/outreach/preview', OutreachPreviewSchema),
-    adminGet('/api/admin/settings', SiteSettingsSchema),
+    /* `settings:read` is not implied by `outreach:read` — an owner without it
+       took the whole log down with a 403 here (10 times on a teacher stack)
+       for the sake of the settings card at the bottom. `null` hides the card. */
+    adminGetOrForbidden('/api/admin/settings', SiteSettingsSchema),
     // `.catch`: during a deploy the web can be one build ahead of the API,
     // and a card that 404s for two minutes must cost the card, not the page.
     autoWhatsapp
@@ -236,17 +239,19 @@ export default async function AdminOutreachPage({
         </CardBody>
       </Card>
 
-      <Card className="max-w-[var(--w-prose)]">
-        <CardHeader>
-          <CardTitle>{c.settingsTitle}</CardTitle>
-        </CardHeader>
-        <CardBody>
-          <p className="mb-5 text-[length:var(--fs-text-sm)] leading-[1.75] text-fg-muted">
-            {c.settingsLead}
-          </p>
-          <OutreachSettingsForm defaultValues={settings.outreach} autoWhatsapp={autoWhatsapp} />
-        </CardBody>
-      </Card>
+      {settings ? (
+        <Card className="max-w-[var(--w-prose)]">
+          <CardHeader>
+            <CardTitle>{c.settingsTitle}</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="mb-5 text-[length:var(--fs-text-sm)] leading-[1.75] text-fg-muted">
+              {c.settingsLead}
+            </p>
+            <OutreachSettingsForm defaultValues={settings.outreach} autoWhatsapp={autoWhatsapp} />
+          </CardBody>
+        </Card>
+      ) : null}
     </>
   );
 }

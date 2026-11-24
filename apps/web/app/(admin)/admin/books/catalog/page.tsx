@@ -10,7 +10,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
 import { cn } from '@ayman/ui/lib/cn';
-import { adminGet } from '@/lib/admin-api';
+import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { CourseArt } from '@/components/course-art';
 import { StreamBadge } from '@/components/stream-badge';
@@ -77,7 +77,11 @@ export default async function AdminBooksCatalogPage() {
 
   const [books, settings, subjects, courses] = await Promise.all([
     adminGet('/api/admin/books', z.array(AdminBookRowSchema)),
-    adminGet('/api/admin/settings', SiteSettingsSchema),
+    /* `settings:read`, which «أسعار الكتب» (`book:read`) does not imply — a
+       teacher stack logged an owner without it hitting a 403 here 35 times,
+       and the whole shelf died for the sake of the delivery-fee form at the
+       bottom. `null` hides that form; the shelf is still theirs. */
+    adminGetOrForbidden('/api/admin/settings', SiteSettingsSchema),
     /* `/admin/taxonomy/subjects`, not the public `/api/taxonomy`: the public
        payload nests subjects inside offerings per system/year/track, so the
        same subject appears many times and its bare id is not on it. This route
@@ -205,12 +209,14 @@ export default async function AdminBooksCatalogPage() {
       {/* The delivery fee lives on this screen and not under a fifth settings
           tab, because it is a price and this is the prices screen — but UNDER
           the shelf: it changes a few times a year, the books change weekly. */}
-      <div className="mt-8">
-        <ShippingFeeForm
-          rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES}
-          courierCostCents={settings.store?.courierCostCents ?? null}
-        />
-      </div>
+      {settings ? (
+        <div className="mt-8">
+          <ShippingFeeForm
+            rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES}
+            courierCostCents={settings.store?.courierCostCents ?? null}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

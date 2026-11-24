@@ -273,10 +273,37 @@ function refineCenter(
   }
 }
 
+/**
+ * The guardian's number must not be the student's own. A student who types
+ * their own number twice leaves the platform with no way to reach a parent:
+ * the guardian result message, the absence call and the guardian code all go
+ * back to the student. Compared AFTER `egyptianPhone`'s transform, so
+ * `010…` and `+2010…` (or Arabic-Indic digits) count as the same number.
+ *
+ * On the guardian field because that is the one the student is filling when
+ * the clash becomes visible — the student's own number was an earlier step.
+ * Server-side too: the API validates with this schema (`OnboardingDto`), and
+ * «بياناتك» submits it, so an old row with the same number twice is asked to
+ * fix it the next time the profile is saved.
+ */
+function refineGuardianPhone(
+  data: { phone: string; fatherPhone: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.phone === data.fatherPhone) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['fatherPhone'],
+      message: 'رقم ولي الأمر لازم يكون غير رقم تليفونك',
+    });
+  }
+}
+
 export const OnboardingSchema = OnboardingShapeSchema.superRefine((data, ctx) => {
   refineSection(data, ctx);
   refineCity(data, ctx);
   refineCenter(data, ctx);
+  refineGuardianPhone(data, ctx);
 });
 
 /**

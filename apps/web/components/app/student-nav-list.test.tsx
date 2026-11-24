@@ -57,10 +57,11 @@ describe('StudentNavList — entitlement rows', () => {
     const { StudentFeaturesSync } = await import('./student-features');
     const { allEnabled } = await import('@ayman/contracts/admin/entitlements');
     const off = { ...allEnabled(), shareCards: false };
+    const flags = { 'arena.enabled': true, 'mistakes.enabled': true };
 
     const { container, rerender } = render(
       <>
-        <StudentFeaturesSync features={off} />
+        <StudentFeaturesSync features={off} flags={flags} />
         <StudentNavList />
       </>,
     );
@@ -68,10 +69,33 @@ describe('StudentNavList — entitlement rows', () => {
 
     rerender(
       <>
-        <StudentFeaturesSync features={allEnabled()} />
+        <StudentFeaturesSync features={allEnabled()} flags={flags} />
         <StudentNavList />
       </>,
     );
     expect(container.querySelector('a[href="/certificates"]')).not.toBeNull();
+  });
+
+  it('hides «ساحة التحدي» until the stack reports `arena.enabled` on', async () => {
+    const { StudentFeaturesSync } = await import('./student-features');
+    const { allEnabled } = await import('@ayman/contracts/admin/entitlements');
+
+    const { container, rerender } = render(
+      <>
+        <StudentFeaturesSync features={allEnabled()} flags={{ 'arena.enabled': false, 'mistakes.enabled': false }} />
+        <StudentNavList />
+      </>,
+    );
+    expect(container.querySelector('a[href="/arena"]')).toBeNull();
+    expect(container.querySelector('a[href="/mistakes"]')).toBeNull();
+
+    rerender(
+      <>
+        <StudentFeaturesSync features={allEnabled()} flags={{ 'arena.enabled': true, 'mistakes.enabled': false }} />
+        <StudentNavList />
+      </>,
+    );
+    expect(container.querySelector('a[href="/arena"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/mistakes"]')).toBeNull();
   });
 });

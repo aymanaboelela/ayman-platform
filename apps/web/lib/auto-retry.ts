@@ -1,3 +1,4 @@
+import { ADMIN_FORBIDDEN_DIGEST } from './admin-forbidden-digest';
 import { isConnectivityError } from './connectivity-error';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
 import { isExamRunnerPath } from './stale-navigation';
@@ -129,6 +130,9 @@ function jittered(ms: number): number {
 export const AUTO_RETRY_MEMORY_MS = 2 * 60_000;
 
 export function autoRetryPlanFor(error: Error & { digest?: string }): AutoRetryPlan | null {
+  // A permission refusal answers the same on every attempt — retrying it only
+  // flashes «جاري المحاولة» over a screen that cannot change.
+  if (error.digest === ADMIN_FORBIDDEN_DIGEST) return null;
   if (isConnectivityError(error)) return { kind: 'network', delays: NETWORK_DELAYS };
   if (error.digest === UPSTREAM_BUSY_DIGEST) return { kind: 'soon', delays: BUSY_DELAYS };
   if (error.digest === UPSTREAM_TIMEOUT_DIGEST) return { kind: 'soon', delays: UNANSWERED_DELAYS };

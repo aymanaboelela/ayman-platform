@@ -251,13 +251,12 @@ describe('STUDENT_NAV on a stack that teaches physics', () => {
         (href) =>
           href !== '/foundations' &&
           href !== '/playground' &&
-          // The rows that are Ayman-only; this stack is not his. (`/game` and
-          // `/certificates` are NOT here: they stay in the table behind their
-          // entitlement and the rail hides them at render — see below.)
+          // The rows that are Ayman-only; this stack is not his. (`/game`,
+          // `/certificates`, `/arena` and `/mistakes` are NOT here: they stay
+          // in the table behind their entitlement or flag and the rail hides
+          // them at render — see below.)
           href !== '/backlog' &&
-          href !== '/files' &&
-          href !== '/arena' &&
-          href !== '/mistakes',
+          href !== '/files',
       ),
     );
   });
@@ -280,5 +279,14 @@ describe('STUDENT_NAV entitlement rows', () => {
     expect(byHref.get('/badges')).toBe('badges');
     expect(byHref.get('/recap')).toBe('monthlyRecap');
     expect(byHref.get('/invite')).toBe('referrals');
+  });
+
+  it('ties each flag-gated row to its flag, on every stack', () => {
+    // These were `aymanOnly(true)` and so absent from a teacher's table even
+    // after the teacher switched the flag on — the row must be IN the table
+    // and wait on the flag, like a feature row waits on its entitlement.
+    const byHref = new Map(STUDENT_NAV.map((item) => [item.href, item.flag]));
+    expect(byHref.get('/arena')).toBe('arena.enabled');
+    expect(byHref.get('/mistakes')).toBe('mistakes.enabled');
   });
 });

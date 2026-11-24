@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
+import { ADMIN_FORBIDDEN_DIGEST } from './admin-forbidden-digest';
 import {
   REPORTS_PER_MINUTE,
   buildServerErrorReport,
@@ -95,6 +96,25 @@ describe('buildServerErrorReport', () => {
     expect(buildServerErrorReport(resume, request({ path: '/', method: 'POST' }), action)).toBeNull();
     // The same sentence on a GET render is a real mismatch — it stays filed.
     expect(buildServerErrorReport(resume, request({ path: '/' }), context)).not.toBeNull();
+  });
+
+  it('skips an admin read the API refused with 403, and only that', () => {
+    const refused = Object.assign(new Error('GET /api/admin/expenses/overview failed with 403'), {
+      digest: ADMIN_FORBIDDEN_DIGEST,
+    });
+    const admin = { ...context, routePath: '/admin/finance' } as ServerErrorContext;
+    expect(buildServerErrorReport(refused, request({ path: '/admin/finance' }), admin)).toBeNull();
+    // A 500 on the same read is a fault and stays filed.
+    const broken = new Error('GET /api/admin/expenses/overview failed with 500');
+    expect(buildServerErrorReport(broken, request({ path: '/admin/finance' }), admin)).not.toBeNull();
+  });
+
+  it('skips a scanner POST to a URL with no page, but not a GET 404 render fault', () => {
+    const scan = new TypeError('Failed to parse body as FormData.');
+    const notFoundPage = { ...context, routePath: '/_not-found/page', renderSource: undefined } as ServerErrorContext;
+    const path = '/developmentserver/metadatauploader';
+    expect(buildServerErrorReport(scan, request({ path, method: 'POST' }), notFoundPage)).toBeNull();
+    expect(buildServerErrorReport(scan, request({ path }), notFoundPage)).not.toBeNull();
   });
 
   it('copes with something that is not an Error being thrown', () => {

@@ -180,6 +180,19 @@ describe('OnboardingSchema', () => {
     expect(OnboardingSchema.safeParse(basePayload({ fatherPhone: '123' })).success).toBe(false);
   });
 
+  it("rejects the guardian's phone when it is the student's own, in any spelling", () => {
+    // Same number written three ways: national, E.164, Arabic-Indic digits.
+    for (const fatherPhone of ['01012345678', '+201012345678', '٠١٠١٢٣٤٥٦٧٨']) {
+      const result = OnboardingSchema.safeParse(basePayload({ fatherPhone }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual([
+          expect.objectContaining({ path: ['fatherPhone'], message: 'رقم ولي الأمر لازم يكون غير رقم تليفونك' }),
+        ]);
+      }
+    }
+  });
+
   it('rejects an invalid Egyptian phone', () => {
     const result = OnboardingSchema.safeParse(basePayload({ phone: '123' }));
     expect(result.success).toBe(false);

@@ -2,6 +2,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import type { ErrorReportInput } from '@ayman/contracts/diagnostics';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
+import { ADMIN_FORBIDDEN_DIGEST } from './admin-forbidden-digest';
 import { CLIENT_IP_HEADER } from './client-ip';
 
 /**
@@ -137,6 +138,22 @@ export function buildServerErrorReport(
   if (context.routeType === 'action' && error.message.startsWith("Couldn't find all resumable slots")) {
     return null;
   }
+
+  /*
+   * An admin read the API refused with 403 — the operator's account lacks the
+   * permission, and `(admin)/error.tsx` tells them so. That is the permission
+   * system working, not a fault: a teacher stack filed 60+ of these in a month
+   * for owners whose grants were narrower than the page's reads, and none of
+   * them was a bug anyone could fix. See `ADMIN_FORBIDDEN_DIGEST`.
+   */
+  if (digest === ADMIN_FORBIDDEN_DIGEST) return null;
+
+  /*
+   * A POST to a URL with no page — scanners probing `/developmentserver/…`,
+   * `/wp-admin/…` with a body Next cannot parse. Nothing on this site can
+   * answer it, and the row would be the scanner's malformed body, not ours.
+   */
+  if (context.routePath === '/_not-found/page' && request.method === 'POST') return null;
 
   const route = pathnameOf(request.path);
   if (!route) return null;

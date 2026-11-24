@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { ZodType } from 'zod';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
 import { bound, resolve } from './api';
+import { ADMIN_FORBIDDEN_DIGEST } from './admin-forbidden-digest';
 import { forwardClientIp } from './client-ip';
 
 /**
@@ -84,7 +85,11 @@ export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> 
    * `…/conversation` returned 403, and the page showed «حصلت مشكلة» empty.
    */
   if (!response.ok) {
-    throw new AdminApiError(`GET ${path} failed with ${response.status}`, response.status, null);
+    const failed = new AdminApiError(`GET ${path} failed with ${response.status}`, response.status, null);
+    // A page with no `adminGetOrForbidden` of its own still reaches the
+    // boundary as «not yours», not as a crash — see `ADMIN_FORBIDDEN_DIGEST`.
+    if (response.status === 403) (failed as AdminApiError & { digest?: string }).digest = ADMIN_FORBIDDEN_DIGEST;
+    throw failed;
   }
   return schema.parse(await response.json());
 }
