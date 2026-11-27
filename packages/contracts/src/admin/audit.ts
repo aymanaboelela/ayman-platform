@@ -74,6 +74,11 @@ export const AUDIT_ACTIONS = [
   // (moved / raised / lowered / skipped) in `metadata`: it changes students'
   // grades in bulk, and «مين غيّر درجات الامتحان ده» must have an answer.
   'question:regrade',
+  // «الإجابة المتسجّلة صح» on the overview's suspect-key band: the teacher
+  // looked and the key stands, so the band stops listing the version. Logged
+  // because it silences a warning about students' marks — «مين قال إن
+  // الإجابة دي صح» must have an answer if the key turns out wrong after all.
+  'question:key-confirm',
   'quiz:publish',
   'quiz:answer-edit',
   // Re-points an existing quiz at another lesson. Logged because it moves

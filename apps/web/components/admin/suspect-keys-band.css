@@ -105,3 +105,47 @@
 .keyband__open:hover {
   opacity: 0.88;
 }
+
+.keyband__actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+/* The calm half of the pair: «it is right» is the answer on a misconception,
+   so it is outlined in the success colour rather than filled like the fix. */
+.keyband__confirm-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.keyband__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid var(--ok);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--ok) 8%, var(--n-1));
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ok);
+  transition: opacity 160ms;
+}
+
+.keyband__confirm:hover {
+  opacity: 0.88;
+}
+
+.keyband__confirm:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.keyband__confirm-failed {
+  font-size: var(--fs-text-xs);
+  color: var(--err);
+}

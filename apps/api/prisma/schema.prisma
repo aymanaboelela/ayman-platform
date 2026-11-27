@@ -5513,6 +5513,13 @@ model SuspectKeyAlert {
   /// version can sit in several quizzes; the counts are across all of them.
   quizId            String?  @map("quiz_id") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at")
+  /// «الإجابة المتسجّلة صح» — a teacher checked the key against the book and
+  /// it IS right: the students share a misconception. The row stays (it is
+  /// the dedup that stops the alert being raised again for this version) and
+  /// the band stops listing it. A fixed key is a NEW version, so a later edit
+  /// that gets it wrong is watched afresh.
+  confirmedAt       DateTime? @map("confirmed_at")
+  confirmedBy       String?   @map("confirmed_by")
 
   version QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
   quiz    Quiz?           @relation(fields: [quizId], references: [id], onDelete: SetNull)
