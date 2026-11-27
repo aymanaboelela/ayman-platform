@@ -6893,7 +6893,10 @@ const quizAdmin = {
   suspectKeysTitle: 'أسئلة إجابتها الصح غالبًا متسجّلة غلط',
   /** What to do, worded about the fix rather than at the reader. */
   suspectKeysLead:
-    'أغلب الطلبة اختاروا اختيار واحد غير المتسجّل صح. تصليح الإجابة الصح في السؤال، وبعدها «صحّح من جديد»، بيعيد تصحيح إجابات الطلبة اللي اتحسبت غلط.',
+    'أغلب الطلبة اختاروا اختيار واحد غير المتسجّل صح. تصليح الإجابة الصح في السؤال، وبعدها «صحّح من جديد»، بيعيد تصحيح إجابات الطلبة اللي اتحسبت غلط. ولو الإجابة المتسجّلة صح فعلًا والطلبة هم اللي غلطوا، «الإجابة المتسجّلة صح» بيقفل التنبيه ومش بيرجع تاني.',
+  /** The key was checked against the book and stands — off the band for good. */
+  suspectKeyConfirm: 'الإجابة المتسجّلة صح',
+  suspectKeyConfirmFailed: 'التنبيه ماتقفلش — جرّب تاني.',
   suspectKeysEvidence: '{picks} من {answers} اختاروا «{picked}» — المتسجّل صح: «{key}»',
   suspectKeysQuiz: 'في {quiz}',
   /** A newer version is already published — the key is fixed, the marks are not. */

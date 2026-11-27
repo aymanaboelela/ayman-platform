@@ -1,4 +1,16 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Patch, Query, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Patch,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
@@ -33,6 +45,22 @@ export class AdminQuestionsController {
   @Get('suspect-keys')
   async suspectKeys() {
     return { rows: await this.keyWatch.listSuspects() };
+  }
+
+  /**
+   * «الإجابة المتسجّلة صح» — the key was checked and stands, so the band stops
+   * listing this version. 404 for a version with no open alert: nothing was
+   * silenced, and the band's button should say so rather than pretend.
+   */
+  @Post('suspect-keys/:questionVersionId/confirm')
+  @HttpCode(204)
+  async confirmSuspectKey(
+    @Param('questionVersionId', new ParseUUIDPipe()) questionVersionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    if (!(await this.keyWatch.confirm(questionVersionId, user.id))) {
+      throw new NotFoundException('no open suspect-key alert for this question version');
+    }
   }
 
   // Registered BEFORE `@Get()`'s sibling param-free list route matters only

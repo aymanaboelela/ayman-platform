@@ -6,6 +6,8 @@ import type { SuspectKeyRow } from '@ayman/contracts/quiz/suspect-key';
 const adminGet = vi.fn();
 vi.mock('@/lib/admin-api', () => ({ adminGet: (...args: unknown[]) => adminGet(...args) }));
 
+vi.mock('./suspect-keys-actions', () => ({ confirmSuspectKeyAction: vi.fn() }));
+
 const { SuspectKeysBand } = await import('./suspect-keys-band');
 
 const ROW: SuspectKeyRow = {
@@ -38,6 +40,9 @@ describe('<SuspectKeysBand>', () => {
     expect(html).toContain(`href="/admin/questions/${ROW.bankEntryId}"`);
     expect(html).toContain(copy.quizAdmin.suspectKeyOpen);
     expect(html).not.toContain(copy.quizAdmin.suspectKeysEdited);
+    // A right key has a way off the band, not only a way into the editor.
+    // Asserted on the button: the lead names the same label in its sentence.
+    expect(html).toContain('class="keyband__confirm"');
   });
 
   it('says only the regrade is left once the key was already corrected', async () => {
@@ -45,6 +50,8 @@ describe('<SuspectKeysBand>', () => {
     const html = renderToStaticMarkup((await SuspectKeysBand())!);
 
     expect(html).toContain(copy.quizAdmin.suspectKeysEdited);
+    // The key was already changed — «it was right all along» is not offered.
+    expect(html).not.toContain('class="keyband__confirm"');
   });
 
   it('renders nothing on the ordinary day, and nothing when the API fails', async () => {

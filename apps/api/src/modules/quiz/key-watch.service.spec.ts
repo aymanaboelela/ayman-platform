@@ -48,7 +48,7 @@ describe('KeyWatchService', () => {
   }
 
   const notifications = new NotificationsService(prisma);
-  const keyWatch = new KeyWatchService(prisma, notifications);
+  const keyWatch = new KeyWatchService(prisma, notifications, new AuditService(prisma));
   const attempts = attemptService(notifications, keyWatch);
 
   let fixture: QuizFixture | undefined;
@@ -212,6 +212,41 @@ describe('KeyWatchService', () => {
     expect(await alertsFor(fixture!.adminId)).toHaveLength(1);
   }, 180_000);
 
+  it('«الإجابة المتسجّلة صح» takes a right key off the band for good, once', async () => {
+    // The 2026-11-27 band: the key IS right and the students share a
+    // misconception, so the answers will always say otherwise.
+    const { versionId, right } = await trueFalseQuiz('صح');
+    for (let i = 0; i < 4; i += 1) await pastAnswer(versionId, right, 0);
+    await submitThrough(attempts, right);
+    await keyWatch.idle();
+    expect((await keyWatch.listSuspects()).some((row) => row.questionVersionId === versionId)).toBe(true);
+
+    expect(await keyWatch.confirm(versionId, fixture!.adminId)).toBe(true);
+    expect((await keyWatch.listSuspects()).some((row) => row.questionVersionId === versionId)).toBe(false);
+    const audit = await prisma.auditLog.findMany({
+      where: { action: 'question:key-confirm', resourceId: versionId },
+      select: { actorUserId: true },
+    });
+    expect(audit).toEqual([{ actorUserId: fixture!.adminId }]);
+
+    // A double click is not a second audit row.
+    expect(await keyWatch.confirm(versionId, fixture!.adminId)).toBe(false);
+    expect(await prisma.auditLog.count({ where: { action: 'question:key-confirm', resourceId: versionId } })).toBe(1);
+
+    // More wrong-looking answers neither re-raise the alert nor bring the row back.
+    await pastAnswer(versionId, right, 0);
+    const attemptId = (await prisma.quizAttempt.findFirstOrThrow({
+      where: { quizId: fixture!.quizId, userId: fixture!.studentId },
+      select: { id: true },
+    })).id;
+    expect(await keyWatch.checkAttempt(attemptId)).toBe(0);
+    expect(await alertsFor(fixture!.adminId)).toHaveLength(1);
+    expect((await keyWatch.listSuspects()).some((row) => row.questionVersionId === versionId)).toBe(false);
+
+    // An unknown version silences nothing.
+    expect(await keyWatch.confirm(randomUUID(), fixture!.adminId)).toBe(false);
+  }, 180_000);
+
   it('raises nothing when the key is right', async () => {
     const { versionId, right } = await trueFalseQuiz('خطأ');
     for (let i = 0; i < 4; i += 1) await pastAnswer(versionId, right, 1);
@@ -230,7 +265,7 @@ describe('KeyWatchService', () => {
       }
     }
     const broken = new BrokenNotifications(prisma);
-    const brokenWatch = new KeyWatchService(prisma, broken);
+    const brokenWatch = new KeyWatchService(prisma, broken, new AuditService(prisma));
     const service = attemptService(broken, brokenWatch);
 
     const { versionId, right } = await trueFalseQuiz('صح');

@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { SuspectKeyListSchema, type SuspectKeyRow } from '@ayman/contracts/quiz/suspect-key';
 import { adminGet } from '@/lib/admin-api';
+import { SuspectKeyConfirm } from './suspect-key-confirm';
 import '@/components/admin/quiz/question-bank.css';
 import './suspect-keys-band.css';
 
@@ -29,7 +30,9 @@ async function loadSuspectKeys(): Promise<SuspectKeyRow[]> {
  * question is suspect — which is the ordinary day.
  *
  * A row leaves on its own once fixing the key and «صحّح من جديد» have moved
- * the answers onto the corrected version (see `KeyWatchService.listSuspects`).
+ * the answers onto the corrected version (see `KeyWatchService.listSuspects`),
+ * or when «الإجابة المتسجّلة صح» says the key was right and the students share
+ * a misconception — without that, a right key sat on the band for good.
  */
 export async function SuspectKeysBand() {
   const rows = await loadSuspectKeys();
@@ -66,10 +69,16 @@ export async function SuspectKeysBand() {
               </p>
               {row.edited ? <p className="keyband__edited">{c.suspectKeysEdited}</p> : null}
             </div>
-            <Link href={`/admin/questions/${row.bankEntryId}`} className="keyband__open">
-              <PencilLine className="size-4" aria-hidden="true" />
-              {c.suspectKeyOpen}
-            </Link>
+            <div className="keyband__actions">
+              <Link href={`/admin/questions/${row.bankEntryId}`} className="keyband__open">
+                <PencilLine className="size-4" aria-hidden="true" />
+                {c.suspectKeyOpen}
+              </Link>
+              {/* Not on an edited row: there the key was already changed and
+                  only the regrade is left — «it was right all along» would
+                  contradict the edit. */}
+              {row.edited ? null : <SuspectKeyConfirm questionVersionId={row.questionVersionId} />}
+            </div>
           </li>
         ))}
       </ul>

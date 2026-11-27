@@ -4,6 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { GRADED_STATES, isSuspectKey } from './analytics.service';
 import { stemExcerpt } from './question-removal.service';
 import { optionTexts } from './suspect-key-text';
@@ -81,6 +83,7 @@ export class KeyWatchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly audit: AuditService,
   ) {}
 
   /** Fire-and-forget, after the submit's own commit. Never throws. */
@@ -144,7 +147,8 @@ export class KeyWatchService {
    */
   async listSuspects(): Promise<SuspectKeyRow[]> {
     const alerts = await this.prisma.suspectKeyAlert.findMany({
-      where: { version: { bankEntry: { archivedAt: null } } },
+      // A confirmed key is the teacher's answer to the alert — see `confirm`.
+      where: { confirmedAt: null, version: { bankEntry: { archivedAt: null } } },
       orderBy: { createdAt: 'desc' },
       select: {
         questionVersionId: true,
@@ -186,6 +190,40 @@ export class KeyWatchService {
       });
     }
     return rows;
+  }
+
+  /**
+   * «الإجابة المتسجّلة صح» — the teacher checked the key against the book and
+   * it stands; the students share a misconception (10,000 bits answered as
+   * 10,000 bytes). Before this, the band had no way off for a RIGHT key: it
+   * lists a version for as long as most answers sit on one unkeyed option,
+   * and on a misconception they always will.
+   *
+   * The alert row is kept, not deleted: it is also the dedup `checkAttempt`
+   * reads, and deleting it would raise the same alert on the next wrong
+   * answer. Confirming is per version — fixing a key publishes a new version,
+   * which is watched from scratch.
+   *
+   * Answers whether a still-open alert was confirmed now; `false` for an
+   * unknown version or one already confirmed, so a double click writes one
+   * audit row.
+   */
+  async confirm(questionVersionId: string, actorUserId: string): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.suspectKeyAlert.updateMany({
+        where: { questionVersionId, confirmedAt: null },
+        data: { confirmedAt: new Date(), confirmedBy: actorUserId },
+      });
+      if (updated.count === 0) return false;
+      await this.audit.recordTx(tx, {
+        action: 'question:key-confirm',
+        resourceType: AUDIT_RESOURCES.questionVersion,
+        resourceId: questionVersionId,
+        outcome: 'success',
+        actorUserId,
+      });
+      return true;
+    });
   }
 
   /**
